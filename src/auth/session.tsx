@@ -1,0 +1,120 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  adoptSession as apiAdoptSession,
+  currentSession,
+  hydrateSession,
+  onSessionChange,
+  signIn as apiSignIn,
+  signInWithGoogle as apiSignInWithGoogle,
+  signOut as apiSignOut,
+} from "../api/client";
+import { hydrateApiBase } from "../api/config";
+import type { StoredSession } from "./storage";
+
+/**
+ * Session state, as React sees it.
+ *
+ * The session itself does NOT live here. It lives in `src/api/client.ts`,
+ * because the refresh interceptor has to be able to read and replace it from
+ * outside React entirely — a token rotation happens inside a fetch, under
+ * whatever screen happened to trigger it, with no component in scope. This
+ * provider subscribes to that module and mirrors it into state so the router
+ * can re-render on a change.
+ *
+ * That direction matters. If React owned the session, a refresh would have to
+ * call a setter it cannot reach, and the two copies would drift the moment a
+ * rotation happened during a screen transition.
+ */
+
+interface SessionState {
+  session: StoredSession | null;
+  /** True until SecureStore has been read. Nothing may route on the session yet. */
+  isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  /** Exchanges a verified Google ID token for a session. See `./google.ts`. */
+  signInWithGoogle: (idToken: string) => Promise<void>;
+  /**
+   * Installs an already-obtained session.
+   *
+   * The register screen's Continue button. It authenticates during signup and
+   * then sits on the resulting pair while the "check your email" step is on
+   * screen, because installing it there would trip the (auth) guard and route
+   * the user away mid-sentence.
+   */
+  adoptSession: (session: StoredSession) => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+const SessionContext = createContext<SessionState | null>(null);
+
+export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = useState<StoredSession | null>(() => currentSession());
+  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Subscribe BEFORE hydrating, so a change that lands during the read is not
+    // missed — the alternative ordering has a window in which a rotation would
+    // be applied to the module and never reach this component.
+    const unsubscribe = onSessionChange(setSession);
+
+    // The base URL is read BEFORE the session, and awaited rather than fired
+    // alongside it. Both live in SecureStore, but the URL is an input to every
+    // request the session hydration might trigger afterwards — resolving them
+    // in parallel leaves a window in which a request goes to the compiled-in
+    // default while the override is still in flight, which is exactly the bug
+    // the override exists to fix.
+    hydrateApiBase()
+      .then(() => hydrateSession())
+      .finally(() => setIsLoading(false));
+
+    return unsubscribe;
+  }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      await apiSignIn(email, password);
+      // Anything cached belonged to whoever was signed in before. Clearing is
+      // not an optimisation: /api/v1/home is keyed on the caller, so a stale
+      // page would render the previous account's feed, leaves and unread counts
+      // under the new user's name until the refetch landed.
+      queryClient.clear();
+    },
+    [queryClient],
+  );
+
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      await apiSignInWithGoogle(idToken);
+      queryClient.clear();
+    },
+    [queryClient],
+  );
+
+  const adoptSession = useCallback(
+    async (next: StoredSession) => {
+      await apiAdoptSession(next);
+      queryClient.clear();
+    },
+    [queryClient],
+  );
+
+  const signOut = useCallback(async () => {
+    await apiSignOut();
+    queryClient.clear();
+  }, [queryClient]);
+
+  const value = useMemo<SessionState>(
+    () => ({ session, isLoading, signIn, signInWithGoogle, adoptSession, signOut }),
+    [session, isLoading, signIn, signInWithGoogle, adoptSession, signOut],
+  );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+export function useSession(): SessionState {
+  const ctx = useContext(SessionContext);
+  if (!ctx) throw new Error("useSession must be used inside <SessionProvider>");
+  return ctx;
+}

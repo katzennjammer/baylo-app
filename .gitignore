@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local env — the API base URL for THIS machine.
+.env
+.env.local
