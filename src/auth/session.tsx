@@ -10,6 +10,8 @@ import {
   signOut as apiSignOut,
 } from "../api/client";
 import { hydrateApiBase } from "../api/config";
+import { TimeoutError, withTimeout } from "../api/timeout";
+import { registerClearSessionDevItem } from "../dev/dev-menu";
 import type { StoredSession } from "./storage";
 
 /**
@@ -31,6 +33,14 @@ interface SessionState {
   session: StoredSession | null;
   /** True until SecureStore has been read. Nothing may route on the session yet. */
   isLoading: boolean;
+  /**
+   * Why boot gave up on the stored session, or null if it did not.
+   *
+   * Set rather than thrown. A boot that cannot read SecureStore is not a fatal
+   * app state — it is a signed-out one — so this rides along to the login
+   * screen and is shown there as a banner. See the note on the effect below.
+   */
+  hydrationError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   /** Exchanges a verified Google ID token for a session. See `./google.ts`. */
   signInWithGoogle: (idToken: string) => Promise<void>;
@@ -48,9 +58,20 @@ interface SessionState {
 
 const SessionContext = createContext<SessionState | null>(null);
 
+/**
+ * How long boot waits on SecureStore before routing without it.
+ *
+ * Generous on purpose. A cold Keychain/Keystore round-trip on a slow device is
+ * tens of milliseconds, so five seconds is not a performance budget — it is the
+ * line past which the read is not slow but stuck, and the user is better served
+ * by a login screen they can act on than by a splash they cannot.
+ */
+const HYDRATION_TIMEOUT_MS = 5_000;
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<StoredSession | null>(() => currentSession());
   const [isLoading, setIsLoading] = useState(true);
+  const [hydrationError, setHydrationError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -59,17 +80,61 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // be applied to the module and never reach this component.
     const unsubscribe = onSessionChange(setSession);
 
+    // Guards the setters against a chain that outlives the mount. The race
+    // below cannot cancel the SecureStore read it lost to, so that read can
+    // still settle after this component is gone — under Fast Refresh, on every
+    // save.
+    let mounted = true;
+
     // The base URL is read BEFORE the session, and awaited rather than fired
     // alongside it. Both live in SecureStore, but the URL is an input to every
     // request the session hydration might trigger afterwards — resolving them
     // in parallel leaves a window in which a request goes to the compiled-in
     // default while the override is still in flight, which is exactly the bug
     // the override exists to fix.
-    hydrateApiBase()
-      .then(() => hydrateSession())
-      .finally(() => setIsLoading(false));
+    //
+    // WHY THERE IS A DEADLINE ON IT. Both halves are native SecureStore calls,
+    // and a native call that never calls back does not reject — it goes quiet.
+    // The `.finally()` that used to be the only thing here runs on a rejection
+    // but not on silence, so a single wedged Keystore read left `isLoading`
+    // true forever and parked the whole app on the splash screen: no error, no
+    // request, nothing on screen to act on and nothing in the logs to read.
+    // That is the bug this deadline exists to make impossible.
+    //
+    // Losing the race is NOT the same as having no session. The read carries
+    // on, and `hydrateSession()` publishes through onSessionChange when it
+    // lands, so a session that arrives late still moves the app off the login
+    // screen on its own. Timing out only decides what the user looks at while
+    // they wait.
+    withTimeout(
+      hydrateApiBase().then(() => hydrateSession()),
+      HYDRATION_TIMEOUT_MS,
+      "Reading the saved session",
+    )
+      .then(() => {
+        if (mounted) setHydrationError(null);
+      })
+      .catch((cause: unknown) => {
+        if (!mounted) return;
+        setHydrationError(
+          cause instanceof TimeoutError
+            ? "Could not read the saved session — secure storage did not respond. " +
+                "You have been signed out; sign in again to continue."
+            : `Could not read the saved session. You have been signed out. ` +
+                `(${cause instanceof Error ? cause.message : String(cause)})`,
+        );
+      })
+      // Stays in a finally, and now it means something: every path through the
+      // above reaches here, so there is no longer an outcome in which the
+      // splash screen is permanent.
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
 
-    return unsubscribe;
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const signIn = useCallback(
@@ -101,13 +166,37 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    await apiSignOut();
-    queryClient.clear();
+    try {
+      await apiSignOut();
+    } finally {
+      // In the finally rather than after the await. apiSignOut() drops the
+      // session before anything that can throw, so a failure past that point
+      // would otherwise leave a signed-out app still holding the previous
+      // account's cached feed, leaves and unread counts — which the next
+      // sign-in would render for a frame under the new user's name.
+      queryClient.clear();
+    }
   }, [queryClient]);
 
+  // The shake-to-clear dev shortcut. Registered here, and with THIS signOut,
+  // so the menu item and the button on the Profile tab are one action: revoke
+  // the family, drop the tokens, clear the cache, let the guard route out.
+  // A no-op in release builds — see the note in src/dev/dev-menu.ts.
+  useEffect(() => {
+    registerClearSessionDevItem(signOut);
+  }, [signOut]);
+
   const value = useMemo<SessionState>(
-    () => ({ session, isLoading, signIn, signInWithGoogle, adoptSession, signOut }),
-    [session, isLoading, signIn, signInWithGoogle, adoptSession, signOut],
+    () => ({
+      session,
+      isLoading,
+      hydrationError,
+      signIn,
+      signInWithGoogle,
+      adoptSession,
+      signOut,
+    }),
+    [session, isLoading, hydrationError, signIn, signInWithGoogle, adoptSession, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

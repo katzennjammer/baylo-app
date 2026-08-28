@@ -288,6 +288,79 @@ async function main() {
     `${secureStore.size} keys left: ${[...secureStore.keys()].join(", ")}`,
   );
 
+  // ── 6. Sign out ────────────────────────────────────────────────────────────
+  // The contract the Profile tab depends on: the family dies server-side AND
+  // the tokens leave the device.
+  console.log("\n[6] sign out");
+
+  const live = await client.signIn("test@example.com", PASSWORD);
+  const liveFamily = refreshTokens.get(live.refreshToken).familyId;
+  const revokesBefore = seen.filter((r) => r.url === "/api/auth/revoke").length;
+
+  await client.signOut();
+
+  const revokes = seen.filter((r) => r.url === "/api/auth/revoke");
+  check(
+    "POSTed /api/auth/revoke exactly once",
+    revokes.length === revokesBefore + 1,
+    `${revokes.length - revokesBefore} calls`,
+  );
+  check("the server revoked the whole family", families.get(liveFamily).revoked === true);
+  check("the in-memory session is gone", client.currentSession() === null);
+  check(
+    "SecureStore was emptied",
+    secureStore.size === 0,
+    `${secureStore.size} keys left: ${[...secureStore.keys()].join(", ")}`,
+  );
+
+  const afterSignOut = await client.apiV1("/api/v1/home").then(
+    () => null,
+    (e) => e,
+  );
+  check(
+    "a request afterwards is UNAUTHENTICATED, which is what routes to login",
+    afterSignOut?.code === "UNAUTHENTICATED",
+    String(afterSignOut),
+  );
+
+  // ── 7. Sign out with nothing on the other end ──────────────────────────────
+  // The rule the Profile tab's button is written around: a user who taps sign
+  // out ENDS UP SIGNED OUT. An unreachable server costs the server-side revoke
+  // and nothing else — not the local clear, and not by throwing.
+  console.log("\n[7] sign out while offline");
+
+  const config = require("../src/api/config.ts");
+  const stranded = await client.signIn("test@example.com", PASSWORD);
+  const strandedFamily = refreshTokens.get(stranded.refreshToken).familyId;
+
+  // Port 1 is not listening. ECONNREFUSED is the fast version of offline; the
+  // slow one — a captive portal that accepts the connection and then never
+  // answers — is what the AbortController in revokeFamily() covers, and
+  // asserting it here would cost the length of that timeout.
+  await config.setApiBase("http://127.0.0.1:1");
+
+  const offline = await client.signOut().then(
+    () => "resolved",
+    (e) => e.message,
+  );
+  check("signOut() resolved rather than throwing", offline === "resolved", String(offline));
+  check("the session is gone from memory anyway", client.currentSession() === null);
+  check(
+    "the tokens are gone from SecureStore anyway",
+    // setApiBase() just wrote a key of its own, so "cleared" here means no
+    // TOKENS rather than no keys at all.
+    !secureStore.has("baylo.accessToken") &&
+      !secureStore.has("baylo.refreshToken") &&
+      !secureStore.has("baylo.user"),
+    [...secureStore.keys()].join(", "),
+  );
+  check(
+    "the family is still alive server-side — the known, accepted cost",
+    families.get(strandedFamily).revoked === false,
+  );
+
+  await config.resetApiBase();
+
   console.log(`\n${pass} passed, ${fail} failed`);
   server.close();
   process.exitCode = fail === 0 ? 0 : 1;

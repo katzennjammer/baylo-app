@@ -6,43 +6,82 @@
  * oklch, so each value below is the sRGB conversion of the corresponding
  * `--token` — same colour, a notation the platform can read.
  *
- * Only the DEFAULT direction (Forest/Cream) is ported. The web carries two more
- * (`[data-direction="green"]`, `[data-direction="day"]`) that exist so the
- * landing page can be re-skinned; the app has no such switch, and porting
- * palettes nothing renders would be three tables to keep in sync instead of one.
+ * The app carries exactly two surface sets, and they are not a light/dark pair
+ * a viewer can switch between: `colors` is what everything behind the sign-in
+ * gate renders on, `auth` is what the sign-in screens render on. Neither is
+ * derived from the other. The web's three re-skinnable `[data-direction]`
+ * palettes are not ported — the app has no such switch, and porting palettes
+ * nothing renders would be tables to keep in sync rather than tables in use.
  *
  * Keep this file plain CommonJS. It is required by `tailwind.config.js`, which
  * Tailwind loads through Node before any TypeScript transform runs — a .ts file
  * here would work in the app and fail in the CLI.
  */
 
-/** Forest/Cream: dark olive canvas, cream type, bright green accent. */
+/**
+ * Daylight: the (app) surface set.
+ *
+ * The artboards for the Home tab are a LIGHT theme — white cards on a warm
+ * near-white canvas, near-black type — where this file used to hold the dark
+ * Forest/Cream port of the web tokens. The flip is deliberate and it is
+ * app-wide rather than Home-only, because the tab bar and header are shared
+ * chrome: a light feed under a dark bar is not a half-migrated theme, it is a
+ * broken one.
+ *
+ * `accent` and `accent-2` are carried over UNCHANGED. They are the brand green,
+ * they read correctly on both grounds, and they are the only two tokens the
+ * (auth) screens borrow from this block — leaving them alone is what keeps the
+ * auth flow exactly as it was while everything behind the gate changes.
+ *
+ * Note on type over `accent`: the artboards put WHITE on the green fills
+ * (Offer Trade, Post your first item, Retry), not the near-black `on-accent`
+ * that the dark theme used. White on this green is roughly 3:1 — fine for the
+ * button-sized weights it is used at, short of AA for body copy, which is why
+ * it appears on fills and nowhere else.
+ */
 const colors = {
-  /** --bg — the canvas. oklch(0.22 0.062 145) */
-  bg: "#032206",
-  /** --bg-2 — raised surfaces: tab bar, headers. oklch(0.265 0.065 145) */
-  "bg-2": "#0d2d0f",
-  /** --card — cards and inputs. oklch(0.295 0.065 145) */
-  card: "#153517",
-  /** --text — cream body type. oklch(0.935 0.030 88) */
-  text: "#f2e9d3",
-  /** --muted — secondary type. oklch(0.74 0.022 90) */
-  muted: "#b0aa9c",
-  /** --line — hairline borders. oklch(0.48 0.06 145 / 0.5) */
-  line: "rgba(72, 103, 73, 0.5)",
-  /** --accent — the green everything actionable is. oklch(0.65 0.185 140) */
+  /** --bg — the canvas the feed scrolls on. Warm, not pure white. */
+  bg: "#faf9f6",
+  /** --bg-2 — raised chrome: header, tab bar. Lifts by being cleaner, not darker. */
+  "bg-2": "#ffffff",
+  /** --card — cards and inputs. */
+  card: "#ffffff",
+  /** --text — near-black body type, warmed a touch off neutral. */
+  text: "#12140f",
+  /** --muted — secondary type. Passes AA on both bg and card. */
+  muted: "#63665d",
+  /** --line — hairline borders and the full-bleed card divider. */
+  line: "rgba(18, 20, 15, 0.10)",
+  /** --accent — the green everything actionable is. Unchanged from the dark set. */
   accent: "#45a92b",
-  /** --accent-2 — pressed/hover accent. oklch(0.70 0.175 140) */
+  /** --accent-2 — pressed/hover accent. Unchanged. */
   "accent-2": "#5bb846",
-  /** --on-accent — type on an accent fill. oklch(0.16 0.06 145) */
+  /** --on-accent — near-black, kept for marks that sit on an accent fill. */
   "on-accent": "#001300",
+  /** The Leaves pill: a green wash with type dark enough to read at 13px. */
+  "leaf-wash": "#e6f4e8",
+  "leaf-ink": "#1b5e20",
+  /**
+   * Skeleton blocks. One step off `bg` — a skeleton that contrasts hard reads
+   * as content rather than as absence, and the whole point of 2a is that the
+   * chrome looks settled while only the feed is pending.
+   */
+  skeleton: "#e8e4dd",
+  /**
+   * The offline bar. Terracotta, not the danger red: 2c is explicit that this
+   * is the persistent, non-urgent layer, and it sits under the top bar for as
+   * long as the connection is gone. `danger` stays reserved for the urgent one.
+   */
+  "warn-wash": "#fcede9",
+  "warn-ink": "#a8432a",
+  "warn-line": "rgba(168, 67, 42, 0.22)",
   /** --ph-stripe — the striped image placeholder. */
-  "ph-stripe": "rgba(69, 169, 43, 0.17)",
+  "ph-stripe": "rgba(69, 169, 43, 0.12)",
   /** --scrim-1 / --scrim-2 — gradient scrims over media. */
-  "scrim-1": "rgba(3, 34, 6, 0.94)",
-  "scrim-2": "rgba(3, 34, 6, 0.5)",
-  /** Not a web token: destructive state, which the web spells inline. */
-  danger: "#e06c5a",
+  "scrim-1": "rgba(250, 249, 246, 0.94)",
+  "scrim-2": "rgba(250, 249, 246, 0.5)",
+  /** Destructive state, tuned for a light canvas. */
+  danger: "#c0392b",
 };
 
 /**

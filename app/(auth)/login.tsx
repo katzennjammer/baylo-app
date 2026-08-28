@@ -30,7 +30,7 @@ import {
  * ends the same way, through the same guard.
  */
 export default function LoginScreen() {
-  const { signIn } = useSession();
+  const { signIn, hydrationError } = useSession();
   const google = useGoogleSignIn();
 
   const [email, setEmail] = useState("");
@@ -68,7 +68,12 @@ export default function LoginScreen() {
 
   // One banner, not two stacked ones. Whichever path was tried last is the one
   // the user is waiting on an answer about.
-  const banner = error ?? google.error;
+  //
+  // hydrationError is LAST on purpose. It explains why this screen is showing
+  // at all — boot could not read the stored session — which matters right up
+  // until the user tries something, and not one moment after. The result of the
+  // attempt they just made is always the more useful of the two.
+  const banner = error ?? google.error ?? hydrationError;
 
   return (
     <AuthScreen>

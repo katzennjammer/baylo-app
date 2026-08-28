@@ -1,10 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
-import { Platform, Pressable, View, type GestureResponderEvent } from "react-native";
 
 import { AppHeader } from "../../src/components/AppHeader";
 import { Splash } from "../../src/components/Splash";
-import { colors } from "../../src/theme/palette";
+import { TabBar, type TabBarProps } from "../../src/components/TabBar";
 import { useSession } from "../../src/auth/session";
 
 /**
@@ -21,6 +19,26 @@ import { useSession } from "../../src/auth/session";
  * what handles a mid-session logout: when the refresh interceptor gives up on a
  * revoked token it clears the session, this layout re-renders with none, and
  * whatever tab was open is replaced by the login screen.
+ *
+ * THE BAR, left to right: Home, Marketplace, Post, Trades, Profile.
+ *
+ * Messages used to hold the fourth slot and is now a header icon. A bottom tab
+ * costs a fifth of the bar permanently, and the bar is for the places you go to
+ * do the app's job — look at what is offered, list a thing, run a trade.
+ * Messages is where you go when a trade is already happening, which is a
+ * notification-shaped need rather than a destination-shaped one: as a header
+ * icon it keeps its unread count visible from every tab and gives the slot to
+ * Marketplace.
+ *
+ * The route itself is untouched. `href: null` takes it off the bar and leaves
+ * it navigable, so router.push("/messages") from the header still lands, deep
+ * links still resolve, and the screen keeps its place in the group's guard.
+ * `TabBar` also refuses to draw any route it has no entry for, so the two
+ * mechanisms agree even if `href: null` changes behaviour upstream.
+ *
+ * THE BAR IS DRAWN, NOT CONFIGURED. See the note at the top of TabBar — the
+ * spec's geometry is not reachable through screenOptions. Everything the
+ * navigator would style is therefore left alone here.
  */
 export default function AppLayout() {
   const { session, isLoading } = useSession();
@@ -30,108 +48,25 @@ export default function AppLayout() {
 
   return (
     <Tabs
-      screenOptions={{
-        header: () => <AppHeader />,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors["bg-2"],
-          borderTopColor: colors.line,
-          borderTopWidth: 1,
-          height: Platform.OS === "ios" ? 88 : 64,
-          paddingTop: 6,
-          paddingBottom: Platform.OS === "ios" ? 28 : 8,
-        },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
-      }}
+      screenOptions={{ header: () => <AppHeader /> }}
+      // The cast, and why it is here rather than an import. BottomTabBarProps
+      // lives inside expo-router's vendored copy of react-navigation and has no
+      // importable path; reaching into expo-router/build/… for it buys a type
+      // that can move on any patch release. TabBarProps declares the four
+      // members this bar actually touches, and the object the navigator passes
+      // structurally contains all four — the cast is asserting that and nothing
+      // more. Same reasoning as the tabBarButton props in the previous version
+      // of this file.
+      tabBar={(props) => <TabBar {...(props as unknown as TabBarProps)} />}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="trades"
-        options={{
-          title: "Trades",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="swap-horizontal" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="post"
-        options={{
-          title: "",
-          // The centre action is raised out of the bar, so it cannot use the
-          // normal icon slot — the bar clips to its own height. Replacing the
-          // whole button is what lets the circle overhang the top edge.
-          //
-          // The two props are passed by name rather than spread. expo-router
-          // vendors react-navigation inside its own build output, so
-          // BottomTabBarButtonProps has no importable path; PostButton declares
-          // the shape it actually uses instead of reaching into
-          // expo-router/build/… for a type that may move on any patch release.
-          tabBarButton: ({ onPress, accessibilityState }) => (
-            <PostButton onPress={onPress} accessibilityState={accessibilityState} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: "Messages",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-ellipses" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="marketplace" options={{ title: "Marketplace" }} />
+      <Tabs.Screen name="post" options={{ title: "Post" }} />
+      <Tabs.Screen name="trades" options={{ title: "Trades" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+
+      {/* Reachable, not listed. See the header note above. */}
+      <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
     </Tabs>
-  );
-}
-
-/** The two props the raised centre button actually needs from the tab bar. */
-interface PostButtonProps {
-  onPress?: ((event: GestureResponderEvent) => void) | null;
-  accessibilityState?: { selected?: boolean };
-}
-
-/** The raised centre button. Only the rendering is replaced; navigation is the bar's. */
-function PostButton({ onPress, accessibilityState }: PostButtonProps) {
-  const focused = accessibilityState?.selected ?? false;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Post an item"
-      className="flex-1 items-center justify-center"
-    >
-      <View
-        className={`h-14 w-14 -mt-8 items-center justify-center rounded-full border-4 border-bg-2 ${
-          focused ? "bg-accent-2" : "bg-accent"
-        }`}
-        // The tab bar has no elevation of its own; without this the circle
-        // reads as a flat hole punched in the bar rather than a raised control.
-        style={{
-          shadowColor: "#000",
-          shadowOpacity: 0.35,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 8,
-        }}
-      >
-        <Ionicons name="add" size={30} color={colors["on-accent"]} />
-      </View>
-    </Pressable>
   );
 }

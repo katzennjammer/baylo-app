@@ -47,11 +47,25 @@ export interface StoredSession extends TokenPair {
 }
 
 export async function loadSession(): Promise<StoredSession | null> {
-  const [accessToken, refreshToken, rawUser] = await Promise.all([
-    SecureStore.getItemAsync(ACCESS_KEY),
-    SecureStore.getItemAsync(REFRESH_KEY),
-    SecureStore.getItemAsync(USER_KEY),
-  ]);
+  let accessToken: string | null;
+  let refreshToken: string | null;
+  let rawUser: string | null;
+
+  try {
+    [accessToken, refreshToken, rawUser] = await Promise.all([
+      SecureStore.getItemAsync(ACCESS_KEY),
+      SecureStore.getItemAsync(REFRESH_KEY),
+      SecureStore.getItemAsync(USER_KEY),
+    ]);
+  } catch {
+    // A Keystore read that THROWS is a real case, not a theoretical one: the
+    // keys are invalidated by a reinstall, by a restore onto a different
+    // device, and on some OEM builds by a lockscreen credential change. The
+    // stored pair is unrecoverable in every one of them, and the honest
+    // reading of an unreadable session is no session — the user signs in
+    // again. Rethrowing would take the whole boot down instead.
+    return null;
+  }
 
   // A half-written session is treated as no session. The three values are
   // written together but not atomically, and a client that boots holding an

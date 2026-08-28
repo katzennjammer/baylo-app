@@ -374,27 +374,87 @@ export async function verifyEmailToken(token: string): Promise<VerifyEmailResult
   );
 }
 
+/** How long the revoke request gets before the logout stops waiting for it. */
+const REVOKE_TIMEOUT_MS = 6000;
+
 /**
- * POST /api/auth/revoke, then forget everything locally.
+ * POST /api/auth/revoke — kills the whole token family, not just this token.
  *
- * The local half runs even if the network call fails. A logout that leaves the
- * tokens on the device because the server was unreachable is not a logout.
+ * Never throws and never reports. The endpoint answers 200 for a token that
+ * does not exist and 200 for one already revoked — logout is idempotent, and
+ * saying otherwise would make it a free validity oracle for anyone holding a
+ * stolen string — so the only failure it can have is "the request did not
+ * arrive", which is precisely the case the caller has already decided to sign
+ * out through.
+ *
+ * The AbortController is not decoration. React Native's fetch has no default
+ * timeout, and the interesting offline case is not a phone in flight mode —
+ * that fails in milliseconds — but one associated to a captive-portal Wi-Fi:
+ * fully connected, routing nowhere, the request hanging until the OS socket
+ * timeout. On Android that is measured in minutes.
+ */
+async function revokeFamily(base: string, refreshToken: string): Promise<void> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REVOKE_TIMEOUT_MS);
+
+  try {
+    await fetch(`${base}/api/auth/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      credentials: "omit",
+      signal: abort.signal,
+    });
+  } catch {
+    // Offline, wrong base URL, or the timeout above. None of it is fixable from
+    // here, and the note on signOut() says why none of it is fatal.
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Sign out: revoke the family server-side, and forget everything locally.
+ *
+ * THE ORDERING IS THE WHOLE FUNCTION. The revoke is *started* first, because it
+ * needs the refresh token and the local clear is about to destroy it — but it
+ * is not awaited until the end. Everything in between is therefore
+ * unconditional: a server that is down, slow or misaddressed cannot skip the
+ * clear, and neither can an exception thrown out of the fetch.
+ *
+ * That is the rule this function exists to hold. A logout that leaves the pair
+ * on the device because the phone was in a lift is not a logout — the refresh
+ * token is good for thirty days, and the next person to open the app is
+ * whoever was signed in. Losing the *server-side* half is the lesser failure:
+ * the family stays alive until it expires, which is a real cost, but not one
+ * that hands the device to a stranger.
+ *
+ * publish() runs before the revoke is awaited, so by the time anything is
+ * waiting on the network the guard in app/(app)/_layout.tsx has already swapped
+ * in the login screen. Nothing is watching this promise when it settles.
+ *
+ * This is also the path a dead refresh token takes — performRefresh() calls it
+ * on a terminal 401. Revoking an already-revoked family is a 200 and a no-op,
+ * which is why that costs nothing and needs no special case.
  */
 export async function signOut(): Promise<void> {
   const refreshToken = memory?.refreshToken;
+  const base = getApiBase();
+
+  const revoking = refreshToken && base ? revokeFamily(base, refreshToken) : null;
 
   memory = null;
-  await clearSession();
-  publish();
+  try {
+    await clearSession();
+  } finally {
+    // In a finally, so a SecureStore that refuses to delete still gets the user
+    // off the signed-in screens. The in-memory mirror is what the guard reads;
+    // a keystore that will not clear is a problem for the next launch, not a
+    // reason to strand someone inside the app now.
+    publish();
+  }
 
-  const base = getApiBase();
-  if (!refreshToken || !base) return;
-  await fetch(`${base}/api/auth/revoke`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-    credentials: "omit",
-  }).catch(() => undefined);
+  await revoking;
 }
 
 // ── The refresh interceptor ──────────────────────────────────────────────────

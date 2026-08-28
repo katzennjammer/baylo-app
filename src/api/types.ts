@@ -13,6 +13,8 @@
  * the compiler would happily believe.
  */
 
+import type { TrustTier } from "../lib/trust";
+
 /** Precise coordinates reach only the owner and an accepted counterparty. */
 export interface Pickup {
   lat: number;
@@ -28,10 +30,25 @@ export interface ItemOwner {
   avatar: string | null;
   location: string | null;
   rating: number;
+  /**
+   * The denormalised counter, fine as a displayed statistic and NOT a tier
+   * input — it has drifted above the real completed count on live rows. The
+   * server says the same thing in `V1Owner`.
+   */
   totalTrades: number;
   lifetimeLeaves: number;
-  /** "Seedling" | "Sprout" | "Grower" | "Guardian" — resolved server-side. */
+  /** The LEAF ladder: "Seedling" | "Sprout" | "Grower" | "Guardian". */
   rank: string;
+  /**
+   * The TRUST ladder, resolved server-side with DPA defaults charged against
+   * it — the same value the contract gates enforce with.
+   *
+   * NULL ON ENDPOINTS THAT DO NOT RESOLVE IT. /home does; /browse, /items/[id]
+   * and both profile routes send null today because the three aggregates it
+   * costs were not worth adding to routes whose screens do not draw the badge.
+   * Null means "unknown", never "New Trader" — see `resolveTier`.
+   */
+  trustTier: TrustTier | null;
 }
 
 export interface Item {

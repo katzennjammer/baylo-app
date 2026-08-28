@@ -51,7 +51,30 @@ export function useHome() {
     unread: first?.unread,
     trending: first?.trending ?? [],
     matches: first?.matches ?? [],
-    /** Every page's feed, flattened, in order. */
-    feed: pages.flatMap((p) => p.payload.feed),
+    /** Every page's feed, flattened, in order, with repeats dropped. */
+    feed: dedupeById(pages.flatMap((p) => p.payload.feed)),
   };
+}
+
+/**
+ * First occurrence wins, order preserved.
+ *
+ * The keyset cursor already guarantees no overlap between pages — it is
+ * (createdAt, id) strictly-less-than, so a row cannot appear on both sides of
+ * it — and this is not here to paper over that. It is here for the case the
+ * cursor cannot cover: a refetch re-runs every page in sequence against a table
+ * that has moved on, so page 0 can come back holding a row that page 1 already
+ * had. Without this the list renders it twice and React logs duplicate keys.
+ *
+ * The stale copy is the one dropped, since page 0 is the freshest read.
+ */
+function dedupeById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
 }

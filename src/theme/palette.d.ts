@@ -9,6 +9,12 @@ export declare const colors: {
   readonly accent: string;
   readonly "accent-2": string;
   readonly "on-accent": string;
+  readonly "leaf-wash": string;
+  readonly "leaf-ink": string;
+  readonly skeleton: string;
+  readonly "warn-wash": string;
+  readonly "warn-ink": string;
+  readonly "warn-line": string;
   readonly "ph-stripe": string;
   readonly "scrim-1": string;
   readonly "scrim-2": string;

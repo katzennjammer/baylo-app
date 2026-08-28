@@ -14,9 +14,9 @@ app/
     login.tsx          POST /api/auth/token, and Continue with Google
     register.tsx       POST /api/auth/register, then "check your email"
   (app)/
-    _layout.tsx        the session gate, and the bottom tab bar
+    _layout.tsx        the session gate; the bar itself is src/components/TabBar
     index.tsx          Home — GET /api/v1/home
-    trades|post|messages|profile.tsx   placeholders
+    marketplace|trades|post|messages|profile.tsx   placeholders
 src/
   api/client.ts        Bearer injection, the refresh interceptor, the auth calls
   api/config.ts        the base URL: compiled-in default + SecureStore override
@@ -26,11 +26,159 @@ src/
   auth/storage.ts      expo-secure-store
   auth/session.tsx     React's view of the session
   auth/google.ts       the expo-auth-session flow, and nothing it decides
+  components/icons.tsx            the drawn icon set — see "Home" below
+  components/AppHeader.tsx        wordmark, Leaves, notifications, messages
+  components/TabBar.tsx           the bottom bar, drawn rather than configured
+  components/Divider.tsx          the 1 px rule the whole direction rests on
+  components/home/                the feed and its five states
   components/LoginBackground.tsx  the auth background LAYER — video goes here
   components/auth-ui.tsx          the shell, fields, buttons and banners
   components/ApiUrlGear.tsx       the gear, and the URL label under it
-  theme/palette.js     Baylo's palette, plus the green/white auth surface
+  theme/tokens.js      Direction 1 — every colour, type role, gap and radius
+  theme/palette.js     the older palette. (auth) and Profile only.
 ```
+
+## Home — Direction 1, "Quiet Feed"
+
+The Home tab, the header and the bottom bar are built to one implementation
+spec. Two rules carry most of it:
+
+**Cards are not raised, they are ruled.** A card's fill is the same `#FAFAF7`
+as the canvas behind it, there is no shadow anywhere except the Post FAB, and
+what separates one listing from the next is a single 1 px `#EDEBE3` line. There
+is no gap between cards. `<Divider />` exists so that value cannot drift.
+
+**Every value lives in `src/theme/tokens.js`.** Colours, the forty type roles,
+gaps, radii, control heights, icon sizes and per-icon stroke weights. Components
+build StyleSheets out of it; none of them writes a number. The file is plain
+CommonJS because `tailwind.config.js` requires it — Tailwind loads that config
+through Node before any TypeScript transform runs — and `tokens.d.ts` is what
+gives the app its types. The handful of measurements that are NOT in the spec
+(chip padding, the pill's internal gap, the empty state's vertical rhythm) are
+marked as artboard-read where they are defined, so a tuning pass can tell which
+numbers came from the table and which came from an eye.
+
+**Three fonts, seven static instances**, bundled under `assets/fonts` with their
+OFL licences beside them and embedded at build time by the expo-font config
+plugin in `app.json`:
+
+| Family | Instances | Role |
+|---|---|---|
+| Bricolage Grotesque | SemiBold, Bold | wordmark, item titles, state headlines |
+| Public Sans | Regular, Medium, SemiBold, Bold | all UI text |
+| JetBrains Mono | Regular | eyebrows, timestamps, the expand label |
+
+Each weight is addressed as its own family by PostScript name, never as one
+family plus `fontWeight` — these are static instances, and asking Android for
+"PublicSans-Regular at 600" gets synthetic emboldening rather than the SemiBold
+file. Every file's basename equals its PostScript name, which is what makes one
+string resolve on both platforms.
+
+**The icons are drawn, not imported.** `src/components/icons.tsx` is vector
+paths because the spec pairs a stroke weight with every mark and the tab bar's
+selected state is the SAME glyph at 1.9 instead of 1.6. An icon font has one
+baked-in weight per glyph, which is why Ionicons expresses "active" as a filled
+variant instead — taking that substitution would redraw the most characteristic
+thing about this direction. Stroke widths are converted from real pixels into
+the 24-unit viewBox, so the number in `tokens.icon` is what lands on screen.
+
+**The bar** is Home, Marketplace, Post, Trades, Profile, and it is drawn rather
+than configured: react-navigation owns the paddings and the icon/label
+relationship, and none of those are reachable as the numbers the spec states.
+Messages moved out of the bar and into the header, where its unread count is
+visible from every tab and it costs no permanent slot.
+
+### Where the artboard and the endpoint disagree
+
+Four things the artboard draws were not in `/api/v1/home`. One of them — the
+trust tier — turned out to be worth an endpoint change and got one; the rest are
+resolved towards the data rather than away from it:
+
+- **"2.4 km away"** — not built. There is no viewer coordinate anywhere in the
+  schema. See [Distance, and why it is not built yet](#distance-and-why-it-is-not-built-yet).
+- **"TRUSTED"** — now `owner.trustTier`, resolved server-side. This is the TRUST
+  ladder (New / Rising / Trusted / Top Trader, from completed trades and rating)
+  and not `owner.rank`, the LEAF ladder (Seedling / Sprout / Grower / Guardian,
+  from lifetime earnings) the card used to show. The two answer different
+  questions and the card was asking the wrong one: a prolific poster who has
+  never completed a trade reads Guardian on the leaf ladder and New Trader on
+  the trust one. The artboard's four treatments map onto the four tiers in
+  order.
+- **"Trending in Lapu-Lapu"** — the trending groupBy has no geographic filter of
+  any kind, so the heading keeps the timeframe and drops the place.
+- **"Moving out Sunday"** — no urgency field. The chip is built and takes a
+  prop; nothing passes one.
+
+Two more are about people. The story rings have a viewed state nothing records,
+so every ring renders unviewed and the viewed treatment stays as a prop. And the
+"Matches for you" interstitial is drawn as ITEMS with Leaves values where the
+payload holds PEOPLE — `MatchesStrip` implements it to the spec's geometry with
+the data that exists, but it is deliberately not mounted: `matches` is the only
+people list on the endpoint and the ringed row at the top already spends it, so
+mounting both would put the same five faces on one screen twice. The reasoning
+is written out in `app/(app)/index.tsx`.
+
+The social row is display-only. `stats.likes`, `stats.liked` and
+`stats.comments` are real and are rendered; the only like endpoint on this
+backend is `/api/posts/[id]/like`, a cookie-session route outside `/api/v1` that
+a Bearer client cannot call, so the row reports as text rather than as three
+buttons that do nothing.
+
+### Distance, and why it is not built yet
+
+Deferred deliberately, not forgotten. The design below is settled; what is
+missing is the permission work, and it should be picked up after the remaining
+screens. Writing it down because the central constraint is not obvious and is
+easy to get backwards on a second reading of the privacy rules.
+
+**What exists.** `Item.pickupLat` / `pickupLng` are the only coordinates in the
+entire schema. `User.location` is free text and is `NULL` for every user in the
+database today — which is why the line under a name currently renders as nothing
+but a date. So the *item* end of a distance calculation is fully populated and
+the *viewer* end does not exist at all.
+
+**The shape.** Compute it CLIENT-SIDE, from the coarsened point the payload
+already carries, and render it in buckets.
+
+1. `expo-location` with `ACCESS_COARSE_LOCATION`. Fine precision buys nothing at
+   this resolution and is a much harder permission to ask for. The bulk of the
+   work is the permission flow — request, denied, "never ask again", the
+   settings deep-link — not the arithmetic.
+2. Haversine in `src/lib/`, against `pickup.lat` / `pickup.lng`, which
+   non-participants already receive.
+3. Render a bucket — "~2 km away", "under 1 km" — never "2.4 km". The input is
+   rounded to ~1.1 km, so a tenth-of-a-kilometre reading claims a precision that
+   was thrown away on purpose, on the one line whose whole job is to be honest
+   about what is withheld.
+4. Keep a real no-distance state. `pickup` is nullable and the permission can be
+   refused, so this is additive to what the line shows now, not a replacement.
+
+**Why it must not be computed server-side.** This is the part worth not
+re-deriving. Sending the viewer's coordinates up and measuring against the
+*stored precise* pickup point looks strictly better — more accurate, and no
+coordinates on the wire at all. It is the opposite. **A distance from a known
+point is a circle, and three circles are a fix.** A viewer who moves and
+re-reads the same listing, or who runs two accounts, trilaterates the exact
+pickup point from three precise distances — which is the seller's front door,
+and is precisely what `coarsen()` exists to prevent. A precise distance is a
+slower channel for the same leak, not a smaller one.
+
+So: quantise the INPUT, which is what `coarsen()` already does and what makes
+the client-side version safe by construction. If a distance is ever computed
+server-side anyway, the output must be bucketed before it leaves the process,
+and the buckets must not shrink with repeated reads.
+
+Two smaller notes. The address is nulled for non-participants and a distance
+must not become a back door to it. And distance leaks in both directions: it
+tells the viewer roughly where a seller is, and the request tells the server
+where the viewer is — `User.location` is a string someone chose to publish,
+whereas GPS is not.
+
+**Cost.** About a day for the client-side bucketed version, almost all of it
+permission UX, with no endpoint change and no migration. Several days for the
+alternative — a stored `homeLat` / `homeLng` on `User`, set during onboarding,
+which avoids the runtime permission but adds two columns, a migration and a
+screen.
 
 ## The auth screens
 
