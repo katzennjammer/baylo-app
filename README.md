@@ -229,8 +229,12 @@ server. It also survives the laptop changing networks.
 
 ```bash
 adb devices                        # confirm the phone is listed as "device"
-adb reverse tcp:3000 tcp:3000      # re-run after every replug or adb restart
+adb reverse tcp:3000 tcp:3000      # the API
+adb reverse tcp:8081 tcp:8081      # Metro — see "the bundle location" below
 ```
+
+or just `npm run phone`, which checks both servers are up, opens both tunnels,
+and proves the phone can reach each one through them.
 
 with `.env` holding:
 
@@ -241,6 +245,47 @@ EXPO_PUBLIC_API_URL=http://localhost:3000
 `adb reverse` is not persistent. Unplugging the phone, rebooting it, or
 restarting the adb server drops the tunnel, and the app then fails with a
 connection error against a URL that is still correct. Re-run the command.
+
+### The bundle location resets to localhost — and that is fine
+
+"Change Bundle Location" in the dev menu does not survive a force-close, and
+this is upstream behaviour rather than a misconfiguration. In React Native
+0.86, `PackagerConnectionSettings.debugServerHost` has a setter that assigns to
+a **static field in a companion object and nothing else** — it never writes
+SharedPreferences. On process death the static dies, the getter falls through to
+the (never-written) `debug_http_host` preference, and then to
+`AndroidInfoHelpers.getServerHost()`, which on a physical device is `localhost`.
+
+There is no fix from JavaScript. `DevSettings` in JS exposes only
+`addMenuItem`, `reload` and `onFastRefresh` — there is no host setter — and the
+bundle host is chosen *before any of this app's JS exists*, so no app code could
+influence it even if there were one. This project has no `expo-dev-client`, so
+`expo-dev-launcher`'s remembered-URL list is not available either; adding it
+would buy a native dependency and a full rebuild for a list you still have to
+pick from, and a saved LAN IP still breaks on the next DHCP lease.
+
+So do not fight the reset — **make the value it resets to correct**:
+
+```bash
+adb reverse tcp:8081 tcp:8081
+```
+
+The phone's own `localhost:8081` is now this machine's Metro. The dev menu can
+reset to `localhost` as often as it likes and it will be right every time, and
+because no LAN IP is involved it stays right when this laptop's DHCP lease
+changes on a phone hotspot.
+
+**Off the cable.** If the phone has to find Metro over Wi-Fi, seed the
+preference RN actually reads:
+
+```bash
+npm run phone -- -PersistBundleHost
+```
+
+`DevServerHelper`'s own doc comment names `debug_http_host` as the supported way
+to hand the debug server a host, and a preference is real persistent storage —
+so unlike the dev menu's value, this one survives a force-close. It pins a LAN
+IP, so re-run it after a DHCP change. The tunnel is still the better path.
 
 ### Over Wi-Fi — when USB is not an option
 

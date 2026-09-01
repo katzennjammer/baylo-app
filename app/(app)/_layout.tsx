@@ -43,7 +43,7 @@ import { useSession } from "../../src/auth/session";
 export default function AppLayout() {
   const { session, isLoading } = useSession();
 
-  if (isLoading) return <Splash />;
+  if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (
@@ -65,8 +65,25 @@ export default function AppLayout() {
       <Tabs.Screen name="trades" options={{ title: "Trades" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 
-      {/* Reachable, not listed. See the header note above. */}
+      {/* Reachable, not listed. See the header note above.
+
+          FLAT FILES, NOT NESTED DIRECTORIES. `item` takes its id as a query
+          param (`/item?id=…`) rather than living at `item/[id].tsx`, and that
+          is a deliberate narrowing: expo-router's documented Tabs.Screen `name`
+          is a direct child of this group, and whether a nested "item/[id]"
+          resolves as a tab screen is not something the SDK 57 docs state. The
+          query-param form is fully documented — useLocalSearchParams() returns
+          URL parameters including the query string — so it is the version that
+          cannot break on a patch release. */}
       <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
+      <Tabs.Screen name="item" options={{ href: null, title: "Item" }} />
+      <Tabs.Screen name="offer" options={{ href: null, title: "Offer" }} />
+      <Tabs.Screen name="user" options={{ href: null, title: "Profile" }} />
+
+      {/* The Safe-Zone map and one hub's listings. Same flat-file, query-param
+          arrangement as `item` above, and for the same reason. */}
+      <Tabs.Screen name="hubs" options={{ href: null, title: "Safe Zones" }} />
+      <Tabs.Screen name="hub" options={{ href: null, title: "Safe Zone" }} />
     </Tabs>
   );
 }

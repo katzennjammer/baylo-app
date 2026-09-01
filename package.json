@@ -28,10 +28,12 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
+    "react-native-webview": "13.16.1",
     "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "leaflet": "^1.9.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -41,7 +43,13 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "verify:api": "tsx scripts/verify-api-client.cjs",
-    "phone": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1"
+    "verify:map": "tsx scripts/verify-map-document.cjs",
+    "vendor:leaflet": "node scripts/vendor-leaflet.mjs",
+    "phone": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode hotspot",
+    "phone:tunnel": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode tunnel",
+    "phone:lan": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode lan",
+    "phone:reset": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -ClearBundleHost",
+    "phone:show": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -ShowOnly"
   },
   "private": true,
   "overrides": {

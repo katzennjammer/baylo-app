@@ -89,7 +89,22 @@ export type TypeRoleName =
   | "emptyBody"
   | "offlineText"
   | "lastSynced"
-  | "photoCaption";
+  | "photoCaption"
+  | "searchInput"
+  | "gridTitle"
+  | "gridLeaves"
+  | "gridMeta"
+  | "resultCount"
+  | "sheetTitle"
+  | "sheetLabel"
+  | "detailTitle"
+  | "detailLeaves"
+  | "detailSection"
+  | "detailBody"
+  | "hubName"
+  | "hubLandmark"
+  | "dangerAction"
+  | "carouselCount";
 
 export declare const type: Readonly<Record<TypeRoleName, TypeRole>>;
 
@@ -155,6 +170,47 @@ export declare const space: Readonly<{
     buttonToSynced: number;
   }>;
   trending: Readonly<{ y: number; headerToRail: number; chipGap: number }>;
+  browse: Readonly<{
+    searchY: number;
+    searchGap: number;
+    chipsY: number;
+    chipGap: number;
+    gridX: number;
+    gridGap: number;
+    tileBody: number;
+    tileTitleToMeta: number;
+    tileMetaToLeaves: number;
+    countY: number;
+  }>;
+  sheet: Readonly<{
+    x: number;
+    top: number;
+    bottom: number;
+    titleToBody: number;
+    groupGap: number;
+    labelToOptions: number;
+    optionGap: number;
+    rangeGap: number;
+    actionsTop: number;
+    actionGap: number;
+  }>;
+  detail: Readonly<{
+    x: number;
+    photoToBody: number;
+    titleToLeaves: number;
+    leavesToChips: number;
+    chipsToOwner: number;
+    ownerY: number;
+    sectionY: number;
+    headingToBody: number;
+    hubGap: number;
+    hubIconToText: number;
+    hubNameToLandmark: number;
+    dangerY: number;
+    dangerGap: number;
+    actionBarClearance: number;
+    actionBarY: number;
+  }>;
   matches: Readonly<{
     y: number;
     headerToRail: number;
@@ -181,7 +237,17 @@ export type RadiusName =
   | "unreadBadge"
   | "matchesThumb"
   | "photoCaption"
-  | "reloadButton";
+  | "reloadButton"
+  | "searchField"
+  | "filterButton"
+  | "gridTile"
+  | "gridPhoto"
+  | "sheet"
+  | "sheetOption"
+  | "rangeInput"
+  | "hubRow"
+  | "carouselDot"
+  | "carouselCount";
 
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
@@ -241,6 +307,30 @@ export declare const size: Readonly<{
   }>;
   emptyIconCircle: number;
   errorIconCircle: number;
+  browse: Readonly<{
+    searchField: number;
+    filterButton: number;
+    chip: number;
+    chipX: number;
+    tilePhotoAspect: number;
+  }>;
+  sheet: Readonly<{
+    option: number;
+    optionX: number;
+    rangeInput: number;
+    action: number;
+    handleW: number;
+    handleH: number;
+  }>;
+  detail: Readonly<{
+    photoAspect: number;
+    dot: number;
+    dotGap: number;
+    hubIcon: number;
+    dangerRow: number;
+    actionButton: number;
+    backButton: number;
+  }>;
   skeletonBlock: Readonly<{
     storyLabel: Readonly<{ w: number; h: number }>;
     name: Readonly<{ w: number; h: number }>;
@@ -278,7 +368,17 @@ export type IconName =
   | "retryError"
   | "retryPhoto"
   | "emptyLeaf"
-  | "errorMark";
+  | "errorMark"
+  | "search"
+  | "filter"
+  | "clear"
+  | "back"
+  | "chevron"
+  | "detailLeaf"
+  | "hubPin"
+  | "danger"
+  | "check"
+  | "emptyGrid";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 

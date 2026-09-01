@@ -78,7 +78,7 @@ export default function RootLayout() {
   // app; a permanent spinner is no app. `fontError` is the only thing standing
   // between a corrupt asset and a boot that never finishes, so it releases the
   // gate rather than being swallowed.
-  if (!fontsLoaded && !fontError) return <Splash />;
+  if (!fontsLoaded && !fontError) return <Splash waitingOn="Loading the app’s fonts" />;
 
   return (
     <QueryClientProvider client={queryClient}>

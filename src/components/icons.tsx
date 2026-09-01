@@ -239,3 +239,106 @@ export function RefreshIcon(props: IconProps) {
     </Glyph>
   );
 }
+
+/* ──────────────────────── marketplace and detail ────────────────────── */
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="10.5" cy="10.5" r="6.5" />
+      <Path d="M15.4 15.4 20.5 20.5" />
+    </Glyph>
+  );
+}
+
+/**
+ * Filters — three sliders, not a funnel.
+ *
+ * A funnel is the commoner mark and it means "this list is reduced". Sliders
+ * mean "these are the controls", which is what the button opens. The sheet has
+ * a Clear action of its own; the icon does not need to carry the state too.
+ */
+export function FilterIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M3.5 7h11" />
+      <Path d="M18.5 7h2" />
+      <Circle cx="16.5" cy="7" r="2" />
+      <Path d="M3.5 17h2" />
+      <Path d="M9.5 17h11" />
+      <Circle cx="7.5" cy="17" r="2" />
+    </Glyph>
+  );
+}
+
+/** Clears the search field. Also the filter sheet's dismiss. */
+export function CloseIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M6 6 18 18" />
+      <Path d="M18 6 6 18" />
+    </Glyph>
+  );
+}
+
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M14.5 5 7.5 12l7 7" />
+    </Glyph>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M9.5 5 16.5 12l-7 7" />
+    </Glyph>
+  );
+}
+
+/** The selected state inside the filter sheet. */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </Glyph>
+  );
+}
+
+/**
+ * A Safe-Zone hub. A map pin, and the only pin in the app.
+ *
+ * Deliberately NOT used for a seller's pickup point anywhere: a pin is what a
+ * coordinate you may publish looks like, and the whole reason hubs exist is
+ * that a seller's own coordinates are not that. See src/lib/safe-zones.ts on
+ * the server.
+ */
+export function PinIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 21.5s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z" />
+      <Circle cx="12" cy="10.2" r="2.6" />
+    </Glyph>
+  );
+}
+
+/** Report. A flag, which is the mark every platform uses for exactly this. */
+export function FlagIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5.5 21.5V3.5" />
+      <Path d="M5.5 4.5h11l-2.2 3.8 2.2 3.8h-11" />
+    </Glyph>
+  );
+}
+
+/** Block. A circle with a bar — the universal "no". */
+export function BlockIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" />
+      <Path d="M6 6 18 18" />
+    </Glyph>
+  );
+}

@@ -168,6 +168,39 @@ const type = {
 
   /** The expand affordance on a cropped photo. */
   photoCaption: { fontFamily: font.mono, fontSize: 9 },
+
+  /* ── Marketplace and item detail ──────────────────────────────────────── */
+
+  /** The search field's own text and its placeholder. */
+  searchInput: { fontFamily: font.sans, fontSize: 15 },
+  /** A grid tile's title. Smaller than `itemTitle` — two per row, not one. */
+  gridTitle: { fontFamily: font.displaySemi, fontSize: 14, lineHeight: 18.2 },
+  /** The Leaves figure on a grid tile. */
+  gridLeaves: { fontFamily: font.sansBold, fontSize: 12, fontVariant: ["tabular-nums"] },
+  /** A grid tile's condition line. */
+  gridMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
+  /** "24 results" above the grid. */
+  resultCount: { fontFamily: font.mono, fontSize: 11 },
+  /** The filter sheet's title. */
+  sheetTitle: { fontFamily: font.displaySemi, fontSize: 18 },
+  /** A labelled group inside the filter sheet. */
+  sheetLabel: { fontFamily: font.sansSemi, fontSize: 13 },
+  /** The detail screen's item title. Largest type outside a headline. */
+  detailTitle: { fontFamily: font.displayBold, fontSize: 22, lineHeight: 28.6 },
+  /** The Leaves figure on the detail screen. */
+  detailLeaves: { fontFamily: font.sansBold, fontSize: 17, fontVariant: ["tabular-nums"] },
+  /** A section heading on the detail screen — "Wanted in return". */
+  detailSection: { fontFamily: font.sansSemi, fontSize: 13 },
+  /** Body copy on the detail screen. */
+  detailBody: { fontFamily: font.sans, fontSize: 14, lineHeight: 21 },
+  /** A Safe-Zone hub's name. */
+  hubName: { fontFamily: font.sansSemi, fontSize: 13 },
+  /** A hub's "where exactly" line. */
+  hubLandmark: { fontFamily: font.sans, fontSize: 12, lineHeight: 16.8 },
+  /** The destructive row labels — Report, Block. */
+  dangerAction: { fontFamily: font.sansMedium, fontSize: 14 },
+  /** The 1-of-N counter over a carousel. */
+  carouselCount: { fontFamily: font.mono, fontSize: 10 },
 };
 
 /** Truncation, from the spec's own rules. */
@@ -260,6 +293,62 @@ const space = {
 
   trending: { y: 18, headerToRail: 12, chipGap: 8 },
 
+  /* ── Marketplace ──────────────────────────────────────────────────────────
+     The browse tab is a different MODE from the feed: two columns, denser, and
+     scanned rather than read. Its rhythm is therefore its own rather than
+     inherited from `card`, which is tuned for one full-bleed item at a time. */
+  browse: {
+    /** Search row → chip rail → grid. */
+    searchY: 12,
+    searchGap: 8,
+    chipsY: 10,
+    chipGap: 8,
+    /** Gutter around the grid, and the gap between the two columns. */
+    gridX: 12,
+    gridGap: 10,
+    /** Grid tile internals. */
+    tileBody: 10,
+    tileTitleToMeta: 5,
+    tileMetaToLeaves: 8,
+    countY: 10,
+  },
+
+  /* ── Filter sheet ─────────────────────────────────────────────────────── */
+  sheet: {
+    x: 20,
+    top: 18,
+    bottom: 24,
+    titleToBody: 18,
+    groupGap: 22,
+    labelToOptions: 10,
+    optionGap: 8,
+    /** The two range inputs, side by side. */
+    rangeGap: 12,
+    actionsTop: 20,
+    actionGap: 10,
+  },
+
+  /* ── Item detail ──────────────────────────────────────────────────────── */
+  detail: {
+    x: 16,
+    /** Carousel → title block. */
+    photoToBody: 16,
+    titleToLeaves: 10,
+    leavesToChips: 12,
+    chipsToOwner: 18,
+    ownerY: 14,
+    sectionY: 18,
+    headingToBody: 8,
+    hubGap: 10,
+    hubIconToText: 10,
+    hubNameToLandmark: 4,
+    dangerY: 14,
+    dangerGap: 12,
+    /** Clearance under the last section so the sticky bar never covers it. */
+    actionBarClearance: 96,
+    actionBarY: 12,
+  },
+
   matches: {
     y: 18,
     headerToRail: 12,
@@ -287,6 +376,18 @@ const radius = {
   matchesThumb: 8,
   photoCaption: 2,
   reloadButton: 22,
+
+  /* Marketplace and detail. */
+  searchField: 10,
+  filterButton: 10,
+  gridTile: 10,
+  gridPhoto: 10,
+  sheet: 18,
+  sheetOption: 8,
+  rangeInput: 8,
+  hubRow: 10,
+  carouselDot: 3,
+  carouselCount: 10,
 };
 
 /* ──────────────────────────── 4. COMPONENTS ─────────────────────────── */
@@ -362,6 +463,42 @@ const size = {
   emptyIconCircle: 96,
   errorIconCircle: 88,
 
+  /* ── Marketplace and item detail ──────────────────────────────────────── */
+  browse: {
+    /** Both 44 — the spec's minimum target, and they sit on one row. */
+    searchField: 44,
+    filterButton: 44,
+    /** The category rail's chips reuse the trending chip's geometry. */
+    chip: 36,
+    chipX: 14,
+    /** A grid tile's photo is square; the body sits under it. */
+    tilePhotoAspect: 1,
+  },
+
+  sheet: {
+    /** A tappable option inside the sheet. 44, like everything else. */
+    option: 44,
+    optionX: 14,
+    rangeInput: 44,
+    action: 48,
+    /** The grab handle at the top of the sheet. */
+    handleW: 40,
+    handleH: 4,
+  },
+
+  detail: {
+    /** The carousel box. 4:5 — taller than wide, the spec's portrait clamp. */
+    photoAspect: 4 / 5,
+    dot: 6,
+    dotGap: 6,
+    /** The hub row's leading icon well. */
+    hubIcon: 32,
+    /** Report / block rows, and the sticky primary. */
+    dangerRow: 44,
+    actionButton: 50,
+    backButton: 44,
+  },
+
   /**
    * Skeleton block dimensions.
    *
@@ -412,6 +549,19 @@ const icon = {
   /* The mark inside the error state's 88 px circle. The spec sizes the circle
      and stops; artboard-read, like the flagged values in `space`. */
   errorMark: { size: 38, stroke: 1.6 },
+
+  /* Marketplace and item detail. All 1.6 unless the mark is small enough that
+     1.6 reads heavy at its size, matching the table's own logic. */
+  search: { size: 18, stroke: 1.7 },
+  filter: { size: 19, stroke: 1.7 },
+  clear: { size: 16, stroke: 1.8 },
+  back: { size: 22, stroke: 1.8 },
+  chevron: { size: 16, stroke: 1.8 },
+  detailLeaf: { size: 16, stroke: 1.8 },
+  hubPin: { size: 16, stroke: 1.7 },
+  danger: { size: 18, stroke: 1.6 },
+  check: { size: 14, stroke: 2.1 },
+  emptyGrid: { size: 40, stroke: 1.4 },
 };
 
 const border = {

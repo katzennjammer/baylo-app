@@ -19,6 +19,6 @@ import { useSession } from "../src/auth/session";
 export default function Index() {
   const { session, isLoading } = useSession();
 
-  if (isLoading) return <Splash />;
+  if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
   return <Redirect href={session ? "/(app)" : "/(auth)/login"} />;
 }

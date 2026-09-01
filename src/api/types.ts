@@ -43,12 +43,42 @@ export interface ItemOwner {
    * The TRUST ladder, resolved server-side with DPA defaults charged against
    * it — the same value the contract gates enforce with.
    *
-   * NULL ON ENDPOINTS THAT DO NOT RESOLVE IT. /home does; /browse, /items/[id]
-   * and both profile routes send null today because the three aggregates it
-   * costs were not worth adding to routes whose screens do not draw the badge.
-   * Null means "unknown", never "New Trader" — see `resolveTier`.
+   * NULL ON ENDPOINTS THAT DO NOT RESOLVE IT. /home and /items/[id] both
+   * resolve it; /browse and the two profile routes still send null, because
+   * the three aggregates it costs are not worth adding to routes whose screens
+   * do not draw the badge. Null means "unknown", never "New Trader".
+   *
+   * THE DETAIL SCREEN MUST NOT FALL BACK. `resolveTier()` exists for the
+   * grid and the feed, where an approximate badge is a cosmetic error. On item
+   * detail the badge is read by somebody deciding whether to go and meet a
+   * stranger, and the fallback is known to read HIGH — it works off a
+   * denormalised counter and cannot see DPA defaults. /items/[id] was changed
+   * to resolve the real tier for exactly that reason; render nothing rather
+   * than a guess if it ever comes back null again.
    */
   trustTier: TrustTier | null;
+}
+
+/** A curated public meetup point. Coordinates here are public and precise. */
+export interface SafeZoneHub {
+  id: string;
+  name: string;
+  /** Wire form: "mall" | "barangay_hall" | "police_station" | … */
+  type: string;
+  typeLabel: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  city: string;
+  /** The "where exactly" note — the field that actually gets two people to one spot. */
+  landmark: string;
+  /**
+   * FALSE MEANS "still listed here, but this place is no longer a Safe Zone".
+   * The association survives deactivation deliberately, so the listing does not
+   * silently lose the only answer it had to "where would we meet?". Render it
+   * struck through; do not filter it out.
+   */
+  isActive: boolean;
 }
 
 export interface Item {
@@ -69,7 +99,34 @@ export interface Item {
   pickup: Pickup | null;
   owner: ItemOwner;
   stats: { likes: number; liked: boolean; comments: number };
+  /**
+   * NULL means the endpoint did not load them; `[]` means the listing genuinely
+   * has none. A client must not collapse the two — the feed sends null and a
+   * card that rendered "no meetup points" from it would be making a claim the
+   * feed never checked. Only /items/[id] populates this today.
+   */
+  safeZones: SafeZoneHub[] | null;
   createdAt: string;
+}
+
+/** GET /api/v1/browse — `meta.nextCursor` carries the keyset cursor. */
+export interface BrowsePayload {
+  items: Item[];
+  facets: { categories: { category: string; label: string; count: number }[] };
+}
+
+/** GET /api/v1/items/[id] — the detail screen in one request. */
+export interface ItemDetailPayload {
+  item: Item & { imageHash: string | null; updatedAt: string };
+  viewer: {
+    isOwner: boolean;
+    /** False for your own listing and for anything that has left AVAILABLE. */
+    canOffer: boolean;
+    leaves: number;
+    tradeableItems: { id: string; title: string; image: string | null }[];
+    /** Non-null when this viewer already has a PENDING offer on this listing. */
+    existingOfferId: string | null;
+  };
 }
 
 export interface HomeViewer {

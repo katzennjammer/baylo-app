@@ -1,0 +1,201 @@
+<#
+.SYNOPSIS
+  Confirms a USB-connected Android phone is ready and opens BOTH port tunnels.
+
+.DESCRIPTION
+  Five things have to be true before the app can start and talk to the Next.js
+  dev server, and when one of them is not, the failure is usually a blank or
+  white screen that looks the same for all five. This checks them in the order
+  they fail and says which.
+
+    1  adb exists
+    2  exactly one phone is attached AND authorised
+    3  Metro (8081) and the API (3000) are actually listening on this machine
+    4  both reverse tunnels are open
+    5  the phone can really reach both through them
+
+  ── WHY 8081 IS TUNNELLED AND NOT JUST 3000 ─────────────────────────────────
+
+  This is the fix for "Change bundle location resets to localhost on every
+  force-close", and it is worth understanding rather than just running.
+
+  In React Native 0.86, `PackagerConnectionSettings.debugServerHost` — the value
+  the dev menu's "Change Bundle Location" writes — has a setter that assigns to
+  a static field in a companion object AND NOTHING ELSE. It never touches
+  SharedPreferences. So the host you type survives exactly as long as the
+  process does; on force-close the static dies, the getter falls through to the
+  (never-written) `debug_http_host` preference, and then to
+  AndroidInfoHelpers.getServerHost(), which on a physical device is `localhost`.
+
+  That is not a bug you can fix from JavaScript. `DevSettings` in JS exposes
+  only addMenuItem/reload/onFastRefresh — there is no host setter — and in any
+  case the bundle host is chosen BEFORE any of this app's JS exists, so no
+  amount of app code can influence it.
+
+  So rather than fight the reset, make the value it resets TO be correct:
+  `adb reverse tcp:8081 tcp:8081` points the phone's own localhost:8081 at this
+  machine's Metro. The dev menu can then reset to localhost as often as it likes
+  and it will be right every time — and, because no LAN IP is involved anywhere,
+  it stays right when this laptop's DHCP lease changes on the hotspot.
+
+  ── THE ONE THAT SILENTLY LAPSES ────────────────────────────────────────────
+
+  `adb reverse` does not survive unplugging the phone, rebooting it, or
+  restarting the adb server. Re-run this script whenever the app stops reaching
+  Metro or the API for no apparent reason.
+
+.PARAMETER PersistBundleHost
+  Seeds the `debug_http_host` preference with this machine's LAN IP, for the
+  case where the phone will be OFF the USB cable and has to find Metro over
+  Wi-Fi. Unlike the dev menu's value, a preference is real persistent storage
+  and survives a force-close.
+
+  This is the fallback, not the primary path. It pins a LAN IP, so it goes stale
+  the next time this machine's DHCP lease changes — which on a phone hotspot is
+  often. Prefer the tunnel.
+#>
+
+[CmdletBinding()]
+param(
+  [int]    $ApiPort   = 3000,
+  [int]    $MetroPort = 8081,
+  [string] $Adb       = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
+  [switch] $PersistBundleHost,
+  [string] $Package   = "com.baylo.app"
+)
+
+function Fail([string] $m) { Write-Host "  FAIL  $m" -ForegroundColor Red; exit 1 }
+function Ok([string] $m)   { Write-Host "  OK    $m" -ForegroundColor Green }
+function Warn([string] $m) { Write-Host "  WARN  $m" -ForegroundColor Yellow }
+function Note([string] $m) { Write-Host "  NOTE  $m" -ForegroundColor DarkGray }
+
+Write-Host ""
+Write-Host "  phone connection check" -ForegroundColor Cyan
+
+# 1 ── adb
+if (-not (Test-Path $Adb)) {
+  Fail "adb not found at $Adb  (install Android Platform Tools, or pass -Adb <path>)"
+}
+Ok "adb found"
+
+# 2 ── the device
+$lines = & $Adb devices | Select-Object -Skip 1 | Where-Object { $_.Trim() }
+if (-not $lines) {
+  Fail "no device attached. Plug the phone in, then see the USB-debugging steps in README.md"
+}
+
+if ($lines | Where-Object { $_ -match "unauthorized" }) {
+  Fail "phone attached but UNAUTHORISED - unlock it and tap 'Allow' on the 'Allow USB debugging?' dialog, then re-run"
+}
+
+if ($lines | Where-Object { $_ -match "offline" }) {
+  Fail "phone is 'offline' - unplug, replug, and re-run. If it persists: adb kill-server; adb start-server"
+}
+
+$devices = $lines | Where-Object { $_ -match "\sdevice$" }
+if ($devices.Count -eq 0) { Fail "device present but not ready: $lines" }
+if ($devices.Count -gt 1) {
+  Warn "more than one device attached; using the first"
+}
+$serial = ($devices[0] -split "\s+")[0]
+$model  = (& $Adb -s $serial shell getprop ro.product.model 2>$null).Trim()
+Ok "device $serial ($model)"
+
+# 3 ── the servers. Tunnelling to a port nothing listens on produces a
+#      connection error on the phone that looks exactly like a bad URL.
+foreach ($p in @(@{ Port = $MetroPort; Name = "Metro"; Start = "npx expo start" },
+                 @{ Port = $ApiPort;   Name = "API";   Start = "cd ..\baylo; npx next dev" })) {
+  if (-not (Get-NetTCPConnection -LocalPort $p.Port -State Listen -ErrorAction SilentlyContinue)) {
+    Fail "nothing is listening on localhost:$($p.Port) - start $($p.Name) first:  $($p.Start)"
+  }
+  Ok "$($p.Name) listening on localhost:$($p.Port)"
+}
+
+# 4 ── the tunnels
+foreach ($port in @($MetroPort, $ApiPort)) {
+  & $Adb -s $serial reverse "tcp:$port" "tcp:$port" | Out-Null
+  if ($LASTEXITCODE -ne 0) { Fail "adb reverse failed for tcp:$port" }
+}
+Ok "tunnels open: $((& $Adb -s $serial reverse --list) -join ', ')"
+
+# 5 ── prove it end to end from the phone's own network stack rather than
+#      asserting it. This Android image has no curl or wget, so the probe is a
+#      raw HTTP/1.1 request through toybox nc. `-w` matters: without a timeout
+#      nc waits on a half-closed socket and the check hangs instead of failing.
+$metroProbe = & $Adb -s $serial shell "(printf 'GET /status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n'; sleep 2) | nc -w 4 localhost $MetroPort 2>&1 | head -c 64"
+if ("$metroProbe" -match "200 OK") {
+  Ok "phone reached Metro on localhost:$MetroPort"
+} elseif ("$metroProbe" -match "not found") {
+  Note "no nc on this Android image - could not probe Metro; the tunnel is open regardless"
+} else {
+  Warn "phone could not reach Metro through the tunnel. Got: $metroProbe"
+}
+
+# A 401 here is a SUCCESS: it means /api/v1/hubs was reached and correctly
+# refused an unauthenticated request.
+$apiProbe = & $Adb -s $serial shell "(printf 'GET /api/v1/hubs HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n'; sleep 2) | nc -w 4 localhost $ApiPort 2>&1 | head -c 64"
+if ("$apiProbe" -match "401") {
+  Ok "phone reached /api/v1/hubs and got 401 (correct: no Bearer token yet)"
+} elseif ("$apiProbe" -match "HTTP/1\.1 (\d{3})") {
+  Warn "phone reached the API but got HTTP $($Matches[1]) (expected 401)"
+} elseif ("$apiProbe" -match "not found") {
+  Note "no nc on this Android image - could not probe the API; the tunnel is open regardless"
+} else {
+  Warn "phone could not reach the API through the tunnel. Got: $apiProbe"
+}
+
+# ── optional: the no-USB fallback ───────────────────────────────────────────
+#
+# RN never writes `debug_http_host`, but it DOES read it — DevServerHelper's own
+# doc comment names it as the supported way to hand the debug server a host. So
+# seeding it is using a documented escape hatch, not patching around one.
+#
+# `run-as` is what makes this possible without root: it works on any debuggable
+# build, which every `expo run:android` debug APK is.
+if ($PersistBundleHost) {
+  Write-Host ""
+  Write-Host "  persisting the bundle host" -ForegroundColor Cyan
+
+  $lanIp = (Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object { $_.PrefixOrigin -eq "Dhcp" -and $_.IPAddress -ne "127.0.0.1" } |
+            Select-Object -First 1).IPAddress
+  if (-not $lanIp) { Fail "no DHCP IPv4 address found on this machine to persist" }
+  $host_ = "${lanIp}:${MetroPort}"
+
+  $prefs = "shared_prefs/${Package}_preferences.xml"
+
+  # Read-modify-write rather than overwrite. RN's own DevInternalSettings keeps
+  # its toggles (hot reloading, the perf monitor, the element inspector) in this
+  # same default-preferences file, so clobbering it would silently reset them.
+  $existing = & $Adb -s $serial shell "run-as $Package cat $prefs 2>/dev/null"
+  $xml = ($existing -join "`n").Trim()
+
+  if ($xml -match "<map") {
+    if ($xml -match 'name="debug_http_host"') {
+      $xml = $xml -replace '<string name="debug_http_host">[^<]*</string>', "<string name=`"debug_http_host`">$host_</string>"
+    } else {
+      $xml = $xml -replace '</map>', "  <string name=`"debug_http_host`">$host_</string>`n</map>"
+    }
+  } else {
+    $xml = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>`n<map>`n  <string name=`"debug_http_host`">$host_</string>`n</map>"
+  }
+
+  # base64 over the wire so no quoting, newline or XML character has to survive
+  # two shells. Verified by reading the value back, below - if the device image
+  # has no `base64`, that read is what tells you, rather than a silent no-op.
+  $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($xml))
+  & $Adb -s $serial shell "run-as $Package sh -c 'echo $b64 | base64 -d > $prefs'" | Out-Null
+
+  $readBack = (& $Adb -s $serial shell "run-as $Package cat $prefs 2>/dev/null") -join ""
+  if ($readBack -match [Regex]::Escape($host_)) {
+    Ok "debug_http_host = $host_  (survives force-close)"
+    Note "this pins a LAN IP. Re-run with -PersistBundleHost after any DHCP change."
+  } else {
+    Warn "could not verify the preference was written - the app will fall back to localhost"
+  }
+}
+
+Write-Host ""
+Write-Host "  Ready. Now:  npx expo start   then press 'a'" -ForegroundColor Green
+Write-Host "  The dev menu's bundle location can stay on localhost:$MetroPort - the tunnel makes it correct." -ForegroundColor Green
+Write-Host ""

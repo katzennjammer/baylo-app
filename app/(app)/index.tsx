@@ -1,7 +1,9 @@
+import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { Splash } from "../../src/components/Splash";
 import { Divider } from "../../src/components/Divider";
 import { EmptyFeed } from "../../src/components/home/EmptyFeed";
 import { FeedCard } from "../../src/components/home/FeedCard";
@@ -76,6 +78,7 @@ const TRENDING_AFTER = 1;
 type Row = { kind: "item"; item: Item } | { kind: "trending" };
 
 export default function HomeScreen() {
+  const router = useRouter();
   const {
     viewer,
     trending,
@@ -101,6 +104,12 @@ export default function HomeScreen() {
     return out;
   }, [feed, trending.length]);
 
+  /** The card's Offer Trade button and a tap on the card both land here. */
+  const openItem = useCallback(
+    (item: Item) => router.push({ pathname: "/item", params: { id: item.id } }),
+    [router],
+  );
+
   const onEndReached = useCallback(() => {
     // hasNextPage is derived from meta.nextCursor. The isFetchingNextPage guard
     // matters more than it looks: FlatList fires onEndReached again on every
@@ -121,12 +130,18 @@ export default function HomeScreen() {
       if (row.kind === "trending") return <TrendingStrip trending={trending} />;
       return (
         <View>
-          <FeedCard item={row.item} />
+          {/*
+            The card's Offer Trade button had nowhere to go until item detail
+            existed — `onOffer` was optional and nothing passed it, so the
+            control was inert. It opens the listing now; the offer sheet itself
+            is one more hop and is still a placeholder.
+          */}
+          <FeedCard item={row.item} onOffer={openItem} />
           <Divider />
         </View>
       );
     },
-    [trending],
+    [trending, openItem],
   );
 
   const hasCache = viewer !== undefined;
@@ -140,14 +155,23 @@ export default function HomeScreen() {
   }
 
   if (isError && !hasCache) {
-    // A 401 gets a blank frame, not an error state. By the time a query fails
-    // with UNAUTHENTICATED the interceptor has already tried to refresh and
-    // given up, which means it has already cleared the session — so the guard
-    // in (app)/_layout.tsx is about to replace this whole tree with the login
+    // A 401 gets the Splash, not an error state. By the time a query fails with
+    // UNAUTHENTICATED the interceptor has already tried to refresh and given up,
+    // which means it has already cleared the session — so the guard in
+    // (app)/_layout.tsx is about to replace this whole tree with the login
     // screen. Rendering a Retry button would flash for one frame and vanish.
+    //
+    // Splash rather than a blank frame, because "about to" is doing a lot of
+    // work in that sentence. When the redirect lands promptly this shows the
+    // same spinner a blank frame would have, and nobody sees a difference. When
+    // it does NOT land — the guard is wedged, the refresh never resolved, the
+    // API is unreachable — the blank frame was a white screen with no way to
+    // tell which. Splash reveals the bundle and API origins after a few seconds
+    // and says what it is waiting on, which is the whole difference between a
+    // failure you can read and one you have to guess at.
     const apiError = error instanceof ApiError ? error : null;
     if (apiError?.code === "UNAUTHENTICATED") {
-      return <View style={{ flex: 1, backgroundColor: color.surface }} />;
+      return <Splash waitingOn="Signing you back in" />;
     }
 
     return (
