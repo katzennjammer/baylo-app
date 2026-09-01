@@ -218,137 +218,143 @@ is layered over that default; **Reset** drops back to it. **Test** POSTs an empt
 body to `/api/auth/token` and reports the status — a 400 back is a pass, because
 what is being tested is whether anything on the other end parsed the request.
 
-
 ## Reaching the dev server from a phone
 
-**There is one supported path. It is `npm run phone`. Read the next paragraph
-and then run that command.**
+### Over USB — the easy path, and the one this repo is configured for
 
-Three routes to Metro exist, this repo used to document all three, and switching
-between them is what broke this setup repeatedly — each leaves state the next
-one does not clear, so the app ends up dialling an address that no longer means
-anything. What follows picks one, explains why, and makes the other two
-explicitly unsupported fallbacks.
-
-### The one path: the laptop's own hotspot
+`adb reverse` opens a tunnel from the phone back to this machine: the phone's
+own `localhost:3000` becomes this machine's `localhost:3000`. No LAN IP, no
+firewall rule, no shared Wi-Fi, and nothing on the network can reach the dev
+server. It also survives the laptop changing networks.
 
 ```bash
-# once, in Windows: Settings > Network & Internet > Mobile hotspot > On
-#                   then join the PHONE to that hotspot
-npm run phone
+adb devices                        # confirm the phone is listed as "device"
+adb reverse tcp:3000 tcp:3000      # the API
+adb reverse tcp:8081 tcp:8081      # Metro — see "the bundle location" below
 ```
 
-That is the whole setup. The script starts Metro and the API if they are not
-already up, opens the firewall, checks the phone can actually reach both, and
-writes the host into the app so it survives a force-close.
+or just `npm run phone`, which checks both servers are up, opens both tunnels,
+and proves the phone can reach each one through them.
 
-**Why the hotspot and not the other two.** Windows pins its hosted network to
-`192.168.137.1` and has done since Internet Connection Sharing shipped. It is
-not a DHCP lease on a network you do not control — it is a fixed address on a
-virtual adapter that this machine owns. So:
+with `.env` holding:
 
-| | needs the cable up | breaks when an address changes |
-|---|---|---|
-| `adb reverse` (USB tunnel) | **yes — constantly** | no |
-| LAN / Wi-Fi IP | no | **yes — every DHCP lease** |
-| **hotspot** | **no** | **no** |
+```
+EXPO_PUBLIC_API_URL=http://localhost:3000
+```
 
-The hotspot is the only one of the three that is not waiting to fail. Its one
-cost is that the phone is on the laptop's internet rather than its own mobile
-data, which for development is not a cost at all.
+`adb reverse` is not persistent. Unplugging the phone, rebooting it, or
+restarting the adb server drops the tunnel, and the app then fails with a
+connection error against a URL that is still correct. Re-run the command.
 
-The cable is still needed **once**, to write the host onto the phone. After that
-it can come out and stay out.
+### The bundle location resets to localhost — and that is fine
 
-### Why the host has to be written, not typed
-
-The dev menu's **Change Bundle Location** does not persist. In React Native
+"Change Bundle Location" in the dev menu does not survive a force-close, and
+this is upstream behaviour rather than a misconfiguration. In React Native
 0.86, `PackagerConnectionSettings.debugServerHost` has a setter that assigns to
-a static field in a companion object and does nothing else — it never touches
-SharedPreferences. The host you type lives exactly as long as the process does.
-On force-close the static dies, the getter falls through to the never-written
-`debug_http_host` preference, and then to `AndroidInfoHelpers.getServerHost()`,
-which on a physical device is `localhost`.
+a **static field in a companion object and nothing else** — it never writes
+SharedPreferences. On process death the static dies, the getter falls through to
+the (never-written) `debug_http_host` preference, and then to
+`AndroidInfoHelpers.getServerHost()`, which on a physical device is `localhost`.
 
-That is not fixable from JavaScript. `DevSettings` exposes only
-`addMenuItem`/`reload`/`onFastRefresh`, and the bundle host is chosen before any
-of this app's JS exists, so no amount of app code can influence it.
+There is no fix from JavaScript. `DevSettings` in JS exposes only
+`addMenuItem`, `reload` and `onFastRefresh` — there is no host setter — and the
+bundle host is chosen *before any of this app's JS exists*, so no app code could
+influence it even if there were one. This project has no `expo-dev-client`, so
+`expo-dev-launcher`'s remembered-URL list is not available either; adding it
+would buy a native dependency and a full rebuild for a list you still have to
+pick from, and a saved LAN IP still breaks on the next DHCP lease.
 
-So `npm run phone` writes `debug_http_host` itself, through `run-as`, which
-works on any debuggable build — which every `expo run:android` debug APK is. RN
-never writes that preference but it does read it: `DevServerHelper`'s own doc
-comment names it as the supported way to hand the debug server a host. A
-preference is real storage. It survives force-close, reboot, and the cable
-falling out.
-
-### The other commands
+So do not fight the reset — **make the value it resets to correct**:
 
 ```bash
-npm run phone           # hotspot. the supported path.
-npm run phone:tunnel    # adb reverse + localhost. needs the cable to stay up.
-npm run phone:lan       # this machine's Wi-Fi IP. goes stale; avoid.
-npm run phone:show      # what is set on the device right now. changes nothing.
-npm run phone:reset     # forget the persisted host.
+adb reverse tcp:8081 tcp:8081
 ```
 
-`npm run phone:show` first, always. It prints the `debug_http_host` the phone is
-actually holding, which is the only thing that answers "why is it reaching for
-*that* address" — and it is not visible from the laptop any other way.
+The phone's own `localhost:8081` is now this machine's Metro. The dev menu can
+reset to `localhost` as often as it likes and it will be right every time, and
+because no LAN IP is involved it stays right when this laptop's DHCP lease
+changes on a phone hotspot.
 
-> **Flags do not pass through npm.** `npm run phone -PersistBundleHost` silently
-> drops the flag; npm forwards nothing after the script name without `--`, and
-> PowerShell switches do not survive that either. That is why each mode is its
-> own npm script. To pass anything else, call the file directly:
->
-> ```bash
-> powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode hotspot -BundleHost 192.168.1.50
-> ```
+**Off the cable.** If the phone has to find Metro over Wi-Fi, seed the
+preference RN actually reads:
 
-### When the app reaches an address you do not recognise
+```bash
+npm run phone -- -PersistBundleHost
+```
 
-Work down this list. Every step is a thing that can supply a host, in the order
-they are worth checking.
+`DevServerHelper`'s own doc comment names `debug_http_host` as the supported way
+to hand the debug server a host, and a preference is real persistent storage —
+so unlike the dev menu's value, this one survives a force-close. It pins a LAN
+IP, so re-run it after a DHCP change. The tunnel is still the better path.
 
-1. **`npm run phone:show`** — the persisted `debug_http_host`. If this is stale,
-   `npm run phone:reset` and then `npm run phone`.
-2. **The gear's API override.** `EXPO_PUBLIC_API_URL` is compiled into the
-   bundle and is only a default; the gear writes an override to SecureStore that
-   outranks it. Editing `.env` has **no effect** while an override is set. The
-   boot diagnostic says `from the gear's override, NOT .env` when this is the
-   case. **Reset** in the gear drops it.
-3. **Metro's advertised host.** `npx expo start` defaults to `--host lan`, which
-   makes Metro advertise this laptop's Wi-Fi DHCP address — the source of every
-   stray `10.x.x.x` in this project's history. `npm run phone` sets
-   `REACT_NATIVE_PACKAGER_HOSTNAME` so Metro, the QR code, and the persisted
-   preference all name the same host. A Metro started by hand in another window
-   does not, and a Metro already running is the one thing the script cannot fix
-   for you — close that window and let the script start it.
-4. **A stale bundle.** `EXPO_PUBLIC_API_URL` is inlined at build time, so a
-   Metro started before an `.env` edit serves the old value. Always
-   `npx expo start --clear` after touching `.env`.
+### Over Wi-Fi — when USB is not an option
+
+This is the part that catches people out. `localhost` on a phone is the phone,
+so a device pointed at `http://localhost:3000` is talking to itself.
+
+**1. Bind Next.js to every interface.** By default `next dev` listens on
+localhost only and will refuse a connection that came from another machine:
+
+```bash
+cd ../baylo
+npx next dev -H 0.0.0.0 -p 3000
+```
+
+**2. Find this machine's LAN IP.**
+
+```bash
+ipconfig                      # Windows — the "Wi-Fi" adapter's IPv4 Address
+ipconfig getifaddr en0        # macOS
+hostname -I | awk '{print $1}'  # Linux
+```
+
+Take the address on the same subnet as the phone. On this machine that is
+`172.20.248.88` (Wi-Fi). Ignore `192.168.56.x` — that is a VirtualBox host-only
+adapter and no phone can reach it.
+
+**3. Put it in `.env`.**
+
+```
+EXPO_PUBLIC_API_URL=http://172.20.248.88:3000
+```
+
+`EXPO_PUBLIC_*` is read at BUILD time, not at runtime. Changing it means
+restarting Metro with `npx expo start --clear` — without `--clear` the old value
+stays baked into the cached bundle and you will debug a URL that is no longer in
+the file.
+
+**4. Open the Windows Firewall for port 3000.** Windows blocks inbound
+connections to Node by default, which presents as a request that hangs and then
+times out — indistinguishable from a wrong IP. Once, from an elevated shell:
+
+```powershell
+New-NetFirewallRule -DisplayName "Next.js dev 3000" -Direction Inbound `
+  -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private
+```
+
+Keep it to `-Profile Private`. On a public network that rule exposes the dev
+server, database-backed API and all, to everyone on the Wi-Fi.
+
+**5. Same network.** Phone and machine on the same SSID, and not a guest network
+— guest networks isolate clients from each other by design.
+
+### Per-target cheat sheet
+
+| Target | `EXPO_PUBLIC_API_URL` | Notes |
+| --- | --- | --- |
+| **Real device over USB** | `http://localhost:3000` | Needs `adb reverse tcp:3000 tcp:3000`. No firewall rule. **Current setting.** |
+| Real device, same Wi-Fi | `http://<LAN-IP>:3000` | Needs steps 1 and 4 above |
+| Android emulator | `http://10.0.2.2:3000` | `10.0.2.2` is the emulator's alias for the host's loopback; no firewall rule needed |
+| iOS simulator | `http://localhost:3000` | Shares the host's network stack |
+
+Whichever you pick, `EXPO_PUBLIC_*` is substituted at BUILD time. Changing it and
+restarting Metro is not enough — Metro's transform cache will hand back a bundle
+with the old URL still compiled in. This is not hypothetical; it was observed
+while writing this file. Always `npx expo start --clear`.
 
 Verify the path before blaming the app — from the phone's browser, open
-`http://192.168.137.1:3000`. If the Baylo landing page does not load there, no
-amount of app debugging will help.
-
-### Not installed: `expo-dev-client`
-
-Worth knowing what it would and would not buy, because it looks like the fix and
-is only half of one.
-
-It **would** solve the reset: it adds a launcher that keeps recently-used dev
-server URLs in its own persistent storage, so a force-close returns you to a
-screen listing them rather than to a silent fallback to `localhost`.
-
-It **would not** solve either thing that actually breaks this setup. The URL it
-remembers is still a URL: point it at a LAN IP and the next DHCP lease still
-kills it; point it at `localhost` and it still needs `adb reverse` and a cable
-that stays plugged in. It also adds a build step and a native dependency.
-
-Writing `debug_http_host` gets the same persistence with no new dependency, and
-the hotspot removes the reason the stored value would ever go stale. Install
-`expo-dev-client` if you want its launcher UI and its other tooling — not as a
-fix for this.
+`http://<LAN-IP>:3000`. If the Baylo landing page does not load there, no amount
+of app debugging will help.
 
 ## Google sign-in
 
