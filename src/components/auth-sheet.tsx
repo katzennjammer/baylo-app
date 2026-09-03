@@ -1,6 +1,7 @@
 import {
   createContext,
   forwardRef,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -61,6 +62,14 @@ import {
   selectableYears,
   type DateParts,
 } from "../lib/dob";
+import {
+  NativeDateSpinner,
+  dateBounds,
+  dateToParts,
+  nativeDatePickerAvailable,
+  openAndroidDatePicker,
+  partsToDate,
+} from "./native-date-dialog";
 
 /**
  * The auth kit: a sheet over a video band.
@@ -943,8 +952,6 @@ export function FieldMessage({ children }: { children: React.ReactNode }) {
 
 export interface FieldProps extends Omit<TextInputProps, "style" | "placeholder"> {
   label: string;
-  /** Shown in `placeholder` grey when the field is empty. */
-  placeholder?: string;
   /** Drives the error state and renders a message underneath. */
   error?: string | null;
   /** Password fields: the "Show" / "Hide" text button. */
@@ -956,13 +963,29 @@ export interface FieldProps extends Omit<TextInputProps, "style" | "placeholder"
 /**
  * A text field.
  *
+ * NO PLACEHOLDER, and the prop is omitted from the type rather than merely left
+ * unset — which is why `Omit<…, "placeholder">` above is not re-widened. The
+ * label sits above the rule and never moves, so a hint underneath it can only
+ * repeat it, and grey text in an empty box makes a field that has not been
+ * filled in look as though it has. Worse, a hint is the one piece of help that
+ * disappears at the exact moment it would be used: "At least 8 characters" is
+ * gone by the second keystroke. That rule belongs in `error`, which appears
+ * when it is broken and stays until it is not. `AuthField` in auth-thumbbar.tsx
+ * has had the same shape since the spec first said so; passing a placeholder
+ * here is now a type error in both, so it cannot quietly come back a third
+ * time.
+ *
+ * `SelectRow` below is the deliberate exception. Its "placeholder" is not a
+ * hint over an empty input — it is what the row DISPLAYS until a value is
+ * picked, and a picker showing nothing at all is a blank rectangle.
+ *
  * THE CARET IS THE NATIVE ONE, TINTED. The spec draws a 1.5 × 17 bar in #1B4D2B
  * blinking on a 1s step; that is exactly what `cursorColor` (Android) and
  * `selectionColor` (both) produce, and a drawn caret would have to blink on the
  * JS thread while fighting the real one for the same pixels.
  */
 export const Field = forwardRef<TextInput, FieldProps>(function Field(
-  { label, placeholder, error, reveal, matched, onFocus, onBlur, editable, secureTextEntry, value, ...input },
+  { label, error, reveal, matched, onFocus, onBlur, editable, secureTextEntry, value, ...input },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
@@ -1018,8 +1041,6 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
           value={value}
           editable={editable}
           secureTextEntry={secureTextEntry}
-          placeholder={placeholder}
-          placeholderTextColor={sheetColor.placeholder}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -1303,7 +1324,7 @@ export function TextButton({
   );
 }
 
-/** "Naa nay account? Log in" — a prompt and a link on one row. */
+/** "Already have an account? Log in" — a prompt and a link on one row. */
 export function FooterPrompt({
   prompt,
   label,
@@ -1595,24 +1616,50 @@ export function DateRow({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState<DateColumn | null>(null);
-  const draft = useDateDraft(value, onChange);
+
+  /*
+   * THE COLUMNS ARE THE DISPLAY; THE PICKER BEHIND THEM IS SWAPPABLE.
+   *
+   * The spec draws this row as three fields and that has not changed — the
+   * system picker replaces what a TAP opens, not what the row looks like. The
+   * draft is therefore still what the three fields read from, and a native
+   * confirm has to land in it rather than beside it.
+   *
+   * That is what the nonce is for. `useDateDraft` re-seeds from `value` only
+   * when the nonce moves, so reporting a date upward without bumping it would
+   * update the parent and leave these three fields showing their placeholders —
+   * the row would look untouched immediately after being filled in.
+   */
+  const [nonce, setNonce] = useState(0);
+  const draft = useDateDraft(value, onChange, nonce);
+
+  const native = useNativeDatePicker(value ?? (draft.complete ? draft.parts : null), (picked) => {
+    onChange(picked);
+    setNonce((n) => n + 1);
+  });
 
   return (
     <View>
       <DateColumns
         parts={draft.parts}
         chosen={draft.chosen}
-        onOpenColumn={setOpen}
+        // Which column was tapped stops mattering the moment the system picker
+        // takes over — it asks for the whole date at once. The column is still
+        // passed through to the fallback, so a device without the native module
+        // opens exactly the sheet it always did.
+        onOpenColumn={(column) => native.tryOpen(() => setOpen(column))}
         disabled={disabled}
       />
 
       {error ? <FieldMessage>{error}</FieldMessage> : null}
 
+      {native.sheet}
+
       {/*
-        One sheet, opened for whichever column was tapped. Safe to be a modal
-        here because this row renders on the PAGE - nothing above it is already
-        a modal. `DateOfBirthField` cannot use it for exactly that reason and
-        swaps its own sheet's content instead.
+        The fallback. One sheet, opened for whichever column was tapped. Safe to
+        be a modal here because this row renders on the PAGE - nothing above it
+        is already a modal. `DateOfBirthField` cannot use it for exactly that
+        reason and swaps its own sheet's content instead.
       */}
       <OptionSheet
         visible={open !== null}
@@ -1653,6 +1700,17 @@ export function DateOfBirthField({
   const [nonce, setNonce] = useState(0);
   const draft = useDateDraft(value, undefined, nonce);
 
+  const native = useNativeDatePicker(value, onChange);
+
+  /** The fallback: the column sheet this field opened before there was a native one. */
+  const openColumnSheet = () => {
+    // Re-seed from the committed value, so an abandoned edit does not
+    // reappear next time as though it had been saved.
+    setNonce((n) => n + 1);
+    setColumn(null);
+    setOpen(true);
+  };
+
   return (
     <>
       <PickerField
@@ -1662,14 +1720,13 @@ export function DateOfBirthField({
         icon="calendar"
         error={error}
         disabled={disabled}
-        onPress={() => {
-          // Re-seed from the committed value, so an abandoned edit does not
-          // reappear next time as though it had been saved.
-          setNonce((n) => n + 1);
-          setColumn(null);
-          setOpen(true);
-        }}
+        // The system picker first, this field's own sheet when there is not
+        // one. Both write through `onChange`, so nothing downstream of this
+        // control can tell which of them ran.
+        onPress={() => native.tryOpen(openColumnSheet)}
       />
+
+      {native.sheet}
 
       {/*
         ONE MODAL, NOT A MODAL INSIDE A MODAL.
@@ -1713,6 +1770,117 @@ export function DateOfBirthField({
       </ModalSheet>
     </>
   );
+}
+
+/* -- the system picker, and the column picker it falls back to ------------ */
+
+/**
+ * The platform's own date picker, with the column sheet behind it.
+ *
+ * ── WHY THE FALLBACK IS NOT OPTIONAL ────────────────────────────────────────
+ *
+ * `native-date-dialog.tsx` can report unavailable for three different reasons —
+ * the native module missing from the installed shell (the normal state of this
+ * project between rebuilds), `open()` throwing, or Android's own dialog failing
+ * asynchronously because there was no Activity to attach to. The first is known
+ * before the tap; the other two are not. So `tryOpen` takes the fallback as an
+ * argument and every path that cannot produce a native dialog calls it. A tap
+ * on a date field always opens SOMETHING.
+ *
+ * ── TWO PLATFORMS, TWO SHAPES, ONE ENTRY POINT ──────────────────────────────
+ *
+ * Android's picker IS a dialog, so it is fired imperatively and this hook
+ * renders nothing for it. iOS's is an inline view, so it needs a host — and the
+ * host is `ModalSheet`, the same one the column picker uses, with the same
+ * title and the same "Set date of birth" button underneath. That is deliberate:
+ * the two pickers are alternatives, and a person who hits the fallback should
+ * not be able to tell that anything switched except the wheels themselves.
+ *
+ * ── THE SEED, AND WHERE THIS DEPARTS FROM `useDateDraft` ────────────────────
+ *
+ * `useDateDraft` refuses to let its seed become a value: it opens on MIN_AGE
+ * years ago for the scroll position but reports null until all three columns
+ * have been chosen, because a control that committed its own seed would hand
+ * somebody an age they never claimed on the one screen where that matters.
+ *
+ * A system picker cannot express that. Every date picker on both platforms
+ * opens on a date and commits what is showing when the positive button is
+ * pressed; there is no "nothing chosen yet" state to render. So this hook seeds
+ * at the same MIN_AGE-years-ago scroll position and treats the confirm as the
+ * claim — which it is: the dialog shows the date in full and requires an
+ * explicit positive tap, unlike the column picker where no single tap can
+ * commit all three fields.
+ *
+ * That is a real, if narrow, difference in posture and it is written down here
+ * rather than left to be discovered. If it ever needs to be closed, the single
+ * change is to seed at `todayParts()` instead: an unmoved confirm then commits
+ * an age of zero, which the gate refuses and the rejection screen explains. The
+ * cost is a year wheel that every honest user has to spin eighteen notches.
+ *
+ * Nothing downstream relaxes either way. `isAdult()` still runs on the client,
+ * the server checks the same rule again, and the 403 it answers with is still
+ * what the rejection screen renders.
+ */
+function useNativeDatePicker(current: DateParts | null, onPicked: (next: DateParts) => void) {
+  const [iosOpen, setIosOpen] = useState(false);
+  const [draft, setDraft] = useState<DateParts>(() => current ?? defaultDobParts());
+
+  const tryOpen = useCallback(
+    (onUnavailable: () => void) => {
+      const seed = current ?? defaultDobParts();
+
+      if (!nativeDatePickerAvailable) {
+        onUnavailable();
+        return;
+      }
+
+      if (NativeDateSpinner) {
+        // Re-seeded on every open, so an abandoned edit does not reappear next
+        // time as though it had been saved. Same rule as `DateOfBirthField`'s
+        // nonce, for the same reason.
+        setDraft(seed);
+        setIosOpen(true);
+        return;
+      }
+
+      const opened = openAndroidDatePicker({
+        value: seed,
+        onConfirm: onPicked,
+        // Dismissing is a decision, not a failure. The field keeps whatever it
+        // had, which for an untouched field is still nothing.
+        onCancel: () => {},
+        onFailed: onUnavailable,
+      });
+      if (!opened) onUnavailable();
+    },
+    [current, onPicked],
+  );
+
+  const sheet = NativeDateSpinner ? (
+    <ModalSheet visible={iosOpen} title="Date of birth" onClose={() => setIosOpen(false)}>
+      <NativeDateSpinner
+        value={partsToDate(draft)}
+        mode="date"
+        display="spinner"
+        {...dateBounds()}
+        onValueChange={(_event, date) => setDraft(dateToParts(date))}
+        // The sheet is the app's own light surface and the app is locked to a
+        // light interface, so the picker is told the same rather than following
+        // a system dark mode that nothing else here follows.
+        themeVariant="light"
+      />
+      <View style={{ height: 20 }} />
+      <PrimaryButton
+        label="Set date of birth"
+        onPress={() => {
+          setIosOpen(false);
+          onPicked(draft);
+        }}
+      />
+    </ModalSheet>
+  ) : null;
+
+  return { tryOpen, sheet };
 }
 
 /* -- the three columns, and the draft behind them ------------------------- */

@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { createQueryClient } from "../src/api/queryClient";
 import { Splash } from "../src/components/Splash";
 import { SessionProvider, useSession } from "../src/auth/session";
+import { sheetColor } from "../src/theme/auth-sheet-tokens";
 import { color } from "../src/theme/tokens";
 
 /**
@@ -97,7 +98,36 @@ export default function RootLayout() {
               // a canvas that is not the platform default.
               contentStyle: { backgroundColor: color.surface },
             }}
-          />
+          >
+            {/*
+              THE TWO DARK-GROUNDED ROUTES, DECLARED ONLY TO CORRECT THE COLOUR
+              BEHIND THEM.
+
+              The default above is the app canvas, which is right for the feed
+              and wrong for these two: the intro is a film on #14140F and the
+              auth screens are a sheet over a band on the same ground, so the
+              navigator painting cream behind either one shows as a white flash
+              in the gap between a screen unmounting and the next one's first
+              paint. It is most visible on exactly the transition this build
+              adds — intro → login — where both screens are dark and only the
+              navigator between them was not.
+
+              `animation: "none"` on the intro for the same reason from the
+              other end: it is left with `replace`, and a slide would animate a
+              screen that has already ended out over one that has not started.
+
+              Declaring these does not opt the other routes out of file-based
+              discovery; they keep the defaults above.
+            */}
+            <Stack.Screen
+              name="intro"
+              options={{ animation: "none", contentStyle: { backgroundColor: sheetColor.frame } }}
+            />
+            <Stack.Screen
+              name="(auth)"
+              options={{ contentStyle: { backgroundColor: sheetColor.frame } }}
+            />
+          </Stack>
         </SafeAreaProvider>
       </SessionProvider>
     </QueryClientProvider>
