@@ -278,12 +278,94 @@ export async function signIn(email: string, password: string): Promise<StoredSes
  * "check your email" step to hold open.
  */
 export async function signInWithGoogle(idToken: string): Promise<StoredSession> {
-  const body = await postAuth<Partial<TokenResponse>>(
+  const { session } = await exchangeGoogleIdToken(idToken);
+  return adoptSession(session);
+}
+
+export interface GoogleExchange {
+  /** A real, valid pair. NOT installed — see the note below. */
+  session: StoredSession;
+  /**
+   * True when this account has no date of birth on file.
+   *
+   * The Google flow is one tap and hands the backend an email, a name and a
+   * picture. It cannot hand it an age, and Baylo is 18+, so an account created
+   * this way owes exactly one more fact before it is usable. The server decides
+   * — the client never guesses at this — and the register-style "hold the
+   * session without installing it" pattern is what buys the screen to ask on.
+   */
+  needsDateOfBirth: boolean;
+}
+
+/**
+ * POST /api/auth/google/token — a Google ID token for the same pair. NOT
+ * installed.
+ *
+ * The client runs the Google half itself (see `src/auth/google.ts`) and arrives
+ * here holding an ID token. The server verifies its signature against Google's
+ * JWKS, plus issuer, audience and expiry, before it means anything. This end
+ * sends it and checks nothing, deliberately: any check performed here is one an
+ * attacker skips by calling the endpoint directly.
+ *
+ * WHY THIS ONE DOES NOT ADOPT. It used to, because Google sign-in verifies the
+ * account server-side and there was nothing left to ask. There is now: an
+ * account with no date of birth has to answer for one before it may trade, and
+ * installing the session first would trip the guard in (auth)/_layout, which
+ * redirects the instant a session exists — the user would land in the app
+ * having never seen the question. `signInWithGoogle` above is the adopting
+ * wrapper for the case where nothing is outstanding.
+ */
+export async function exchangeGoogleIdToken(idToken: string): Promise<GoogleExchange> {
+  const body = await postAuth<Partial<TokenResponse> & { needsDateOfBirth?: boolean }>(
     "/api/auth/google/token",
     { idToken },
     "Google sign-in failed",
   );
-  return adoptSession(toSession(body, "Google sign-in"));
+  return {
+    session: toSession(body, "Google sign-in"),
+    // Absent means no: a server that predates this field has no date of birth
+    // to ask for, and defaulting the other way would park every user of an
+    // older backend on a step they could never complete.
+    needsDateOfBirth: body.needsDateOfBirth === true,
+  };
+}
+
+/**
+ * POST /api/auth/date-of-birth — sets it once, with an EXPLICIT token.
+ *
+ * One of the two calls in this module that does not go through request(), and
+ * for the same reason `resendVerification` does not: the caller is holding a
+ * session it has deliberately not installed, so there is nothing in `memory`
+ * for the normal path to attach.
+ *
+ * The server is the authority on the age rule and answers UNDER_18 when the
+ * date does not clear it. The screens check first so the refusal is instant and
+ * explicable, but nothing about the account changes until this call returns.
+ */
+export async function submitDateOfBirth(
+  accessToken: string,
+  dateOfBirth: string,
+): Promise<{ ok: boolean }> {
+  const url = `${requireBase()}/api/auth/date-of-birth`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ dateOfBirth }),
+      credentials: "omit",
+    });
+  } catch (cause) {
+    networkFailure(cause);
+  }
+
+  if (!res.ok) await legacyFailure(res, "Could not save your date of birth");
+  return (await res.json().catch(() => ({ ok: true }))) as { ok: boolean };
 }
 
 export interface RegisterResult {
@@ -308,8 +390,33 @@ export async function registerAccount(input: {
   name: string;
   email: string;
   password: string;
+  /** ISO `YYYY-MM-DD`, and a calendar date rather than an instant. The server
+   *  refuses anything under 18 with `code: "UNDER_18"`; see `src/lib/dob.ts`
+   *  for why the wire format has no time and no zone in it. */
+  dateOfBirth: string;
 }): Promise<RegisterResult> {
   return postAuth<RegisterResult>("/api/auth/register", input, "Could not create the account");
+}
+
+/**
+ * POST /api/auth/forgot-password — mails a reset link.
+ *
+ * ALWAYS 200, whether or not the address has an account. That is the server's
+ * deliberate choice and this end must not undo it by reporting anything
+ * different in the two cases: a client that says "no such account" turns the
+ * endpoint into the enumeration oracle the 200 exists to prevent.
+ *
+ * The link lands on the WEB reset page. There is no reset screen in this app,
+ * and the honest reason is that the token arrives by email and the email opens
+ * a browser — building a second one here would only add a place to paste a
+ * token into. The screen says as much when it reports the send.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await postAuth<{ ok: boolean }>(
+    "/api/auth/forgot-password",
+    { email },
+    "Could not send the reset email",
+  );
 }
 
 export interface ResendResult {

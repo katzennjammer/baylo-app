@@ -52,6 +52,10 @@ const FONTS = {
   "PublicSans-SemiBold": require("../assets/fonts/PublicSans-SemiBold.ttf"),
   "PublicSans-Bold": require("../assets/fonts/PublicSans-Bold.ttf"),
   "JetBrainsMono-Regular": require("../assets/fonts/JetBrainsMono-Regular.ttf"),
+  // 500, and it has to be its own family: the auth spec's rejection-panel value
+  // is Mono Medium, and asking Android for Regular at weight 500 synthesises a
+  // face rather than using this file.
+  "JetBrainsMono-Medium": require("../assets/fonts/JetBrainsMono-Medium.ttf"),
   "Archivo-Regular": require("../assets/fonts/Archivo-Regular.ttf"),
   "Archivo-Medium": require("../assets/fonts/Archivo-Medium.ttf"),
   "Archivo-SemiBold": require("../assets/fonts/Archivo-SemiBold.ttf"),

@@ -3,30 +3,67 @@
   Gets the Baylo dev build talking to Metro and the API, and keeps it that way.
 
 .DESCRIPTION
-  There is ONE supported path, and it is the default: `hotspot`.
+  There is ONE supported path, and it is the default: `wireless`.
 
-  -- WHY HOTSPOT IS THE ONE PATH --------------------------------------------
+  -- WHY WIRELESS, AND WHY HOTSPOT STOPPED BEING THE ANSWER ------------------
 
-  Three routes exist and two of them are traps.
+  Four routes exist. Three of them are traps on this machine.
 
-    tunnel   `adb reverse tcp:8081` makes the phone's own localhost:8081 point
-             at this machine. Correct, elegant, and it dies the moment the USB
-             cable twitches. It also silently lapses on unplug, reboot, or
-             `adb kill-server`, and the failure looks like a white screen
-             rather than an error.
+    tunnel    `adb reverse tcp:8081` makes the phone's own localhost:8081 point
+              at this machine. Correct, elegant, and it dies the moment the USB
+              cable twitches. It also silently lapses on unplug, reboot, or
+              `adb kill-server`, and the failure looks like a white screen
+              rather than an error.
 
-    lan      Metro on this laptop's Wi-Fi address. Works until DHCP hands out a
-             different lease. This is where 10.141.155.88 came from, and why it
-             stopped working.
+    lan       Metro on this laptop's Wi-Fi address, with the cable needed again
+              every time that address changes. Works until DHCP hands out a
+              different lease.
 
-    hotspot  This laptop's OWN Mobile Hotspot. Windows pins the hosted network
-             to 192.168.137.1 and has done since ICS shipped: it is not a DHCP
-             lease, it is a fixed address on a virtual adapter. The phone joins
-             it, and Metro is at 192.168.137.1:8081 today, tomorrow, and after
-             every reboot.
+    hotspot   This laptop's OWN Mobile Hotspot, pinned by Windows to
+              192.168.137.1. This was the documented path and it is now
+              UNAVAILABLE here, for a reason no amount of retrying fixes:
+              Windows will not share a connection with itself. When the
+              laptop's only uplink is the phone's hotspot, there is nothing to
+              share, so Mobile Hotspot refuses to start and 192.168.137.1 never
+              carries traffic.
 
-  Hotspot is the only one of the three that needs neither a cable that stays up
-  nor an address that stays leased. That is the whole argument for it.
+              Worse, it fails QUIETLY. Internet Connection Sharing parks
+              192.168.137.1 on a disconnected virtual adapter anyway, so the
+              address is present in ipconfig while nothing is behind it. The
+              old check asked only whether the address existed and therefore
+              answered yes. Test-HotspotUp now also requires AddressState
+              'Preferred' on an adapter that is Up.
+
+    wireless  (default)  Android 11+ wireless debugging. The phone is the
+              access point; this laptop is a client on it. Same topology as
+              hotspot mode with the roles the right way round -- which is the
+              way round they were always going to be, since the phone is where
+              the internet comes from.
+
+  -- WHY WIRELESS IS THE STABLE ONE -----------------------------------------
+
+  Because the phone is this laptop's DEFAULT GATEWAY, and a gateway address is
+  not leased to us. The phone chooses it and holds it for the life of the
+  hotspot, so `adb connect <gateway>` has a fixed target that needs neither a
+  cable that stays up nor a hosted network Windows will not start.
+
+  The pairing is the other half. Android 11 (API 30) added a TLS pairing code
+  that does what the cable used to do -- authorise this host's key, once. It is
+  stored on the phone and survives reboots and toggling the setting off and on.
+  Before API 30 a key could only be authorised over USB. That makes API 30 a
+  hard floor, and Assert-WirelessCapable checks it rather than assuming it.
+
+  What is NOT stable, and how each is handled:
+
+    the wireless-debugging PORT   Android randomises it on every toggle and
+                                  every reboot. Discovered over mDNS each run;
+                                  -PinPort trades it for a fixed 5555.
+
+    this laptop's OWN address     Leased by the phone. Still drifts -- but the
+                                  drift is now cheap, because rewriting
+                                  debug_http_host no longer needs a cable. It
+                                  costs one command instead of a hunt for a
+                                  cable that still works.
 
   -- WHY THE HOST HAS TO BE PERSISTED, NOT TYPED ----------------------------
 
@@ -50,9 +87,38 @@
   and the cable falling out.
 
 .PARAMETER Mode
-  hotspot  (default)  Metro on 192.168.137.1. No cable needed after setup.
-  tunnel               adb reverse; localhost:8081. Needs the cable to stay up.
-  lan                  This machine's Wi-Fi DHCP address. Goes stale; avoid.
+  wireless (default)  adb over Wi-Fi. Android 11+. No cable, ever.
+  hotspot             Metro on 192.168.137.1. Needs Windows Mobile Hotspot,
+                      which cannot start when the phone is the uplink.
+  tunnel              adb reverse; localhost:8081. Needs the cable to stay up.
+  lan                 This machine's Wi-Fi DHCP address. Goes stale; avoid.
+
+.PARAMETER Pair
+  Force the pairing walkthrough even if a connection could be made. Pairing is
+  normally automatic on first use -- this is for re-pairing after the phone's
+  "Forget" button, or after a factory reset.
+
+.PARAMETER PhoneIp
+  The phone's address. Defaults to this machine's default gateway, which in the
+  topology wireless mode exists for IS the phone.
+
+.PARAMETER ConnectPort
+  The port under "IP address & Port" on the phone's Wireless debugging screen.
+  Only needed when mDNS discovery cannot find it, which happens on Android
+  builds that do not forward multicast to their own hotspot clients.
+
+.PARAMETER PinPort
+  After connecting, run `adb tcpip 5555` so the port stops being random. Lasts
+  until the phone reboots. Worth it when mDNS is unreliable on this hotspot.
+
+.PARAMETER Unpair
+  Disconnect and forget the remembered port. The pairing itself lives on the
+  phone; drop it there under Wireless debugging > this laptop > Forget.
+
+.PARAMETER WriteEnv
+  Rewrite EXPO_PUBLIC_API_URL in .env to match this run. Off by default,
+  because the gear's SecureStore override outranks .env anyway and needs no
+  rebuild.
 
 .PARAMETER ClearBundleHost
   Removes the persisted `debug_http_host` preference and stops. Use this when
@@ -61,15 +127,18 @@
   because it is app data rather than anything in the APK.
 
 .PARAMETER ShowOnly
-  Report what is set on the device and change nothing.
+  Report what is set on the device and change nothing. Will not start a pairing
+  walkthrough.
 
 .EXAMPLE
   npm run phone
-  The documented path. Hotspot mode, persists the host, starts Metro if needed.
+  The documented path. Wireless mode: connects over Wi-Fi, pairing first if it
+  has to, persists the host, starts Metro and the API if they are not up.
 
 .EXAMPLE
-  npm run phone:tunnel
-  Cable mode, for when the phone cannot join the hotspot.
+  npm run phone:pair
+  Just the pairing walkthrough. Run this once, with the phone's "Pair device
+  with pairing code" dialog open.
 
 .EXAMPLE
   npm run phone:reset
@@ -78,8 +147,8 @@
 
 [CmdletBinding()]
 param(
-  [ValidateSet('hotspot', 'tunnel', 'lan')]
-  [string] $Mode      = 'hotspot',
+  [ValidateSet('hotspot', 'tunnel', 'lan', 'wireless')]
+  [string] $Mode      = 'wireless',
   [int]    $ApiPort   = 3000,
   [int]    $MetroPort = 8081,
   [string] $Adb       = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
@@ -88,7 +157,22 @@ param(
   [switch] $ShowOnly,
   [switch] $NoStart,
   [int]    $StartTimeoutSec = 120,
-  [string] $Package   = "com.baylo.app"
+  [string] $Package   = "com.baylo.app",
+
+  # -- wireless mode (Android 11+ adb-over-Wi-Fi) ------------------------------
+  # PhoneIp defaults to this machine's default gateway, which in the topology
+  # this mode exists for IS the phone: the laptop is a DHCP client on the
+  # phone's hotspot, so the phone is the router. Override it if the two are on
+  # some other shared network instead.
+  [string] $PhoneIp,
+  [int]    $PairPort,
+  [string] $PairCode,
+  [int]    $ConnectPort,
+  [switch] $Pair,
+  [switch] $PinPort,
+  [switch] $Unpair,
+  [int]    $DiscoverTimeoutSec = 25,
+  [switch] $WriteEnv
 )
 
 function Fail([string] $m) { Write-Host "  FAIL  $m" -ForegroundColor Red; exit 1 }
@@ -108,6 +192,453 @@ if (-not (Test-Path $Adb)) {
 }
 Ok "adb found"
 
+# 1b -- wireless debugging (Android 11+) --------------------------------------
+#
+# -- WHY THIS MODE EXISTS ----------------------------------------------------
+#
+# `hotspot` assumed this laptop could BE an access point. It cannot, when its
+# only uplink is the phone's own hotspot: Windows will not share a connection
+# with itself, so Mobile Hotspot refuses to start. Note that the failure is
+# QUIET -- the Internet Connection Sharing service still parks 192.168.137.1 on
+# a disconnected virtual adapter, so "does 192.168.137.1 exist" answers YES for
+# an address nothing can reach. Test-HotspotUp below is the fix for that.
+#
+# That inverts the topology, and the inversion is an improvement. The PHONE is
+# the access point; this laptop is a client on it. Which means the phone is
+# this machine's DEFAULT GATEWAY -- and a gateway address is not leased to us.
+# The phone picks it and keeps it for the life of the hotspot. So there is a
+# stable target for `adb connect` needing neither a cable nor a hosted network,
+# which is exactly what each of the other three modes failed to provide.
+#
+# Android 11 (API 30) supplies the missing half. Wireless debugging lets a
+# pairing code over TLS do the job the cable used to do -- authorise this
+# host's key, once. Before API 30 a key could only be authorised over USB, so
+# even `adb tcpip` needed the cable first. API 30 is therefore a hard floor,
+# and it is CHECKED rather than assumed: see Assert-WirelessCapable.
+#
+# -- WHAT IS STABLE HERE AND WHAT IS NOT -------------------------------------
+#
+#   stable   the phone's address -- it is the gateway
+#            the pairing -- a stored host key; survives reboots and re-toggles
+#
+#   NOT      the wireless-debugging PORT. Android randomises it on every toggle
+#            of the setting and on every reboot. So this mode DISCOVERS it over
+#            mDNS instead of remembering one, and -PinPort exists to trade that
+#            away for a fixed 5555.
+#
+#            this laptop's own address -- the phone's DHCP leases it. But that
+#            is cheap now in a way it never was under -Mode lan: with adb over
+#            Wi-Fi, re-running this script rewrites debug_http_host with no
+#            cable at all. Drift costs one command instead of a hunt for a
+#            cable that still works.
+
+$stateDir  = Join-Path $projectRoot '.expo'
+$statePath = Join-Path $stateDir 'wireless-adb.json'
+$wirelessSerial = $null
+
+function Read-WirelessState {
+  if (-not (Test-Path $statePath)) { return $null }
+  try { return (Get-Content $statePath -Raw | ConvertFrom-Json) } catch { return $null }
+}
+
+function Write-WirelessState([string] $DeviceIp, [int] $Port) {
+  if (-not (Test-Path $stateDir)) {
+    New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+  }
+  [pscustomobject]@{
+    phoneIp     = $DeviceIp
+    connectPort = $Port
+    written     = (Get-Date).ToString('s')
+  } | ConvertTo-Json | Set-Content -Path $statePath -Encoding UTF8
+}
+
+# The gateway IS the phone in this topology.
+function Get-PhoneIpGuess {
+  $gw = @(Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+          Where-Object { $_.IPv4DefaultGateway } |
+          ForEach-Object { $_.IPv4DefaultGateway.NextHop })
+  if ($gw.Count -gt 0) { return $gw[0] }
+  return $null
+}
+
+# This machine's source address for packets aimed at the phone. In wireless
+# mode that is the address Metro must advertise, and asking the routing table
+# is the only way to get it right on a box with seven IPv4 addresses -- six of
+# which (link-local, VirtualBox, the dead hotspot) are wrong answers.
+function Get-LocalIpToward([string] $Remote) {
+  $r = @(Find-NetRoute -RemoteIPAddress $Remote -ErrorAction SilentlyContinue)
+  if ($r.Count -gt 0 -and $r[0].IPAddress) { return $r[0].IPAddress }
+  return $null
+}
+
+# `adb mdns services` prints one tab-separated row per service:
+#   adb-<serial>-<rand>   _adb-tls-connect._tcp   10.141.155.223:41235
+function Get-MdnsRows([string] $ServiceType) {
+  $raw = @(& $Adb mdns services 2>&1 | Where-Object { $_ -match [Regex]::Escape($ServiceType) })
+  $out = @()
+  foreach ($row in $raw) {
+    $pattern = '(\S+)\s+' + [Regex]::Escape($ServiceType) + '\.?\s+(\d{1,3}(?:\.\d{1,3}){3}):(\d+)'
+    if ("$row" -match $pattern) {
+      $out += [pscustomobject]@{ Name = $Matches[1]; Address = $Matches[2]; Port = [int]$Matches[3] }
+    }
+  }
+  return $out
+}
+
+function Wait-MdnsService([string] $ServiceType, [int] $TimeoutSec, [string] $What) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  $spun = $false
+  while ((Get-Date) -lt $deadline) {
+    $rows = @(Get-MdnsRows $ServiceType)
+    if ($rows.Count -gt 0) {
+      if ($spun) { Write-Host "" }
+      return $rows
+    }
+    if (-not $spun) {
+      Write-Host "        waiting for $What over mDNS" -NoNewline -ForegroundColor DarkGray
+      $spun = $true
+    }
+    Write-Host "." -NoNewline -ForegroundColor DarkGray
+    Start-Sleep -Milliseconds 1200
+  }
+  if ($spun) { Write-Host "" }
+  return @()
+}
+
+# @() around the pipeline, for the reason documented in section 2: a single
+# matching line comes back as a bare string, and indexing a string yields a
+# character rather than the line.
+function Get-AdbNetworkSerial {
+  $rows = @(& $Adb devices 2>$null | Select-Object -Skip 1 |
+            Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}:\d+\s' -and $_ -match "\sdevice(\s|$)" })
+  if ($rows.Count -eq 0) { return $null }
+  return ($rows[0] -split "\s+")[0]
+}
+
+# adb connect exits 0 even when it fails, so its OUTPUT is the return value.
+# And confirm the device that appeared is the one we asked for: on a machine
+# with a stale entry from an earlier port, "some network device is present" is
+# not the same claim as "the connect worked".
+function Invoke-AdbConnect([string] $DeviceIp, [int] $Port) {
+  $target = "${DeviceIp}:${Port}"
+  $out = (& $Adb connect $target 2>&1 | Out-String).Trim()
+  if ($out -notmatch 'connected to' -or $out -match 'failed|cannot|refused|unable') { return $null }
+  Start-Sleep -Milliseconds 700
+  $exact = @(& $Adb devices 2>$null | Select-Object -Skip 1 |
+             Where-Object { $_ -match ('^' + [Regex]::Escape($target) + '\s') -and $_ -match "\sdevice(\s|$)" })
+  if ($exact.Count -gt 0) { return $target }
+  return Get-AdbNetworkSerial
+}
+
+# THE GATE. Wireless debugging is API 30; below that the pairing screen does
+# not exist and no amount of retrying conjures it, so say so plainly and hand
+# back the options that DO still work rather than looping.
+function Assert-WirelessCapable([string] $Serial) {
+  $sdk     = (& $Adb -s $Serial shell getprop ro.build.version.sdk 2>$null | Out-String).Trim()
+  $release = (& $Adb -s $Serial shell getprop ro.build.version.release 2>$null | Out-String).Trim()
+  $phone   = (& $Adb -s $Serial shell getprop ro.product.model 2>$null | Out-String).Trim()
+  $n = 0
+  if (-not [int]::TryParse($sdk, [ref] $n)) {
+    Warn "could not read ro.build.version.sdk from $Serial - skipping the version check"
+    return
+  }
+  if ($n -lt 30) {
+    Fail @"
+this phone CANNOT do wireless debugging.
+
+    $phone reports Android $release (API $n). Wireless debugging -- the
+    "Pair device with pairing code" screen this mode drives -- arrived in
+    Android 11 (API 30). It is not a hidden setting on API ${n}: the screen, and
+    the adbd TLS pairing service behind it, are not in that build at all.
+
+    Given a hotspot this laptop cannot host, what is actually left on API ${n}:
+
+      1  adb tcpip over the cable ONCE per boot, then connect over Wi-Fi. The
+         cable is needed for one command and can come straight back out; the
+         connection then survives until the phone reboots.
+           "$Adb" tcpip 5555
+           "$Adb" connect <phone-ip>:5555
+           npm run phone:lan
+
+      2  npm run phone:lan on its own, re-run whenever the lease changes.
+
+    Neither is as good as wireless debugging. API 30 is the floor, and this
+    device is below it.
+"@
+  }
+  Ok "Android $release (API $n) - wireless debugging supported"
+}
+
+function Show-PairingInstructions {
+  Write-Host ""
+  Write-Host "  On the phone, in this order:" -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "    1  Settings > About phone > tap 'Build number' seven times" -ForegroundColor Gray
+  Write-Host "       (only if Developer options is not already unlocked)" -ForegroundColor Gray
+  Write-Host "    2  Settings > System > Developer options > Wireless debugging > ON" -ForegroundColor Gray
+  Write-Host "    3  Tap 'Pair device with pairing code'" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  Leave that dialog OPEN. The six-digit code and the port it shows are" -ForegroundColor Gray
+  Write-Host "  valid only while it is on screen." -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  If Developer options has no 'Wireless debugging' entry at all, this" -ForegroundColor Gray
+  Write-Host "  phone is below Android 11 and this mode cannot work. See README." -ForegroundColor Gray
+  Write-Host ""
+}
+
+function Invoke-Pairing([string] $DeviceIp) {
+  Step "pairing  (the once-only part)"
+  Show-PairingInstructions
+
+  if (-not [Environment]::UserInteractive) {
+    Fail "pairing needs an interactive terminal - it has to read the six-digit code. Run 'npm run phone:pair' from a console."
+  }
+
+  Read-Host "  Press Enter once the pairing dialog is open on the phone" | Out-Null
+
+  $pairHost = $DeviceIp
+  $pPort    = $PairPort
+
+  if (-not $pPort) {
+    # The pairing port is per-dialog and random. mDNS learns it without the
+    # user transcribing anything -- but see the fallback: multicast is the
+    # first thing a phone-hosted hotspot tends not to forward.
+    $rows = @(Wait-MdnsService '_adb-tls-pairing._tcp' $DiscoverTimeoutSec 'the pairing dialog')
+    if ($rows.Count -gt 0) {
+      $pairHost = $rows[0].Address
+      $pPort    = $rows[0].Port
+      Ok "found the pairing service at ${pairHost}:${pPort}"
+    } else {
+      Warn "mDNS did not surface the pairing service"
+      Note "Common on a phone-hosted hotspot: some Android builds do not forward"
+      Note "multicast to their own clients. Read the address off the dialog instead."
+      $typed = (Read-Host "  'IP address & Port' shown in the dialog (e.g. ${DeviceIp}:37129)").Trim()
+      if ($typed -match '^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$') {
+        $pairHost = $Matches[1]
+        $pPort    = [int]$Matches[2]
+      } elseif ($typed -match '^(\d+)$') {
+        $pPort = [int]$Matches[1]
+      } else {
+        Fail "could not read an address or a port from '$typed'"
+      }
+    }
+  }
+
+  $code = $PairCode
+  if (-not $code) { $code = (Read-Host "  Six-digit pairing code").Trim() }
+  if ($code -notmatch '^\d{6}$') { Fail "'$code' is not a six-digit pairing code" }
+
+  Note "adb pair ${pairHost}:${pPort}"
+  $out = (& $Adb pair "${pairHost}:${pPort}" $code 2>&1 | Out-String).Trim()
+
+  if ($out -match 'Successfully paired') {
+    Ok "paired - this host's key is trusted by the phone from now on"
+    return
+  }
+
+  Fail @"
+pairing failed. adb said:
+
+    $out
+
+    The usual causes, in the order they actually happen:
+      -  the dialog closed or timed out. Its code and port live only while it
+         is on screen, so re-run and enter the code promptly.
+      -  the code was mistyped.
+      -  this laptop dropped off the phone's hotspot. Re-join it and re-run.
+      -  a VPN adapter is holding the route to $pairHost.
+"@
+}
+
+# -- establish the wireless connection ---------------------------------------
+if ($Mode -eq 'wireless' -or $Pair -or $Unpair) {
+
+  Step "wireless adb"
+
+  $state = Read-WirelessState
+
+  if (-not $PhoneIp) { $PhoneIp = if ($state) { $state.phoneIp } else { $null } }
+  if (-not $PhoneIp) { $PhoneIp = Get-PhoneIpGuess }
+  if (-not $PhoneIp) {
+    Fail @"
+could not work out the phone's address.
+
+    This mode assumes the laptop is a CLIENT on the phone's hotspot, which
+    makes the phone this machine's default gateway. No default gateway was
+    found, so either the Wi-Fi is off or the laptop is not on the hotspot.
+
+    Join the phone's hotspot and re-run, or name the address yourself:
+      powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode wireless -PhoneIp 192.168.43.1
+"@
+  }
+
+  if ($state -and $state.phoneIp -and $state.phoneIp -ne $PhoneIp) {
+    Note "phone was at $($state.phoneIp) last time, is at $PhoneIp now"
+  }
+  Ok "phone address: $PhoneIp"
+
+  if (-not (Test-Connection -ComputerName $PhoneIp -Count 1 -Quiet -ErrorAction SilentlyContinue)) {
+    Fail @"
+$PhoneIp does not answer a ping.
+
+    The laptop is not on the same network as the phone. Turn the phone's
+    hotspot on, join this laptop to it, and re-run.
+
+    If it IS joined and this still fails, the phone may be blocking ICMP; pass
+    the address explicitly to skip this check being the thing that stops you:
+      powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode wireless -PhoneIp $PhoneIp -ConnectPort <port>
+"@
+  }
+  Ok "phone answers at $PhoneIp"
+
+  # THE VERSION QUESTION, ANSWERED AS EARLY AS IT CAN BE.
+  #
+  # If the cable happens to be up at this moment -- it does not have to stay up,
+  # and this mode exists precisely because it will not -- then a definitive
+  # answer costs one getprop. Take it. The alternative is walking someone
+  # through "Settings > Developer options > Wireless debugging" and letting them
+  # discover for themselves that the entry is not there, which is both slower
+  # and a worse way to find out.
+  $usb = @(& $Adb devices 2>$null | Select-Object -Skip 1 |
+           Where-Object { $_ -notmatch '^\d{1,3}(\.\d{1,3}){3}:\d+\s' -and $_ -match "\sdevice(\s|$)" })
+  if ($usb.Count -gt 0 -and -not $Unpair) {
+    Note "a cable is up right now - using it to settle the Android version first"
+    Assert-WirelessCapable (($usb[0] -split "\s+")[0])
+  }
+
+  if ($Unpair) {
+    Step "forgetting the wireless connection"
+    & $Adb disconnect 2>&1 | Out-Null
+    if (Test-Path $statePath) { Remove-Item $statePath -Force }
+    Ok "disconnected, and the remembered port is gone"
+    Note "The PAIRING itself lives on the phone. To drop it there:"
+    Note "  Developer options > Wireless debugging > tap this laptop > Forget"
+    exit 0
+  }
+
+  # Already connected from an earlier run? adb's own mDNS auto-connect
+  # (ADB_MDNS_AUTO_CONNECT, default adb-tls-connect) often gets there first.
+  $wirelessSerial = Get-AdbNetworkSerial
+
+  if ($wirelessSerial -and -not $Pair) {
+    Ok "already connected: $wirelessSerial"
+  }
+  elseif (-not $Pair) {
+    # Candidate ports, cheapest first. The remembered one usually still works
+    # within a session; 5555 is there for a phone that has been -PinPort'ed.
+    $candidates = @()
+    if ($ConnectPort) { $candidates += [int]$ConnectPort }
+    if ($state -and $state.connectPort) { $candidates += [int]$state.connectPort }
+    $candidates += 5555
+    $candidates = @($candidates | Select-Object -Unique)
+
+    foreach ($p in $candidates) {
+      Note "trying ${PhoneIp}:${p}"
+      $wirelessSerial = Invoke-AdbConnect $PhoneIp $p
+      if ($wirelessSerial) { Ok "connected on port $p"; Write-WirelessState $PhoneIp $p; break }
+    }
+
+    # Nothing known worked. The port has been reshuffled, so discover it.
+    if (-not $wirelessSerial) {
+      Note "no remembered port answered - the phone reshuffles it on every toggle and reboot"
+      Note "make sure Developer options > Wireless debugging is ON, then wait"
+      $rows = @(Wait-MdnsService '_adb-tls-connect._tcp' $DiscoverTimeoutSec 'wireless debugging')
+      foreach ($row in $rows) {
+        $wirelessSerial = Invoke-AdbConnect $row.Address $row.Port
+        if ($wirelessSerial) {
+          Ok "connected on discovered port $($row.Port)"
+          Write-WirelessState $row.Address $row.Port
+          break
+        }
+      }
+    }
+  }
+
+  # -ShowOnly promises to change nothing and is the first thing you reach for
+  # when something is wrong. Dragging it into an interactive pairing walkthrough
+  # would break both halves of that. Report and move on -- a USB device, if one
+  # happens to be attached, still answers the question.
+  if (-not $wirelessSerial -and $ShowOnly) {
+    Warn "not connected over Wi-Fi (run 'npm run phone:pair' to set that up)"
+  }
+  # Still nothing: either never paired, or the pairing was forgotten.
+  elseif (-not $wirelessSerial) {
+    if (-not $Pair) {
+      Warn "could not connect with an existing pairing - falling through to pairing"
+    }
+    Invoke-Pairing $PhoneIp
+
+    # After pairing, adb's mDNS auto-connect frequently lands the device
+    # before we ask. Give it a moment, then discover and connect explicitly.
+    Start-Sleep -Seconds 2
+    $wirelessSerial = Get-AdbNetworkSerial
+
+    if (-not $wirelessSerial) {
+      $rows = @(Wait-MdnsService '_adb-tls-connect._tcp' $DiscoverTimeoutSec 'wireless debugging')
+      foreach ($row in $rows) {
+        $wirelessSerial = Invoke-AdbConnect $row.Address $row.Port
+        if ($wirelessSerial) { Write-WirelessState $row.Address $row.Port; break }
+      }
+    }
+
+    if (-not $wirelessSerial -and $ConnectPort) {
+      $wirelessSerial = Invoke-AdbConnect $PhoneIp $ConnectPort
+      if ($wirelessSerial) { Write-WirelessState $PhoneIp $ConnectPort }
+    }
+
+    if (-not $wirelessSerial) {
+      Fail @"
+paired, but could not then CONNECT.
+
+    Pairing and connecting are two different services on two different ports,
+    and only pairing is the one the code applies to. The connect port is the
+    one printed under 'IP address & Port' on the Wireless debugging screen
+    ITSELF -- not the one in the pairing dialog, which is now gone.
+
+    Read that port off the phone and pass it once:
+      powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode wireless -ConnectPort <port>
+
+    The pairing is done and does not need repeating.
+"@
+    }
+  }
+
+  # Everything below needs a device to talk to. -ShowOnly can legitimately get
+  # this far without one, having declined to pair, so guard rather than assume:
+  # an unguarded Assert-WirelessCapable would shell out with an empty -s and
+  # report "could not read the SDK" about a device that was never there.
+  if ($wirelessSerial) {
+    Ok "wireless device: $wirelessSerial"
+
+    # The version gate runs HERE rather than earlier because reading a build
+    # property needs a device to read it from, and in this mode the wireless
+    # connection is the first one there is. A phone that got this far has
+    # already proved API 30 by answering a TLS pairing -- this turns that
+    # inference into a stated fact, and it catches an unrelated USB device
+    # having been picked up by accident.
+    Assert-WirelessCapable $wirelessSerial
+
+    if ($PinPort) {
+      # Trades Android's randomised port for a fixed 5555, so later runs skip
+      # mDNS entirely. It lasts until the phone reboots and no longer: adbd
+      # returns to its normal mode on boot. Worth doing when mDNS is flaky on
+      # this hotspot; unnecessary otherwise.
+      Step "pinning the port to 5555"
+      & $Adb -s $wirelessSerial tcpip 5555 2>&1 | Out-String | ForEach-Object { Note $_.Trim() }
+      Start-Sleep -Seconds 3
+      $pinned = Invoke-AdbConnect $PhoneIp 5555
+      if ($pinned) {
+        $wirelessSerial = $pinned
+        Write-WirelessState $PhoneIp 5555
+        Ok "adbd is on ${PhoneIp}:5555 until the phone reboots"
+      } else {
+        Warn "could not reconnect on 5555 - staying on the discovered port"
+        Note "some OEM builds refuse 'adb tcpip' over a wireless connection; run it on the cable if you want this"
+      }
+    }
+  }
+}
+
 # 2 -- the device ------------------------------------------------------------
 #
 # @() IS LOAD-BEARING. `Where-Object` returns a bare [string] when exactly one
@@ -119,7 +650,12 @@ Ok "adb found"
 $lines = @(& $Adb devices | Select-Object -Skip 1 | Where-Object { $_.Trim() })
 
 if ($lines.Count -eq 0) {
-  Fail "no device attached. Plug the phone in, then see the USB-debugging steps in README.md"
+  Fail @"
+no device attached.
+
+    Cable: plug the phone in and follow the USB-debugging steps in README.md.
+    No cable: npm run phone:wireless  (Android 11 or newer, pairs over Wi-Fi)
+"@
 }
 if (@($lines | Where-Object { $_ -match "unauthorized" }).Count -gt 0) {
   Fail "phone attached but UNAUTHORISED - unlock it and tap 'Allow' on the 'Allow USB debugging?' dialog, then re-run"
@@ -142,9 +678,17 @@ phone is 'offline' - adb sees it but cannot talk to it.
 
 $devices = @($lines | Where-Object { $_ -match "\sdevice(\s|$)" })
 if ($devices.Count -eq 0) { Fail "device present but not ready: $($lines -join '; ')" }
-if ($devices.Count -gt 1) { Warn "more than one device attached; using the first" }
+if ($devices.Count -gt 1 -and -not $wirelessSerial) { Warn "more than one device attached; using the first" }
 
-$serial = ($devices[0] -split "\s+")[0]
+# In wireless mode the device that matters is the one over Wi-Fi, and there is
+# very often a USB device listed beside it -- half-connected on a cable that is
+# on its way out, which is the whole reason this mode exists. Picking [0] would
+# silently do all the work over that cable and prove nothing.
+if ($wirelessSerial) {
+  $serial = $wirelessSerial
+} else {
+  $serial = ($devices[0] -split "\s+")[0]
+}
 if ([string]::IsNullOrWhiteSpace($serial) -or $serial.Length -lt 4) {
   Fail "could not parse a device serial from: $($devices[0])"
 }
@@ -209,6 +753,25 @@ function Get-LanIp {
     } | Select-Object -First 1).IPAddress
 }
 
+# A hotspot address EXISTING is not a hotspot being up. When Windows refuses to
+# start Mobile Hotspot -- which it does whenever the only uplink is itself a
+# tethered connection, because it will not share a connection with itself --
+# the Internet Connection Sharing service has already parked 192.168.137.1 on
+# the virtual adapter. That adapter then sits Disconnected with the address in
+# AddressState 'Tentative', and the old presence-only check happily returned
+# true for an address with nothing behind it. Both extra conditions are load-
+# bearing: a live hotspot is 'Preferred' on an adapter that is Up.
+function Test-HotspotUp {
+  $addr = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -eq $hotspotIp })
+  if ($addr.Count -eq 0) { return $false }
+  if ($addr[0].AddressState -ne 'Preferred') { return $false }
+  $ad = @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+          Where-Object { $_.ifIndex -eq $addr[0].InterfaceIndex })
+  if ($ad.Count -eq 0) { return $false }
+  return ($ad[0].Status -eq 'Up')
+}
+
 if ($BundleHost) {
   $metroHost = $BundleHost
   Note "using -BundleHost override: $metroHost"
@@ -216,19 +779,38 @@ if ($BundleHost) {
 elseif ($Mode -eq 'tunnel') {
   $metroHost = 'localhost'
 }
+elseif ($Mode -eq 'wireless') {
+  # Not Get-LanIp. On this machine that picks *a* DHCP address, and there is
+  # more than one candidate; the right answer is specifically the address this
+  # box would use to reach the phone, which is a routing-table question.
+  $metroHost = Get-LocalIpToward $PhoneIp
+  if (-not $metroHost) {
+    Fail "could not find this machine's address on the phone's network (route to $PhoneIp)"
+  }
+  Note "this laptop is $metroHost on the phone's hotspot; the phone is $PhoneIp"
+  Note "that lease can change - but re-running this over Wi-Fi fixes it without a cable"
+}
 elseif ($Mode -eq 'hotspot') {
-  $haveHotspot = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                   Where-Object { $_.IPAddress -eq $hotspotIp }).Count -gt 0
-  if (-not $haveHotspot) {
+  if (-not (Test-HotspotUp)) {
     Fail @"
-Mobile Hotspot is not up - no adapter holds $hotspotIp.
+Mobile Hotspot is not up.
 
     Turn it on:  Settings > Network & Internet > Mobile hotspot
                  (or the Mobile hotspot tile in the Win+A quick settings panel)
     Then join the PHONE to that hotspot and re-run this script.
 
-    Windows always assigns the hosted network $hotspotIp. That it cannot drift
-    is the entire reason this mode is the supported one.
+    IF WINDOWS REFUSES TO TURN IT ON, that is expected rather than broken: it
+    will not share a connection with itself, so a laptop whose only internet
+    comes from the phone's own hotspot has nothing to share and this mode
+    cannot work at all. Use wireless debugging instead -- the phone becomes
+    the access point and this laptop the client, which is the same topology
+    with the roles the right way round:
+
+        npm run phone:wireless
+
+    (Do not be reassured by $hotspotIp showing up in ipconfig. ICS parks that
+    address on a disconnected virtual adapter whether or not the hotspot ever
+    started, which is exactly what this check now looks past.)
 "@
   }
   $metroHost = $hotspotIp
@@ -236,7 +818,7 @@ Mobile Hotspot is not up - no adapter holds $hotspotIp.
 else {
   $metroHost = Get-LanIp
   if (-not $metroHost) { Fail "no DHCP IPv4 address found for -Mode lan" }
-  Warn "-Mode lan pins $metroHost, which changes on the next DHCP lease. Prefer -Mode hotspot."
+  Warn "-Mode lan pins $metroHost, which changes on the next DHCP lease. Prefer -Mode wireless."
 }
 
 Ok "Metro host for this run: ${metroHost}:${MetroPort}"
@@ -419,6 +1001,56 @@ if ((Read-PrefsXml) -match [Regex]::Escape($hostValue)) {
   Warn "if 'run-as' was refused, the installed APK is not a debuggable build"
 }
 
+# 8 -- the OTHER host, the one this script does not own ----------------------
+#
+# debug_http_host gets the app's JS bundle. It does not get the app to the API:
+# that address is EXPO_PUBLIC_API_URL, inlined into the bundle at build time,
+# and it has its own way of going stale. Under -Mode hotspot the two agreed by
+# accident, because 192.168.137.1 was hard-coded in both. Under wireless they
+# cannot agree by accident, because the address is a lease.
+#
+# So check, and say so. A silent mismatch here looks exactly like a broken
+# login rather than a wrong address, and that has cost hours before.
+$envPath = Join-Path $projectRoot '.env'
+if ($Mode -ne 'tunnel' -and (Test-Path $envPath)) {
+  $envText  = Get-Content $envPath -Raw
+  $wantApi  = "http://${metroHost}:${ApiPort}"
+  if ($envText -match '(?m)^\s*EXPO_PUBLIC_API_URL\s*=\s*(\S+)\s*$') {
+    $haveApi = $Matches[1]
+    if ($haveApi -ne $wantApi) {
+      Step "the API address in .env does not match"
+      Warn ".env has EXPO_PUBLIC_API_URL=$haveApi"
+      Warn "this run needs        EXPO_PUBLIC_API_URL=$wantApi"
+      Write-Host ""
+      Write-Host "    Two ways out, and the first needs no rebuild:" -ForegroundColor Gray
+      Write-Host ""
+      Write-Host "      1  The gear on the login screen. Set the base URL to" -ForegroundColor Gray
+      Write-Host "         $wantApi there. It writes an override to SecureStore" -ForegroundColor Gray
+      Write-Host "         that OUTRANKS .env, so nothing has to be rebuilt -- and note" -ForegroundColor Gray
+      Write-Host "         that while it is set, editing .env does nothing at all." -ForegroundColor Gray
+      Write-Host ""
+      Write-Host "      2  Edit .env, then restart Metro with --clear. The value is" -ForegroundColor Gray
+      Write-Host "         inlined at BUILD time, so a Metro already running serves the" -ForegroundColor Gray
+      Write-Host "         old one no matter what the file says." -ForegroundColor Gray
+      Write-Host ""
+      Write-Host "         Or have this script do both:" -ForegroundColor Gray
+      Write-Host "         powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode $Mode -WriteEnv" -ForegroundColor Gray
+      Write-Host ""
+      if ($WriteEnv) {
+        $updated = $envText -replace '(?m)^(\s*EXPO_PUBLIC_API_URL\s*=\s*)\S+\s*$', "`${1}$wantApi"
+        Set-Content -Path $envPath -Value $updated -Encoding UTF8 -NoNewline
+        Ok "wrote EXPO_PUBLIC_API_URL=$wantApi into .env"
+        Warn "Metro must be restarted with --clear for that to reach the bundle."
+        Warn "Close the Metro window this script opened and re-run, or run: npx expo start --clear"
+        Note "a gear override, if one is set, still outranks this"
+      }
+    } else {
+      Ok "EXPO_PUBLIC_API_URL agrees with this run ($wantApi)"
+      Note "unless the gear's override is set - that outranks .env and only the phone can show it"
+    }
+  }
+}
+
 # -- done --------------------------------------------------------------------
 Write-Host ""
 Write-Host "  Ready." -ForegroundColor Green
@@ -427,6 +1059,18 @@ if ($Mode -eq 'hotspot') {
   Write-Host "  Keep the phone on this laptop's hotspot; $metroHost does not change." -ForegroundColor Green
 } elseif ($Mode -eq 'tunnel') {
   Write-Host "  Force-close Baylo and reopen it. Keep the cable in - the tunnel dies with it." -ForegroundColor Green
+} elseif ($Mode -eq 'wireless') {
+  Write-Host "  Force-close Baylo on the phone and reopen it. No cable, now or later." -ForegroundColor Green
+  Write-Host "  Keep the laptop on the phone's hotspot." -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  Next time: npm run phone:wireless. The pairing is stored on the phone" -ForegroundColor Green
+  Write-Host "  and does not need repeating - not after a reboot, not after toggling" -ForegroundColor Green
+  Write-Host "  wireless debugging off and on. Only the PORT changes, and that is what" -ForegroundColor Green
+  Write-Host "  the mDNS discovery step is for." -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  If it ever cannot find the port, the phone's Wireless debugging screen" -ForegroundColor DarkGray
+  Write-Host "  prints it under 'IP address & Port':" -ForegroundColor DarkGray
+  Write-Host "    npm run phone:wireless -- -ConnectPort <port>" -ForegroundColor DarkGray
 } else {
   Write-Host "  Force-close Baylo and reopen it. Re-run after any DHCP change." -ForegroundColor Green
 }

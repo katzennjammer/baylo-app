@@ -224,41 +224,149 @@ what is being tested is whether anything on the other end parsed the request.
 **There is one supported path. It is `npm run phone`. Read the next paragraph
 and then run that command.**
 
-Three routes to Metro exist, this repo used to document all three, and switching
-between them is what broke this setup repeatedly — each leaves state the next
-one does not clear, so the app ends up dialling an address that no longer means
-anything. What follows picks one, explains why, and makes the other two
+Four routes to Metro exist, this repo used to document three of them, and
+switching between them is what broke this setup repeatedly — each leaves state
+the next one does not clear, so the app ends up dialling an address that no
+longer means anything. What follows picks one, explains why, and makes the rest
 explicitly unsupported fallbacks.
 
-### The one path: the laptop's own hotspot
+### The one path: wireless debugging
 
 ```bash
-# once, in Windows: Settings > Network & Internet > Mobile hotspot > On
-#                   then join the PHONE to that hotspot
 npm run phone
 ```
 
-That is the whole setup. The script starts Metro and the API if they are not
-already up, opens the firewall, checks the phone can actually reach both, and
-writes the host into the app so it survives a force-close.
+First run walks you through pairing the phone over Wi-Fi. Every run after that
+just connects. The script then starts Metro and the API if they are not already
+up, opens the firewall, checks the phone can actually reach both, and writes the
+host into the app so it survives a force-close.
 
-**Why the hotspot and not the other two.** Windows pins its hosted network to
-`192.168.137.1` and has done since Internet Connection Sharing shipped. It is
-not a DHCP lease on a network you do not control — it is a fixed address on a
-virtual adapter that this machine owns. So:
+**Requires Android 11 (API 30) or newer.** That is a hard floor, not a
+preference — see [below](#if-the-phone-is-below-android-11). The script checks
+`ro.build.version.sdk` and says so plainly rather than failing sideways.
 
-| | needs the cable up | breaks when an address changes |
+### Why this, and why the hotspot stopped being the answer
+
+The laptop's hotspot **was** the documented path. It is now unavailable here,
+for a reason no amount of retrying fixes: **Windows will not share a connection
+with itself.** When the laptop's only uplink is the phone's own hotspot, there
+is nothing to share, so Mobile Hotspot refuses to start and `192.168.137.1`
+never carries traffic.
+
+That failure is quiet, which is what makes it expensive. Internet Connection
+Sharing parks `192.168.137.1` on a *disconnected* virtual adapter regardless, so
+the address shows up in `ipconfig` with nothing behind it:
+
+```
+IPAddress       InterfaceAlias            PrefixOrigin   AddressState
+192.168.137.1   Local Area Connection* 1  Manual         Tentative      <- dead
+10.141.155.88   Wi-Fi                     Dhcp           Preferred      <- real
+```
+
+The old check asked only whether the address existed, and so answered yes.
+`Test-HotspotUp` now also requires `AddressState` `Preferred` on an adapter that
+is `Up`.
+
+**The fix is to turn the topology around.** In wireless mode the *phone* is the
+access point and the laptop is the client — which is the way round it was always
+going to be, because the phone is where the internet comes from. And that
+inversion hands over the one thing every other mode lacked:
+
+> The phone is the laptop's **default gateway**, and a gateway address is not
+> leased to us. The phone chooses it and holds it for the life of the hotspot.
+
+So `adb connect <gateway>` has a fixed target needing neither a cable that stays
+up nor a hosted network Windows will not start.
+
+| | needs the cable up | breaks when an address changes | needs a hosted network |
+|---|---|---|---|
+| `adb reverse` (`phone:tunnel`) | **yes — constantly** | no | no |
+| LAN / Wi-Fi IP (`phone:lan`) | **yes, on every change** | **yes** | no |
+| laptop hotspot (`phone:hotspot`) | once | no | **yes — impossible here** |
+| **wireless (`npm run phone`)** | **never** | **no** ¹ | **no** |
+
+¹ The laptop's own address is still a lease from the phone and can still drift.
+The difference is that the drift is now *cheap*: rewriting `debug_http_host` no
+longer needs a cable, so it costs one command rather than a hunt for a cable
+that still works.
+
+### What is stable here and what is not
+
+| | stable? | |
 |---|---|---|
-| `adb reverse` (USB tunnel) | **yes — constantly** | no |
-| LAN / Wi-Fi IP | no | **yes — every DHCP lease** |
-| **hotspot** | **no** | **no** |
+| the phone's address | **yes** | it is the gateway; not leased to us |
+| the pairing | **yes** | a host key stored on the phone; survives reboots and re-toggling |
+| the wireless-debugging **port** | **no** | Android randomises it on every toggle and every reboot |
+| this laptop's own address | **no** | leased by the phone — but see ¹ above |
 
-The hotspot is the only one of the three that is not waiting to fail. Its one
-cost is that the phone is on the laptop's internet rather than its own mobile
-data, which for development is not a cost at all.
+The port is the only one that needs machinery. The script discovers it over
+mDNS each run rather than remembering one. If mDNS is unreliable on your hotspot
+— some Android builds do not forward multicast to their own clients — pin it:
 
-The cable is still needed **once**, to write the host onto the phone. After that
-it can come out and stay out.
+```bash
+npm run phone:pin     # adb tcpip 5555; lasts until the phone reboots
+```
+
+### Pairing, once
+
+`npm run phone` does this for you the first time. To do it deliberately:
+
+```bash
+npm run phone:pair
+```
+
+On the phone, in this order:
+
+1. **Settings → About phone → tap "Build number" seven times** (only if
+   Developer options is not already unlocked)
+2. **Settings → System → Developer options → Wireless debugging → ON**
+3. **Tap "Pair device with pairing code"**
+
+Leave that dialog open — its six-digit code and port are valid only while it is
+on screen. The script finds the port over mDNS and asks you for the code.
+
+**Pairing and connecting are two different services on two different ports**,
+and this is the single most confusing thing about wireless debugging. The
+pairing code applies only to the pairing port, which is per-dialog and dies with
+it. The *connect* port is the one printed under "IP address & Port" on the
+Wireless debugging screen itself. If pairing succeeds but connecting does not,
+that is the number to pass:
+
+```bash
+npm run phone:wireless -- -ConnectPort 41235
+```
+
+The pairing itself does not need repeating — not after a reboot, not after
+toggling wireless debugging off and on. Only after the phone's **Forget**
+button, or a factory reset.
+
+### If the phone is below Android 11
+
+<a id="if-the-phone-is-below-android-11"></a>
+
+Wireless debugging arrived in Android 11 (API 30). Below that it is not a hidden
+setting — the "Pair device with pairing code" screen and the adbd TLS pairing
+service behind it are not in the build at all. A quick check either way:
+
+```bash
+adb shell getprop ro.build.version.release   # needs the cable once
+```
+
+Or just look: if Developer options has no **Wireless debugging** entry, the
+phone is below 11.
+
+What is left, given a hotspot this laptop cannot host:
+
+1. **`adb tcpip` over the cable once per boot.** The cable is needed for one
+   command and can come straight back out; the connection then lasts until the
+   phone reboots.
+   ```bash
+   adb tcpip 5555
+   adb connect <phone-ip>:5555
+   npm run phone:lan
+   ```
+2. **`npm run phone:lan` on its own**, re-run whenever the lease changes — which
+   needs the cable each time, and is why this is last.
 
 ### Why the host has to be written, not typed
 
@@ -284,24 +392,30 @@ falling out.
 ### The other commands
 
 ```bash
-npm run phone           # hotspot. the supported path.
-npm run phone:tunnel    # adb reverse + localhost. needs the cable to stay up.
-npm run phone:lan       # this machine's Wi-Fi IP. goes stale; avoid.
+npm run phone           # wireless. the supported path.
+npm run phone:pair      # just the pairing walkthrough.
+npm run phone:pin       # pin adbd to 5555 (until reboot) when mDNS is flaky.
+npm run phone:unpair    # disconnect and forget the remembered port.
 npm run phone:show      # what is set on the device right now. changes nothing.
 npm run phone:reset     # forget the persisted host.
+
+npm run phone:hotspot   # the old path. needs a hotspot Windows will not start.
+npm run phone:tunnel    # adb reverse + localhost. needs the cable to stay up.
+npm run phone:lan       # this machine's Wi-Fi IP. goes stale; avoid.
 ```
 
 `npm run phone:show` first, always. It prints the `debug_http_host` the phone is
 actually holding, which is the only thing that answers "why is it reaching for
-*that* address" — and it is not visible from the laptop any other way.
+*that* address" — and it is not visible from the laptop any other way. It will
+not drag you into a pairing walkthrough.
 
-> **Flags do not pass through npm.** `npm run phone -PersistBundleHost` silently
-> drops the flag; npm forwards nothing after the script name without `--`, and
-> PowerShell switches do not survive that either. That is why each mode is its
-> own npm script. To pass anything else, call the file directly:
+> **Flags do not pass through npm without `--`.** `npm run phone -ConnectPort 5`
+> silently drops the flag; npm forwards nothing after the script name unless you
+> separate it. Both of these work:
 >
 > ```bash
-> powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode hotspot -BundleHost 192.168.1.50
+> npm run phone:wireless -- -ConnectPort 41235
+> powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode wireless -ConnectPort 41235
 > ```
 
 ### When the app reaches an address you do not recognise
@@ -316,20 +430,23 @@ they are worth checking.
    outranks it. Editing `.env` has **no effect** while an override is set. The
    boot diagnostic says `from the gear's override, NOT .env` when this is the
    case. **Reset** in the gear drops it.
-3. **Metro's advertised host.** `npx expo start` defaults to `--host lan`, which
-   makes Metro advertise this laptop's Wi-Fi DHCP address — the source of every
-   stray `10.x.x.x` in this project's history. `npm run phone` sets
-   `REACT_NATIVE_PACKAGER_HOSTNAME` so Metro, the QR code, and the persisted
-   preference all name the same host. A Metro started by hand in another window
-   does not, and a Metro already running is the one thing the script cannot fix
-   for you — close that window and let the script start it.
-4. **A stale bundle.** `EXPO_PUBLIC_API_URL` is inlined at build time, so a
+3. **`.env` itself.** In wireless mode the API lives at the laptop's *leased*
+   address, so `EXPO_PUBLIC_API_URL` cannot be right by accident the way it was
+   under the hotspot's fixed `192.168.137.1`. `npm run phone` compares the two
+   and prints both if they disagree; `-WriteEnv` makes it fix the file.
+4. **Metro's advertised host.** `npx expo start` defaults to `--host lan`, which
+   makes Metro advertise this laptop's Wi-Fi address without asking which one.
+   `npm run phone` sets `REACT_NATIVE_PACKAGER_HOSTNAME` so Metro, the QR code,
+   and the persisted preference all name the same host. A Metro started by hand
+   in another window does not, and a Metro already running is the one thing the
+   script cannot fix for you — close that window and let the script start it.
+5. **A stale bundle.** `EXPO_PUBLIC_API_URL` is inlined at build time, so a
    Metro started before an `.env` edit serves the old value. Always
    `npx expo start --clear` after touching `.env`.
 
 Verify the path before blaming the app — from the phone's browser, open
-`http://192.168.137.1:3000`. If the Baylo landing page does not load there, no
-amount of app debugging will help.
+`http://<the address npm run phone printed>:3000`. If the Baylo landing page
+does not load there, no amount of app debugging will help.
 
 ### Not installed: `expo-dev-client`
 
@@ -345,10 +462,155 @@ remembers is still a URL: point it at a LAN IP and the next DHCP lease still
 kills it; point it at `localhost` and it still needs `adb reverse` and a cable
 that stays plugged in. It also adds a build step and a native dependency.
 
-Writing `debug_http_host` gets the same persistence with no new dependency, and
-the hotspot removes the reason the stored value would ever go stale. Install
+Writing `debug_http_host` gets the same persistence with no new dependency — and
+under wireless mode, re-running `npm run phone` re-writes it without a cable, so
+a lease change costs one command instead of a plugged-in phone. Install
 `expo-dev-client` if you want its launcher UI and its other tooling — not as a
 fix for this.
+
+## Cloud builds — EAS
+
+`eas.json` is checked in with two Android profiles. `preview` is the one that
+replaces the cable: a **release APK, internally distributed**, installed once and
+run with no Metro, no `adb reverse` and no dev client. `production` builds the
+AAB the Play Store wants.
+
+```sh
+npm run build:apk      # eas build --platform android --profile preview
+npm run build:aab      # eas build --platform android --profile production
+npm run build:status   # last five Android builds
+```
+
+### What it removes, and what it does not
+
+It removes **Metro**. A release APK carries its own JavaScript bundle, so the
+laptop no longer has to be serving one and the cable no longer has to survive.
+
+It does not remove the **backend**. The app still talks to Next.js on the laptop,
+so `next dev -H 0.0.0.0` still has to be running and the phone still has to be
+able to reach it. That part works without any cable already: the phone is the
+hotspot and the laptop is a client on it, so the phone can reach the laptop at
+its address on that network — `10.141.155.88:3000` at the time of writing, which
+is what `preview`'s `EXPO_PUBLIC_API_URL` is set to. That address is a DHCP
+lease and will change. When it does, **use the gear** — it outranks the compiled
+default and costs no rebuild. Rebuilding for an address change is the wrong move;
+that is the whole reason the gear exists.
+
+One thing does go missing in a release build: the dev caption chip that prints
+the current server under the sheet is `__DEV__`-only. The gear still opens and
+still shows you the value — you just have to tap it to read it.
+
+### One-time setup
+
+1. An Expo account — free, sign up at [expo.dev](https://expo.dev/signup).
+2. `npm install --global eas-cli`
+3. `eas login`
+4. `eas init` — from this directory, once. It creates the project on Expo's side
+   and writes `extra.eas.projectId` into `app.json`. **Commit that change.**
+
+### Commit first — this is the one that will bite
+
+EAS builds from a **clean git clone** of this repo. Uncommitted edits and
+untracked files are not uploaded, and `eas.json` sets `"requireCommit": true` so
+the CLI refuses to start rather than quietly building last week's code.
+
+That matters right now more than it usually would: the auth kit
+(`src/components/auth-sheet.tsx`, `auth-thumbbar.tsx`, `auth-under-age.tsx`,
+`src/theme/auth-*.ts`, `src/lib/dob.ts` and the rest) is **untracked**. Build
+without adding it and you get an APK of the old dark auth screens. `git status`
+before every build until that settles.
+
+### Where the environment comes from
+
+`.env` is gitignored, so it does not reach the builder — there is no `.env` in
+the clone EAS makes. `EXPO_PUBLIC_*` values for cloud builds live in each
+profile's `env` block in `eas.json` instead. Same rule as always applies to what
+may go there: `EXPO_PUBLIC_*` is inlined into the bundle and ships inside the
+APK, so it holds public values only. `eas.json` is committed, which makes that
+rule stricter, not looser.
+
+`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` is left blank in both profiles. Password
+sign-in works without it; Google sign-in does not. Fill it in — a client id is
+public — or, if you would rather it not sit in the repo, keep it out of
+`eas.json` and set it on Expo's side instead:
+
+```sh
+eas env:create --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value <the id> --environment preview
+```
+
+Note that the SHA-1 in the Google console must match the keystore that signed
+the APK. EAS generates and holds its own upload keystore, which is **not** the
+debug keystore under `android/`, so Google sign-in needs that build's SHA-1
+added — `eas credentials` prints it.
+
+### Cleartext HTTP, and the one thing that had to be added
+
+This is the trap in the whole exercise, and it is silent.
+
+Debug builds talk plain HTTP because `expo prebuild` writes
+`android:usesCleartextTraffic="true"` into `android/app/src/debug/AndroidManifest.xml`.
+**Release builds do not get that**, and Android has blocked cleartext by default
+since API 28. So the `preview` APK — a release build pointed at
+`http://10.141.155.88:3000` — would fail every single request, with a network
+error indistinguishable from "the laptop is not running the server."
+
+`expo.android.usesCleartextTraffic` is not a key the Expo config schema accepts,
+so app.json cannot say this. `expo-build-properties` is the supported route, and
+it is now a dependency for that one reason.
+
+Which build gets the exemption is decided in `app.config.js`. It reads app.json
+as its base and appends the plugin only when `BAYLO_ALLOW_CLEARTEXT=1`, which
+only the `preview` profile sets. `production` must never set it: a store build
+talks HTTPS to a deployed backend, and a blanket cleartext exemption in a Play
+Store upload is a security-review failure waiting to happen.
+
+Nothing about local development changes. The variable is unset, `app.config.js`
+returns app.json untouched, and debug builds keep getting cleartext from the
+debug manifest exactly as before.
+
+### `/android` is not the source of truth
+
+`/android` is gitignored, so the builder never sees it and regenerates it from
+`app.json` plus `app.config.js` with `expo prebuild`. Nothing in the local
+`android/` directory affects a cloud build, and nothing hand-edited there would
+survive — including the debug manifest above, which is why the cleartext
+permission had to be expressed as config rather than left where it sits. Native
+config goes in `app.json`, and in a config plugin when app.json has no key for
+it.
+
+### The build, and getting it onto the phone
+
+```sh
+npm run build:apk
+```
+
+The CLI uploads, queues, and prints a build page URL. Android internal
+distribution needs no device registration — that is an iOS ad-hoc constraint, not
+this one. When the build finishes the page offers an **Install** button and a QR
+code; open that page in the phone's browser, download, and allow "install
+unknown apps" for the browser when Android asks. The phone hosts the hotspot, so
+it has mobile data for the download and the laptop is not involved at all.
+
+Expect **10–25 minutes** on the free tier, most of it queueing rather than
+compiling. Free accounts get 15 Android builds a month, one at a time, on the
+low-priority queue, with a 45-minute build ceiling — comfortably enough for this,
+as long as you do not treat a rebuild as the way to change a URL.
+
+### Toward the Play Store
+
+`production` is already shaped for it: an AAB, `distribution: "store"`, and
+`autoIncrement` against `"appVersionSource": "remote"`, which means Expo keeps
+the `versionCode` and bumps it each build rather than leaving it to a field in
+`app.json` that someone forgets. `version` in `app.json` stays the human-facing
+string you set by hand.
+
+Two things are deliberately unfinished there. `EXPO_PUBLIC_API_URL` is
+`https://CHANGE-ME.example.com` — a store build must point at a deployed HTTPS
+backend, and Android blocks cleartext HTTP by default, so a LAN address is not
+merely wrong, it will not connect. And `submit.production` is empty; it wants a
+Google service-account key before `eas submit --platform android` can upload.
+Neither blocks the APK work, and both are the right shape to fill in when
+there is something to ship.
 
 ## Google sign-in
 

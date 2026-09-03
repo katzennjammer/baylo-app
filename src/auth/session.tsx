@@ -3,11 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   adoptSession as apiAdoptSession,
   currentSession,
+  exchangeGoogleIdToken,
   hydrateSession,
   onSessionChange,
   signIn as apiSignIn,
   signInWithGoogle as apiSignInWithGoogle,
   signOut as apiSignOut,
+  type GoogleExchange,
 } from "../api/client";
 import { hydrateApiBase } from "../api/config";
 import { TimeoutError, withTimeout } from "../api/timeout";
@@ -44,6 +46,17 @@ interface SessionState {
   signIn: (email: string, password: string) => Promise<void>;
   /** Exchanges a verified Google ID token for a session. See `./google.ts`. */
   signInWithGoogle: (idToken: string) => Promise<void>;
+  /**
+   * The same exchange, WITHOUT installing what comes back.
+   *
+   * The Google date-of-birth step needs it: an account the server says still
+   * owes a date of birth has a perfectly valid token pair, and installing it
+   * would trip the (auth) guard and route the user into the app before they
+   * had been asked. The screen holds the pair, asks, and calls adoptSession()
+   * when the answer is in — the same arrangement registration already uses for
+   * the "check your email" step, and for the same reason.
+   */
+  exchangeGoogle: (idToken: string) => Promise<GoogleExchange>;
   /**
    * Installs an already-obtained session.
    *
@@ -157,6 +170,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [queryClient],
   );
 
+  // No queryClient.clear() here, deliberately: nothing has been installed, so
+  // there is no cache belonging to the wrong user yet. adoptSession() is what
+  // does the clearing, on whichever of the two paths ends up calling it.
+  const exchangeGoogle = useCallback(
+    (idToken: string) => exchangeGoogleIdToken(idToken),
+    [],
+  );
+
   const adoptSession = useCallback(
     async (next: StoredSession) => {
       await apiAdoptSession(next);
@@ -193,10 +214,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       hydrationError,
       signIn,
       signInWithGoogle,
+      exchangeGoogle,
       adoptSession,
       signOut,
     }),
-    [session, isLoading, hydrationError, signIn, signInWithGoogle, adoptSession, signOut],
+    [
+      session,
+      isLoading,
+      hydrationError,
+      signIn,
+      signInWithGoogle,
+      exchangeGoogle,
+      adoptSession,
+      signOut,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 
-import { ApiError } from "../api/client";
+import { ApiError, type GoogleExchange } from "../api/client";
 import { useSession } from "./session";
 
 /**
@@ -70,6 +70,20 @@ function clientIdForPlatform(): string {
  */
 const PLACEHOLDER_CLIENT_ID = "unconfigured.apps.googleusercontent.com";
 
+export interface GoogleSignInOptions {
+  /**
+   * Called INSTEAD of installing the session, when the server says the account
+   * still owes a date of birth.
+   *
+   * The screen that passes this takes over: it holds the pair, shows the
+   * date-of-birth step, and adopts the session once the date is accepted. A
+   * caller that does not pass it gets the old behaviour — the session is
+   * installed and the guard routes into the app — which is right for any
+   * surface that has no step to show.
+   */
+  onNeedsDateOfBirth?: (pending: GoogleExchange) => void;
+}
+
 export interface GoogleSignIn {
   /** Starts the flow. Safe to call repeatedly; ignored while one is running. */
   start: () => void;
@@ -85,8 +99,15 @@ export interface GoogleSignIn {
   reset: () => void;
 }
 
-export function useGoogleSignIn(): GoogleSignIn {
-  const { signInWithGoogle } = useSession();
+export function useGoogleSignIn(options: GoogleSignInOptions = {}): GoogleSignIn {
+  const { exchangeGoogle, adoptSession } = useSession();
+
+  // Held in a ref rather than named in the effect's deps. A screen passes a
+  // fresh closure on every render, and depending on it would re-run the effect
+  // continuously while a response sat in state — `handled` below stops that
+  // becoming a repeated POST, but the churn is avoidable and this avoids it.
+  const onNeedsDob = useRef(options.onNeedsDateOfBirth);
+  onNeedsDob.current = options.onNeedsDateOfBirth;
 
   const configured = clientIdForPlatform().length > 0;
   const [busy, setBusy] = useState(false);
@@ -156,8 +177,18 @@ export function useGoogleSignIn(): GoogleSignIn {
     let cancelled = false;
     (async () => {
       try {
-        await signInWithGoogle(idToken);
-        // No navigation. signInWithGoogle installs the session, the module
+        const pending = await exchangeGoogle(idToken);
+
+        if (pending.needsDateOfBirth && onNeedsDob.current) {
+          // Deliberately NOT adopted. The screen owns the pair from here; see
+          // the note on `exchangeGoogle` in session.tsx for why installing it
+          // first would tear the step down before it rendered.
+          onNeedsDob.current(pending);
+          return;
+        }
+
+        await adoptSession(pending.session);
+        // No navigation. adoptSession installs the session, the module
         // publishes, and the (auth) guard redirects — same contract as
         // password sign-in, and for the same reason.
       } catch (err) {
@@ -171,7 +202,7 @@ export function useGoogleSignIn(): GoogleSignIn {
     return () => {
       cancelled = true;
     };
-  }, [response, signInWithGoogle]);
+  }, [response, exchangeGoogle, adoptSession]);
 
   const start = useCallback(() => {
     if (busy) return;

@@ -43,3 +43,5 @@ yarn-error.*
 # Local env — the API base URL for THIS machine.
 .env
 .env.local
+
+.claude/

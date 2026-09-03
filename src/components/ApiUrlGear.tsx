@@ -20,6 +20,10 @@ import {
   resetApiBase,
   setApiBase,
 } from "../api/config";
+import { ChromeButton } from "./auth-thumbbar";
+import { Tappable } from "./Tappable";
+import { GearIcon } from "./auth-sheet-icons";
+import { authSize, sheetColor } from "../theme/auth-sheet-tokens";
 import { auth } from "../theme/palette";
 
 /**
@@ -35,13 +39,63 @@ import { auth } from "../theme/palette";
  * The URL is shown in the collapsed state, not hidden behind the gear. Half the
  * value here is answering "what is it pointing at" without a tap.
  */
-export function ApiUrlGear() {
+export function ApiUrlGear({ variant = "row" }: { variant?: "row" | "icon" | "band" } = {}) {
   const [open, setOpen] = useState(false);
   const [base, setBase] = useState(getApiBase);
 
   // The sheet is not the only writer — hydrateApiBase() at boot also changes
   // this — so the label subscribes rather than reading once.
   useEffect(() => onApiBaseChange(setBase), []);
+
+  // ── "band": the sheet-over-video auth screens ───────────────────────────
+  //
+  // The current direction has a 44px content row across the top of the video
+  // band, and the gear rides its trailing end beside the wordmark. Unlike
+  // "icon" it positions NOTHING — `BandRow` places it — because that row is
+  // also where the back button and the "Cebu" pill live, and three things
+  // absolutely positioned into the same corner is how they end up on top of
+  // each other on a device nobody tested.
+  if (variant === "band") {
+    return (
+      <>
+        <Tappable
+          onPress={() => setOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="API server settings"
+          accessibilityHint={`Currently ${base || "not set"}`}
+          style={{
+            width: authSize.backButton,
+            height: authSize.backButton,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <GearIcon color={sheetColor.onVideo} />
+        </Tappable>
+        <ApiUrlSheet visible={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
+
+  // ── "icon": the previous "Thumb Bar" auth direction ─────────────────────
+  //
+  // Kept for the screens still drawn that way. It positions itself absolutely
+  // in the top-right corner and reads `AuthShell`'s context to do it, so it can
+  // only be used inside one — which is why the sheet screens have their own
+  // variant above rather than reusing this.
+  if (variant === "icon") {
+    return (
+      <>
+        <ChromeButton
+          kind="gear"
+          onPress={() => setOpen(true)}
+          label="API server settings"
+          hint={`Currently ${base || "not set"}`}
+        />
+        <ApiUrlSheet visible={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
 
   return (
     <>
