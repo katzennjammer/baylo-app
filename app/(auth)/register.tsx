@@ -313,7 +313,6 @@ function RegisterForm({
         value={form.name}
         onChangeText={edit("name", "name")}
         onFocus={() => setFocusedField(1)}
-        placeholder="Juan dela Cruz"
         error={fieldErrors.name}
         autoCapitalize="words"
         autoComplete="name"
@@ -331,7 +330,6 @@ function RegisterForm({
         value={form.email}
         onChangeText={edit("email", "email")}
         onFocus={() => setFocusedField(2)}
-        placeholder="you@example.com"
         error={fieldErrors.email}
         autoCapitalize="none"
         autoComplete="email"
@@ -350,7 +348,6 @@ function RegisterForm({
         value={form.password}
         onChangeText={edit("password", "password")}
         onFocus={() => setFocusedField(3)}
-        placeholder="At least 8 characters"
         error={fieldErrors.password}
         secureTextEntry={!showPassword}
         autoCapitalize="none"
@@ -370,7 +367,6 @@ function RegisterForm({
         value={form.confirm}
         onChangeText={edit("confirm", "confirm")}
         onFocus={() => setFocusedField(4)}
-        placeholder="Type it again"
         error={fieldErrors.confirm}
         secureTextEntry={!showPassword}
         autoCapitalize="none"
@@ -505,7 +501,7 @@ function RegisterForm({
           </LegalCopy>
 
           <FooterPrompt
-            prompt="Naa nay account?"
+            prompt="Already have an account?"
             label="Log in"
             onPress={() => router.back()}
             disabled={busy}

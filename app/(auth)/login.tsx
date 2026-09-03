@@ -141,6 +141,22 @@ export default function LoginScreen() {
  * same account either way — the exchange creates one when there is not one
  * already. Email keeps a full-width 52px control beneath it rather than being
  * demoted to a link, because "no Google account" is not a minority case here.
+ *
+ * ── THERE IS NO "ALREADY HAVE AN ACCOUNT?" FOOTER, AND THAT IS THE FIX ──────
+ *
+ * There was one, and it made the screen lie about itself. A footer offering
+ * "Log in" implies everything ABOVE it is the sign-up path — so "Continue with
+ * email" reads as "create an account with email". It is not: it opens
+ * <EmailLogIn>, which asks for a password a new user has never chosen. The
+ * footer also pointed at the same place the email button did, so the screen
+ * carried two labels for one destination and gave the wrong one the last word.
+ *
+ * This screen asks ONE question — how do you want to continue — and does not
+ * claim to know whether the person answering it already has an account. Google
+ * settles that server-side (the exchange creates one when there is not one
+ * already); email settles it on the next screen, which carries the real
+ * "New to Baylo? / Create an account" link. Registration is one tap further
+ * either way, and it is a tap taken from a screen that is honest about itself.
  */
 function ChooseHowToSignIn({
   google,
@@ -209,14 +225,6 @@ function ChooseHowToSignIn({
         By continuing you agree to Baylo&rsquo;s Terms of Service and Privacy Policy. Baylo is an
         18+ marketplace — you will be asked for your date of birth.
       </LegalCopy>
-
-      <FooterPrompt
-        tall
-        prompt="Naa nay account?"
-        label="Log in"
-        onPress={onEmail}
-        disabled={google.busy}
-      />
     </AuthScreen>
   );
 }
@@ -328,7 +336,6 @@ function EmailLogIn({
           setEmail(next);
           if (error) setError(null);
         }}
-        placeholder="you@example.com"
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
@@ -351,7 +358,6 @@ function EmailLogIn({
           setPassword(next);
           if (error) setError(null);
         }}
-        placeholder="Your password"
         secureTextEntry={!showPassword}
         autoCapitalize="none"
         autoCorrect={false}
