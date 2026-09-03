@@ -11,7 +11,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "http://10.141.155.88:3000",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "999513455694-s0kq73egdacn3fsmdi0s6jdfg4dulfpt.apps.googleusercontent.com",
         "BAYLO_ALLOW_CLEARTEXT": "1"
       }
     },
