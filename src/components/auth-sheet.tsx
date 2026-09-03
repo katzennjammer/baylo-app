@@ -60,6 +60,7 @@ import {
   defaultDobParts,
   formatLongDate,
   selectableYears,
+  todayParts,
   type DateParts,
 } from "../lib/dob";
 import {
@@ -1796,38 +1797,49 @@ export function DateOfBirthField({
  * the two pickers are alternatives, and a person who hits the fallback should
  * not be able to tell that anything switched except the wheels themselves.
  *
- * ── THE SEED, AND WHERE THIS DEPARTS FROM `useDateDraft` ────────────────────
+ * ── THE SEED IS TODAY, AND THAT IS THE WHOLE POINT ──────────────────────────
  *
  * `useDateDraft` refuses to let its seed become a value: it opens on MIN_AGE
  * years ago for the scroll position but reports null until all three columns
  * have been chosen, because a control that committed its own seed would hand
  * somebody an age they never claimed on the one screen where that matters.
  *
- * A system picker cannot express that. Every date picker on both platforms
- * opens on a date and commits what is showing when the positive button is
- * pressed; there is no "nothing chosen yet" state to render. So this hook seeds
- * at the same MIN_AGE-years-ago scroll position and treats the confirm as the
- * claim — which it is: the dialog shows the date in full and requires an
- * explicit positive tap, unlike the column picker where no single tap can
- * commit all three fields.
+ * A system picker has no way to express "nothing chosen yet" — every date
+ * picker on both platforms opens on a date and commits whatever is showing when
+ * the positive button is pressed. So the rule is kept by moving the seed
+ * instead: it opens on TODAY, which is an age of zero.
  *
- * That is a real, if narrow, difference in posture and it is written down here
- * rather than left to be discovered. If it ever needs to be closed, the single
- * change is to seed at `todayParts()` instead: an unmoved confirm then commits
- * an age of zero, which the gate refuses and the rejection screen explains. The
- * cost is a year wheel that every honest user has to spin eighteen notches.
+ * The obvious alternative is to seed MIN_AGE years ago, where the wheels open
+ * on a plausible birth year and an adult is a short scroll in either direction.
+ * That is rejected here, and the reason is what this control is for. This is the
+ * only age gate in the app and it is self-declared, so the single thing it can
+ * actually establish is that the claim was DELIBERATE. A picker opening on a
+ * date that already passes, where one confirm commits it, cannot establish that
+ * — it collects "did not disagree with a prefilled 18+" and records it as
+ * "declared 18+". Those are different facts and only one of them is worth
+ * storing.
  *
- * Nothing downstream relaxes either way. `isAdult()` still runs on the client,
- * the server checks the same rule again, and the 403 it answers with is still
- * what the rejection screen renders.
+ * The cost is real and it is accepted: every honest user spins the year wheel
+ * about eighteen notches. Eighteen notches is cheap for the difference above,
+ * and `display: "spinner"` is what keeps it to one flick of one column rather
+ * than a journey through a calendar grid.
+ *
+ * An unmoved confirm therefore commits today, `isAdult()` refuses it, and the
+ * rejection screen explains why — which is the correct outcome for somebody who
+ * did not answer the question. A field being EDITED still seeds from its
+ * committed value; the ceiling only applies where there is nothing to reopen on.
+ *
+ * Nothing downstream relaxes either way. `isAdult()` runs on the client, the
+ * server checks the same rule again, and the 403 it answers with is still what
+ * the rejection screen renders.
  */
 function useNativeDatePicker(current: DateParts | null, onPicked: (next: DateParts) => void) {
   const [iosOpen, setIosOpen] = useState(false);
-  const [draft, setDraft] = useState<DateParts>(() => current ?? defaultDobParts());
+  const [draft, setDraft] = useState<DateParts>(() => current ?? todayParts());
 
   const tryOpen = useCallback(
     (onUnavailable: () => void) => {
-      const seed = current ?? defaultDobParts();
+      const seed = current ?? todayParts();
 
       if (!nativeDatePickerAvailable) {
         onUnavailable();
