@@ -312,8 +312,12 @@ export function usePhotos(): PhotoPipeline {
  *
  * The FIRST one that finished uploading and was not blocked — not simply the
  * first in the list, which may be a failed upload or a duplicate. Detection
- * reads it, the review rail leads with it, and its hash is the one sent to
- * /api/items.
+ * reads it and the review rail leads with it.
+ *
+ * NOT "the photo whose hash is posted": EVERY photo's hash is sent now. This
+ * predicate also does not wait for a duplicate verdict, deliberately — making
+ * detection wait on the duplicate check would hold the item's name hostage to
+ * an unrelated request. `isPostable` in state.tsx is the one that waits.
  */
 export function leadPhoto(photos: Photo[]): Photo | null {
   return photos.find((p) => p.upload === "done" && p.url && p.dup !== "failed") ?? null;

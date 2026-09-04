@@ -500,8 +500,24 @@ export interface CreateItemInput {
   images: string[];
   /** "What are you hoping to get?" — free text, optional. */
   wantedItems: string | null;
-  /** The first photo's dHash, so the NEXT upload can be matched against it. */
+  /**
+   * The lead photo's dHash. Still sent, because the server keeps a lead-hash
+   * column the web wizard reads back in its edit mode.
+   */
   imageHash: string | null;
+  /**
+   * ONE HASH PER PHOTO, POSITIONALLY ALIGNED WITH `images`.
+   *
+   * This is what the duplicate check actually scans. Sending only the lead hash
+   * put one image per listing into the pool, so re-posting a listing's second
+   * or third photo matched nothing — a bypass that cost nothing to find.
+   *
+   * NULLS ARE KEPT, NOT FILTERED. /api/ai/phash answers `{ hash: null,
+   * status: "passed" }` when it could not fetch or decode an image. Dropping
+   * that entry would shift every later hash one place left and bind it to the
+   * wrong photo, and the server writes these by index.
+   */
+  imageHashes: (string | null)[];
   /** Max 5. `resolveHubIds` rejects a sixth and the item is not created. */
   hubIds: string[];
 }

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 
 import { RETENTION_LINE } from "../../post/draft";
-import { draftProgress, isPostable, type PostState } from "../../post/state";
+import { draftProgress, isVisible, type PostState } from "../../post/state";
 import {
   draftSheetShadow,
   postColor,
@@ -58,7 +58,10 @@ export function DraftSheet({
 }) {
   const [confirming, setConfirming] = useState(false);
 
-  const photos = state.photos.filter(isPostable);
+  // `isVisible`, not `isPostable`: the draft sheet shows what the draft HAS,
+  // and a photo whose duplicate check is still in flight is in the draft. It
+  // would be shown, vanish for the second the check takes, and come back.
+  const photos = state.photos.filter(isVisible);
   const thumb = state.photos[0]?.localUri ?? null;
   const meta = `${draftProgress(state)} of 7 steps · ${photos.length} photo${
     photos.length === 1 ? "" : "s"

@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   BackHandler,
   Keyboard,
   ScrollView,
@@ -39,6 +40,7 @@ import { useValuation } from "../src/post/valuation";
 import {
   canAdvance,
   effectiveValue,
+  isChecking,
   isPostable,
   LAST_STEP,
   PostStateProvider,
@@ -228,9 +230,11 @@ function Wizard() {
         valueLeaves: value,
         images: photos.map((p) => p.url!).slice(0, rules.maxPhotos),
         wantedItems: state.wanted.trim() || null,
-        // The FIRST postable photo's hash, which is the one the check ran
-        // against and the one the next upload will be compared to.
+        // EVERY postable photo's hash, positionally aligned with `images`
+        // above — the same slice bound, so index i in one is index i in the
+        // other. The lead hash goes too, for the server's legacy column.
         imageHash: photos[0]?.hash ?? null,
+        imageHashes: photos.slice(0, rules.maxPhotos).map((p) => p.hash),
         hubIds: state.hubIds.slice(0, rules.maxHubs),
       });
       // The draft has become a listing. Deleting it here rather than on the way
@@ -275,6 +279,15 @@ function Wizard() {
   const onTextStep = step === 1 || step === 4;
   const accessoryUp = keyboardUp && onTextStep;
 
+  /**
+   * Step 0 only: every uploaded photo is still waiting on its duplicate check.
+   *
+   * Not "any photo is checking" — one settled photo is enough to continue, and
+   * a second photo checking in the background must not take Next away again.
+   */
+  const checkingPhotos =
+    step === 0 && !state.photos.some(isPostable) && state.photos.some(isChecking);
+
   const footerLabel =
     step === LAST_STEP
       ? state.posting
@@ -282,7 +295,9 @@ function Wizard() {
         : "Post this item"
       : step === 3 && state.editingItemId
         ? "Save changes"
-        : "Next";
+        : checkingPhotos
+          ? "Checking your photo…"
+          : "Next";
 
   return (
     <PostScreenHost imeInset={imeInset}>
@@ -418,6 +433,15 @@ function Wizard() {
             <PrimaryButton
               label={footerLabel}
               loading={state.posting}
+              // The spinner rides BESIDE the label rather than replacing it,
+              // which is what `loading` would do. "Checking your photo…" is the
+              // whole reason the button is disabled, so it is the one thing that
+              // must not be swapped out for a spinner.
+              icon={
+                checkingPhotos ? (
+                  <ActivityIndicator size="small" color={postColor.inkDisabled} />
+                ) : undefined
+              }
               disabled={!canAdvance(state) || (limit !== null && postCountdown > 0)}
               onPress={step === LAST_STEP ? () => void post() : next}
             />

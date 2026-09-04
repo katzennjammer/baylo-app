@@ -73,9 +73,53 @@ export interface Photo {
   rejected: "too-large" | "unsupported" | null;
 }
 
-/** A blocked photo is held for its panel and never posted. */
-export const isPostable = (p: Photo): boolean =>
+/**
+ * Whether the duplicate check has come back at all.
+ *
+ * `idle` is before the upload lands, `running` is the request in flight.
+ * Everything else is a verdict the server actually issued.
+ */
+export const dupSettled = (p: Photo): boolean =>
+  p.dup !== "idle" && p.dup !== "running";
+
+/**
+ * Uploaded and not blocked — what the tiles, the draft sheet and detection are
+ * about. Says nothing about whether the duplicate check has finished, because
+ * none of those should sit and wait for it: the photo is on screen and the item
+ * can be identified from it long before a verdict exists.
+ */
+export const isVisible = (p: Photo): boolean =>
   p.upload === "done" && p.url !== null && p.dup !== "failed";
+
+/**
+ * A photo that may become part of a listing. A blocked photo is held for its
+ * panel and never posted.
+ *
+ * THE VERDICT MUST EXIST. This used to be `isVisible` — upload done and not
+ * blocked — and the missing clause was a hole rather than a nicety. Step 0's
+ * Next is gated on this predicate, so an unsettled photo enabled Next the
+ * instant the upload landed; a quick tap through the wizard then posted before
+ * the check returned, and `hash` is written by the SAME patch that writes the
+ * verdict, so that listing was created with `imageHash: null`.
+ *
+ * A listing with no hash is not merely unchecked. It is invisible to every
+ * future check as well, permanently — so each one that slips through makes the
+ * next duplicate harder to catch. The check is worth the two seconds it costs;
+ * a pool with holes in it is not worth having.
+ */
+export const isPostable = (p: Photo): boolean =>
+  isVisible(p) && dupSettled(p);
+
+/**
+ * Step 0 is waiting on a verdict: nothing is postable yet, but something is
+ * still being checked rather than merely failing.
+ *
+ * Drives the footer's own `detecting` register — a disabled Next that says why
+ * it is disabled. A dead grey button with no sentence attached is the state
+ * this replaces, and it read as a bug.
+ */
+export const isChecking = (p: Photo): boolean =>
+  isVisible(p) && !dupSettled(p);
 
 /* ────────────────────────── step 2, detection ───────────────────────── */
 
@@ -457,8 +501,9 @@ function sentenceCase(s: string): string {
 export function canAdvance(s: PostState): boolean {
   switch (s.step) {
     case 0:
-      // "at least 1 photo has finished uploading" — and was not blocked. A
-      // failed duplicate check is not a photo you can post.
+      // At least one photo has finished uploading, was not blocked, AND has a
+      // duplicate verdict. Waiting on the verdict is the point: see the note on
+      // `isPostable`. The footer says it is checking rather than going quiet.
       return s.photos.some(isPostable);
     case 1:
       return s.category !== null && s.title.trim().length >= rules.titleMin;
