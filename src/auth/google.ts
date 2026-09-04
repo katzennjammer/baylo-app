@@ -15,8 +15,10 @@ import { useSession } from "./session";
  *      (a Custom Tab on Android, SFAuthenticationSession on iOS) — NOT a
  *      WebView. Google refuses to authenticate inside an embedded WebView, and
  *      is right to: the host app can read every keystroke in one.
- *   2. Google redirects back to `com.baylo.app:/oauthredirect` with an
- *      authorization code.
+ *   2. Google redirects back to `baylo://oauthredirect` with an authorization
+ *      code, which expo-web-browser catches on `Linking`. `app/+native-intent.ts`
+ *      keeps expo-router off that URL so it is not ALSO treated as a navigation
+ *      — see the note there for what that was costing.
  *   3. The library exchanges that code for tokens using PKCE and NO client
  *      secret. Installed-app clients are public clients — there is nowhere in
  *      an APK to keep a secret — so PKCE is what binds the code to this
@@ -37,9 +39,9 @@ import { useSession } from "./session";
  * a backend that accepted an unlisted audience would accept ID tokens minted
  * for unrelated apps.
  *
- * NOT AVAILABLE IN EXPO GO. The redirect URI is derived from this app's own
- * package name, and in Expo Go the package is Expo's. A development build is
- * required — see README.
+ * NOT AVAILABLE IN EXPO GO. The redirect URI is this app's own scheme, and
+ * Expo Go does not have it — links there arrive as `exp://…/--/…` instead. A
+ * development build is required — see README.
  */
 
 // Dismisses the auth browser tab if it is somehow still open when the app comes
@@ -69,6 +71,49 @@ function clientIdForPlatform(): string {
  * variable is missing.
  */
 const PLACEHOLDER_CLIENT_ID = "unconfigured.apps.googleusercontent.com";
+
+/**
+ * Where Google sends the authorization code back to.
+ *
+ * STATED, NOT INFERRED. Left alone, `Google.useAuthRequest` builds this as
+ * `makeRedirectUri({ native: `${applicationId}:/oauthredirect` })`, and
+ * `makeRedirectUri` only honours its `native` argument when
+ * `Constants.executionEnvironment` is `"bare"` or `"standalone"`. That check
+ * does not hold in this app.
+ *
+ * expo-constants assembles its export by SPREADING the native module —
+ * `const { name, appOwnership, ...nativeConstants } = ExponentConstants` —
+ * whereas `Constants.expoConfig` is a `defineProperty` getter that reads
+ * `ExponentConstants.manifest` off the module directly. The two disagree here:
+ * `expoConfig` resolves, since the embedded app config is plainly readable, but
+ * `executionEnvironment` arrives undefined, so the guard fails and
+ * `makeRedirectUri` falls through to `Linking.createURL("oauthredirect")` —
+ * which returns the FIRST entry of `expo.scheme` in app.json.
+ *
+ * That accident is what produced `baylo://oauthredirect`, and Google has been
+ * accepting it, so it is the value pinned here. WHAT CHANGES IS THAT IT IS NOW
+ * A FACT RATHER THAN A COINCIDENCE. Reordering `expo.scheme` in app.json used
+ * to silently move the redirect URI out from under a registered OAuth client,
+ * and an expo-constants release that repaired the spread would have moved it
+ * too. Neither can now.
+ *
+ * `baylo` MUST STAY IN `expo.scheme`. That entry is what puts
+ * `<data android:scheme="baylo"/>` in the manifest; without it the browser has
+ * nothing to hand the redirect to and the flow dies on the return leg.
+ *
+ * THIS IS NOT GOOGLE'S CANONICAL FORM. Google documents
+ * `<package or bundle id>:/oauthredirect` for installed-app clients —
+ * `com.baylo.app:/oauthredirect` here, which is also declared in `expo.scheme`
+ * and would reach the app just as well. The custom scheme above is accepted
+ * today; if Google ever tightens that, change this one constant and nothing
+ * else. The failure mode is loud and early — `redirect_uri_mismatch` on the
+ * consent screen, before any authorization code exists.
+ *
+ * Web is left undefined deliberately: `useAuthRequest` only substitutes its own
+ * value when the key is absent, and on web the correct answer is the page's own
+ * origin, which `makeRedirectUri` does derive correctly.
+ */
+const NATIVE_REDIRECT_URI = "baylo://oauthredirect";
 
 export interface GoogleSignInOptions {
   /**
@@ -117,6 +162,7 @@ export function useGoogleSignIn(options: GoogleSignInOptions = {}): GoogleSignIn
     androidClientId: ANDROID_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
     iosClientId: IOS_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
     webClientId: WEB_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
+    redirectUri: Platform.OS === "web" ? undefined : NATIVE_REDIRECT_URI,
     // Only what the backend reads off the token. Asking for more would put
     // scopes on the consent screen that nothing in this app uses, which is both
     // a worse first impression and a larger blast radius on the access token

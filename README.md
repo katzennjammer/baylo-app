@@ -653,9 +653,21 @@ It asks for exactly two values:
 | Package name | `com.baylo.app` — this is `expo.android.package` in `app.json` |
 | SHA-1 certificate fingerprint | the signing certificate's, per build type (below) |
 
-There is no redirect URI field for an Android client. Google derives it from the
-package name, and expo-auth-session builds the same string:
-`com.baylo.app:/oauthredirect`.
+There is no redirect URI field for an Android client, so nothing has to be
+registered. The app sends `baylo://oauthredirect` — `NATIVE_REDIRECT_URI` in
+`src/auth/google.ts`, and `baylo` is the first entry of `expo.scheme` in
+app.json.
+
+**That is stated in the source rather than left to `makeRedirectUri`**, which
+only uses the `<package name>:/oauthredirect` form Google documents when
+`Constants.executionEnvironment` is `"bare"` or `"standalone"` — a check that
+does not hold in this build, because expo-constants loses that key while
+spreading its native module. So it fell through to
+`Linking.createURL("oauthredirect")` and produced the custom scheme instead.
+Google accepts it, so it is pinned as-is; the point of pinning is that
+reordering `expo.scheme` can no longer move the redirect URI out from under a
+live OAuth client. Keep `baylo` in `expo.scheme` — that entry is what puts the
+matching `<data android:scheme>` in the manifest.
 
 **A client is a (package name, SHA-1) pair, so a debug build and a production
 build need TWO Android clients.** Same package name, different fingerprints.
@@ -720,6 +732,19 @@ GOOGLE_NATIVE_CLIENT_IDS=123456789-abcdef.apps.googleusercontent.com,987654321-u
 
 Then restart Metro with `--clear` (the value is compiled in) and restart the
 Next dev server.
+
+### The return leg
+
+`app/+native-intent.ts` drops the redirect before expo-router routes it.
+expo-web-browser catches the same URL on its own `Linking` listener and
+completes the exchange either way — but without the gate, expo-router *also*
+sees it, finds no `/oauthredirect` route, and pushes "Unmatched Route" on top
+of the login screen. The sign-in finishes underneath, invisibly, and the
+date-of-birth step renders behind a full-screen error.
+
+Do not add an `app/oauthredirect.tsx` route to paper over this. The redirect is
+the return half of a request this app made, addressed to the auth session; a
+route would just make the wrong owner's screen prettier.
 
 ### What the failures look like
 
