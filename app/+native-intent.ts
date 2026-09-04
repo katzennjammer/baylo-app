@@ -55,15 +55,19 @@ const OAUTH_REDIRECT_SEGMENT = "oauthredirect";
  * reach a device:
  *
  *   com.baylo.app:/oauthredirect?code=…   single slash, no authority — the
- *                                         segment is the path
+ *                                         segment is the PATH. THIS IS THE ONE
+ *                                         IN USE: Google's documented
+ *                                         installed-app form.
  *   baylo://oauthredirect?code=…          double slash — the segment is the
- *                                         HOST, and the path is empty
+ *                                         HOST, and the path is empty. Still
+ *                                         reachable: `baylo` is in
+ *                                         `expo.scheme` too.
  *
  * `new URL()` would need two different accessors for those, and React Native's
  * URL polyfill is unreliable on non-`//` schemes anyway. Stripping the scheme
  * and any leading slashes and reading the first segment handles both without
- * caring which is which — so this keeps working if `NATIVE_REDIRECT_URI` is
- * ever moved to the `com.baylo.app:/oauthredirect` form Google documents.
+ * caring which is which — so `NATIVE_REDIRECT_URI` can move between the two
+ * forms, as it already has, without this file changing.
  */
 function isOAuthRedirect(url: string): boolean {
   const withoutScheme = url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:/, "");

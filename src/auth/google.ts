@@ -15,10 +15,11 @@ import { useSession } from "./session";
  *      (a Custom Tab on Android, SFAuthenticationSession on iOS) — NOT a
  *      WebView. Google refuses to authenticate inside an embedded WebView, and
  *      is right to: the host app can read every keystroke in one.
- *   2. Google redirects back to `baylo://oauthredirect` with an authorization
- *      code, which expo-web-browser catches on `Linking`. `app/+native-intent.ts`
- *      keeps expo-router off that URL so it is not ALSO treated as a navigation
- *      — see the note there for what that was costing.
+ *   2. Google redirects back to `com.baylo.app:/oauthredirect` with an
+ *      authorization code, which expo-web-browser catches on `Linking`.
+ *      `app/+native-intent.ts` keeps expo-router off that URL so it is not
+ *      ALSO treated as a navigation — see the note there for what that was
+ *      costing.
  *   3. The library exchanges that code for tokens using PKCE and NO client
  *      secret. Installed-app clients are public clients — there is nowhere in
  *      an APK to keep a secret — so PKCE is what binds the code to this
@@ -90,30 +91,37 @@ const PLACEHOLDER_CLIENT_ID = "unconfigured.apps.googleusercontent.com";
  * `makeRedirectUri` falls through to `Linking.createURL("oauthredirect")` —
  * which returns the FIRST entry of `expo.scheme` in app.json.
  *
- * That accident is what produced `baylo://oauthredirect`, and Google has been
- * accepting it, so it is the value pinned here. WHAT CHANGES IS THAT IT IS NOW
- * A FACT RATHER THAN A COINCIDENCE. Reordering `expo.scheme` in app.json used
- * to silently move the redirect URI out from under a registered OAuth client,
- * and an expo-constants release that repaired the spread would have moved it
- * too. Neither can now.
+ * That accident is what produced `baylo://oauthredirect`, which Google accepted
+ * for months and then began rejecting with `invalid_request` — no change on
+ * this side, just a tightening on theirs. So the value pinned here is now the
+ * one Google documents. Either way IT IS A FACT RATHER THAN A COINCIDENCE:
+ * reordering `expo.scheme` in app.json used to silently move the redirect URI
+ * out from under a registered OAuth client, and an expo-constants release that
+ * repaired the spread would have moved it too. Neither can now.
  *
- * `baylo` MUST STAY IN `expo.scheme`. That entry is what puts
- * `<data android:scheme="baylo"/>` in the manifest; without it the browser has
- * nothing to hand the redirect to and the flow dies on the return leg.
+ * GOOGLE'S CANONICAL FORM, WITH A SINGLE SLASH. Google documents
+ * `<package or bundle id>:/oauthredirect` for installed-app clients, and the
+ * slash count is load-bearing. `com.baylo.app:/oauthredirect` has no authority,
+ * so the segment is its PATH; `com.baylo.app://oauthredirect` would make that
+ * same segment a HOST, which is a different URI and not one this client is
+ * registered for. Do not "tidy" the slash.
  *
- * THIS IS NOT GOOGLE'S CANONICAL FORM. Google documents
- * `<package or bundle id>:/oauthredirect` for installed-app clients —
- * `com.baylo.app:/oauthredirect` here, which is also declared in `expo.scheme`
- * and would reach the app just as well. The custom scheme above is accepted
- * today; if Google ever tightens that, change this one constant and nothing
- * else. The failure mode is loud and early — `redirect_uri_mismatch` on the
- * consent screen, before any authorization code exists.
+ * BOTH SCHEMES MUST STAY IN `expo.scheme`. That array is what puts
+ * `<data android:scheme="com.baylo.app"/>` and `<data android:scheme="baylo"/>`
+ * in the manifest; drop the one named here and the browser has nothing to hand
+ * the redirect to, so the flow dies on the return leg. `baylo` stays regardless
+ * — `Linking.createURL` and every other in-app deep link are built on it.
+ *
+ * If this ever has to move again, it moves alone: `app/+native-intent.ts`
+ * recognises both shapes, so the return leg is swallowed either way. The
+ * failure mode is loud and early — `invalid_request` or `redirect_uri_mismatch`
+ * on the consent screen, before any authorization code exists.
  *
  * Web is left undefined deliberately: `useAuthRequest` only substitutes its own
  * value when the key is absent, and on web the correct answer is the page's own
  * origin, which `makeRedirectUri` does derive correctly.
  */
-const NATIVE_REDIRECT_URI = "baylo://oauthredirect";
+const NATIVE_REDIRECT_URI = "com.baylo.app:/oauthredirect";
 
 export interface GoogleSignInOptions {
   /**
