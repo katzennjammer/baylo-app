@@ -12,6 +12,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { prewarmBandPlayer } from "../src/media/BandVideo";
 import { markIntroPlayed } from "../src/media/intro-gate";
 import { videoKit } from "../src/media/video-kit";
 import { VideoFallback } from "../src/media/VideoFallback";
@@ -74,14 +75,47 @@ import { authText, authType, sheetColor } from "../src/theme/auth-sheet-tokens";
  * between resolves to the same dark ground the next screen also starts from.
  * `useExoShutter={false}` keeps ExoPlayer from drawing its own black rectangle
  * over that ground while it loads.
+ *
+ * ── THE HANDOFF IS A CROSS-FADE, AND IT IS PREPARED FOR IN ADVANCE ──────────
+ *
+ * Leaving this screen used to look like a freeze: the film reached its end and
+ * its last frame sat on the glass for a beat before the auth screen appeared.
+ * Two things were producing it, and both are handled — one here, one next door.
+ *
+ *   THE GAP. `replace` off a screen with `animation: "none"` is a hard cut, and
+ *   the intro never faded out. `app/_layout.tsx` now gives this route
+ *   `animation: "fade"`, which under a `replace` is a 150ms cross-fade with the
+ *   OUTGOING screen drawn on top — so the intro's frame dissolves into the auth
+ *   screen instead of being swapped for it.
+ *
+ *   THE WORK. The band's ExoPlayer was being constructed during the auth
+ *   screen's first render, in the same commit that tears this player down. Both
+ *   are main-thread native calls. `prewarmBandPlayer()` moves that construction
+ *   into the middle of the film, where there is nothing else to contend with.
+ *
+ * And `leave()` PAUSES before it navigates, so what dissolves is a held frame
+ * rather than a video still decoding underneath a fade. On the natural exit that
+ * is a no-op — the clip has already ended on its last frame, which is the frame
+ * worth holding. On a tap, a timeout, or a backgrounding it is the difference
+ * between the intro ending and the intro being interrupted.
  */
 export default function IntroScreen() {
   const leaving = useRef(false);
+
+  /**
+   * Freezes the player on whatever frame is showing. Installed by `IntroPlayer`,
+   * null when there is no player — a missing kit, or a boundary that has already
+   * caught one. A ref rather than a prop because the four exits are split across
+   * both components and only this one has a player to stop.
+   */
+  const holdFrame = useRef<(() => void) | null>(null);
 
   const leave = useCallback(() => {
     // Synchronous and ref-based; see the note above on why this cannot be state.
     if (leaving.current) return;
     leaving.current = true;
+    // Before the navigation, not after: the cross-fade should dissolve a still.
+    holdFrame.current?.();
     router.replace("/(auth)/login");
   }, []);
 
@@ -116,7 +150,7 @@ export default function IntroScreen() {
     >
       {videoKit ? (
         <VideoFallback what="IntroVideo">
-          <IntroPlayer onFinished={leave} />
+          <IntroPlayer onFinished={leave} holdFrame={holdFrame} />
         </VideoFallback>
       ) : null}
 
@@ -138,7 +172,24 @@ const introSource = { uri: INTRO_VIDEO_URL, useCaching: true };
 
 const FADE_MS = 320;
 
-function IntroPlayer({ onFinished }: { onFinished: () => void }) {
+/**
+ * How long after the intro's first frame the band's player is built.
+ *
+ * `prewarmBandPlayer()` blocks the main thread for as long as it takes to
+ * construct an ExoPlayer, so it must not land inside the fade-in above — that
+ * animation is native-driven and immune to a busy JS thread, but not to a busy
+ * MAIN thread. One fade's length after the picture arrives, the reveal is over
+ * and there are still several seconds of film left to hide the cost in.
+ */
+const BAND_PREWARM_DELAY_MS = FADE_MS;
+
+function IntroPlayer({
+  onFinished,
+  holdFrame,
+}: {
+  onFinished: () => void;
+  holdFrame: React.RefObject<(() => void) | null>;
+}) {
   const { useVideoPlayer, VideoView } = videoKit!;
 
   const player = useVideoPlayer(introSource, (p) => {
@@ -152,6 +203,39 @@ function IntroPlayer({ onFinished }: { onFinished: () => void }) {
 
   const opacity = useRef(new Animated.Value(0)).current;
   const shown = useRef(false);
+  const prewarm = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── The screen's exits reach the player through here ─────────────────────
+  //
+  // Registered in an effect so it is paired with a cleanup: a player released
+  // by a re-render must not stay reachable through a stale closure.
+  useEffect(() => {
+    holdFrame.current = () => {
+      try {
+        player.pause();
+      } catch {
+        // Already torn down natively. There is nothing left to freeze, and the
+        // frame it left behind is the one that stays on screen anyway.
+      }
+    };
+    return () => {
+      holdFrame.current = null;
+    };
+  }, [player, holdFrame]);
+
+  // ── The band's player is built while the film is still running ───────────
+  //
+  // Armed by the first frame rather than by mount: at mount this screen is
+  // itself constructing a player and racing a two-second budget to show a
+  // picture, and a second construction alongside it is the one place this call
+  // could do harm. Cleared on unmount so a skip inside the delay does not fire
+  // it into the transition it exists to keep clear.
+  useEffect(
+    () => () => {
+      if (prewarm.current) clearTimeout(prewarm.current);
+    },
+    [],
+  );
 
   // ── The two-second budget, held against the first RENDERED frame ─────────
   useEffect(() => {
@@ -211,6 +295,11 @@ function IntroPlayer({ onFinished }: { onFinished: () => void }) {
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
+
+    // There is a picture and this screen's own work is done. The next screen's
+    // most expensive piece of setup goes here, in the slack, rather than into
+    // the frame in which this one is being replaced.
+    prewarm.current = setTimeout(prewarmBandPlayer, BAND_PREWARM_DELAY_MS);
   }, [opacity]);
 
   return (

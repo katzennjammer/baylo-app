@@ -197,6 +197,53 @@ function ensureBandPlayer(): VideoPlayer {
   return sharedPlayer;
 }
 
+/**
+ * Build the band's player NOW, before anything renders a view for it.
+ *
+ * ── WHAT THIS IS FOR ────────────────────────────────────────────────────────
+ *
+ * `ensureBandPlayer()` runs in `BandVideoInner`'s render body, so without this
+ * the band's ExoPlayer is constructed during the auth screen's FIRST RENDER —
+ * which, coming out of the intro, is the same commit in which the intro's own
+ * player is being torn down. Constructing and releasing an ExoPlayer are both
+ * main-thread native calls, and two of them in the frame where a whole screen is
+ * also mounting is the stall that showed up as the intro freezing on its last
+ * frame before the auth screen appeared.
+ *
+ * The intro calls this a beat after its own first frame, where there are several
+ * seconds of slack and nothing else contending. By the time the auth screen
+ * renders, `ensureBandPlayer()` finds a player already built and returns it.
+ *
+ * ── IT COUNTS NOTHING, AND CANNOT LEAK ──────────────────────────────────────
+ *
+ * This is `ensure`, not `retain`: it takes no reference. `ensure` arms the idle
+ * release itself for exactly this case — a player that exists with nothing
+ * mounted against it — so a prewarm the auth screen never follows (the intro is
+ * skipped, the process is backgrounded, sign-in happens from somewhere else) is
+ * cleaned up on the same 30-second timer as any other. The intro's own ceiling
+ * is 12 seconds, so a real handoff always lands well inside it.
+ *
+ * ── IT NEVER THROWS ─────────────────────────────────────────────────────────
+ *
+ * `ensureBandPlayer` throws on a kit that loaded but cannot build a player, and
+ * that is correct where it is called from a render body: `VideoFallback` catches
+ * it and the band keeps its poster. Here there is no boundary and no view — this
+ * is a speculative call from an unrelated screen — so the same failure is logged
+ * and dropped. The auth screen will try again on mount, inside its boundary,
+ * and degrade there in the way that file already describes.
+ */
+export function prewarmBandPlayer(): void {
+  if (!videoKit) return;
+  try {
+    ensureBandPlayer();
+  } catch (err) {
+    console.warn(
+      "[video] band prewarm failed; the auth screen will build its own player:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 /** Called from an effect. Paired with `releaseBandPlayer` by React. */
 function retainBandPlayer() {
   retained += 1;

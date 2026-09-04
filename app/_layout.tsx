@@ -112,16 +112,33 @@ export default function RootLayout() {
               adds — intro → login — where both screens are dark and only the
               navigator between them was not.
 
-              `animation: "none"` on the intro for the same reason from the
-              other end: it is left with `replace`, and a slide would animate a
-              screen that has already ended out over one that has not started.
+              `animation: "fade"` on the intro is the SAME problem solved from
+              the other end. It is left with `replace`, and the old value here
+              was "none" — chosen because a slide would animate a screen that has
+              already ended out over one that has not started. That reasoning
+              still holds against a slide and never held against a fade: a hard
+              cut off a film's last frame reads as the app freezing, not as the
+              film ending.
+
+              WHICH SCREEN'S ANIMATION THIS ACTUALLY IS. react-native-screens
+              takes the animation from the INCOMING screen on a replace only when
+              `replaceAnimation` is "push"; the default is "pop", so a replace
+              uses the OUTGOING screen's — this one's — and draws it on top of
+              the arriving screen while it plays. That is exactly the layering a
+              cross-fade off a video wants, and it is why this option belongs on
+              the intro rather than on (auth).
+
+              It is a 150ms alpha in both directions, fixed on Android
+              (`animationDuration` only reaches the iOS side of a fade). Both
+              screens are grounded in the same #14140F, so there is nothing to
+              see through the dissolve but the two pictures.
 
               Declaring these does not opt the other routes out of file-based
               discovery; they keep the defaults above.
             */}
             <Stack.Screen
               name="intro"
-              options={{ animation: "none", contentStyle: { backgroundColor: sheetColor.frame } }}
+              options={{ animation: "fade", contentStyle: { backgroundColor: sheetColor.frame } }}
             />
             <Stack.Screen
               name="(auth)"

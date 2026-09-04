@@ -15,10 +15,8 @@
  * ── WHAT THE TRANSFORM SEGMENTS DO, AND THE NUMBERS THEY PRODUCED ───────────
  *
  *   f_auto        let Cloudinary pick the container/codec per client
- *   q_auto:eco    the quality tier below the `q_auto` default. The footage sits
- *                 under a 28-62% scrim in the band and plays once at speed in
- *                 the intro; the tier below default is invisible in both and is
- *                 the single biggest lever on the byte count.
+ *   q_auto        the default quality tier. What the INTRO ships at.
+ *   q_auto:eco    the tier below it. What the BAND ships at.
  *   w_1080,c_limit  cap the width at 1080, NEVER upscale. c_limit is the half
  *                 that matters — plain w_1080 would enlarge a narrower master.
  *   du_6          BAND ONLY: the first six seconds. See the note on it below.
@@ -27,21 +25,46 @@
  * body rather than an estimate:
  *
  *   INTRO  raw master                                4,944,181 B   4.72 MB
- *          f_auto,q_auto,w_1080,c_limit              1,651,891 B   1.58 MB
- *          f_auto,q_auto:eco,w_1080,c_limit          1,360,475 B   1.30 MB  ← shipped
+ *          f_auto,q_auto,w_1080,c_limit              1,653,289 B   1.58 MB  ← shipped
+ *          f_auto,q_auto:eco,w_1080,c_limit          1,362,681 B   1.30 MB
  *
  *   BAND   raw master                               23,649,339 B  22.55 MB
  *          f_auto,q_auto,w_1080,c_limit              7,391,963 B   7.05 MB
  *          f_auto,q_auto:eco,w_720,c_limit           3,601,947 B   3.44 MB
  *          f_auto,q_auto:low,w_540,c_limit           2,196,661 B   2.09 MB
- *          f_auto,q_auto:eco,w_1080,c_limit,du_6     1,470,305 B   1.40 MB  ← shipped
+ *          f_auto,q_auto:eco,w_1080,c_limit,du_6     1,469,687 B   1.40 MB  ← shipped
+ *
+ * ── THE BUDGET IS 1.8 MB PER CLIP, AND THE TWO CLIPS SPEND IT DIFFERENTLY ───
+ *
+ * It was 1.5 MB, which both clips cleared at q_auto:eco. The INTRO did not
+ * survive that tier: it is full-screen, it plays at speed with nothing over it,
+ * and the drop was visible on a phone. So the ceiling moved to 1.8 MB and the
+ * intro moved up to q_auto — 1.58 MB, about 290 KB more than it was.
+ *
+ * That 290 KB is paid ONCE. `useCaching` on the intro player keeps the file on
+ * disk against an immutable URL, so it is a first-launch cost per install and
+ * nothing on every launch after.
+ *
+ * THE BAND STAYS AT q_auto:eco, and the reason is not the budget — it would
+ * clear 1.8 MB comfortably. It is that the two clips are not seen the same way.
+ * The band sits under a 28-62% scrim, behind an opaque sheet, as the background
+ * of a form somebody is reading rather than watching; the tier below default is
+ * genuinely invisible there. And it is the file that plays on EVERY auth screen
+ * of every session, so it is the one whose bytes and whose decode cost recur.
+ * Spending the raised ceiling on it would buy quality nobody can see, on the
+ * clip that can least afford the weight.
+ *
+ * If 1.58 MB still reads as degraded, the next move is a shorter re-export of
+ * the intro master, not a higher ceiling. `q_auto` IS the default tier — above
+ * it there is only `q_auto:best` and an explicit `q_<n>`, which stop being an
+ * automatic decision and start being a number somebody has to defend.
  *
  * ── WHY THE BAND IS TRIMMED AND NOT SHRUNK ──────────────────────────────────
  *
  * The band is full-bleed across the top of the screen, so every pixel of width
  * is on display; its LENGTH is not, because it loops and sits behind an opaque
- * sheet that nobody studies. No full-length variant reaches the 1.5 MB budget —
- * the closest is 2.09 MB at w_540, which is a 2× upscale on a 1080p phone and
+ * sheet that nobody studies. No full-length variant reaches the budget — the
+ * closest is 2.09 MB at w_540, which is a 2× upscale on a 1080p phone and
  * visible as softness in exactly the dimension that shows. Six seconds at full
  * width is 1.40 MB and looks native. Length was the cheap axis; width was not.
  *
@@ -56,6 +79,10 @@
  * of revalidating on every cold start. Re-uploading footage under the same
  * public ID with a new version produces a new URL and a clean re-fetch; editing
  * the transform does the same. Neither can serve a stale frame.
+ *
+ * That last sentence is also why the quality change above is safe to ship: the
+ * intro's transform is different, so its URL is different, so every install
+ * fetches the new file once rather than being served the eco copy it has.
  */
 
 const CLOUD_BASE = "https://res.cloudinary.com/dm7ctbxq7/video/upload";
@@ -71,14 +98,26 @@ function cloudinaryVideo(transform: string, version: string, publicId: string): 
   return `${CLOUD_BASE}/${transform}/${version}/${publicId}.mp4`;
 }
 
-/** Plays once on a cold start, before the auth screens. ~7s, 1.30 MB. */
+/**
+ * Plays once on a cold start, before the auth screens. ~7s, 1.58 MB.
+ *
+ * `q_auto` rather than the band's `q_auto:eco`: this one is full-screen with
+ * nothing over it, and the eco tier was visible on a phone. See the budget note
+ * at the top of the file for what that costs and why it is paid once.
+ */
 export const INTRO_VIDEO_URL = cloudinaryVideo(
-  "f_auto,q_auto:eco,w_1080,c_limit",
+  "f_auto,q_auto,w_1080,c_limit",
   "v1788278268",
   "1_vm9emg",
 );
 
-/** Loops in the band above the auth sheet. 6s, 1.40 MB. */
+/**
+ * Loops in the band above the auth sheet. 6s, 1.40 MB.
+ *
+ * Deliberately still `q_auto:eco` after the intro moved off it. Under a scrim,
+ * behind a sheet, on every auth screen of every session — the one clip where the
+ * tier below default buys nothing visible and costs on every launch.
+ */
 export const BAND_VIDEO_URL = cloudinaryVideo(
   "f_auto,q_auto:eco,w_1080,c_limit,du_6",
   "v1788278527",
