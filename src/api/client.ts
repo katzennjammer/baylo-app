@@ -173,7 +173,7 @@ function networkFailure(cause: unknown): never {
 type LegacyErrorBody = { error?: string; code?: string; issues?: FieldIssue[] };
 
 /** Turns a non-2xx from an /api/auth endpoint into the one error type. */
-async function legacyFailure(res: Response, fallback: string): Promise<never> {
+export async function legacyFailure(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as LegacyErrorBody;
   const header = res.headers.get("Retry-After");
   const retryAfter = header ? Number(header) : null;
@@ -686,7 +686,7 @@ async function performRefresh(): Promise<string | null> {
  * of which resolveSession() answers with a 401 that looks exactly like an
  * expiry. Looping on it would spin forever against a user who cannot be let in.
  */
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+export async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const url = `${requireBase()}${path}`;
 
   const send = async (accessToken: string | null) => {
@@ -737,10 +737,20 @@ export async function apiV1<T>(
   }
 
   if (!res.ok || body.error || body.data === null) {
+    // Retry-After travels with the error rather than being dropped. A 429 whose
+    // wait is unknown can only be reported as "try again some time", and the
+    // post flow renders an actual countdown — `Try again in 2:14` — which it can
+    // only do if the number survives the throw. Every /api/v1 route that limits
+    // sends the header; the ones that do not send nothing and this stays null.
+    const header = res.headers.get("Retry-After");
+    const retryAfter = header ? Number(header) : null;
+
     throw new ApiError(
       res.status,
       body.error?.code ?? "INTERNAL_ERROR",
       body.error?.message ?? `Request to ${path} failed`,
+      [],
+      retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
     );
   }
 

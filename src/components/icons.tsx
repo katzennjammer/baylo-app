@@ -48,7 +48,7 @@ export interface IconProps {
  * owns the hit area — without it Android hands the touch to the SVG on some
  * versions and the button under it never fires.
  */
-function Glyph({
+export function Glyph({
   size,
   color,
   stroke = 1.6,

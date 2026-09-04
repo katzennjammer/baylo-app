@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -72,6 +73,7 @@ const FAB_ROUTE = "post";
 
 export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   // The spec's 22 is a floor, not a constant. A phone with a gesture bar
   // reserves more than that and a phone with hardware keys reserves none;
@@ -92,6 +94,21 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
         // navigation. Calling navigate() first would make that listener
         // pointless.
         const onPress = () => {
+          // POST IS NOT A TAB SWITCH. The listing wizard owns the whole screen
+          // — its own 44 header and 90 footer, on all seven steps — and a tab
+          // screen has the app header above it and this bar below it. Both
+          // would have to be hidden for the entire flow, which is the same
+          // thing as not being a tab. So the FAB pushes the wizard OVER the
+          // tabs and closing it returns to whichever tab was underneath, which
+          // is also the right answer for "I hit Post by mistake".
+          //
+          // The route stays registered so the bar keeps its five slots and its
+          // centre circle; it is simply never the focused screen.
+          if (route.name === FAB_ROUTE) {
+            router.push("/post-item");
+            return;
+          }
+
           const event = navigation.emit({
             type: "tabPress",
             target: route.key,

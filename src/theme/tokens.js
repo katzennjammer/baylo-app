@@ -96,6 +96,14 @@ const font = {
   sansBold: "PublicSans-Bold",
   /** Eyebrows, timestamps, dev labels. */
   mono: "JetBrainsMono-Regular",
+  /**
+   * Mono 500. Its own family, not `mono` at weight 500 — asking Android for
+   * Regular at 500 synthesises a face rather than reaching for this file. The
+   * auth spec's rejection value and the post flow's slider band values and
+   * reference codes are all Mono Medium; the .ttf has been bundled since the
+   * auth work, and this is the name that reaches it.
+   */
+  monoMedium: "JetBrainsMono-Medium",
 };
 
 /**

@@ -45,7 +45,8 @@ export type FontName =
   | "sansMedium"
   | "sansSemi"
   | "sansBold"
-  | "mono";
+  | "mono"
+  | "monoMedium";
 
 export declare const font: Readonly<Record<FontName, string>>;
 
