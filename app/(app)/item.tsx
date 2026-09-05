@@ -5,7 +5,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
 import { Splash } from "../../src/components/Splash";
-import { REPORT_REASONS, useBlockUser, useItem, useReportItem } from "../../src/api/item";
+import { useBlockUser, useItem, useReport } from "../../src/api/item";
 import {
   BlockIcon,
   ChevronLeftIcon,
@@ -14,6 +14,7 @@ import {
   LeafIcon,
   PinIcon,
 } from "../../src/components/icons";
+import { ReportSheet } from "../../src/components/ReportSheet";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
@@ -81,9 +82,19 @@ export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data, isPending, isError, error, refetch } = useItem(id);
 
-  const report = useReportItem();
+  const report = useReport();
   const block = useBlockUser();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
+  /**
+   * Whether the reason picker is up.
+   *
+   * IT REPLACED AN Alert, AND THAT WAS A BUG FIX, NOT A RESTYLE. The reasons
+   * were the buttons of an `Alert.alert` — six of them plus a Cancel — and
+   * Android renders at most THREE buttons in a dialog and silently drops the
+   * rest. Testers on Android were being offered half the reasons, with no
+   * indication that the list was truncated. See ReportSheet for the full note.
+   */
+  const [reporting, setReporting] = useState(false);
 
   const apiError = error instanceof ApiError ? error : null;
 
@@ -132,35 +143,37 @@ export default function ItemDetailScreen() {
   const { item, viewer } = data;
   const hubs = item.safeZones ?? [];
 
-  const onReport = () => {
-    Alert.alert(
-      "Report this listing",
-      "A moderator reviews every report and tells you the outcome.",
-      [
-        { text: "Cancel", style: "cancel" },
-        ...REPORT_REASONS.map((r) => ({
-          text: r.label,
-          onPress: () =>
-            report.mutate(
-              { itemId: item.id, category: r.value },
-              {
-                onSuccess: () => setActed("reported"),
-                onError: (e) =>
-                  Alert.alert(
-                    // A 409 is not a failure: it means this reporter already has
-                    // an open report against this listing. Saying "already
-                    // reported" is the truthful answer and stops them retrying.
-                    e instanceof ApiError && e.code === "CONFLICT"
-                      ? "Already reported"
-                      : "Could not send that report",
-                    e instanceof ApiError
-                      ? e.message
-                      : "Something went wrong. Please try again.",
-                  ),
-              },
-            ),
-        })),
-      ],
+  /**
+   * A reason was picked. The sheet stays up while the request is in flight —
+   * SheetShell swaps its Cancel for a spinner — and comes down on either
+   * outcome, because both of them are answered by a dialog and a sheet still
+   * standing behind one reads as a step that did not finish.
+   */
+  const onPickReason = (category: string) => {
+    report.mutate(
+      { targetType: "listing", targetId: item.id, category },
+      {
+        onSuccess: () => {
+          setReporting(false);
+          setActed("reported");
+          Alert.alert(
+            "Thanks — that is with a moderator",
+            "They review every report and will let you know the outcome.",
+          );
+        },
+        onError: (e) => {
+          setReporting(false);
+          Alert.alert(
+            // A 409 is not a failure: it means this reporter already has an
+            // open report against this listing. Saying "already reported" is
+            // the truthful answer and stops them retrying.
+            e instanceof ApiError && e.code === "CONFLICT"
+              ? "Already reported"
+              : "Could not send that report",
+            e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+          );
+        },
+      },
     );
   };
 
@@ -296,7 +309,7 @@ export default function ItemDetailScreen() {
                 }
                 label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
                 disabled={acted === "reported" || report.isPending}
-                onPress={onReport}
+                onPress={() => setReporting(true)}
               />
               <DangerRow
                 icon={
@@ -321,6 +334,21 @@ export default function ItemDetailScreen() {
           router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } })
         }
       />
+
+      {/*
+        Mounted last so it sits over the sticky ActionBar. It renders nothing
+        until `reporting` is true; the Modal inside it is created and destroyed
+        with the picker rather than kept alive behind the screen.
+      */}
+      {reporting ? (
+        <ReportSheet
+          target="listing"
+          targetName="this listing"
+          busy={report.isPending}
+          onPick={onPickReason}
+          onClose={() => setReporting(false)}
+        />
+      ) : null}
     </View>
   );
 }

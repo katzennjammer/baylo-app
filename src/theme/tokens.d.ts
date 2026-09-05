@@ -144,6 +144,8 @@ export declare const space: Readonly<{
     socialGap: number;
     nameToBadge: number;
     failedGap: number;
+    socialToOffer: number;
+    offerGap: number;
   }>;
   chip: Readonly<{ x: number; y: number }>;
   tierBadge: Readonly<{ x: number; y: number }>;
@@ -194,6 +196,8 @@ export declare const space: Readonly<{
     rangeGap: number;
     actionsTop: number;
     actionGap: number;
+    menuGap: number;
+    menuTop: number;
   }>;
   detail: Readonly<{
     x: number;
@@ -239,6 +243,8 @@ export type RadiusName =
   | "matchesThumb"
   | "photoCaption"
   | "reloadButton"
+  | "offerInline"
+  | "offerPill"
   | "searchField"
   | "filterButton"
   | "gridTile"
@@ -285,6 +291,10 @@ export declare const size: Readonly<{
     fabLift: number;
     reloadButton: number;
     reloadButtonX: number;
+    offerInline: number;
+    offerInlineX: number;
+    offerPill: number;
+    offerPillX: number;
   }>;
   badge: Readonly<{
     unread: number;
@@ -320,6 +330,8 @@ export declare const size: Readonly<{
     optionX: number;
     rangeInput: number;
     action: number;
+    menuRow: number;
+    menuIcon: number;
     handleW: number;
     handleH: number;
   }>;
@@ -379,7 +391,9 @@ export type IconName =
   | "hubPin"
   | "danger"
   | "check"
-  | "emptyGrid";
+  | "emptyGrid"
+  | "offer"
+  | "menuRow";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 

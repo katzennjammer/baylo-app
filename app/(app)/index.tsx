@@ -1,18 +1,23 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
 import { Splash } from "../../src/components/Splash";
 import { Divider } from "../../src/components/Divider";
+import { CommentsSheet } from "../../src/components/home/CommentsSheet";
+import { EditListingSheet } from "../../src/components/home/EditListingSheet";
 import { EmptyFeed } from "../../src/components/home/EmptyFeed";
 import { FeedCard } from "../../src/components/home/FeedCard";
 import { FeedError } from "../../src/components/home/FeedError";
 import { FeedSkeleton } from "../../src/components/home/FeedSkeleton";
+import { ListingMenu } from "../../src/components/home/ListingMenu";
 import { StoriesRow } from "../../src/components/home/StoriesRow";
 import { TrendingStrip } from "../../src/components/home/TrendingStrip";
 import { color, space } from "../../src/theme/tokens";
 import { useHome } from "../../src/api/home";
+import { useLike } from "../../src/api/social";
+import { shareListing } from "../../src/lib/share";
 import type { Item } from "../../src/api/types";
 
 /**
@@ -77,8 +82,52 @@ const TRENDING_AFTER = 1;
 
 type Row = { kind: "item"; item: Item } | { kind: "trending" };
 
+/**
+ * THE THREE SHEETS ARE MOUNTED HERE, ONE EACH, NOT ONE PER CARD.
+ *
+ * Each is a React Native `Modal`, and a Modal is a native modal host — a
+ * separate window on Android, a presented view controller on iOS. Rendering one
+ * inside FeedCard would mean forty of them alive in a scrolled feed, each with
+ * its own mount cost and animation driver, to support a thing that can only be
+ * open once. So the card raises an event with the item, this screen records
+ * which item that was, and the sheet renders from that.
+ *
+ * Which also means the sheets survive the card scrolling out of the viewport
+ * and being unmounted by FlatList — the item is held in this screen's state,
+ * not in the row's.
+ *
+ * The menu and the editor are two states rather than one nested sheet: tapping
+ * "Edit listing" closes the menu and opens the editor, because two Modals
+ * stacked is a scrim over a scrim, and on Android the second one's back button
+ * dismisses both.
+ */
 export default function HomeScreen() {
   const router = useRouter();
+  /**
+   * WHAT IS HELD IS AN ID, AND THE ITEM IS LOOKED UP FROM THE FEED.
+   *
+   * Holding the `Item` object instead would freeze it at the moment of the tap,
+   * and every one of these sheets renders something that then MOVES: the
+   * comment sheet's header counts comments and one is about to be added, the
+   * editor seeds from the title and description, the menu draws the owner's
+   * name. Post a comment against a captured object and the header still says
+   * what it said before you typed.
+   *
+   * Resolving through `feed` on each render means the sheets read the same
+   * cache the cards do, so an optimistic write updates the sheet and the card
+   * behind it together. It also closes them correctly for free: an item that
+   * leaves the feed — removed, or its owner blocked — resolves to undefined,
+   * and the sheet unmounts because the thing it was about is gone.
+   */
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [commentsId, setCommentsId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // `mutate`, not the whole mutation object. useMutation() returns a NEW object
+  // on every render — it carries isPending and friends — so depending on it
+  // would rebuild `onLike`, and therefore `renderItem`, on every render, and
+  // FlatList would repaint every visible card each time anything on this screen
+  // changed. `mutate` itself is a stable reference.
+  const { mutate: like } = useLike();
   const {
     viewer,
     trending,
@@ -110,6 +159,32 @@ export default function HomeScreen() {
     [router],
   );
 
+  /**
+   * The heart.
+   *
+   * `next` comes from the card, which read it off the item it is rendering —
+   * so the request always states the state being asked for rather than "flip
+   * whatever you have", and a retry after a timeout cannot invert the result.
+   *
+   * NO onError HERE. The mutation rolls the cache back itself, so the heart
+   * returns to where it was; an alert on top of that would interrupt a scroll
+   * to report something the user can already see, and the recovery is to tap
+   * again. The comment composer, where a failure would lose written text, does
+   * raise one.
+   */
+  const onLike = useCallback(
+    (item: Item, next: boolean) => like({ itemId: item.id, next }),
+    [like],
+  );
+
+  /** The OS share sheet, with a link to the listing's public web page. */
+  const onShare = useCallback((item: Item) => {
+    void shareListing(item);
+  }, []);
+
+  const openMenu = useCallback((item: Item) => setMenuId(item.id), []);
+  const openComments = useCallback((item: Item) => setCommentsId(item.id), []);
+
   const onEndReached = useCallback(() => {
     // hasNextPage is derived from meta.nextCursor. The isFetchingNextPage guard
     // matters more than it looks: FlatList fires onEndReached again on every
@@ -135,14 +210,33 @@ export default function HomeScreen() {
             existed — `onOffer` was optional and nothing passed it, so the
             control was inert. It opens the listing now; the offer sheet itself
             is one more hop and is still a placeholder.
+
+            The other four handlers are the row that used to be display-only,
+            plus the three dots. Passing them is what turns those glyphs into
+            buttons — FeedCard renders each one as inert text when its handler
+            is absent, so this list is the whole difference.
           */}
-          <FeedCard item={row.item} onOffer={openItem} />
+          <FeedCard
+            item={row.item}
+            onOffer={openItem}
+            onLike={onLike}
+            onComment={openComments}
+            onShare={onShare}
+            onMenu={openMenu}
+          />
           <Divider />
         </View>
       );
     },
-    [trending, openItem],
+    [trending, openItem, onLike, onShare, openComments, openMenu],
   );
+
+  // Resolved fresh on every render. `?? null` because the sheets take null for
+  // "closed" and `find` answers undefined for "gone".
+  const byId = (id: string | null) => (id ? (feed.find((i) => i.id === id) ?? null) : null);
+  const menuItem = byId(menuId);
+  const commentsItem = byId(commentsId);
+  const editingItem = byId(editingId);
 
   const hasCache = viewer !== undefined;
 
@@ -184,43 +278,60 @@ export default function HomeScreen() {
   }
 
   return (
-    <FlatList
-      style={{ flex: 1, backgroundColor: color.surface }}
-      data={rows}
-      keyExtractor={keyOf}
-      renderItem={renderItem}
-      ListHeaderComponent={<StoriesRow matches={matches} />}
-      ListEmptyComponent={
-        <View>
-          <EmptyFeed location={viewer?.location ?? null} />
-          <Divider />
-          <TrendingStrip trending={trending} />
-        </View>
-      }
-      ListFooterComponent={
-        isFetchingNextPage ? (
-          <View style={{ paddingVertical: space.trending.y }}>
-            <ActivityIndicator color={color.green} />
+    <>
+      <FlatList
+        style={{ flex: 1, backgroundColor: color.surface }}
+        data={rows}
+        keyExtractor={keyOf}
+        renderItem={renderItem}
+        ListHeaderComponent={<StoriesRow matches={matches} />}
+        ListEmptyComponent={
+          <View>
+            <EmptyFeed location={viewer?.location ?? null} />
+            <Divider />
+            <TrendingStrip trending={trending} />
           </View>
-        ) : (
-          <View style={{ height: space.trending.y }} />
-        )
-      }
-      onEndReached={onEndReached}
-      onEndReachedThreshold={0.6}
-      refreshControl={
-        <RefreshControl
-          // Not while paginating. Both are refetches as far as TanStack is
-          // concerned, and without the guard reaching the bottom of the feed
-          // spins the pull-to-refresh indicator at the top of it.
-          refreshing={isRefetching && !isFetchingNextPage}
-          onRefresh={refetch}
-          tintColor={color.green}
-          colors={[color.green]}
-          progressBackgroundColor={color.surface}
-        />
-      }
-    />
+        }
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={{ paddingVertical: space.trending.y }}>
+              <ActivityIndicator color={color.green} />
+            </View>
+          ) : (
+            <View style={{ height: space.trending.y }} />
+          )
+        }
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.6}
+        refreshControl={
+          <RefreshControl
+            // Not while paginating. Both are refetches as far as TanStack is
+            // concerned, and without the guard reaching the bottom of the feed
+            // spins the pull-to-refresh indicator at the top of it.
+            refreshing={isRefetching && !isFetchingNextPage}
+            onRefresh={refetch}
+            tintColor={color.green}
+            colors={[color.green]}
+            progressBackgroundColor={color.surface}
+          />
+        }
+      />
+
+      <ListingMenu
+        item={menuItem}
+        viewerId={viewer?.id ?? null}
+        onClose={() => setMenuId(null)}
+        onEdit={(item) => {
+          // Closed first, then opened. See the note above the component.
+          setMenuId(null);
+          setEditingId(item.id);
+        }}
+      />
+
+      <EditListingSheet item={editingItem} onClose={() => setEditingId(null)} />
+
+      <CommentsSheet item={commentsItem} onClose={() => setCommentsId(null)} />
+    </>
   );
 }
 

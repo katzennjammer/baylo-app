@@ -333,6 +333,33 @@ export function FlagIcon(props: IconProps) {
   );
 }
 
+/** Edit. A pencil on a baseline — the mark for changing what is already there. */
+export function PencilIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 20h4l10.5-10.5a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+      <Path d="M14.5 5.5 18.5 9.5" />
+    </Glyph>
+  );
+}
+
+/**
+ * Delete. A bin, and it is drawn OPEN — the lid is a separate line above the
+ * body rather than a closed box, so it reads as a bin at 19 px where a filled
+ * rectangle reads as a chip.
+ */
+export function TrashIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 6.5h16" />
+      <Path d="M9.5 6.5V4.5h5v2" />
+      <Path d="M6 6.5 7 20a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 20l1-13.5" />
+      <Path d="M10.5 10.5v6.5" />
+      <Path d="M13.5 10.5v6.5" />
+    </Glyph>
+  );
+}
+
 /** Block. A circle with a bar — the universal "no". */
 export function BlockIcon(props: IconProps) {
   return (

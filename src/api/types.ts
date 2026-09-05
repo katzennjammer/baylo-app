@@ -81,6 +81,39 @@ export interface SafeZoneHub {
   isActive: boolean;
 }
 
+/**
+ * The like and comment counters on a listing, plus this viewer's own like.
+ *
+ * Named and exported rather than inlined on `Item` because it is now a wire
+ * shape in its own right: POST/DELETE /api/v1/items/[id]/like and POST
+ * .../comments all answer with exactly this block, so the client can replace
+ * what it guessed with what the server counted. The server shapes all four
+ * from one function (`v1Stats`) for the same reason.
+ */
+export interface ItemStats {
+  likes: number;
+  liked: boolean;
+  comments: number;
+}
+
+/**
+ * One top-level comment on a listing.
+ *
+ * `replyCount` arrives and is not rendered anywhere yet — there is no thread
+ * screen, and GET .../comments returns top-level rows only. It is on the wire
+ * so the day that screen exists it does not need a second endpoint. Comment
+ * LIKES are deliberately absent: the legacy route returns them, no v1 endpoint
+ * can change them, and a count with no control beside it is the dead affordance
+ * this whole pass removed from the card.
+ */
+export interface ItemComment {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; name: string; avatar: string | null };
+  replyCount: number;
+}
+
 export interface Item {
   id: string;
   title: string;
@@ -98,7 +131,7 @@ export interface Item {
   wanted: string | null;
   pickup: Pickup | null;
   owner: ItemOwner;
-  stats: { likes: number; liked: boolean; comments: number };
+  stats: ItemStats;
   /**
    * NULL means the endpoint did not load them; `[]` means the listing genuinely
    * has none. A client must not collapse the two — the feed sends null and a

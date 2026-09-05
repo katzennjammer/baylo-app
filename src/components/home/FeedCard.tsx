@@ -2,7 +2,7 @@ import { Image, type ImageLoadEventData } from "expo-image";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon } from "../icons";
+import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { clampAspect, relativeShort, wasCropped } from "../../lib/format";
 import { resolveTier, TIER_LABEL, type TrustTier } from "../../lib/trust";
@@ -59,23 +59,79 @@ import type { Item } from "../../api/types";
  *     wish list into a deadline. The chip is built and takes a prop; nothing on
  *     this screen passes one yet.
  *
- * THE SOCIAL ROW IS DISPLAY-ONLY. `stats.likes`, `stats.liked` and
- * `stats.comments` all arrive on the item, so the counts and the liked heart
- * are real. Acting on them is not: the only like endpoint on this backend is
- * /api/posts/[id]/like, a cookie-session route outside /api/v1 that a Bearer
- * client cannot call, and this task is not the place to add one. So the row is
- * a row of facts rather than three buttons that do nothing when pressed — it
- * reports as text to a screen reader and has no press handler to swallow a tap.
+ * THE SOCIAL ROW IS LIVE. It was a row of facts — three glyphs with no press
+ * handler — because the only like endpoint was /api/posts/[id]/like, outside
+ * /api/v1 and answering in a shape `apiV1()` cannot read. There are now
+ * POST/DELETE /api/v1/items/[id]/like and GET/POST /api/v1/items/[id]/comments,
+ * so all three are real controls: like is optimistic and moves on the tap,
+ * comment opens the sheet the feed screen owns, and share opens the OS sheet
+ * with a link to the listing's public web page. See `src/api/social.ts` and
+ * `src/lib/share.ts`.
+ *
+ * EVERY HANDLER IS OPTIONAL AND THE GLYPH FOLLOWS IT. A card rendered without
+ * `onLike` draws the heart exactly as it used to — as text, with no press
+ * target — rather than as a button that swallows the tap. That is what keeps
+ * this component usable on a screen that has not wired the actions yet, which
+ * is the state it was in until this pass.
  */
+
+/**
+ * WHERE OFFER TRADE SITS. Two layouts, and the card is built for both.
+ *
+ * It was a 48 px full-width green bar on its own row under the social actions.
+ * That is the treatment a form's submit button gets, and a feed of them reads
+ * as a stack of forms rather than a stack of listings — the button, not the
+ * photo, becomes the loudest thing on every card, and the eye stops at each one
+ * instead of scrolling past.
+ *
+ *   "inline"  the pill rides the social row, hard right. The card ends on ONE
+ *             line: likes, comments, share, then the action. Saves the whole
+ *             row — 48 of button plus 6 of gap — off every card in the feed,
+ *             which is roughly a fifth of a card's non-photo height.
+ *
+ *   "pill"    its own row still, but an intrinsic-width capsule on the left
+ *             gutter instead of a full-width bar. Keeps the action on a line of
+ *             its own — more separation, less compression — at the cost of the
+ *             row.
+ *
+ * NEITHER SHRINKS IT INTO INVISIBILITY, and that was the constraint. Both keep
+ * the solid `color.green` fill, which nothing else on the card has: the Leaves
+ * chip is the pale wash, the tier badge is grey unless someone is a Top Trader,
+ * and every other control is a hairline outline. Both keep the full 15 px bold
+ * label rather than dropping to the 14 px semibold `secondaryButton` role. Both
+ * gain a swap glyph the full-width bar never had — the mark buys back at a
+ * glance what the width gave up, and it is the app's own SwapIcon, so the
+ * control now says what it does in two ways instead of one.
+ *
+ * The two differ by a constant so they can be compared on a device in one
+ * reload. Flip this line.
+ */
+export type OfferLayout = "inline" | "pill";
+
+export const OFFER_LAYOUT: OfferLayout = "inline";
+
 export function FeedCard({
   item,
   urgency = null,
   onOffer,
+  onLike,
+  onComment,
+  onShare,
+  onMenu,
+  offerLayout = OFFER_LAYOUT,
 }: {
   item: Item;
   /** The urgency chip's copy. See the note above — nothing supplies it today. */
   urgency?: string | null;
   onOffer?: (item: Item) => void;
+  /** `next` is the state being asked for, never "toggle" — see useLike(). */
+  onLike?: (item: Item, next: boolean) => void;
+  onComment?: (item: Item) => void;
+  onShare?: (item: Item) => void;
+  /** The three dots. The sheet itself belongs to the screen, not to the card. */
+  onMenu?: (item: Item) => void;
+  /** Per-card override of the constant above. The feed does not pass one. */
+  offerLayout?: OfferLayout;
 }) {
   const place = item.owner.location?.trim();
   const when = relativeShort(item.createdAt);
@@ -117,7 +173,7 @@ export function FeedCard({
           ) : null}
         </View>
 
-        <KebabButton owner={item.owner.name} />
+        <KebabButton owner={item.owner.name} onPress={onMenu && (() => onMenu(item))} />
       </View>
 
       {/* ── photo ── */}
@@ -144,27 +200,18 @@ export function FeedCard({
         {urgency ? <Chip label={urgency} urgent /> : null}
       </View>
 
-      {/* ── social ── */}
-      <SocialRow
+      {/* ── social + action ── */}
+      <CardActions
         likes={item.stats.likes}
         liked={item.stats.liked}
         comments={item.stats.comments}
+        layout={offerLayout}
+        title={item.title}
+        onOffer={() => onOffer?.(item)}
+        onLike={onLike && (() => onLike(item, !item.stats.liked))}
+        onComment={onComment && (() => onComment(item))}
+        onShare={onShare && (() => onShare(item))}
       />
-
-      {/* ── action ── */}
-      <View style={s.buttonWrap}>
-        <Tappable
-          onPress={() => onOffer?.(item)}
-          accessibilityRole="button"
-          accessibilityLabel={`Offer a trade for ${item.title}`}
-          style={s.button}
-          pressedStyle={s.buttonPressed}
-        >
-          <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-            Offer Trade
-          </Text>
-        </Tappable>
-      </View>
     </View>
   );
 }
@@ -352,82 +399,261 @@ function Chip({ label, urgent = false }: { label: string; urgent?: boolean }) {
 }
 
 /**
- * Likes, comments, share. See the file note on why none of them is a button.
+ * How a card ends: the social actions, and the action the card exists for.
+ *
+ * ONE COMPONENT FOR BOTH LAYOUTS rather than two cards, because the difference
+ * is where the Offer control is parented and nothing else — same pill, same
+ * fill, same label, same handler. Two components would drift the moment one of
+ * them was tuned.
+ *
+ * In "inline" the social group and the pill are the two ends of one row, so the
+ * social group is pulled left by its own side padding (the glyph lands on the
+ * 16 px gutter, not 10 px inside it) while the pill sits flush on the right
+ * gutter with no pull of its own — its fill IS its edge, so a negative margin
+ * would push green past the gutter every other row respects.
+ *
+ * The social group shrinks and the pill does not. Four digits of likes is the
+ * realistic squeeze, and losing a count's last digit is a smaller failure than
+ * a clipped "Offer Trade".
+ */
+function CardActions({
+  likes,
+  liked,
+  comments,
+  layout,
+  title,
+  onOffer,
+  onLike,
+  onComment,
+  onShare,
+}: {
+  likes: number;
+  liked: boolean;
+  comments: number;
+  layout: OfferLayout;
+  title: string;
+  onOffer: () => void;
+  onLike?: () => void;
+  onComment?: () => void;
+  onShare?: () => void;
+}) {
+  const inline = layout === "inline";
+
+  return (
+    <>
+      <View style={[s.socialWrap, inline && s.socialWrapInline]}>
+        <SocialRow
+          likes={likes}
+          liked={liked}
+          comments={comments}
+          onLike={onLike}
+          onComment={onComment}
+          onShare={onShare}
+        />
+        {inline ? <OfferButton layout={layout} title={title} onPress={onOffer} /> : null}
+      </View>
+
+      {inline ? null : (
+        <View style={s.offerWrap}>
+          <OfferButton layout={layout} title={title} onPress={onOffer} />
+        </View>
+      )}
+    </>
+  );
+}
+
+/**
+ * Likes, comments, share.
  *
  * The row is pulled left by exactly the side padding each action carries, so
  * the first glyph's own edge lands on the 16 px gutter rather than 10 px inside
  * it. Without that the social row reads as indented from every other row in the
  * card, which at this contrast is the most visible misalignment on the screen.
+ *
+ * EACH ACTION IS A BUTTON ONLY IF IT WAS GIVEN A HANDLER. `SocialAction`
+ * renders a plain View with `accessibilityRole="text"` when `onPress` is
+ * absent — the state this row shipped in — and a Pressable with a button role
+ * when it is present. One component, so the two states cannot drift in
+ * geometry: the 44 px height and the 10 px side padding that set the row's
+ * alignment are written once and are the same either way.
+ *
+ * THE HEART DOES NOT WAIT. `onLike` writes the new count into the cache before
+ * the request leaves, so this component re-renders from a prop that has already
+ * moved. There is no pending state here and deliberately no spinner: a heart
+ * that showed a loader would be slower to read than the state it is reporting.
+ * If the write fails the cache is rolled back and the heart returns — see
+ * useLike().
  */
 function SocialRow({
   likes,
   liked,
   comments,
+  onLike,
+  onComment,
+  onShare,
 }: {
   likes: number;
   liked: boolean;
   comments: number;
+  onLike?: () => void;
+  onComment?: () => void;
+  onShare?: () => void;
 }) {
   return (
-    <View style={s.socialWrap}>
-      <View style={s.socialRow}>
-        <View
-          style={s.socialItem}
-          accessibilityRole="text"
-          accessibilityLabel={liked ? `${likes} likes, you liked this` : `${likes} likes`}
+    <View style={s.socialRow}>
+      <SocialAction
+        onPress={onLike}
+        label={liked ? `${likes} likes, you liked this. Unlike` : `${likes} likes. Like`}
+        readOnlyLabel={liked ? `${likes} likes, you liked this` : `${likes} likes`}
+      >
+        <HeartIcon
+          size={icon.social.size}
+          stroke={icon.social.stroke}
+          color={liked ? color.like : color.inkSecondary}
+          liked={liked}
+        />
+        <Text
+          style={[
+            textStyle(type.socialCount),
+            { color: liked ? color.like : color.inkSecondary },
+          ]}
         >
-          <HeartIcon
-            size={icon.social.size}
-            stroke={icon.social.stroke}
-            color={liked ? color.like : color.inkSecondary}
-            liked={liked}
-          />
-          <Text
-            style={[
-              textStyle(type.socialCount),
-              { color: liked ? color.like : color.inkSecondary },
-            ]}
-          >
-            {likes}
-          </Text>
-        </View>
+          {likes}
+        </Text>
+      </SocialAction>
 
-        <View style={s.socialItem} accessibilityRole="text" accessibilityLabel={`${comments} comments`}>
-          <CommentIcon
-            size={icon.social.size}
-            stroke={icon.social.stroke}
-            color={color.inkSecondary}
-          />
-          <Text style={[textStyle(type.socialCount), { color: color.inkSecondary }]}>
-            {comments}
-          </Text>
-        </View>
+      <SocialAction
+        onPress={onComment}
+        label={comments === 1 ? "1 comment. Open comments" : `${comments} comments. Open comments`}
+        readOnlyLabel={`${comments} comments`}
+      >
+        <CommentIcon
+          size={icon.social.size}
+          stroke={icon.social.stroke}
+          color={color.inkSecondary}
+        />
+        <Text style={[textStyle(type.socialCount), { color: color.inkSecondary }]}>
+          {comments}
+        </Text>
+      </SocialAction>
 
-        <View style={s.socialItem} importantForAccessibility="no-hide-descendants">
-          <ShareIcon
-            size={icon.social.size}
-            stroke={icon.social.stroke}
-            color={color.inkSecondary}
-          />
-        </View>
-      </View>
+      <SocialAction onPress={onShare} label="Share this listing" readOnlyLabel={null}>
+        <ShareIcon
+          size={icon.social.size}
+          stroke={icon.social.stroke}
+          color={color.inkSecondary}
+        />
+      </SocialAction>
     </View>
   );
 }
 
 /**
- * The overflow affordance.
+ * One social action, in whichever of its two forms the caller earned.
  *
- * Drawn in the artboard and NOT wired in this task: report and block are their
- * own screens against /api/v1/reports and /api/v1/blocks. It renders as a real
- * 44 px target with a real label so the row's geometry and its screen-reader
- * output are the shipping ones, and so wiring it later is a handler rather than
- * a re-layout. The −12 pull is what puts the dots on the 16 px gutter while the
- * 44 px box it needs extends past it.
+ * `readOnlyLabel` being null is how the share glyph stays out of the screen
+ * reader's way while it is inert — there is no count to announce and "share"
+ * with nothing behind it is worse than silence. With a handler it announces
+ * normally, like the other two.
  */
-function KebabButton({ owner }: { owner: string }) {
+function SocialAction({
+  onPress,
+  label,
+  readOnlyLabel,
+  children,
+}: {
+  onPress?: () => void;
+  label: string;
+  readOnlyLabel: string | null;
+  children: React.ReactNode;
+}) {
+  if (!onPress) {
+    return readOnlyLabel ? (
+      <View style={s.socialItem} accessibilityRole="text" accessibilityLabel={readOnlyLabel}>
+        {children}
+      </View>
+    ) : (
+      <View style={s.socialItem} importantForAccessibility="no-hide-descendants">
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={s.socialItem}
+      pressedStyle={s.socialPressed}
+    >
+      {children}
+    </Tappable>
+  );
+}
+
+/**
+ * The point of the app, in a capsule.
+ *
+ * The glyph is not decoration and it is not optional. It is what stops the
+ * control being read as a chip once it has an intrinsic width — the chip row
+ * two lines above is also a small rounded thing with a word in it, and the only
+ * differences left would be the fill and the weight. A mark on the leading edge
+ * is a shape none of the chips has.
+ *
+ * The label is NOT shortened per layout ("Offer" would fit either). "Offer
+ * Trade" is the verb the whole product is built around, and the point of this
+ * change was to spend less HEIGHT on it, not to say less.
+ */
+function OfferButton({
+  layout,
+  title,
+  onPress,
+}: {
+  layout: OfferLayout;
+  title: string;
+  onPress: () => void;
+}) {
+  const inline = layout === "inline";
+
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Offer a trade for ${title}`}
+      style={inline ? s.offerInline : s.offerPill}
+      pressedStyle={s.offerPressed}
+    >
+      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.onGreen} />
+      <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
+        Offer Trade
+      </Text>
+    </Tappable>
+  );
+}
+
+/**
+ * The overflow affordance, wired.
+ *
+ * It was drawn and inert — a real 44 px target with a real label and no handler
+ * — so that wiring it would be a handler rather than a re-layout. This is that
+ * handler. The sheet it opens is mounted by the SCREEN, not here: see
+ * ListingMenu for why one Modal for the whole feed is not the same thing as one
+ * Modal per card.
+ *
+ * The −12 pull is what puts the dots on the 16 px gutter while the 44 px box
+ * they need extends past it.
+ *
+ * Still renders without an `onPress`, and is still inert when it does. A screen
+ * that has not wired the menu gets the geometry and the label and nothing that
+ * responds to a tap, which is a truthful control; a Pressable with an empty
+ * handler is not.
+ */
+function KebabButton({ owner, onPress }: { owner: string; onPress?: () => void }) {
   return (
     <Pressable
+      onPress={onPress}
+      disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={`More options for ${owner}'s listing`}
       style={s.kebab}
@@ -573,7 +799,15 @@ const s = StyleSheet.create({
   chipUrgent: { borderColor: color.urgentLine, backgroundColor: color.urgentWash },
 
   socialWrap: { paddingHorizontal: space.screenX, marginTop: space.card.chipsToSocial },
-  socialRow: { flexDirection: "row", marginHorizontal: -space.card.socialInset },
+  // Only in the inline layout. In the pill layout the wrap holds one child and
+  // a flex direction on it would do nothing but invite someone to wonder why.
+  socialWrapInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.card.socialToOffer,
+  },
+  socialRow: { flexShrink: 1, flexDirection: "row", marginHorizontal: -space.card.socialInset },
   socialItem: {
     height: size.control.social,
     flexDirection: "row",
@@ -581,16 +815,38 @@ const s = StyleSheet.create({
     gap: space.card.socialGap,
     paddingHorizontal: size.control.socialX,
   },
+  // Opacity rather than a fill. These sit on the card's own background with no
+  // border of their own, so a pressed FILL would draw a rectangle that exists
+  // for no other reason and is visible for 80 ms.
+  socialPressed: { opacity: 0.55 },
 
-  buttonWrap: { paddingHorizontal: space.screenX, marginTop: space.card.socialToButton },
-  button: {
-    height: size.control.primaryButton,
-    borderRadius: radius.primaryButton,
-    backgroundColor: color.green,
+  offerInline: {
+    // Never gives ground to the counts beside it. See CardActions.
+    flexShrink: 0,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: space.card.offerGap,
+    height: size.control.offerInline,
+    paddingHorizontal: size.control.offerInlineX,
+    borderRadius: radius.offerInline,
+    backgroundColor: color.green,
   },
+
+  offerWrap: { paddingHorizontal: space.screenX, marginTop: space.card.socialToButton },
+  offerPill: {
+    // Intrinsic width, on the gutter. Without this the pill stretches to the
+    // wrap's full width and the change undoes itself.
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.card.offerGap,
+    height: size.control.offerPill,
+    paddingHorizontal: size.control.offerPillX,
+    borderRadius: radius.offerPill,
+    backgroundColor: color.green,
+  },
+
   // No second green in the palette, so pressed is the same fill at reduced
   // opacity rather than a shade that is not in the spec.
-  buttonPressed: { opacity: 0.85 },
+  offerPressed: { opacity: 0.85 },
 });

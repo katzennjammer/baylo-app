@@ -275,6 +275,12 @@ const space = {
        box's fill and rules, not these two. */
     nameToBadge: 6,
     failedGap: 12,
+    /* The social group and the Offer control, when they share a row. Wider
+       than `socialGap` because it separates two DIFFERENT things rather than
+       two parts of one action — at 7 the pill reads as a fourth social item. */
+    socialToOffer: 12,
+    /** Glyph -> label inside the Offer control, either layout. */
+    offerGap: 7,
   },
 
   /* Chip and badge padding. The spec fixes every chip's fill, border, radius
@@ -334,6 +340,10 @@ const space = {
     rangeGap: 12,
     actionsTop: 20,
     actionGap: 10,
+    /** Glyph well -> label in a menu row. Matches the card's avatar -> text. */
+    menuGap: 12,
+    /** Title -> the first menu row, and the rule above a destructive group. */
+    menuTop: 6,
   },
 
   /* ── Item detail ──────────────────────────────────────────────────────── */
@@ -384,6 +394,12 @@ const radius = {
   matchesThumb: 8,
   photoCaption: 2,
   reloadButton: 22,
+  /* Both Offer layouts are fully rounded rather than the 10 the full-width
+     button used. A 10 px radius at 40 px tall still reads as a BUTTON, which
+     is the shape that made the card look like a form; a capsule reads as an
+     action. Half the height in each case. */
+  offerInline: 20,
+  offerPill: 22,
 
   /* Marketplace and detail. */
   searchField: 10,
@@ -439,6 +455,20 @@ const size = {
     fabLift: 20,
     reloadButton: 44,
     reloadButtonX: 18,
+
+    /* Offer Trade, in its two layouts. See the note in FeedCard.
+       `offerInline` is 40, not 44, and that is deliberate: it rides the 44 px
+       social row, so 44 would butt against the row's own bounds and leave the
+       pill looking like a mis-drawn full-width button. 40 inside 44 reads as a
+       control sitting IN a row. The touch target is not lost -- the row's own
+       height is the slop, and 40 is above the 36 that Android's guidance
+       treats as the floor for a control inside a list row. */
+    offerInline: 40,
+    offerInlineX: 16,
+    /* On its own row it is not competing with anything, so it takes the full
+       44 every other control in this app is built to. */
+    offerPill: 44,
+    offerPillX: 22,
   },
 
   badge: {
@@ -489,6 +519,14 @@ const size = {
     optionX: 14,
     rangeInput: 44,
     action: 48,
+    /* A row in the listing overflow menu. Taller than `option` (44) because a
+       menu row is a full-width target read left to right, not a chip in a wrap
+       -- 52 is what puts a comfortable 16 of clear space above and below a 19
+       px glyph, and it is the height the app's own detail-screen danger rows
+       already sit at plus their surrounding gap. */
+    menuRow: 52,
+    /** Fixed leading well, so every row's label starts on the same x. */
+    menuIcon: 24,
     /** The grab handle at the top of the sheet. */
     handleW: 40,
     handleH: 4,
@@ -570,6 +608,13 @@ const icon = {
   danger: { size: 18, stroke: 1.6 },
   check: { size: 14, stroke: 2.1 },
   emptyGrid: { size: 40, stroke: 1.4 },
+
+  /* The swap mark inside the Offer control. Small and HEAVY: it is carrying
+     the salience the button lost when it stopped being 48 px of full-width
+     green, and a 1.6 stroke at 15 px disappears against a bold 15 px label. */
+  offer: { size: 15, stroke: 2 },
+  /** Rows in the listing overflow sheet. */
+  menuRow: { size: 19, stroke: 1.7 },
 };
 
 const border = {
