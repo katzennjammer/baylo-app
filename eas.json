@@ -4,6 +4,17 @@
     "requireCommit": true
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.11:3000",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "519487980064-ej108t0mvsjcr6utkjp28qe9tn95ff0a.apps.googleusercontent.com"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {
