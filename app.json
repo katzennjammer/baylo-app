@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": ["baylo", "com.baylo.app"],
+    "scheme": [
+      "baylo",
+      "com.baylo.app"
+    ],
     "userInterfaceStyle": "light",
     "backgroundColor": "#FAFAF7",
     "ios": {
@@ -71,8 +74,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "3a4d4029-1bf6-4898-9023-e5724f5f594b"
+        "projectId": "58258725-a8d6-45ca-9ec3-e63866c2e256"
       }
-    }
+    },
+    "owner": "baylo-acto"
   }
 }
