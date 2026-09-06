@@ -12,7 +12,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useQuery } from "@tanstack/react-query";
+
 import { ApiError } from "../src/api/client";
+import {
+  fetchIdVerification,
+  isIdGateError,
+  type IdVerificationPayload,
+} from "../src/api/id-verification";
 import { createItem, type Category, type Condition } from "../src/api/post";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import {
@@ -90,11 +97,53 @@ export default function PostItemRoute() {
 
   const { status, initial } = useStoredDraft(editingItemId);
 
+  /**
+   * The ID gate, checked before the wizard is drawn.
+   *
+   * ── WHY HERE AND NOT ON THE FAB ─────────────────────────────────────────
+   *
+   * The Post FAB is a synchronous press and this is an asynchronous question,
+   * so gating there would mean either a spinner on a tab bar button or a
+   * cached answer that can be wrong. This route is the ONE way into the
+   * wizard — the FAB pushes it, and so does the edit path — so checking it
+   * here covers every entry with one piece of code.
+   *
+   * ── IT IS A COURTESY, NOT THE GATE ──────────────────────────────────────
+   *
+   * POST /api/items re-derives the same answer from the database on every
+   * attempt and refuses with 403 regardless of what this component believed.
+   * What this buys is that somebody finds out BEFORE seven steps and a photo
+   * upload, rather than at the end of them. The `catch` in `post()` below
+   * still handles the 403, because this check can be stale — an approval can
+   * be revoked, or the answer can have been fetched a minute ago.
+   *
+   * EDIT MODE IS NOT GATED. `editingItemId` means the listing already exists,
+   * which means it was posted by an account that was verified at the time, and
+   * PATCH is not one of the two acts the gate covers. Blocking an edit would
+   * strand a listing its owner can no longer correct.
+   */
+  const gate = useQuery({
+    queryKey: ["id-verification"],
+    queryFn: fetchIdVerification,
+    enabled: editingItemId === null,
+    staleTime: 60_000,
+  });
+
   // Held on a blank canvas rather than painting step 1 and then replacing it
   // with a restored step 4. One frame of the wrong screen on every resume is
   // more noticeable than one frame of nothing.
-  if (status === "reading") {
+  //
+  // The gate is awaited on the same blank canvas, for the same reason: drawing
+  // step 1 and then replacing it with "verify your ID" is worse than a beat of
+  // nothing. A gate that FAILS to load is treated as open — the server is the
+  // real check, and a flaky network must not be a second way to be locked out
+  // of posting.
+  if (status === "reading" || (editingItemId === null && gate.isPending)) {
     return <View style={{ flex: 1, backgroundColor: postColor.surface }} />;
+  }
+
+  if (editingItemId === null && gate.data && !gate.data.verified) {
+    return <IdGatePrompt state={gate.data} />;
   }
 
   return (
@@ -107,6 +156,113 @@ export default function PostItemRoute() {
         <Wizard />
       </PhotoPipelineProvider>
     </PostStateProvider>
+  );
+}
+
+/* ─────────────────────────── the ID gate prompt ─────────────────────── */
+
+/**
+ * What somebody sees when they tap Post without a verified ID.
+ *
+ * ── IT LEADS WITH WHY, NOT WITH NO ──────────────────────────────────────────
+ *
+ * The failure mode of every gate like this is a screen that says "verification
+ * required" and leaves the person to work out what that means for them, how
+ * long it takes, what it costs, and what else has just stopped working. Three
+ * of those four have concrete answers and they are all here — a photo of a
+ * government ID, about a day, and NOTHING ELSE STOPS WORKING. The last one is
+ * the sentence that keeps somebody in the app instead of assuming they have
+ * been locked out of it.
+ *
+ * ── FOUR STATES, ONE COMPONENT ──────────────────────────────────────────────
+ *
+ * Never submitted, waiting, rejected-with-attempts-left, and out of attempts.
+ * They differ only in the sentence and in whether there is a button, so they
+ * are one component with a switch rather than four screens; the SUBMISSION form
+ * itself lives on /verify-id, which this pushes to.
+ */
+function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const copy =
+    state.status === "pending"
+      ? {
+          title: "Your ID is being reviewed",
+          body: "We usually get to it within a day. As soon as it is approved you can post.",
+          cta: "See where it is up to",
+        }
+      : state.status === "exhausted"
+        ? {
+            title: "No attempts left",
+            body: `Your ID was not approved after ${state.maxAttempts} attempts. To go further you will need to talk to a person — email support and mention this account.`,
+            cta: "See the details",
+          }
+        : state.status === "rejected"
+          ? {
+              title: "Your ID needs another look",
+              body:
+                state.latest?.rejectionFix ??
+                "Your last submission was not approved. You can send another.",
+              cta: `Try again — ${state.attemptsRemaining} of ${state.maxAttempts} left`,
+            }
+          : {
+              title: "Verify your ID to post",
+              body: "Posting an item needs a photo of a government ID, so that everyone trading here is a real, once-verified person. It is usually reviewed within a day.",
+              cta: "Verify my ID",
+            };
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: postColor.surface,
+        paddingTop: insets.top,
+      }}
+    >
+      <View style={{ height: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+        <Tappable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
+          <CloseIcon size={22} color={postColor.ink} />
+        </Tappable>
+      </View>
+
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
+        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>
+          {copy.title}
+        </Text>
+
+        <Text
+          style={[
+            textStyle(postType.stepSub),
+            { color: postColor.inkSecondary, marginTop: 12, lineHeight: 22 },
+          ]}
+        >
+          {copy.body}
+        </Text>
+
+        {/*
+          The sentence that does the most work on this screen. Somebody who has
+          just been stopped assumes they have been stopped from everything, and
+          the truthful answer is that almost nothing is affected — including,
+          deliberately, accepting a trade somebody offers them.
+        */}
+        <Text
+          style={[
+            textStyle(postType.stepSub),
+            { color: postColor.inkSecondary, marginTop: 16, lineHeight: 22 },
+          ]}
+        >
+          Everything else stays open: browsing, searching, messaging, liking, commenting, and
+          accepting a trade someone offers you.
+        </Text>
+
+        <PrimaryButton
+          label={copy.cta}
+          onPress={() => router.push("/verify-id")}
+          style={{ marginTop: 28 }}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -245,6 +401,26 @@ function Wizard() {
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         dispatch({ type: "rate-limit", action: "post", seconds: e.retryAfter ?? 240 });
+        return;
+      }
+      // The server's ID gate, refusing at the last step. The check in
+      // PostItemRoute normally catches this before the wizard opens, but that
+      // answer can be up to a minute old and an approval can be revoked — so
+      // the authoritative 403 is handled here too, and it is handled the same
+      // way: save the draft and send them to the screen that explains it, not
+      // to a generic "could not post".
+      //
+      // The draft is saved FIRST. Somebody who has just filled in seven steps
+      // and is being redirected must find their work waiting when they come
+      // back, or the gate has cost them the listing rather than delayed it.
+      if (isIdGateError(e)) {
+        await saveDraft(state);
+        router.push("/verify-id");
+        dispatch({
+          type: "post/fail",
+          message:
+            "Posting needs a verified ID. Your draft is safe — we have taken you to the ID screen.",
+        });
         return;
       }
       // The draft is deliberately re-saved on the failure path: the copy

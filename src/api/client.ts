@@ -70,6 +70,22 @@ export class ApiError extends Error {
     readonly issues: readonly FieldIssue[] = [],
     /** Seconds to wait, parsed from a 429's Retry-After. */
     readonly retryAfter: number | null = null,
+    /**
+     * The failure envelope's `meta`, carried through rather than dropped.
+     *
+     * THE V1 ENVELOPE PUTS THE BRANCHABLE REASON HERE, not in `code`.
+     * `ApiErrorCode` is a closed set of transport-level codes — FORBIDDEN,
+     * CONFLICT — so every gate that refuses for a SPECIFIC reason says which in
+     * `meta.rule`: DPA_MIN_COMPLETED_TRADES, TIER_ITEM_VALUE_CAP,
+     * ID_VERIFICATION_REQUIRED. Throwing that away left this client with three
+     * indistinguishable 403s and a message it is not allowed to parse.
+     *
+     * Empty for the pre-v1 routes, which have no envelope; those carry their
+     * specific code in `code` directly. A caller that wants to recognise one
+     * reason across both families checks `code` and `meta.rule` — see
+     * isIdGateError() in ./id-verification.
+     */
+    readonly meta: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "ApiError";
@@ -153,8 +169,8 @@ interface TokenResponse {
   user: StoredUser;
 }
 
-function networkFailure(cause: unknown): never {
-  throw new ApiError(
+function networkError(cause: unknown): ApiError {
+  return new ApiError(
     0,
     "NETWORK_ERROR",
     `Could not reach ${getApiBase() || "the API"}. Check the URL behind the ` +
@@ -162,6 +178,48 @@ function networkFailure(cause: unknown): never {
       `must be this machine's LAN IP with the dev server bound to 0.0.0.0. ` +
       `(${cause instanceof Error ? cause.message : String(cause)})`,
   );
+}
+
+function networkFailure(cause: unknown): never {
+  throw networkError(cause);
+}
+
+/**
+ * A body we could not ENCODE, told apart from a server we could not REACH.
+ *
+ * Both arrive at the same `catch`, because `fetch` rejects for both, and for a
+ * while everything caught there was called NETWORK_ERROR. That is an expensive
+ * lie rather than a sloppy one: the message above names the API URL, the gear,
+ * `adb reverse` and the LAN binding — four things that are always slightly
+ * suspect on this project and none of which can cause a malformed body. The
+ * banner sends whoever reads it to check their IP, and their IP is fine.
+ *
+ * The tell is that an encode failure happens BEFORE a socket is opened. Expo's
+ * fetch serialises the whole body in JS (see the note on sendMultipart), so a
+ * part its encoder does not understand throws straight back out of `fetch`.
+ *
+ * Matching on the message is not pretty. The alternative is re-inspecting a
+ * body we have already established we cannot encode, which is worse, and the
+ * fallthrough here is the old behaviour — a message we do not recognise is
+ * still reported, just as a network error.
+ */
+const ENCODE_FAILURES = [
+  "Unsupported FormDataPart implementation",
+  "Unsupported FormData implementation",
+];
+
+function sendFailure(cause: unknown): never {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (ENCODE_FAILURES.some((m) => message.includes(m))) {
+    throw new ApiError(
+      0,
+      "REQUEST_ENCODE_ERROR",
+      `This request's body could not be encoded, so it never left the device. ` +
+        `This is NOT a connection problem — the API URL and the gear are not ` +
+        `the cause. (${message})`,
+    );
+  }
+  throw networkError(cause);
 }
 
 /**
@@ -677,6 +735,124 @@ async function performRefresh(): Promise<string | null> {
 // ── The request path ─────────────────────────────────────────────────────────
 
 /**
+ * Does this body carry a React Native file descriptor?
+ *
+ * `{ uri, name, type }` is React Native's own extension to FormData: the
+ * native networking layer opens that uri and streams the file off disk. It is
+ * how every image in this app is appended, and the reason is memory —
+ * `fetch(uri).then(r => r.blob())` pulls a 12 MP photo through JS as a ~40 MB
+ * string before a byte has left the device.
+ *
+ * Iterating works because Expo's winter runtime patches `entries` and
+ * `Symbol.iterator` onto React Native's FormData; the values it yields are the
+ * objects `append()` was handed, untouched.
+ */
+function hasRnFileParts(body: BodyInit | null | undefined): body is FormData {
+  if (!(body instanceof FormData)) return false;
+  for (const [, value] of body as unknown as Iterable<[string, unknown]>) {
+    const uri = (value as { uri?: unknown } | null)?.uri;
+    if (typeof value === "object" && value !== null && typeof uri === "string") return true;
+  }
+  return false;
+}
+
+/** `xhr.getAllResponseHeaders()` is one CRLF-joined string. Response wants a map. */
+function parseHeaders(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of raw.trim().split("\n")) {
+    const i = line.indexOf(":");
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+/**
+ * A multipart body sent over XMLHttpRequest instead of fetch, because on this
+ * SDK `fetch` cannot send one.
+ *
+ * ── WHY THIS EXISTS AT ALL ──────────────────────────────────────────────────
+ *
+ * `globalThis.fetch` IS NOT REACT NATIVE'S FETCH. Expo SDK 57's winter runtime
+ * replaces it with `expo/fetch` at startup — unconditionally, unless
+ * EXPO_PUBLIC_USE_RN_FETCH=1 (see expo/src/winter/runtime.native.ts). That
+ * implementation builds the multipart body in JavaScript, and its encoder
+ * understands exactly three kinds of part: a string, a Blob, and anything with
+ * `.bytes()`. React Native's `{ uri }` descriptor is none of the three, so it
+ * throws `Unsupported FormDataPart implementation` before opening a socket.
+ *
+ * XMLHttpRequest was never swapped. It still goes to the native networking
+ * stack, which is the layer that knows what a `uri` part is — and which streams
+ * the file rather than buffering it, the property the descriptor exists for.
+ * The post wizard's uploads have always worked for precisely this reason:
+ * uploadPhotoWithProgress() uses XHR for the progress events and got the
+ * working transport as a side effect. That was luck, not design. This makes it
+ * the rule for every multipart body instead of a happy accident in one caller.
+ *
+ * Content-Type is dropped even when a caller sets one: the native layer fills
+ * in multipart/form-data with the boundary it generated, and replacing that
+ * with a boundary-less header makes the server parse an empty body.
+ */
+function sendMultipart(
+  url: string,
+  init: RequestInit,
+  accessToken: string | null,
+): Promise<Response> {
+  return new Promise<Response>((resolve, reject) => {
+    const signal = init.signal;
+    if (signal?.aborted) {
+      reject(new ApiError(0, "ABORTED", "Request cancelled."));
+      return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open(init.method ?? "POST", url);
+    // No cookie may ever enter the jar. See the note at the top of this file.
+    xhr.withCredentials = false;
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(init.headers as Record<string, string> | undefined),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    };
+    for (const [name, value] of Object.entries(headers)) {
+      if (name.toLowerCase() === "content-type") continue;
+      xhr.setRequestHeader(name, value);
+    }
+
+    const abort = () => xhr.abort();
+    signal?.addEventListener("abort", abort);
+    const done = () => signal?.removeEventListener("abort", abort);
+
+    xhr.onload = () => {
+      done();
+      // 204/205/304 may not carry a body; Response rejects one that does.
+      const empty = xhr.status === 204 || xhr.status === 205 || xhr.status === 304;
+      resolve(
+        new Response(empty ? null : xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: parseHeaders(xhr.getAllResponseHeaders()),
+        }),
+      );
+    };
+    xhr.onerror = () => {
+      done();
+      reject(networkError(new Error("XHR transport error")));
+    };
+    xhr.ontimeout = () => {
+      done();
+      reject(networkError(new Error("XHR timed out")));
+    };
+    xhr.onabort = () => {
+      done();
+      reject(new ApiError(0, "ABORTED", "Request cancelled."));
+    };
+
+    xhr.send(init.body as FormData);
+  });
+}
+
+/**
  * One request, with the Bearer header attached and at most one retry after a
  * refresh.
  *
@@ -689,7 +865,13 @@ async function performRefresh(): Promise<string | null> {
 export async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const url = `${requireBase()}${path}`;
 
+  // Decided once, outside send(), so the retry below takes the same transport.
+  // Re-sending is safe on this path: the parts hold uris, not consumed streams,
+  // so the native layer simply reads the files off disk a second time.
+  const multipart = hasRnFileParts(init.body);
+
   const send = async (accessToken: string | null) => {
+    if (multipart) return sendMultipart(url, init, accessToken);
     try {
       return await fetch(url, {
         ...init,
@@ -701,7 +883,7 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
         },
       });
     } catch (cause) {
-      networkFailure(cause);
+      sendFailure(cause);
     }
   };
 
@@ -751,6 +933,10 @@ export async function apiV1<T>(
       body.error?.message ?? `Request to ${path} failed`,
       [],
       retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
+      // `meta` survives the throw for the same reason Retry-After does: the
+      // server put the branchable detail in there and a client that drops it
+      // is left parsing prose. See the note on the field.
+      body.meta ?? {},
     );
   }
 

@@ -1,7 +1,12 @@
 # baylo-mobile
 
-The Expo client for Baylo. Sibling to the Next.js app in `../baylo`, which it
-talks to over `/api/v1` with a Bearer token and no cookie.
+The Expo client for Baylo. Sibling to the Next.js app in
+[`../baylo`](../baylo), which it talks to over `/api/v1` with a Bearer token and
+no cookie.
+
+**New here? Start with [Setup](#setup) — but set up
+[`../baylo`](../baylo/README.md) first.** This app is a client; without that
+server running there is nothing for it to show.
 
 ```
 app/
@@ -37,6 +42,162 @@ src/
   theme/tokens.js      Direction 1 — every colour, type role, gap and radius
   theme/palette.js     the older palette. (auth) and Profile only.
 ```
+
+---
+
+## Setup
+
+Written for someone who has never seen this project.
+
+### 0. The API has to exist first
+
+**This app is a client. It does nothing on its own.** Before anything here will
+run you need the Next.js server in the sibling repo
+[`../baylo`](../baylo) installed, migrated, seeded and running — its
+[README](../baylo/README.md) walks through that in seven steps. Come back when
+`npm run dev` there serves <http://localhost:3000> and you can sign in as
+`maria@baylo.test`.
+
+Everything below assumes that is done, and that both repos are checked out
+side by side:
+
+```
+BAYLO/
+  baylo/          the Next.js API + web app  ← set this up first
+  baylo-mobile/   this repo
+```
+
+### 1. Prerequisites
+
+| | Notes |
+|---|---|
+| **Node.js 20.9+** | 22 LTS recommended. |
+| **A physical Android phone, Android 11+** | A hard floor — the supported connection path is wireless debugging, which needs API 30. See [Reaching the dev server from a phone](#reaching-the-dev-server-from-a-phone). |
+| **Android Platform Tools (`adb`)** | On `PATH`. `adb --version` should answer. |
+| **Expo Go**, from the Play Store | Enough for everything except Google sign-in. |
+
+An emulator works too, with `http://10.0.2.2:3000` as the API URL, but the
+`npm run phone` tooling is written for a real device.
+
+### 2. Install
+
+```bash
+cd baylo-mobile
+npm install
+```
+
+### 3. Environment — point it at YOUR machine, not someone else's
+
+```bash
+cp .env.example .env
+```
+
+`.env` holds four variables and **all four are public** — a base URL and three
+OAuth *client ids*. No secret belongs in this file; see
+[What is not here, and must not be](#what-is-not-here-and-must-not-be).
+
+The one you must change is `EXPO_PUBLIC_API_URL`:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.10:3000
+```
+
+**That address is an example and it is almost certainly not yours.** It has to
+be *your* laptop's IP on the network your phone is on — the IP of whoever
+committed the file is meaningless to your phone, and a stale value here is the
+single most common reason a fresh setup shows a spinner and nothing else.
+
+Find yours:
+
+```bash
+# Windows
+ipconfig                  # IPv4 Address, under your active adapter
+
+# macOS / Linux
+ipconfig getifaddr en0    # or: hostname -I
+```
+
+**Not `localhost`.** On a phone, `localhost` is the phone. Use:
+
+| Running on | Address |
+|---|---|
+| Physical device, same Wi-Fi | `http://<your-laptop-LAN-IP>:3000` |
+| Android emulator | `http://10.0.2.2:3000` |
+| iOS simulator | `http://localhost:3000` |
+
+You do not have to get this exactly right by hand — `npm run phone` works out
+the correct address, tells you when this line disagrees with it, and will write
+the correction for you with `-WriteEnv`. And the gear (below) overrides it at
+runtime anyway.
+
+> `EXPO_PUBLIC_API_URL` is **compiled into the bundle**, so it is a default, not
+> a setting. Changing this file needs `npx expo start --clear` to take effect.
+
+### 4. Start it — three terminals
+
+The API must bind `0.0.0.0`, not loopback, or the phone's requests arrive at a
+server that is not listening for them. That is what `dev:lan` is for.
+
+```bash
+# Terminal 1 — the API, reachable from outside this machine
+cd baylo && npm run dev:lan
+
+# Terminal 2 — connect the phone (first run walks you through pairing)
+cd baylo-mobile && npm run phone
+
+# Terminal 3 — Metro
+cd baylo-mobile && npm start
+```
+
+Then press **a** in terminal 3, or scan the QR with Expo Go.
+
+`npm run phone` will start Metro and the API itself if they are not already up,
+so you can skip terminals 1 and 3 once you trust it. Three terminals is the
+version where you can see which of the three is unhappy — worth it the first
+time and whenever something breaks.
+
+`npm run phone:show` first, always, when something is wrong: it prints the
+address the phone is actually holding, which is the only thing that answers
+"why is it reaching for *that*". See
+[Reaching the dev server from a phone](#reaching-the-dev-server-from-a-phone)
+for the whole story, and read it before trying `adb reverse` — mixing connection
+methods is what has broken this setup repeatedly.
+
+### 5. Sign in
+
+Use a seeded account from the API repo. All four share one password:
+
+| Email | Password |
+|---|---|
+| `maria@baylo.test` | `BayloDev123!` |
+| `jun@baylo.test` | `BayloDev123!` |
+| `aya@baylo.test` | `BayloDev123!` |
+| `carlo@baylo.test` | `BayloDev123!` |
+
+If sign-in fails, the API URL is wrong far more often than the credentials are.
+Tap the **gear** on the sign-in screen: it shows the URL the app is really
+using, lets you override it without a rebuild, and **Test** posts to
+`/api/auth/token` and reports the status — **a 400 is a pass**, because what is
+being tested is whether anything on the other end parsed the request at all. A
+timeout or a refused connection means you have the wrong address, or the API is
+not on `0.0.0.0`. See [The gear](#the-gear).
+
+### 6. What will not work yet: Google sign-in
+
+**"Continue with Google" cannot work in Expo Go, at all, regardless of
+configuration.** The native flow needs a custom URL scheme that only a dev build
+has; in Expo Go the redirect has nowhere to land. Email-and-password sign-in
+works fine, and the seeded accounts are password accounts — so this is safe to
+ignore unless you are specifically working on Google sign-in.
+
+When you do need it, it takes a dev build plus **both** ends configured — the
+platform client ids here, and `GOOGLE_NATIVE_CLIENT_IDS` in `../baylo/.env`. A
+client id set here with nothing set there reads as configured and 401s. See
+[Google sign-in](#google-sign-in) for the console steps and
+[It does not work in Expo Go](#it-does-not-work-in-expo-go).
+
+---
+
 
 ## Home — Direction 1, "Quiet Feed"
 
@@ -805,11 +966,21 @@ reachable by deep link (`adb shell am start -a android.intent.action.VIEW -d
 
 ## Running it
 
+Setting up for the first time? [Setup](#setup) is the ordered version of this,
+including the API server that has to be up before any of it means anything.
+
 ```bash
 npm start                 # Metro; press a for Android, i for iOS
 npm run typecheck         # tsc --noEmit
 npm run verify:api        # the API client acceptance harness (see below)
+
+npm run phone             # connect a physical device — the supported path
+npm run phone:show        # what address the phone is actually holding
 ```
+
+The API side is `cd ../baylo && npm run dev:lan` — `dev:lan` rather than `dev`
+because the phone needs the server bound to `0.0.0.0`. See
+[`../baylo/README.md`](../baylo/README.md).
 
 ## The API client
 

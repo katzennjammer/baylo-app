@@ -137,10 +137,16 @@ export interface UploadResult {
  * whole image into JS memory first, which on a 12 MP photo is a 40 MB string
  * on the bridge before a single byte has left the device.
  *
- * `Content-Type` IS DELIBERATELY NOT SET. React Native fills it in with the
+ * `Content-Type` IS DELIBERATELY NOT SET. The transport fills it in with the
  * multipart boundary it generated; setting it by hand overwrites that with a
  * boundary-less header and the server's `formData()` parse fails on every
  * upload. This is the single most common way this call breaks.
+ *
+ * This says `fetch`, but `request()` routes a body holding a `uri` part over
+ * XHR instead — `globalThis.fetch` is Expo's on SDK 57 and its encoder cannot
+ * serialise one. See sendMultipart() in ./client. Until that routing existed
+ * this function was quietly broken, which nobody noticed because the only
+ * caller is the 401 fallback below.
  */
 export async function uploadPhoto(
   uri: string,
