@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#EFEEE8; }
+  a { color:#1B4D2B; text-decoration:none; }
+  a:hover { color:#3DBE5A; }
+  .sb::-webkit-scrollbar { width:0; height:0; }
+  @keyframes caret { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+  @keyframes shimmer { 0%,100% { opacity:.55 } 50% { opacity:1 } }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:30px;padding:40px;font-family:'Public Sans',system-ui,sans-serif">
+
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:960px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Turn 7 · Offer flow · Direction B</div>
+    <div style="font:700 26px/1.15 'Bricolage Grotesque',sans-serif;color:#14140F">Direction B — the two columns</div>
+    <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;max-width:760px;text-wrap:pretty">Where A reads the gap as one horizontal track, B stands the two sides up next to each other: your side left, theirs right, a hairline down the middle, both bottom-aligned so the difference is the empty space above your column. Settling isn't a radio choice, it's stacking — Leaves and promises drop in as extra blocks until your column reaches theirs, and the button stays inert until it does or you deliberately send short. Same palette and copy voice as A; different claim about what the gap is.<br><br><a href="#7a">7a</a> pick your item, <a href="#7b">7b</a> small gap settled, <a href="#7c">7c</a> large gap part-stacked, <a href="#7d">7d</a> off the scale, <a href="#7e">7e</a> DPA proposal, <a href="#7f">7f</a> owner accepting.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- 7a -->
+    <div id="7a" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7a</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Pick, against the column</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Their column is drawn once at the top and stays fixed while you scroll your items past it, each item showing the height it would reach. Choosing is comparing, not reading numbers.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:6px 16px 16px;border-bottom:1px solid #EDEBE3;display:flex;align-items:flex-end;gap:14px">
+          <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Their side</span>
+            <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</span>
+            <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">Marco A. · Trusted</span>
+          </div>
+          <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <span style="font:500 22px/1 'JetBrains Mono',monospace;color:#14140F">480</span>
+            <div style="width:74px;height:62px;border-radius:4px;background:#E6E4DA"></div>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:14px 16px 8px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Your side · pick one</div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #EDEBE3;background:#F2F8F3">
+            <div style="width:52px;height:52px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 · reaches 92%</div>
+            </div>
+            <div style="width:26px;height:62px;border-radius:3px;background:#EAF6EC;display:flex;flex-direction:column;justify-content:flex-end;flex:0 0 auto"><div style="height:92%;border-radius:3px;background:#3DBE5A"></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #EDEBE3">
+            <div style="width:52px;height:52px;border-radius:8px;background:repeating-linear-gradient(135deg,#E0DCD4 0 8px,#D6D2CA 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Herman Miller task chair</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">760 · over by 280</div>
+            </div>
+            <div style="width:26px;height:62px;border-radius:3px;background:#EAF6EC;display:flex;flex-direction:column;justify-content:flex-end;flex:0 0 auto"><div style="height:100%;border-radius:3px;background:#1B4D2B"></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #EDEBE3">
+            <div style="width:52px;height:52px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Levi's 501 denim jacket</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">300 · reaches 63%</div>
+            </div>
+            <div style="width:26px;height:62px;border-radius:3px;background:#EAF6EC;display:flex;flex-direction:column;justify-content:flex-end;flex:0 0 auto"><div style="height:63%;border-radius:3px;background:#3DBE5A"></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #EDEBE3;border-bottom:1px solid #EDEBE3">
+            <div style="width:52px;height:52px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Uniqlo linen shirt, medium</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">120 · reaches 25%</div>
+            </div>
+            <div style="width:26px;height:62px;border-radius:3px;background:#EAF6EC;display:flex;flex-direction:column;justify-content:flex-end;flex:0 0 auto"><div style="height:25%;border-radius:3px;background:#3DBE5A"></div></div>
+          </div>
+          <div style="padding:14px 16px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">You can add a second item after this. Items promised to another trade aren't listed.</div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Offer the Vans</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7b -->
+    <div id="7b" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7b</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Small gap, stacked level</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">40 short, closed by a Leaves block that sits on top of the item block. The columns are level, the number above reads Level, and the footer says what it will actually take from your balance.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column">
+          <div style="padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:700 34px/1 'Bricolage Grotesque',sans-serif;color:#1B4D2B;letter-spacing:-.02em">Level</span>
+              <span style="font:400 13px/1 'JetBrains Mono',monospace;color:#8C8A7E">480 against 480</span>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:0;height:300px">
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding-right:16px">
+                <div style="height:34px;border-radius:4px;border:1.5px dashed #1B4D2B;background:#F2F8F3;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 12px/1 'JetBrains Mono',monospace;color:#1B4D2B">+40 Leaves</span></div>
+                <div style="height:255px;border-radius:4px;background:#3DBE5A;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#0B2A15">Vans Old Skool</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#0B2A15">440</span></div>
+              </div>
+              <div style="width:1px;height:100%;background:#E2E0D6;flex:0 0 auto"></div>
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-left:16px">
+                <div style="height:292px;border-radius:4px;background:#E6E4DA;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#5C5B52">480</span></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Your side</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Marco's side</span></div>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Change the stack</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Add another item</span></div>
+              <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Promise instead</span></div>
+              <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Remove the 40</span></div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px;display:flex;align-items:center;gap:10px;min-height:56px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v8A1.5 1.5 0 0 1 18.5 16H9l-5 4z"/></svg>
+            <span style="flex:1 1 auto;font:400 15px/1.3 'Public Sans',sans-serif;color:#8C8A7E">Add a message (optional)</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Where you'll meet</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">Ayala Center Cebu, ground floor</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Safe-Zone Hub</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">40 Leaves held from 310 until Marco replies.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7c -->
+    <div id="7c" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7c</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Large gap, part-stacked</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">180 short: 80 in Leaves and 100 promised, drawn as two different blocks — dashed for Leaves, terracotta outline for the promise. The mono line under the heading shows the arithmetic, so you can see which block is carrying what.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column">
+          <div style="padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:700 34px/1 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">Level</span>
+              <span style="font:400 13px/1 'JetBrains Mono',monospace;color:#8C8A7E">300 + 80 + 100 against 480</span>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:0;height:300px">
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding-right:16px">
+                <div style="height:62px;border-radius:4px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding:0 10px"><span style="font:600 12px/1.3 'Public Sans',sans-serif;color:#14140F">Promised</span><span style="font:400 11px/1.2 'JetBrains Mono',monospace;color:#C56A4B">100 by 6 Oct</span></div>
+                <div style="height:50px;border-radius:4px;border:1.5px dashed #1B4D2B;background:#F2F8F3;box-sizing:border-box;display:flex;align-items:center;padding:0 10px"><span style="font:500 12px/1 'JetBrains Mono',monospace;color:#1B4D2B">+80 Leaves</span></div>
+                <div style="height:180px;border-radius:4px;background:#3DBE5A;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#0B2A15">Levi's 501 jacket</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#0B2A15">300</span></div>
+              </div>
+              <div style="width:1px;height:100%;background:#E2E0D6;flex:0 0 auto"></div>
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-left:16px">
+                <div style="height:292px;border-radius:4px;background:#E6E4DA;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#5C5B52">480</span></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Your side</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Marco's side</span></div>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Your two blocks</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Leaves now</span><span style="font:400 14px/1 'JetBrains Mono',monospace;color:#14140F">80 of 310</span></div>
+                <div style="height:6px;border-radius:3px;background:#EAF6EC;overflow:hidden;display:flex"><div style="width:26%;background:#3DBE5A"></div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Promised</span><span style="font:400 14px/1 'JetBrains Mono',monospace;color:#14140F">100 of 900</span></div>
+                <div style="height:6px;border-radius:3px;background:#F6EBE6;overflow:hidden;display:flex"><div style="width:11%;background:#C56A4B"></div></div>
+              </div>
+            </div>
+            <div style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Drag either block's edge, or move the whole 180 to one side.</div>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px 16px 22px;display:flex;gap:8px;flex-wrap:wrap">
+            <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">All Leaves</span></div>
+            <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">All promised</span></div>
+            <div style="min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Send short instead</span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Set up the 100 promise</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">You'll name the deadline next.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7d -->
+    <div id="7d" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7d</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Off the scale</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">100 against 2,000. Rather than shrink your block to a sliver, their column runs off the top of the frame and fades — the drawing admits it can't hold both. The two routes that work sit underneath, and sending short is still available.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column">
+          <div style="padding:12px 16px 20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:700 34px/1 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">1,900 short</span>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:0;height:300px;position:relative">
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-right:16px">
+                <div style="height:15px;border-radius:4px;background:#3DBE5A"></div>
+                <div style="padding-top:8px;display:flex;flex-direction:column;gap:2px"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#14140F">Uniqlo linen shirt</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#5C5B52">100</span></div>
+              </div>
+              <div style="width:1px;height:100%;background:#E2E0D6;flex:0 0 auto"></div>
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-left:16px;position:relative">
+                <div style="height:300px;border-radius:4px 4px 4px 4px;background:linear-gradient(to bottom,rgba(230,228,218,0) 0,#E6E4DA 64px);display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#14140F">MacBook Air M1</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#5C5B52">2,000</span></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Your side</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Ivy's side · off the scale</span></div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Your balance covers 310 of this and a New Trader can promise 200, which still leaves 1,390 unaccounted for. Two things do work from here.</div>
+          </div>
+          <div style="border-top:1px solid #EDEBE3;padding:16px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="6" width="17" height="13" rx="2"/><path d="M8 6V4.5h8V6M3.5 11h17"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Stack several items</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">All four of yours reach 1,620.</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Watch this listing</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Two more trades makes you Rising, raising your promise ceiling to 900.</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1px solid #D8D6CC"><span style="font:600 16px/1 'Public Sans',sans-serif;color:#14140F">Send the shirt anyway</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7e -->
+    <div id="7e" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7e</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">DPA, sized against the stack</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The promise block from 7c is repeated at the top at its real height, so the amount you're typing has a size on screen. Ceiling shown as the block it would become at 900.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Deferred Points Agreement</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:12px 16px 20px;border-bottom:1px solid #EDEBE3;display:flex;gap:16px;align-items:flex-end">
+            <div style="flex:0 0 auto;width:78px;height:150px;display:flex;flex-direction:column;justify-content:flex-end;gap:3px">
+              <div style="height:56px;border-radius:4px;border:1.5px solid #C56A4B;box-sizing:border-box"></div>
+              <div style="height:26px;border-radius:4px;border:1.5px dashed #1B4D2B;background:#F2F8F3;box-sizing:border-box"></div>
+              <div style="height:62px;border-radius:4px;background:#3DBE5A"></div>
+            </div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:10px;padding-bottom:6px">
+              <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:8px;border-bottom:1.5px solid #14140F">
+                <span style="font:500 36px/1 'JetBrains Mono',monospace;color:#14140F">100</span>
+                <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52">Leaves</span>
+              </div>
+              <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#5C5B52">The terracotta block is what Marco is being asked to wait for. Your ceiling as a New Trader is 200.</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Settle by</div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">2 weeks</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">22 Sep</span></div>
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">1 month</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#1B4D2B">8 Oct</span></div>
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">2 months</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">8 Nov</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="5.5" width="17" height="14" rx="2"/><path d="M3.5 10h17M8 5.5V3.5M16 5.5V3.5"/></svg>
+              <span style="flex:1 1 auto;font:400 15px/1 'Public Sans',sans-serif;color:#5C5B52">Pick another date</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+          <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">What Marco will see</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trades completed</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">7</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Settled on time</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">2 of 2</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 0"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Owed right now</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">0</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:9px">
+          <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">If you miss 8 Oct the agreement is marked defaulted, your tier drops, and the 100 stays owed until you settle it.</span>
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer with agreement</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7f -->
+    <div id="7f" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">7f</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Owner accepting</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The owner sees the same two columns, sides swapped so theirs is on the left — then Dana's record as rows. Accept and Decline carry equal weight; waiving the promise is the third, quieter line.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer from Dana L.</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:12px 16px 18px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:flex-end;gap:0;height:212px">
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-right:16px">
+                <div style="height:206px;border-radius:4px;background:#E6E4DA;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#14140F">Your Air Max 90</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#5C5B52">480</span></div>
+              </div>
+              <div style="width:1px;height:100%;background:#E2E0D6;flex:0 0 auto"></div>
+              <div style="flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding-left:16px">
+                <div style="height:44px;border-radius:4px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding:0 9px"><span style="font:600 12px/1.2 'Public Sans',sans-serif;color:#14140F">Promised 100</span><span style="font:400 11px/1.2 'JetBrains Mono',monospace;color:#C56A4B">by 6 Oct</span></div>
+                <div style="height:34px;border-radius:4px;border:1.5px dashed #1B4D2B;background:#F2F8F3;box-sizing:border-box;display:flex;align-items:center;padding:0 9px"><span style="font:500 12px/1 'JetBrains Mono',monospace;color:#1B4D2B">+80 Leaves</span></div>
+                <div style="height:128px;border-radius:4px;background:#3DBE5A;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box"><span style="font:600 13px/1.3 'Public Sans',sans-serif;color:#0B2A15">Her 501 jacket</span><span style="font:400 12px/1.2 'JetBrains Mono',monospace;color:#0B2A15">300</span></div>
+              </div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Two thirds of Dana's side is here now. The terracotta block is a promise to settle 100 Leaves by 6 Oct.</div>
+          </div>
+          <div style="padding:18px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Dana's record</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trades completed</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">14</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Settled on time</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">5 of 6</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Past defaults</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#C56A4B">1, settled late</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 0"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Owed right now</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">220 across 2</span></div>
+            </div>
+            <div style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Accepting makes it 320 in total.</div>
+          </div>
+          <div style="padding:18px 16px;display:flex;flex-direction:column;gap:11px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Her open agreements</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:1px solid #EDEBE3">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">120 to Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 22 Sep · 14 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">40 paid</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">100 to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 1 Oct · 23 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">nothing paid</span>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1 1 0;display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1px solid #D8D6CC"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Decline</span></div>
+            <div style="flex:1 1 0;display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1.5px solid #1B4D2B;box-sizing:border-box"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B">Accept</span></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;height:44px"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Accept without the 100</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<section style="display:flex;flex-direction:column;gap:30px;padding:40px;font-family:'Public Sans',system-ui,sans-serif">
+
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:960px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Turn 6 · Offer flow · Direction A</div>
+    <div style="font:700 26px/1.15 'Bricolage Grotesque',sans-serif;color:#14140F">Direction A — the bar</div>
+    <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;max-width:760px;text-wrap:pretty">One scrolling screen, not a wizard — offering, gap, settlement, message and hub are sections split by hairlines, so the gap is visible in the same glance as the item that caused it. The gap itself is a single 358px track: their value is the whole track, your offer fills it from the left in green, and what's left is terracotta. The number above it is 44px mono. Nothing about the treatment changes between a 40-Leaf gap and a 1,900-Leaf one except how much terracotta you see, which is the honest answer.<br><br>Row 1: <a href="#6a">6a</a> pick your item, <a href="#6b">6b</a> roughly even, <a href="#6c">6c</a> you're offering more, <a href="#6d">6d</a> small gap, <a href="#6e">6e</a> large gap, <a href="#6f">6f</a> very large gap, <a href="#6g">6g</a> DPA proposal, <a href="#6h">6h</a> DPA keyboard-up, <a href="#6i">6i</a> message and hub, <a href="#6j">6j</a> owner accepting a DPA. Row 2 states: <a href="#6k">6k</a> no items, <a href="#6l">6l</a> not verified, <a href="#6m">6m</a> tier too low, <a href="#6n">6n</a> offer already pending, <a href="#6o">6o</a> sending, <a href="#6p">6p</a> send failed.</div>
+  </div>
+
+  <!-- ROW 1 -->
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- 6a -->
+    <div id="6a" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6a</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Pick what you're offering</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">A sheet over the listing. Each of your items shows its value against theirs, and the difference is already resolved into a word — even, short, over — so the choice is made before the gap screen loads.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;position:relative">
+        <div style="position:absolute;inset:0;background:#14140F;opacity:.42"></div>
+        <div style="margin-top:auto;position:relative;background:#FAFAF7;border-radius:20px 20px 34px 34px;display:flex;flex-direction:column;max-height:700px">
+          <div style="padding:16px 20px 12px;display:flex;flex-direction:column;gap:4px">
+            <div style="width:36px;height:4px;border-radius:2px;background:#E2E0D6;margin:0 auto 10px"></div>
+            <div style="font:700 21px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F">Which item are you offering</div>
+            <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#5C5B52">For Marco's Nike Air Max 90, worth 480 Leaves.</div>
+          </div>
+          <div class="sb" style="overflow-y:auto;border-top:1px solid #EDEBE3">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #EDEBE3;background:#F2F8F3">
+              <div style="width:60px;height:60px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves · 40 short</div>
+              </div>
+              <div style="width:22px;height:22px;border-radius:11px;background:#1B4D2B;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EAF6EC" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #EDEBE3">
+              <div style="width:60px;height:60px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Levi's 501 denim jacket</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">300 Leaves · 180 short</div>
+              </div>
+              <div style="width:22px;height:22px;border-radius:11px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #EDEBE3">
+              <div style="width:60px;height:60px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Uniqlo linen shirt, medium</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">120 Leaves · 360 short</div>
+              </div>
+              <div style="width:22px;height:22px;border-radius:11px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #EDEBE3">
+              <div style="width:60px;height:60px;border-radius:8px;background:repeating-linear-gradient(135deg,#E0DCD4 0 8px,#D6D2CA 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Herman Miller task chair</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">760 Leaves · 280 over</div>
+              </div>
+              <div style="width:22px;height:22px;border-radius:11px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+            </div>
+            <div style="padding:14px 20px 4px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">Items already promised to another trade don't appear here.</div>
+          </div>
+          <div style="padding:12px 16px 26px;border-top:1px solid #EDEBE3">
+            <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Use this item</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6b -->
+    <div id="6b" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6b</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Roughly even</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Under 10% either way, the track is a single green fill and the settlement section is absent entirely — no empty controls, no "nothing to do here". The gap number is replaced by the word.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves</div>
+              </div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 40px/.9 'Bricolage Grotesque',sans-serif;color:#1B4D2B;letter-spacing:-.02em">Even</span>
+              <span style="font:400 13px/1 'JetBrains Mono',monospace;color:#8C8A7E;padding-bottom:4px">40 apart</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="height:14px;border-radius:3px;background:#EAF6EC;overflow:hidden;display:flex"><div style="width:91.6%;background:#3DBE5A"></div></div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Yours 440</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 480</span></div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Close enough that there's nothing to settle. You can send this as a straight swap.</div>
+          </div>
+          <div style="padding:16px;border-bottom:1px solid #EDEBE3;display:flex;align-items:center;gap:10px;min-height:56px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v8A1.5 1.5 0 0 1 18.5 16H9l-5 4z"/></svg>
+            <span style="flex:1 1 auto;font:400 15px/1.3 'Public Sans',sans-serif;color:#8C8A7E">Add a message (optional)</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div style="padding:18px 16px 22px;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Where you'll meet</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">Ayala Center Cebu, ground floor</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Safe-Zone Hub</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">SM City Cebu, north wing</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Safe-Zone Hub</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">Marco has three days to reply.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6c -->
+    <div id="6c" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6c</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">You're offering more</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The overflow runs past the track's end in forest green, so giving value away looks different from owing it without being scolded. Copy states it once and offers the alternative.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#E0DCD4 0 8px,#D6D2CA 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Herman Miller task chair</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">760 Leaves</div>
+              </div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 40px/.9 'Bricolage Grotesque',sans-serif;color:#1B4D2B;letter-spacing:-.02em">280 over</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;gap:2px">
+                <div style="flex:480 0 auto;border-radius:3px 0 0 3px;background:#3DBE5A"></div>
+                <div style="flex:280 0 auto;border-radius:0 3px 3px 0;background:#1B4D2B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 480</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#1B4D2B">Yours 760</span></div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Your chair is worth 280 Leaves more than Marco's shoes. You can still send it, and Marco can add Leaves to even it out — or you can offer something smaller.</div>
+          </div>
+          <div style="padding:18px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The difference</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;background:#1B4D2B;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EAF6EC" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+              <span style="flex:1 1 auto;font:600 15px/1.3 'Public Sans',sans-serif;color:#14140F">Ask Marco to add 280 Leaves</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <span style="flex:1 1 auto;font:600 15px/1.3 'Public Sans',sans-serif;color:#14140F">Send as-is, no settlement</span>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">Marco has three days to reply.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6d -->
+    <div id="6d" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6d</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Small gap, coverable</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">40 short against a 310 balance. The Leaves route is preselected and the remaining balance is stated in the same row, so the cost of using it is visible before the tap.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves</div>
+              </div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">40</span>
+              <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC">
+                <div style="flex:440 0 auto;background:#3DBE5A"></div>
+                <div style="flex:40 0 auto;background:#C56A4B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Yours 440</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 480</span></div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">You hold 310 Leaves, so this one is covered.</div>
+          </div>
+          <div style="padding:18px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Settle the 40</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;background:#1B4D2B;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EAF6EC" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Add 40 Leaves from your balance</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">310 now · 270 after</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Send as-is</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Marco decides whether the 40 matters.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Promise to settle later</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Deferred Points Agreement.</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer with 40 Leaves</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">Leaves are held, not spent, until Marco replies.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6e -->
+    <div id="6e" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6e</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Large gap</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">180 short, 310 held — coverable, but only just. Both routes stay open and the split option appears: part now, part promised. Balance rows do the arguing instead of warning copy.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Levi's 501 denim jacket</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">300 Leaves</div>
+              </div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">180</span>
+              <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC">
+                <div style="flex:300 0 auto;background:#3DBE5A"></div>
+                <div style="flex:180 0 auto;background:#C56A4B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Yours 300</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 480</span></div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">You hold 310 Leaves. Covering all of it leaves you 130.</div>
+          </div>
+          <div style="padding:18px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Settle the 180</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Add all 180 from your balance</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">310 now · 130 after</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;background:#1B4D2B;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EAF6EC" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Add 80 now, promise 100</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Deferred Points Agreement for the rest.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Promise the whole 180</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Nothing leaves your balance now.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Send as-is</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Some traders accept a gap this size.</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Set up the agreement</span></div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">You'll name the amount and the deadline next.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6f -->
+    <div id="6f" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6f</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Very large gap</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">100 against 2,000. The track is honest — a 5% sliver of green — but the copy's job is to name the distance and hand over two real routes without a word of consolation. No lock, no disabled send.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#CFD4D8 0 8px,#C5CACE 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">MacBook Air M1, 256GB</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">2,000 Leaves · Ivy R. · Top Trader</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Uniqlo linen shirt, medium</div>
+                <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">100 Leaves · your highest is 760</div>
+              </div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">1,900</span>
+              <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC">
+                <div style="flex:100 0 auto;background:#3DBE5A"></div>
+                <div style="flex:1900 0 auto;background:#C56A4B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Yours 100</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 2,000</span></div>
+            </div>
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">This is a long way apart. Your balance covers 310 of it, which still leaves 1,590 to promise — more than a New Trader can commit to. Two things do work from here.</div>
+          </div>
+          <div style="padding:18px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">What works instead</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="6" width="17" height="13" rx="2"/><path d="M8 6V4.5h8V6M3.5 11h17"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Offer more than one item</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Your four items together come to 1,620.</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Watch this listing</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Two more trades makes you Rising, which raises what you can promise to 900.</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="padding-top:4px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">You can still send the shirt on its own. Ivy will see the gap the same way you do.</div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1px solid #D8D6CC"><span style="font:600 16px/1 'Public Sans',sans-serif;color:#14140F">Send as-is anyway</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6g -->
+    <div id="6g" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6g</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">DPA proposal</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Amount as a 40px mono field, deadline as three preset rules plus a date row. The consequence line sits above the button, not in a checkbox — it's stated, not agreed to.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Deferred Points Agreement</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:10px 16px 20px;border-bottom:1px solid #EDEBE3;display:flex flex-direction:column">
+            <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">A recorded promise to Marco. The trade goes ahead now; you settle the difference by the date you set.</div>
+          </div>
+          <div style="padding:20px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Amount you'll settle</div>
+            <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:10px;border-bottom:1.5px solid #14140F">
+              <span style="font:500 40px/1 'JetBrains Mono',monospace;color:#14140F">100</span>
+              <span style="font:400 15px/1 'Public Sans',sans-serif;color:#5C5B52">Leaves</span>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">80 added now, 100 promised</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E">max 400</span></div>
+          </div>
+          <div style="padding:20px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Settle by</div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">2 weeks</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">20 Sep</span></div>
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">1 month</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#1B4D2B">6 Oct</span></div>
+              <div style="flex:1 1 0;min-height:56px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">2 months</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">6 Nov</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="5.5" width="17" height="14" rx="2"/><path d="M3.5 10h17M8 5.5V3.5M16 5.5V3.5"/></svg>
+              <span style="flex:1 1 auto;font:400 15px/1 'Public Sans',sans-serif;color:#5C5B52">Pick another date</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+          <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">What Marco will see</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid #EDEBE3"><span style="font:400 14px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trades completed</span><span style="font:400 14px/1.3 'JetBrains Mono',monospace;color:#14140F">7</span></div>
+              <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid #EDEBE3"><span style="font:400 14px/1.3 'Public Sans',sans-serif;color:#5C5B52">Settled on time</span><span style="font:400 14px/1.3 'JetBrains Mono',monospace;color:#14140F">2 of 2</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 14px/1.3 'Public Sans',sans-serif;color:#5C5B52">Owed right now</span><span style="font:400 14px/1.3 'JetBrains Mono',monospace;color:#14140F">0</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:9px">
+          <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">If you miss 6 Oct the agreement is marked defaulted, your tier drops, and the 100 stays owed until you settle it.</span>
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer with agreement</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6h -->
+    <div id="6h" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6h</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Amount, keyboard up</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">358px of keyboard leaves 442px. The amount field and its two constraint lines stay above it; the deadline and record collapse to a one-line summary. Number pad only.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Deferred Points Agreement</span>
+            <span style="margin-left:auto;font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B;padding-right:12px">Done</span>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;overflow:hidden">
+          <div style="padding:16px 16px 20px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Amount you'll settle</div>
+            <div style="display:flex;align-items:baseline;gap:6px;padding-bottom:10px;border-bottom:1.5px solid #1B4D2B">
+              <span style="font:500 40px/1 'JetBrains Mono',monospace;color:#14140F">140</span>
+              <span style="width:2px;height:34px;background:#3DBE5A;animation:caret 1.1s steps(1,end) infinite"></span>
+              <span style="margin-left:4px;font:400 15px/1 'Public Sans',sans-serif;color:#5C5B52">Leaves</span>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">40 added now, 140 promised</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E">max 400</span></div>
+          </div>
+          <div style="padding:14px 16px;display:flex;align-items:center;gap:8px">
+            <span style="font:400 13px/1.4 'Public Sans',sans-serif;color:#5C5B52">Settle by 6 Oct · 7 trades · no defaults</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;height:358px;background:#D6D4CB;border-top:1px solid #C9C7BC;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:12px 6px 28px">
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">1</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">2</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">3</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">4</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">5</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">6</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">7</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">8</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">9</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px"></div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">0</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6H9l-5 6 5 6h11z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6i -->
+    <div id="6i" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6i</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Message and hub</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The same screen scrolled down, message expanded and keyboard up. The gap collapses to one mono line pinned under the header so it stays true while you're typing about it.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+            <span style="margin-left:auto;font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B;padding-right:12px">Done</span>
+          </div>
+          <div style="padding:6px 4px 12px;border-bottom:1px solid #EDEBE3"><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">Vans 440 → Air Max 480 · 40 added</span></div>
+        </div>
+        <div style="flex:1 1 auto;overflow:hidden;padding:16px 16px 0;display:flex;flex-direction:column;gap:10px">
+          <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Your message</div>
+          <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#14140F">Hi Marco, the Vans are barely worn, I only used them twice. I can meet at Ayala any afternoon this week<span style="display:inline-block;width:2px;height:17px;vertical-align:-3px;margin-left:2px;background:#3DBE5A;animation:caret 1.1s steps(1,end) infinite"></span></div>
+          <div style="margin-top:auto;padding-bottom:8px;display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">Optional</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">124 / 400</span></div>
+        </div>
+        <div style="flex:0 0 auto;height:358px;background:#D6D4CB;border-top:1px solid #C9C7BC;display:flex;flex-direction:column;justify-content:flex-start;gap:9px;padding:10px 4px 28px">
+          <div style="display:flex;gap:5px;padding:0 2px 6px;align-items:center">
+            <span style="font:400 13px/1 'Public Sans',sans-serif;color:#5C5B52;padding:6px 10px;border-radius:5px;background:#EDEBE3">Ayala</span>
+            <span style="font:400 13px/1 'Public Sans',sans-serif;color:#5C5B52;padding:6px 10px;border-radius:5px;background:#EDEBE3">afternoon</span>
+            <span style="font:400 13px/1 'Public Sans',sans-serif;color:#5C5B52;padding:6px 10px;border-radius:5px;background:#EDEBE3">week</span>
+          </div>
+          <div style="display:flex;gap:4px">
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">q</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">w</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">e</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">r</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">t</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">y</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">u</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">i</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">o</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">p</div>
+          </div>
+          <div style="display:flex;gap:4px;padding:0 16px">
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">a</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">s</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">d</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">f</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">g</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">h</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">j</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">k</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">l</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <div style="flex:1.4 1 0;height:42px;border-radius:5px;background:#C4C2B8;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l-6 7h12z"/><path d="M6 18h12"/></svg></div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">z</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">x</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">c</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">v</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">b</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">n</div>
+            <div style="flex:1 1 0;height:42px;border-radius:5px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 17px/1 'Public Sans',sans-serif;color:#14140F">m</div>
+            <div style="flex:1.4 1 0;height:42px;border-radius:5px;background:#C4C2B8;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6H9l-5 6 5 6h11z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></svg></div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <div style="flex:1.4 1 0;height:42px;border-radius:5px;background:#C4C2B8;display:flex;align-items:center;justify-content:center;font:400 13px/1 'Public Sans',sans-serif;color:#14140F">123</div>
+            <div style="flex:5 1 0;height:42px;border-radius:5px;background:#FAFAF7"></div>
+            <div style="flex:1.8 1 0;height:42px;border-radius:5px;background:#C4C2B8;display:flex;align-items:center;justify-content:center;font:400 13px/1 'Public Sans',sans-serif;color:#14140F">return</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6j -->
+    <div id="6j" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6j</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Owner accepting a DPA</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The record comes before the decision: four numbers as a plain table, then the outstanding agreements as rows with their deadlines. Accept is not the emphasised action here — both buttons carry equal weight.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer from Dana L.</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:8px 16px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg>
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Her jacket 300 for your Air Max 480</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">80 added now · 100 promised</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:10px;border:1.5px solid #C56A4B;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 4l8.5 15h-17z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+              <span style="flex:1 1 auto;font:600 14px/1.35 'Public Sans',sans-serif;color:#14140F">This offer includes a promise to settle 100 Leaves by 6 Oct.</span>
+            </div>
+          </div>
+          <div style="padding:18px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Dana's record</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trades completed</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">14</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Settled on time</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">5 of 6</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Past defaults</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#C56A4B">1, settled late</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Owed right now</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">220 across 2</span></div>
+            </div>
+          </div>
+          <div style="padding:18px 16px;display:flex;flex-direction:column;gap:11px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Her open agreements</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:1px solid #EDEBE3">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">120 to Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 22 Sep · 16 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">40 paid</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">100 to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 1 Oct · 25 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">nothing paid</span>
+            </div>
+            <div style="padding-top:6px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Accepting adds 100 to what Dana owes, making 320 in total. You can also accept the trade and waive the difference.</div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1 1 0;display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1px solid #D8D6CC"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Decline</span></div>
+            <div style="flex:1 1 0;display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1.5px solid #1B4D2B;box-sizing:border-box"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B">Accept</span></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;height:44px"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Accept without the 100</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2 — STATES -->
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:960px;padding-top:12px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Direction A · states</div>
+    <div style="font:700 21px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F">The six states</div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- 6k -->
+    <div id="6k" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6k</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">No items to offer</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Every new user's first sight of this screen, so the listing they wanted stays on it — the header keeps the item, and the single action is the post flow. No illustration.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:44px 16px 0;display:flex;flex-direction:column;gap:14px">
+            <div style="font:700 25px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.01em;text-wrap:pretty">You need something to offer first</div>
+            <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">A trade in Baylo is one item for another, so nothing can be sent until you have a listing of your own. Post one item and this offer takes about a minute.</div>
+            <div style="padding:16px 0 0;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:flex-start;gap:10px"><span style="font:400 12px/1.4 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">01</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F">Photograph it and post it. Baylo suggests a value.</span></div>
+              <div style="display:flex;align-items:flex-start;gap:10px"><span style="font:400 12px/1.4 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">02</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F">Come back here. We'll keep Marco's shoes saved for you.</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Post your first item</span></div>
+          <div style="display:flex;align-items:center;justify-content:center;height:44px"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Save this listing for later</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6l -->
+    <div id="6l" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6l</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Not verified yet</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Verification gates the promise, not the offer — so the DPA row is the only thing that changes, dimmed with the reason on it, and the other two routes stay live above it.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:14px 16px 22px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">180</span>
+              <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC">
+                <div style="flex:300 0 auto;background:#3DBE5A"></div>
+                <div style="flex:180 0 auto;background:#C56A4B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Yours 300</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Theirs 480</span></div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Settle the 180</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;background:#1B4D2B;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EAF6EC" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Add all 180 from your balance</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">310 now · 130 after</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="width:20px;height:20px;border-radius:10px;border:1.5px solid #D8D6CC;box-sizing:border-box;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Send as-is</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Marco decides whether the 180 matters.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px dashed #D8D6CC;background:#F5F4EE;box-sizing:border-box">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="4.5" y="10.5" width="15" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 1 1 7 0v2.5"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#8C8A7E">Promise to settle later</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#8C8A7E">Needs ID verification. Takes about five minutes.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:10px;border:1px solid #D8D6CC;margin-top:2px"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B">Verify your ID</span></div>
+            <div style="padding-top:4px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Verification is only for promises. Everything else in Baylo works without it.</div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send offer with 180 Leaves</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6m -->
+    <div id="6m" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6m</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Tier too low to promise</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The ceiling is shown as a number with the user's position against it, and the route up is stated in trades, not encouragement. A smaller promise is offered because it actually works.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Deferred Points Agreement</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:16px 16px 20px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="font:700 23px/1.25 'Bricolage Grotesque',sans-serif;color:#14140F;text-wrap:pretty">A New Trader can promise up to 200</div>
+            <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">This gap needs 640, which is above that ceiling. The limit rises with completed trades — it isn't about this item.</div>
+          </div>
+          <div style="padding:20px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Promise ceilings by tier</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="flex:1 1 auto;font:600 15px/1.3 'Public Sans',sans-serif;color:#14140F">New Trader</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#1B4D2B">you are here</span><span style="width:64px;text-align:right;font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">200</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="flex:1 1 auto;font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Rising</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E">3 trades</span><span style="width:64px;text-align:right;font:400 15px/1.3 'JetBrains Mono',monospace;color:#5C5B52">900</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #EDEBE3"><span style="flex:1 1 auto;font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trusted</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E">10 trades</span><span style="width:64px;text-align:right;font:400 15px/1.3 'JetBrains Mono',monospace;color:#5C5B52">2,500</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0"><span style="flex:1 1 auto;font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Top Trader</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E">25 trades</span><span style="width:64px;text-align:right;font:400 15px/1.3 'JetBrains Mono',monospace;color:#5C5B52">no limit</span></div>
+            </div>
+            <div style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">You have one completed trade. Two more moves you to Rising.</div>
+          </div>
+          <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">From here</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1.5px solid #1B4D2B;background:#F2F8F3;box-sizing:border-box">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Add 310 and promise 200</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Leaves 130 of the gap for Marco to accept or refuse.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Offer a different item</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Your chair at 760 closes most of this.</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Send with 310 and a 200 promise</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6n -->
+    <div id="6n" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6n</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Offer already pending</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Not an error — a status. What was sent, when, and how long Marco has left, with the only two moves available: withdraw and replace, or leave it.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:36px 16px 0;display:flex;flex-direction:column;gap:14px">
+            <div style="font:700 25px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.01em">You already have an offer on this</div>
+            <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">Sent two days ago. Marco has until Tuesday to reply, then it expires on its own.</div>
+          </div>
+          <div style="padding:24px 16px 0;display:flex;flex-direction:column;gap:11px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">What you sent</div>
+            <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid #EDEBE3">
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves · 40 added · no message</span></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding-top:2px"><span style="font:400 14px/1.3 'Public Sans',sans-serif;color:#5C5B52">Meetup</span><span style="font:400 14px/1.3 'Public Sans',sans-serif;color:#14140F">Ayala Center Cebu</span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;border:1px solid #D8D6CC"><span style="font:600 16px/1 'Public Sans',sans-serif;color:#14140F">Withdraw and offer again</span></div>
+          <div style="display:flex;align-items:center;justify-content:center;height:44px"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Leave it as it is</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6o -->
+    <div id="6o" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6o</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Sending</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The screen stays put. Content dims to 45%, the footer button becomes a 52px progress rule, and the back control is removed so a double-send can't happen.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0;opacity:.45">
+          <div style="height:44px;display:flex;align-items:center;gap:4px;padding-left:14px">
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;overflow:hidden;opacity:.45">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves</span></div>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px"><span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">40</span><span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span></div>
+            <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC"><div style="flex:440 0 auto;background:#3DBE5A"></div><div style="flex:40 0 auto;background:#C56A4B"></div></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+          <div style="height:52px;border-radius:10px;background:#EAF6EC;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:62%;background:#3DBE5A;animation:shimmer 1.4s ease-in-out infinite"></div>
+            <span style="position:relative;font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Sending</span>
+          </div>
+          <span style="text-align:center;font:400 12px/1 'Public Sans',sans-serif;color:#8C8A7E">Holding 40 Leaves</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6p -->
+    <div id="6p" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">6p</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Send failed</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Terracotta-outlined panel above the footer, following the post flow's rule: outline warns, fill fails. It says the offer was kept and the Leaves were released, because those are the two things a user fears.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer trade</span>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 16px 14px;border-bottom:1px solid #EDEBE3">
+            <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8DCE0 0 8px,#CED2D6 8px 16px);flex:0 0 auto"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+              <div style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90, size 9</div>
+              <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">480 Leaves · Marco A. · Trusted</div>
+            </div>
+          </div>
+          <div style="padding:18px 16px 14px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">You're offering</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCE0DA 0 8px,#D2D6D0 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Vans Old Skool, size 9</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">440 Leaves · 40 added</span></div>
+              <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B;padding:14px 0 14px 14px">Change</span>
+            </div>
+          </div>
+          <div style="padding:20px 16px 22px;display:flex;flex-direction:column;gap:14px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">The gap</div>
+            <div style="display:flex;align-items:flex-end;gap:10px"><span style="font:700 44px/.9 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.02em">40</span><span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52;padding-bottom:5px">Leaves short</span></div>
+            <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC"><div style="flex:440 0 auto;background:#3DBE5A"></div><div style="flex:40 0 auto;background:#C56A4B"></div></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:14px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:11px;padding:13px 14px;border-radius:10px;border:1.5px solid #C56A4B;box-sizing:border-box">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:1px"><path d="M12 4l8.5 15h-17z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font:600 15px/1.3 'Public Sans',sans-serif;color:#14140F">The offer didn't send</span>
+              <span style="font:400 13px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">The connection dropped partway. Nothing reached Marco, your 40 Leaves were released back to your balance, and the offer is still here exactly as you built it.</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Try sending again</span></div>
+            <div style="display:flex;align-items:center;justify-content:center;height:44px"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Keep it and send later</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</x-dc>
+</body>
+</html>

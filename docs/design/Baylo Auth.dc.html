@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#EFEEE8; }
+  a { color:#1B4D2B; text-decoration:none; }
+  a:hover { color:#3DBE5A; }
+  .sb::-webkit-scrollbar { width:0; height:0; }
+  @keyframes caret { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:30px;padding:40px;font-family:'Public Sans',system-ui,sans-serif">
+
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:900px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Turn 4 · Auth · Google + email, recorded 18+</div>
+    <div style="font:700 26px/1.15 'Bricolage Grotesque',sans-serif;color:#14140F">Sign in, create account, age gate</div>
+    <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;max-width:700px">Phone removed as a login method, so the SMS step is gone with it. <a href="#4a">4a</a> sign in, <a href="#4b">4b</a> create account at rest (5 fields), <a href="#4c">4c</a> create account with the IME up — the tightest case, <a href="#4d">4d</a> log in, <a href="#4e">4e</a> DOB step after the Google handoff, <a href="#4f">4f</a> under-18 rejection.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- ==================== 4a SIGN IN ==================== -->
+    <div id="4a" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">4a</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Sign in</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Two methods only. Video band 281, sheet overlaps 28, so 253 of video shows — 30% of 844. Phone button removed.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F">
+
+        <div style="position:relative;height:281px;flex:0 0 auto;background:repeating-linear-gradient(118deg,#3E3A33 0 18px,#35322C 18px 36px);overflow:hidden">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,20,15,.28) 0%, rgba(20,20,15,.52) 100%)"></div>
+          <div style="position:absolute;top:44px;left:16px;right:16px;display:flex;align-items:center">
+            <div style="font:700 24px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;color:#FAFAF7">Baylo</div>
+            <span style="margin-left:auto;font:500 12px/1 'Public Sans',sans-serif;color:#EAF6EC;background:rgba(250,250,247,.14);padding:9px 12px;border-radius:16px">Cebu</span>
+          </div>
+          <div style="position:absolute;left:0;right:0;top:158px;display:flex;justify-content:center">
+            <span style="font:400 10px/1.6 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#EFEDE4;background:rgba(20,20,15,.5);padding:8px 11px;border-radius:2px;text-align:center">looping video · 8s · muted<br>real trades, cebu streets</span>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;background:#FAFAF7;border-radius:28px 28px 0 0;margin-top:-28px;padding:26px 24px 0;display:flex;flex-direction:column">
+          <div style="font:700 27px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;text-wrap:pretty">Baylo na ta.</div>
+          <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#5C5B52;margin-top:10px;max-width:300px;text-wrap:pretty">Trade what you no longer use for what you actually need. No cash, anywhere in Cebu.</div>
+
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:10px;background:#3DBE5A;margin-top:28px">
+            <div style="width:20px;height:20px;border-radius:10px;border:1.6px solid #0B2A15;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Public Sans',sans-serif;color:#0B2A15">G</div>
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Continue with Google</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin-top:20px">
+            <div style="flex:1;height:1px;background:#EDEBE3"></div>
+            <span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8C8A7E">or</span>
+            <div style="flex:1;height:1px;background:#EDEBE3"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;height:52px;border-radius:10px;border:1px solid #D8D6CC;background:#FAFAF7;padding:0 16px;margin-top:20px">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M3 7l9 6 9-6"/></svg>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Continue with email</span>
+          </div>
+
+          <div style="font:400 12px/1.6 'Public Sans',sans-serif;color:#8C8A7E;margin-top:22px;text-wrap:pretty">Baylo is 18+. Trades are arranged in person, so we verify age at sign-up. By continuing you agree to Baylo's <span style="color:#1B4D2B;font-weight:600">Terms</span> and <span style="color:#1B4D2B;font-weight:600">Privacy Policy</span>. Baylo never handles money.</div>
+
+          <div style="margin-top:auto;height:64px;display:flex;align-items:center;justify-content:center;gap:6px">
+            <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52">Naa nay account?</span>
+            <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Log in</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4b CREATE ACCOUNT AT REST ==================== -->
+    <div id="4b" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">4b</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Create account — at rest</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Five fields: name, email, password, confirm, date of birth. Band drops to 200 (172 visible) because five fields need the height — your own reasoning for 30% over 45%. DOB is a picker, not a typed field.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F">
+
+        <div style="position:relative;height:200px;flex:0 0 auto;background:repeating-linear-gradient(118deg,#3E3A33 0 18px,#35322C 18px 36px);overflow:hidden">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,20,15,.34) 0%, rgba(20,20,15,.56) 100%)"></div>
+          <div style="position:absolute;top:44px;left:12px;right:16px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FAFAF7" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+            </div>
+            <div style="font:700 20px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;color:#FAFAF7">Baylo</div>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:44px;display:flex;justify-content:center">
+            <span style="font:400 10px/1.6 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#EFEDE4;background:rgba(20,20,15,.5);padding:8px 11px;border-radius:2px;text-align:center">band 200 · 172 visible</span>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;background:#FAFAF7;border-radius:28px 28px 0 0;margin-top:-28px;padding:24px 24px 0;display:flex;flex-direction:column">
+          <div style="font:700 23px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F">Create your account</div>
+          <div style="font:400 13px/1.5 'Public Sans',sans-serif;color:#8C8A7E;margin-top:7px">Baylo trades happen face to face, so accounts are 18+.</div>
+
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:18px">
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:3px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Full name</span>
+              <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">Mary Joy Abella</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:3px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Email</span>
+              <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">maryjoy.a@gmail.com</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Password</span>
+                <span style="font:500 15px/1 'Public Sans',sans-serif;letter-spacing:.18em;color:#14140F">••••••••</span>
+              </div>
+              <span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B;flex:0 0 auto">Show</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Confirm password</span>
+                <span style="font:500 15px/1 'Public Sans',sans-serif;letter-spacing:.18em;color:#14140F">••••••••</span>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Date of birth</span>
+                <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">14 March 1998</span>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-top:12px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4.5M12 8h.01"/></svg>
+            <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">Submitting records your date of birth as your 18+ declaration. We show your age range to traders, never your birth date.</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A;margin-top:16px">
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Create account</span>
+          </div>
+
+          <div style="font:400 12px/1.6 'Public Sans',sans-serif;color:#8C8A7E;margin-top:14px;text-wrap:pretty">By continuing you agree to Baylo's <span style="color:#1B4D2B;font-weight:600">Terms</span> and <span style="color:#1B4D2B;font-weight:600">Privacy Policy</span>.</div>
+
+          <div style="margin-top:auto;height:56px;display:flex;align-items:center;justify-content:center;gap:6px">
+            <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52">Naa nay account?</span>
+            <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Log in</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4c CREATE ACCOUNT — IME UP, 5 FIELDS ==================== -->
+    <div id="4c" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#3DBE5A;color:#0B2A15;padding:5px 8px;border-radius:3px">4c</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Create account — IME open, 5 fields</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The tight case. IME 358 leaves 486, and five 56px fields plus the button need 476 of it — so the sheet takes the whole 486 and the video is fully covered while typing. It reappears when the IME closes; the loop is never torn down.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F;position:relative">
+
+        <div style="height:486px;box-sizing:border-box;flex:0 0 auto;background:#FAFAF7;padding:26px 24px 0;display:flex;flex-direction:column;position:relative;z-index:2">
+          <div style="display:flex;align-items:center;gap:4px;margin:0 -12px 0 -12px">
+            <div style="width:44px;height:32px;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <div style="font:700 19px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F">Create your account</div>
+            <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;margin-left:auto;padding-right:12px">2 of 5</span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:10px">
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:3px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Full name</span>
+              <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">Mary Joy Abella</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1.5px solid #3DBE5A;background:#FAFAF7;padding:0 13px;display:flex;flex-direction:column;justify-content:center;gap:3px;box-shadow:0 0 0 3px rgba(61,190,90,.16)">
+              <span style="font:600 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#1B4D2B">Email</span>
+              <div style="display:flex;align-items:center;gap:1px">
+                <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">maryjoy.a@gm</span>
+                <span style="width:1.5px;height:17px;background:#1B4D2B;animation:caret 1s step-end infinite"></span>
+              </div>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Password</span>
+                <span style="font:400 14px/1 'Public Sans',sans-serif;color:#A8A69A">At least 8 characters</span>
+              </div>
+              <span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B;flex:0 0 auto">Show</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Confirm password</span>
+                <span style="font:400 14px/1 'Public Sans',sans-serif;color:#A8A69A">Re-enter password</span>
+              </div>
+              <span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B;flex:0 0 auto">Show</span>
+            </div>
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Date of birth</span>
+                <span style="font:400 14px/1 'Public Sans',sans-serif;color:#A8A69A">Tap to select · 18+ only</span>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A;margin-top:12px">
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Create account</span>
+          </div>
+
+          <div style="font:400 11px/1.5 'Public Sans',sans-serif;color:#8C8A7E;margin-top:8px;text-align:center">Your date of birth is recorded as your 18+ declaration.</div>
+        </div>
+
+        <!-- IME 358 -->
+        <div style="height:358px;flex:0 0 auto;background:#DEDCD3;border-top:1px solid #CFCDC3;padding:8px 4px 15px;display:flex;flex-direction:column;gap:9px;box-sizing:border-box">
+          <div style="height:38px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 8px">
+            <span style="font:500 13px/1 'Public Sans',sans-serif;color:#5C5B52;background:#EFEEE7;padding:9px 14px;border-radius:6px">maryjoy.a@gmail.com</span>
+            <span style="font:400 13px/1 'Public Sans',sans-serif;color:#8C8A7E;background:#EFEEE7;padding:9px 14px;border-radius:6px">@gmail</span>
+            <span style="font:400 9px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#A8A69A;margin-left:auto">IME 358</span>
+          </div>
+          <div style="display:flex;gap:5px;justify-content:center;flex:0 0 auto">
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">q</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">w</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">e</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">r</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">t</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">y</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">u</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">i</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">o</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">p</span>
+          </div>
+          <div style="display:flex;gap:5px;justify-content:center;padding:0 18px;flex:0 0 auto">
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">a</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">s</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">d</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">f</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">g</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">h</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">j</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">k</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">l</span>
+          </div>
+          <div style="display:flex;gap:5px;justify-content:center;flex:0 0 auto">
+            <span style="width:46px;height:57px;background:#CFCDC3;border-radius:5px;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l-6 7 6 7"/><path d="M6 12h13"/></svg></span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">z</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">x</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">c</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">v</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">b</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">n</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Public Sans',sans-serif;color:#14140F">m</span>
+            <span style="width:46px;height:57px;background:#CFCDC3;border-radius:5px;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6H9l-6 6 6 6h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1z"/><path d="M12 10l5 4M17 10l-5 4"/></svg></span>
+          </div>
+          <div style="display:flex;gap:5px;justify-content:center;flex:0 0 auto">
+            <span style="width:60px;height:57px;background:#CFCDC3;border-radius:5px;display:flex;align-items:center;justify-content:center;font:500 12px/1 'Public Sans',sans-serif;color:#14140F">?123</span>
+            <span style="width:46px;height:57px;background:#CFCDC3;border-radius:5px;display:flex;align-items:center;justify-content:center;font:500 15px/1 'Public Sans',sans-serif;color:#14140F">,</span>
+            <span style="flex:1;height:57px;background:#FBFBF8;border-radius:5px"></span>
+            <span style="width:46px;height:57px;background:#CFCDC3;border-radius:5px;display:flex;align-items:center;justify-content:center;font:500 15px/1 'Public Sans',sans-serif;color:#14140F">.</span>
+            <span style="width:60px;height:57px;background:#3DBE5A;border-radius:5px;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0B2A15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="M9 10l-4 4 4 4"/></svg></span>
+          </div>
+          <div style="height:24px;flex:0 0 auto;display:flex;align-items:center;justify-content:center"><div style="width:108px;height:4px;border-radius:2px;background:#B4B2A6"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4d LOG IN ==================== -->
+    <div id="4d" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">4d</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Log in</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Email only in the identifier field now that phone is gone. Wrong-password error shown in the terracotta accent — the same one the feed uses for urgency.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F">
+
+        <div style="position:relative;height:281px;flex:0 0 auto;background:repeating-linear-gradient(118deg,#3E3A33 0 18px,#35322C 18px 36px);overflow:hidden">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,20,15,.3) 0%, rgba(20,20,15,.54) 100%)"></div>
+          <div style="position:absolute;top:44px;left:12px;right:16px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FAFAF7" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <div style="font:700 20px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;color:#FAFAF7">Baylo</div>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;background:#FAFAF7;border-radius:28px 28px 0 0;margin-top:-28px;padding:26px 24px 0;display:flex;flex-direction:column">
+          <div style="font:700 25px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F">Balik na ka.</div>
+          <div style="font:400 14px/1.5 'Public Sans',sans-serif;color:#5C5B52;margin-top:8px">Log in to pick up where your trades left off.</div>
+
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:10px;background:#3DBE5A;margin-top:22px">
+            <div style="width:20px;height:20px;border-radius:10px;border:1.6px solid #0B2A15;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Public Sans',sans-serif;color:#0B2A15">G</div>
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Continue with Google</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
+            <div style="flex:1;height:1px;background:#EDEBE3"></div>
+            <span style="font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8C8A7E">or</span>
+            <div style="flex:1;height:1px;background:#EDEBE3"></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+            <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:3px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Email</span>
+              <span style="font:500 15px/1 'Public Sans',sans-serif;color:#14140F">maryjoy.a@gmail.com</span>
+            </div>
+            <div>
+              <div style="height:56px;border-radius:10px;border:1.5px solid #C56A4B;background:#FAFAF7;padding:0 13px;display:flex;align-items:center;gap:10px">
+                <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+                  <span style="font:600 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#B0553A">Password</span>
+                  <span style="font:500 15px/1 'Public Sans',sans-serif;letter-spacing:.18em;color:#14140F">••••••</span>
+                </div>
+                <span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B;flex:0 0 auto">Show</span>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:7px;margin-top:8px">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B0553A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5M12 16h.01"/></svg>
+                <span style="font:500 12px/1.4 'Public Sans',sans-serif;color:#B0553A">That password doesn't match this account. Try again or reset it.</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;height:44px;margin-top:2px">
+            <span style="font:600 13px/1 'Public Sans',sans-serif;color:#1B4D2B">Forgot password?</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A;margin-top:6px">
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Log in</span>
+          </div>
+
+          <div style="margin-top:auto;height:64px;display:flex;align-items:center;justify-content:center;gap:6px">
+            <span style="font:400 14px/1 'Public Sans',sans-serif;color:#5C5B52">Wala pa'y account?</span>
+            <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Sign up</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4e GOOGLE DOB STEP ==================== -->
+    <div id="4e" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">4e</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">DOB step after Google</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">One field, blocking, straight after the Google handoff. The account exists but isn't usable until this is recorded. Google's name and email are shown as confirmation so the step reads as a continuation, not a restart.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F">
+
+        <div style="position:relative;height:281px;flex:0 0 auto;background:repeating-linear-gradient(118deg,#3E3A33 0 18px,#35322C 18px 36px);overflow:hidden">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,20,15,.32) 0%, rgba(20,20,15,.56) 100%)"></div>
+          <div style="position:absolute;top:44px;left:16px;right:16px;display:flex;align-items:center">
+            <div style="font:700 20px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;color:#FAFAF7">Baylo</div>
+            <span style="margin-left:auto;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(250,250,247,.66)">step 2 of 2</span>
+          </div>
+          <div style="position:absolute;left:16px;right:16px;bottom:56px;display:flex;align-items:center;gap:11px;padding:12px;border-radius:12px;background:rgba(250,250,247,.12)">
+            <div style="width:38px;height:38px;border-radius:19px;background:repeating-linear-gradient(135deg,#DCD9CE 0 6px,#D2CFC3 6px 12px);display:flex;align-items:center;justify-content:center;font:600 13px/1 'Public Sans',sans-serif;color:#5C5B52;flex:0 0 auto">MJ</div>
+            <div style="flex:1 1 auto;min-width:0">
+              <div style="font:600 14px/1.2 'Public Sans',sans-serif;color:#FAFAF7">Mary Joy Abella</div>
+              <div style="font:400 12px/1.3 'Public Sans',sans-serif;color:rgba(250,250,247,.74);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">maryjoy.a@gmail.com · via Google</div>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8FE3A6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;background:#FAFAF7;border-radius:28px 28px 0 0;margin-top:-28px;padding:28px 24px 0;display:flex;flex-direction:column">
+          <div style="font:700 25px/1.22 'Bricolage Grotesque',sans-serif;color:#14140F;text-wrap:pretty">One last thing — your date of birth</div>
+          <div style="font:400 14px/1.55 'Public Sans',sans-serif;color:#5C5B52;margin-top:10px;text-wrap:pretty">Google doesn't share this with us. Baylo trades are arranged face to face, so every account has to be 18 or older.</div>
+
+          <div style="height:56px;border-radius:10px;border:1px solid #E2E0D6;background:#F1EFE8;padding:0 14px;display:flex;align-items:center;gap:10px;margin-top:24px">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:3px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8C8A7E">Date of birth</span>
+              <span style="font:400 14px/1 'Public Sans',sans-serif;color:#A8A69A">Tap to select</span>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-top:14px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4.5M12 8h.01"/></svg>
+            <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">Continuing records your date of birth as your 18+ declaration. Traders see an age range only, never the date.</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A;margin-top:20px">
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Confirm and continue</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:48px;margin-top:4px">
+            <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Use a different Google account</span>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:28px">
+            <div style="font:400 12px/1.6 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">You can't browse or post until this step is done. Nothing is shared with Google.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4f UNDER-18 REJECTION ==================== -->
+    <div id="4f" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">4f</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Rejected — under 18</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Fires at submission, not while typing. States the rule, the date entered, and the year they become eligible. The primary action becomes correcting the date; account creation is blocked, not retried silently.</div>
+
+      <div style="width:390px;height:844px;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;background:#14140F">
+
+        <div style="position:relative;height:281px;flex:0 0 auto;background:repeating-linear-gradient(118deg,#3E3A33 0 18px,#35322C 18px 36px);overflow:hidden">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,20,15,.4) 0%, rgba(20,20,15,.62) 100%)"></div>
+          <div style="position:absolute;top:44px;left:12px;right:16px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FAFAF7" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <div style="font:700 20px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;color:#FAFAF7">Baylo</div>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;background:#FAFAF7;border-radius:28px 28px 0 0;margin-top:-28px;padding:28px 24px 0;display:flex;flex-direction:column">
+          <div style="width:72px;height:72px;border-radius:36px;background:#FBEEE9;border:1px solid #F0D8CE;display:flex;align-items:center;justify-content:center">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#B0553A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V13M12 16.5h.01"/></svg>
+          </div>
+
+          <div style="font:700 24px/1.22 'Bricolage Grotesque',sans-serif;color:#14140F;margin-top:20px;text-wrap:pretty">You need to be 18 to use Baylo</div>
+          <div style="font:400 14px/1.55 'Public Sans',sans-serif;color:#5C5B52;margin-top:10px;text-wrap:pretty">Baylo arranges trades in person between strangers, so we can't create an account for anyone under 18. Nothing has been saved.</div>
+
+          <div style="margin-top:20px;border-radius:12px;background:#FBEEE9;border:1px solid #F0D8CE;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#B0553A">Date entered</span>
+              <span style="font:500 14px/1 'JetBrains Mono',monospace;color:#14140F;margin-left:auto">2011-04-22</span>
+            </div>
+            <div style="height:1px;background:#F0D8CE"></div>
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#B0553A">Age</span>
+              <span style="font:500 14px/1 'JetBrains Mono',monospace;color:#14140F;margin-left:auto">15 years</span>
+            </div>
+            <div style="height:1px;background:#F0D8CE"></div>
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font:500 10px/1 'Public Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#B0553A">Eligible from</span>
+              <span style="font:500 14px/1 'JetBrains Mono',monospace;color:#14140F;margin-left:auto">2029-04-22</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A;margin-top:22px">
+            <span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Correct my date of birth</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;height:48px;margin-top:4px">
+            <span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Read why we ask</span>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:26px">
+            <div style="font:400 12px/1.6 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Entered a wrong date by mistake? Correcting it here is fine. Repeated attempts with under-18 dates are logged.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== BUILD NOTES ==================== -->
+    <div style="display:flex;flex-direction:column;gap:12px;width:420px">
+      <div style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Build notes — auth</div>
+      <div style="padding:18px;border-radius:12px;background:#F4F2EA;border:1px solid #E7E5DB;font:400 13px/1.7 'Public Sans',sans-serif;color:#4C4B43">
+        <b style="color:#14140F">Methods.</b> Google and email + password. Phone is gone as a login method, so the SMS code screen went with it — nothing else routed to it.<br><br>
+        <b style="color:#14140F">Sheet geometry, at rest.</b> Sheet is bottom-anchored with top radius 28 and margin-top −28, so <i>visible band = declared band − 28</i>. 4a / 4d / 4e: band 281 → 253 visible = 30.0%. 4f: same 281. Sheet takes flex:1 1 auto.<br><br>
+        <b style="color:#14140F">4b, five fields at rest.</b> Band drops to 200 → 172 visible (20%). Five 56px fields, the declaration line, the button and the footer need 564; the flexed sheet gives 648. Video yields the height, per your own reasoning for 30% over 45%.<br><br>
+        <b style="color:#14140F">4c, five fields with the IME up.</b> IME 358 leaves 486. Content measures 476 — five fields (5 × 56 + 4 × 9 = 316), header 32, button 52, declaration 16, padding 36. That does not leave room for a video sliver, so the sheet takes the full 486 with square top corners and the video is covered, still playing, and returns when the IME dismisses. Column: 486 + 358 = 844 exactly, box-sizing border-box, no negative margin. If a device reports IME &gt; 380, scroll the field stack and pin the button to the sheet bottom.<br><br>
+        <b style="color:#14140F">Date of birth.</b> A tappable field opening the native date picker, never a typed field and never a checkbox — no keyboard, and the recorded value is a real date. Default the picker to 18 years ago so the common case is one scroll. Validate on submit only: never surface an age error while the picker is open.<br><br>
+        <b style="color:#14140F">Rejection.</b> Blocking, at submission. Shows the date entered, the computed age and the eligible-from date so the user can tell a typo from a real block. Persist nothing on reject; log repeated under-18 attempts against the device, not an account.<br><br>
+        <b style="color:#14140F">Google path.</b> Same 18+ rule. Google returns no birth date, so 4e is a blocking one-field step after the handoff — the account exists but can't browse or post until DOB is recorded. Confirming Google's name and email keeps it reading as step 2 of 2, not a restart.<br><br>
+        <b style="color:#14140F">Storage.</b> Store the date, and store the 18+ declaration as a separate timestamped record (date entered, method, app version). Expose age range to other traders, never the date. Gender is not collected.<br><br>
+        <b style="color:#14140F">Fields.</b> 56 tall, radius 10, fill #F1EFE8, border 1 #E2E0D6. Focused: fill #FAFAF7, border 1.5 #3DBE5A, ring 3 rgba(61,190,90,.16), label #1B4D2B. Error: border 1.5 #C56A4B, label #B0553A, message 12/500 #B0553A. Confirm-password match shows a 18px #1B4D2B check.<br><br>
+        <b style="color:#14140F">Video.</b> Scrim rgba(20,20,15,.28) → .52, raised to .40 → .62 on the rejection screen. Poster frame on first paint, 6–10s muted loop, pause on background and data-saver.<br><br>
+        <b style="color:#14140F">Google mark.</b> Neutral placeholder here — drop in the official asset per Google's branding rules; label and 52 height stay.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

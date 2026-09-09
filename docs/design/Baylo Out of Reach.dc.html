@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#EFEEE8; }
+  a { color:#1B4D2B; text-decoration:none; }
+  a:hover { color:#3DBE5A; }
+  .sb::-webkit-scrollbar { width:0; height:0; }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:30px;padding:40px;font-family:'Public Sans',system-ui,sans-serif">
+
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:900px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Turn 8 · Marketplace · addition only</div>
+    <div style="font:700 26px/1.15 'Bricolage Grotesque',sans-serif;color:#14140F">Out of reach</div>
+    <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;max-width:740px;text-wrap:pretty">Three pieces, dropped into the marketplace you already have — the chips, search, filter sheet, grid geometry and detail layout are unchanged and drawn here only as the surround. In this system photos carry the colour, so removing the colour is the quietest signal available: an out-of-reach tile is desaturated and its value line moves to mono. Same tile size, same feed position, same tap. No lock, no overlay, no badge.<br><br><strong style="font-weight:600;color:#14140F">Threshold: your highest-value available item × 1.5, floor 150 Leaves.</strong> A multiplier so it scales with the user, and 1.5 because it sits just past what a single Leaves top-up can bridge — grey then means "needs a promise or a second item", which is the thing the greying should teach. The floor stops someone with one 40-Leaf listing seeing the whole market in grey. Recomputed when items are posted, traded away, or revalued. For the user drawn here the highest item is the 760 chair, so the line sits at 1,140.<br><br><a href="#8a">8a</a> the tile in your grid, <a href="#8b">8b</a> opening one, <a href="#8c">8c</a> the one-time prompt.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- 8a -->
+    <div id="8a" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">8a</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">The tile</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Two of these are above the line. They keep their place in the existing sort — reordering by distance would amount to hiding them. Photo at grayscale(1) and 62% opacity, title to secondary ink, and the feed’s green value line muted to tertiary with the distance appended.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Marketplace</span>
+            <div style="display:flex;gap:2px">
+              <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></div>
+              <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M7 12h10M10 17h4"/></svg></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding:8px 0 14px">
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;background:#14140F;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#FAFAF7">All</span></div>
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#14140F">Shoes</span></div>
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#14140F">Tech</span></div>
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#14140F">Home</span></div>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto;padding:0 16px 24px">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 14px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#C9D6DE 0 10px,#BCCBD4 10px 20px)"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Nike Air Max 90</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B">480 Leaves</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#DCCFC2 0 10px,#D0C2B4 10px 20px)"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Rattan side table</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B">340 Leaves</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#C9D6DE 0 10px,#BCCBD4 10px 20px);filter:grayscale(1);opacity:.62"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#5C5B52">MacBook Air M1</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#8C8A7E">2,000 Leaves · 860 above your reach</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#CFD8CF 0 10px,#C3CCC3 10px 20px)"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Uniqlo linen shirt</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B">120 Leaves</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#D8D2C6 0 10px,#CCC6BA 10px 20px);filter:grayscale(1);opacity:.62"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#5C5B52">Yamaha acoustic guitar</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#8C8A7E">1,450 Leaves · 310 above your reach</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#D3DAD6 0 10px,#C7CECA 10px 20px)"></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Levi's 501 jacket</span><span style="font:600 12px/1 'Public Sans',sans-serif;color:#1B4D2B">300 Leaves</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8b -->
+    <div id="8b" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">8b</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Opening one</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Your existing detail layout, in full colour — the photo is only grey in the grid. One block is inserted between the value row and the description: the distance, then the two routes. The offer button stays live at the bottom.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="height:300px;background:repeating-linear-gradient(135deg,#C9D6DE 0 10px,#BCCBD4 10px 20px);position:relative">
+            <div style="position:absolute;top:44px;left:12px;width:44px;height:44px;border-radius:22px;background:rgba(250,250,247,.9);display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+          </div>
+          <div style="padding:18px 16px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+            <div style="font:700 23px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.01em">MacBook Air M1, 256GB</div>
+            <div style="display:flex;align-items:baseline;gap:10px"><span style="font:500 20px/1 'JetBrains Mono',monospace;color:#14140F">2,000</span><span style="font:400 13px/1 'Public Sans',sans-serif;color:#5C5B52">Leaves · Good condition</span></div>
+          </div>
+          <div style="padding:18px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Where you stand</div>
+              <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">This one is further than your items reach on their own. Your highest is the task chair at 760, and it takes about 1,140 before a swap here is straightforward — so there's 860 to cover another way. Two routes do work.</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:stretch;height:14px;border-radius:3px;overflow:hidden;background:#EAF6EC">
+                <div style="flex:760 0 auto;background:#3DBE5A"></div>
+                <div style="flex:380 0 auto;background:#B7D9BE"></div>
+                <div style="flex:860 0 auto;background:#C56A4B"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Your chair 760</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">2,000</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:12px;min-height:64px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4.5 7.5h15v11h-15z"/><path d="M9 7.5V5.5h6v2M4.5 12.5h15"/></svg>
+                <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Offer with a promise</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">A Deferred Points Agreement covers up to 200 as a New Trader, so a promise alone will not close this one. Ivy decides whether to take a part-promise.</span></div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;min-height:64px;padding:0 14px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg>
+                <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Trade up to it</span><span style="font:400 12px/1.35 'Public Sans',sans-serif;color:#5C5B52">Two trades near your own value usually move the line further than one big offer does.</span></div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+            <div style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">You can send an offer regardless. Ivy sees the same numbers you do.</div>
+          </div>
+          <div style="padding:18px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C8A7E">Description</div>
+            <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Bought 2021, battery still at 89%. Charger included. Small scuff near the trackpad, nothing on the screen.</div>
+          </div>
+          <div style="padding:16px;display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:22px;background:#E6E4DA;flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">Ivy R.</span><span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">Top Trader · 31 trades · Mandaue</span></div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;gap:8px">
+          <div style="width:52px;height:52px;border-radius:10px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.6-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5C19 15.4 12 20 12 20z"/></svg></div>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Offer a trade</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8c -->
+    <div id="8c" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">8c</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">The one-time prompt</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Shown on the first marketplace entry that contains a greyed tile, once per account, dismissed by the single button. Two real tiles sit inside it as the example, so the explanation points at the thing rather than describing it.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column;position:relative">
+        <div style="flex:0 0 auto;padding:44px 16px 0;opacity:.5">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Marketplace</span></div>
+          <div style="display:flex;gap:8px;padding:8px 0 14px">
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;background:#14140F;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#FAFAF7">All</span></div>
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#14140F">Shoes</span></div>
+            <div style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #E2E0D6;display:flex;align-items:center"><span style="font:600 13px/1 'Public Sans',sans-serif;color:#14140F">Tech</span></div>
+          </div>
+        </div>
+        <div style="flex:1 1 auto;opacity:.5;padding:0 16px">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 14px">
+            <div style="display:flex;flex-direction:column;gap:8px"><div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#C9D6DE 0 10px,#BCCBD4 10px 20px)"></div></div>
+            <div style="display:flex;flex-direction:column;gap:8px"><div style="height:164px;border-radius:10px;background:repeating-linear-gradient(135deg,#DCCFC2 0 10px,#D0C2B4 10px 20px)"></div></div>
+          </div>
+        </div>
+        <div style="position:absolute;inset:0;background:#14140F;opacity:.42"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;background:#FAFAF7;border-radius:20px 20px 34px 34px;padding:20px 20px 26px;display:flex;flex-direction:column;gap:16px">
+          <div style="width:36px;height:4px;border-radius:2px;background:#E2E0D6;margin:0 auto"></div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="font:700 23px/1.25 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.01em;text-wrap:pretty">Why some listings look faded</div>
+            <div style="font:400 15px/1.55 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">Those ones are further than your items reach on their own right now. We keep them in view on purpose, so you can see what things are worth around here.</div>
+          </div>
+          <div style="display:flex;gap:14px">
+            <div style="flex:1 1 0;display:flex;flex-direction:column;gap:7px">
+              <div style="height:104px;border-radius:10px;background:repeating-linear-gradient(135deg,#CFD8CF 0 10px,#C3CCC3 10px 20px)"></div>
+              <span style="font:400 11px/1.35 'JetBrains Mono',monospace;color:#5C5B52">within reach</span>
+            </div>
+            <div style="flex:1 1 0;display:flex;flex-direction:column;gap:7px">
+              <div style="height:104px;border-radius:10px;background:repeating-linear-gradient(135deg,#C9D6DE 0 10px,#BCCBD4 10px 20px);filter:grayscale(1);opacity:.62"></div>
+              <span style="font:400 11px/1.35 'JetBrains Mono',monospace;color:#8C8A7E">further off</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:11px;padding-top:2px">
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">01</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Faded ones open like any other listing, and you can still send an offer.</span></div>
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">02</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">Inside, you'll see the distance and the two ways across it — a promise to settle later, or trading up first.</span></div>
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">03</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F;text-wrap:pretty">The line moves as you post and trade. Nothing is fixed.</span></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:10px;background:#3DBE5A"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Got it</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>
