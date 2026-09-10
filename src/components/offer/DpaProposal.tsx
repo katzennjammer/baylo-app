@@ -336,7 +336,25 @@ export function DpaProposal(props: DpaProposalProps) {
           </View>
         }
       >
-        <PrimaryButton label={primaryLabel} onPress={onPrimary} />
+        {/*
+          AN EMPTY AMOUNT CANNOT LEAVE THIS SCREEN.
+
+          The field reports an empty box as `onAmount(0)`, and a zero-Leaf
+          promise is not a promise — it is the absence of one. Letting it out of
+          here is what put a bare offer on the wire under a button that said
+          `Send with the agreement`, with nothing anywhere saying the promise had
+          been dropped. So the control states the gap and does not act.
+
+          The AMOUNT is the only thing that can be missing: `deadline` is seeded
+          from `TERM_PRESETS[0]` and is a Date from the first render, so there is
+          no empty-deadline state to guard.
+        */}
+        <PrimaryButton
+          label={amount > 0 ? primaryLabel : copy.dpa.amountMissing}
+          onPress={onPrimary}
+          disabled={amount <= 0}
+          disabledHint="Enter how many Leaves you are promising."
+        />
       </OfferBottomBar>
 
       {dateSheet ? (

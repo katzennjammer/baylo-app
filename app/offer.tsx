@@ -216,6 +216,10 @@ export default function OfferScreen() {
           postId: context.item.id,
           offeredItem: chosen[0],
           nowLeaves: split.nowLeaves,
+          // The route the user chose, stated once and read three times below.
+          // It is what `promiseIntended` carries to the send — see the note on
+          // that field for why intent and amount are no longer the same fact.
+          promiseIntended: effectiveChoice === "promise" || effectiveChoice === "split",
           promised: effectiveChoice === "promise" || effectiveChoice === "split" ? promised : 0,
           promiseDeadline:
             effectiveChoice === "promise" || effectiveChoice === "split" ? deadline : null,
@@ -234,7 +238,20 @@ export default function OfferScreen() {
       onError: (e) => {
         // The server's own sentence when it refused, because it carries the
         // numbers this client cannot predict — see `SendFailedPanel`.
-        setFailed(e instanceof ApiError && e.status >= 400 && e.status < 500 ? e.message : null);
+        if (e instanceof ApiError) {
+          setFailed(e.status >= 400 && e.status < 500 ? e.message : null);
+          return;
+        }
+        /*
+         * A REFUSAL THIS CLIENT RAISED ITSELF still gets its sentence shown.
+         *
+         * `useSendOffer` throws a plain Error when a draft carries a promise it
+         * cannot send. That message names the missing amount and says the offer
+         * was not sent, which is strictly more useful than the panel's generic
+         * transport line — and falling through to `null` here would have thrown
+         * it away, which is how the silent skip stayed silent one layer up.
+         */
+        setFailed(e instanceof Error && e.message ? e.message : null);
       },
     });
   }, [draft, send, router]);
@@ -507,7 +524,26 @@ export default function OfferScreen() {
           onFocusAmount={() => setFocusedField("amount")}
           onBlurAmount={() => setFocusedField(null)}
           primaryLabel={copy.button.sendWithAgreement}
-          onPrimary={() => setPhase("gap")}
+          /*
+           * COMMIT THE AMOUNT THAT IS ON SCREEN, rather than only the one that
+           * was typed.
+           *
+           * `promised` is `promiseAmount ?? split.promised` — so before anyone
+           * touches the field this screen displays the route's implied amount,
+           * puts it in the consequence line ("you owe 100 by 22 Sep"), and left
+           * `promiseAmount` at null. Leaving here without typing therefore
+           * returned to a gap screen that still said `Set up the agreement`,
+           * whose button opened this screen again: a loop with no way out, and
+           * the reason a promise could not be sent at all unless the user
+           * happened to edit the amount field.
+           *
+           * Committing what is displayed makes the shown number the agreed one,
+           * which is what the person reading it already believes.
+           */
+          onPrimary={() => {
+            setPromiseAmount(promised);
+            setPhase("gap");
+          }}
         />
       </OfferScreenHost>
     );
@@ -1199,6 +1235,22 @@ function primaryIsSecondary(gap: GapResult, _choice: SettlementChoice): boolean 
  * A promise route whose amount has not been set yet has nothing to promise, so
  * `Set up the agreement` opens the proposal; once §6g has been visited and an
  * amount stands, the same row's button sends.
+ *
+ * ── `<= 0`, NOT `=== null`, AND THAT IS THE WHOLE BUG ───────────────────────
+ *
+ * `null` means "never visited §6g". Zero means "visited it and left the amount
+ * empty" — which the amount field produces on its own, because clearing the
+ * input calls `onAmount(0)`. Testing only for null let a zero through, and a
+ * zero is not a promise:
+ *
+ *   - `primaryLabel()` reads `promised <= 0` and prints `Set up the agreement`,
+ *   - this returned false, so that button's onPress was `onSend`,
+ *   - and `useSendOffer` skipped the contract POST because `promised > 0` was
+ *     false.
+ *
+ * A button labelled `Set up the agreement` sent a bare offer, and the promise
+ * was discarded without a word. Both halves now agree on the same test, so the
+ * label and the action cannot disagree again.
  */
 function needsDpaFirst(
   gap: GapResult,
@@ -1206,7 +1258,8 @@ function needsDpaFirst(
   promiseAmount: number | null,
 ): boolean {
   if (gap.situation !== "small" && gap.situation !== "large") return false;
-  return (choice === "promise" || choice === "split") && promiseAmount === null;
+  if (choice !== "promise" && choice !== "split") return false;
+  return promiseAmount === null || promiseAmount <= 0;
 }
 
 /** §10.1's four footnotes, chosen by what the bar is about to do. */

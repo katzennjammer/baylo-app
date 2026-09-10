@@ -116,7 +116,11 @@ export function AppHeader() {
               label="Notifications"
               count={unread?.notifications ?? 0}
               tight={tight}
-              onPress={() => {}}
+              // It opens something now. This was `() => {}` for the life of the
+              // client while the badge beside it reported a real, accurate,
+              // unreachable number — see the note at the top of
+              // `app/notifications.tsx`.
+              onPress={() => router.push("/notifications")}
             >
               <BellIcon
                 size={icon.headerAction.size}

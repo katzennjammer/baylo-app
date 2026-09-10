@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GridIcon, HomeIcon, PersonIcon, PlusIcon, SwapIcon, type IconProps } from "./icons";
+import { useNeedsTodayCount } from "../api/trades";
+import { formatBadge } from "../lib/format";
 import {
   border,
   color,
@@ -71,9 +73,44 @@ const TABS: Record<string, { label: string; Glyph: Glyph }> = {
 /** The one route whose icon slot is replaced by the raised circle. */
 const FAB_ROUTE = "post";
 
+/**
+ * The one route that carries a count.
+ *
+ * ── WHY TRADES AND NOTHING ELSE ────────────────────────────────────────────
+ *
+ * A badge is a claim that something will go wrong if you do not look. That is
+ * true of Trades — an unanswered offer expires in three days, a promise inside
+ * seven days of its deadline defaults, a code times out with someone standing in
+ * front of you — and it is not true of Home, Market or Profile, which hold
+ * things to browse. Badging those would spend the mechanism on nothing and
+ * teach people to ignore the one that matters.
+ *
+ * ── A NUMBER, NOT A DOT ────────────────────────────────────────────────────
+ *
+ * A dot says "something". Two offers and a code expiring tonight is not
+ * "something", and the difference between 1 and 6 changes whether this is worth
+ * opening now. It is also the count of a list the person is about to read, so
+ * the number is checkable against what they find — which is the property that
+ * makes a badge trustworthy rather than decorative.
+ */
+const BADGED_ROUTE = "trades";
+
 export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  /*
+   * §6's `Needs you today`, counted — the same set the Trades screen draws, so
+   * the badge and the list can never disagree. See `useNeedsTodayCount()` for
+   * what it admits and how it refreshes.
+   *
+   * IT CLEARS BY BEING HANDLED, NOT BY BEING SEEN. Nothing here is tied to
+   * focusing the tab: every decision mutation invalidates the queries this
+   * reads, so answering an offer or confirming a code drops the number in the
+   * same tick the row leaves the list. A badge that cleared on tap would be
+   * reporting that you had looked, which is not the question it asks.
+   */
+  const needsToday = useNeedsTodayCount();
 
   // The spec's 22 is a floor, not a constant. A phone with a gesture bar
   // reserves more than that and a phone with hardware keys reserves none;
@@ -120,6 +157,7 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
         const isFab = route.name === FAB_ROUTE;
         const spec = focused ? icon.tabActive : icon.tabInactive;
         const ink = focused ? color.forest : color.inkMuted;
+        const badge = route.name === BADGED_ROUTE ? needsToday : 0;
 
         return (
           <Pressable
@@ -127,10 +165,27 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
             onPress={onPress}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
-            accessibilityLabel={isFab ? "Post an item" : tab.label}
+            accessibilityLabel={
+              isFab
+                ? "Post an item"
+                : badge > 0
+                  ? `${tab.label}, ${badge} needing you`
+                  : tab.label
+            }
             style={s.item}
           >
-            {isFab ? <Fab /> : <tab.Glyph size={spec.size} stroke={spec.stroke} color={ink} />}
+            {isFab ? (
+              <Fab />
+            ) : (
+              // The badge is anchored to a box the exact size of the glyph, not
+              // to the tab item: the item is a fifth of the bar wide and its
+              // top-right corner is nowhere near the icon. Same reasoning as the
+              // FAB ring below — anchor to the thing you are offsetting from.
+              <View>
+                <tab.Glyph size={spec.size} stroke={spec.stroke} color={ink} />
+                {badge > 0 ? <TabCountBadge count={badge} /> : null}
+              </View>
+            )}
 
             <Text
               style={[
@@ -143,6 +198,53 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * §6's count, on the glyph's top-right corner.
+ *
+ * The same 17 px green pill the header's unread badges use — `size.badge.unread`
+ * and its radius, ring and 10 px tabular type — because a second badge shape in
+ * the same app would read as a different KIND of thing, and it is not one. Only
+ * the offsets differ, and they have to: those are pinned to a 44 px header
+ * button and this hangs off a 22 px icon.
+ *
+ * `formatBadge` caps at `99+`, which is also why the pill is min-width rather
+ * than fixed — one digit stays a circle, three do not.
+ *
+ * IT IS HIDDEN FROM SCREEN READERS. The count is already in the tab's own
+ * `accessibilityLabel` ("Trades, 3 needing you"); announcing the pill as well
+ * makes the control read "Trades, 3 needing you, 3".
+ */
+function TabCountBadge({ count }: { count: number }) {
+  const label = formatBadge(count);
+  const wide = label.length > 1;
+
+  return (
+    <View
+      style={[
+        s.badge,
+        {
+          height: size.badge.unread,
+          minWidth: size.badge.unread,
+          borderRadius: radius.unreadBadge,
+          borderWidth: border.unreadRing,
+          paddingHorizontal: wide ? size.badge.unreadXWide : size.badge.unreadX,
+          // Measured off the glyph box, which is `icon.tabActive.size` square.
+          // A third of the pill sits above the icon and it overhangs the right
+          // edge by half — the corner placement the header uses, scaled to a
+          // smaller anchor. Both are inside the tab item's own width, so nothing
+          // clips against the neighbouring tab.
+          top: -Math.round(size.badge.unread / 3),
+          right: -Math.round(size.badge.unread / 2),
+        },
+      ]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Text style={[textStyle(type.unreadBadge), { color: color.onGreen }]}>{label}</Text>
     </View>
   );
 }
@@ -236,6 +338,13 @@ const iconTop = Math.max(
 );
 
 const s = StyleSheet.create({
+  badge: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.green,
+    borderColor: color.surface,
+  },
   bar: {
     flexDirection: "row",
     backgroundColor: color.surface,

@@ -314,6 +314,21 @@ export interface OfferDraft {
   offeredItem: OfferableItem;
   /** Leaves committed now. Zero for a straight swap or a send-as-is. */
   nowLeaves: number;
+  /**
+   * TRUE WHEN THE USER CHOSE A PROMISE ROUTE, independently of whether the
+   * numbers came out usable.
+   *
+   * This exists because intent and payload were the same field, and that is how
+   * a promise could vanish. `useSendOffer` decided whether to create the
+   * contract by testing `promised > 0` — so an intended promise whose amount was
+   * zero was indistinguishable from a straight swap, and the send took the
+   * straight-swap path in silence.
+   *
+   * With intent stated separately, "you asked for a promise and it did not
+   * happen" becomes a case the send can DETECT, and therefore one it can refuse
+   * loudly instead of quietly dropping. See the guard in `useSendOffer`.
+   */
+  promiseIntended: boolean;
   /** The promise half of a split. Zero unless a promise route was chosen. */
   promised: number;
   /** The deadline the promise names, when there is one. */
@@ -418,6 +433,42 @@ export function useSendOffer() {
 
   return useMutation({
     mutationFn: async (draft: OfferDraft): Promise<OfferCreated> => {
+      /*
+       * ── A PROMISE THAT CANNOT BE SENT STOPS THE SEND ──────────────────────
+       *
+       * BEFORE the offer is created, so there is nothing to roll back and no
+       * window in which a bare offer exists. The composer already refuses to
+       * reach this state — `needsDpaFirst()` sends a zero amount back to §6g and
+       * §6g's own button will not leave on one — so this is the backstop, not
+       * the mechanism.
+       *
+       * It is here anyway because the failure it guards against was invisible
+       * for the entire life of the feature: not one DeferredContract row was
+       * ever written, and nothing anywhere said so. The send simply took the
+       * no-promise path. A caller that gets this wrong now gets a sentence.
+       *
+       * `Error`, not `ApiError`: nothing was asked of the server, so there is no
+       * status to carry and it would be a lie to dress it as a refusal. §5.2's
+       * panel prints the message either way.
+       */
+      if (draft.promiseIntended && (draft.promised <= 0 || !draft.promiseDeadline)) {
+        throw new Error(
+          "This offer includes a deferred agreement, but no amount was set for it. " +
+            "Open the agreement and enter the Leaves you are promising — the offer " +
+            "has not been sent.",
+        );
+      }
+
+      // The promise, as two values that are known to be good rather than two
+      // fields that have to be re-checked at the point of use. Binding them here
+      // is what lets the POST below read as the single act it is — and it keeps
+      // the nullability question answered in exactly one place, next to the
+      // guard that answers it.
+      const promise =
+        draft.promiseIntended && draft.promiseDeadline
+          ? { amountLeaves: draft.promised, deadline: draft.promiseDeadline.toISOString() }
+          : null;
+
       const res = await request("/api/offers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -450,16 +501,17 @@ export function useSendOffer() {
        * withdrawal's error instead would replace an accurate message about the
        * promise with a confusing one about the retraction.
        */
-      if (draft.promised > 0 && draft.promiseDeadline) {
+      // `promiseIntended`, not `promised > 0`. The old test conflated "no
+      // promise was asked for" with "a promise was asked for and came out
+      // empty", and silently did nothing in both cases. The guard at the top of
+      // this function has already rejected the second, so reaching here with the
+      // intent set means the numbers are good.
+      if (promise) {
         try {
           await apiV1("/api/v1/contracts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              offerId: created.offerId,
-              amountLeaves: draft.promised,
-              deadline: draft.promiseDeadline.toISOString(),
-            }),
+            body: JSON.stringify({ offerId: created.offerId, ...promise }),
           });
         } catch (contractError) {
           await withdrawOffer(created.offerId).catch(() => {});

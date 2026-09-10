@@ -231,6 +231,13 @@ export const dpa = {
     `A recorded promise to ${owner}. The trade goes ahead now; ` +
     `you settle the difference by the date you set.`,
   amountLabel: "Amount you'll settle",
+  /**
+   * §6g's button when the amount is empty. It names the missing thing rather
+   * than greying out `Send with the agreement` and leaving the reader to work
+   * out why — the control is the only place the gap can be stated at the moment
+   * it matters.
+   */
+  amountMissing: "Set an amount to promise",
   deadlineLabel: "Settle by",
   /** `80 added now, 100 promised` · `max 400` */
   constraint: (now: number, promised: number) =>

@@ -351,24 +351,40 @@ export function PrimaryButton({
   label,
   onPress,
   accessibilityLabel,
+  disabled,
+  disabledHint,
 }: {
   label: string;
   onPress: () => void;
   accessibilityLabel?: string;
+  /**
+   * Off, with the label still stating what is missing.
+   *
+   * §5.1 forbids a disabled SEND — an offer must always be sendable as it
+   * stands — and this does not weaken that: it is for a control that is not a
+   * send, like §6g's `Send with the agreement`, which cannot proceed on an
+   * empty amount. The alternative that was there before was worse than a
+   * disabled button: a live one that quietly dropped the promise.
+   */
+  disabled?: boolean;
+  disabledHint?: string;
 }) {
   return (
     <Tappable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled: !!disabled }}
+      accessibilityHint={disabled ? disabledHint : undefined}
       style={{
         height: offerSize.button.primary,
         borderRadius: offerRadius.button,
         backgroundColor: offerColor.green,
         alignItems: "center",
         justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
       }}
-      pressedStyle={{ opacity: 0.85 }}
+      pressedStyle={disabled ? undefined : { opacity: 0.85 }}
     >
       <Text style={[textStyle(offerType.buttonPrimary), { color: offerColor.onGreen }]}>
         {label}

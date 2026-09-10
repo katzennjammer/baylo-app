@@ -62,7 +62,15 @@ export default function AppLayout() {
       <Tabs.Screen name="index" options={{ title: "Home" }} />
       <Tabs.Screen name="marketplace" options={{ title: "Marketplace" }} />
       <Tabs.Screen name="post" options={{ title: "Post" }} />
-      <Tabs.Screen name="trades" options={{ title: "Trades" }} />
+      {/* THE ONLY TAB THAT DRAWS ITS OWN BAR.
+
+          §3.5 of the offer/trades spec gives Trades a running y that starts at 0
+          with a 44 status bar and puts a 22px Bricolage `Trades` in the 44 that
+          follows — content begins at 88. `AppHeader` above it would push every
+          measured value in that table down by its own height, so this screen
+          renders `TradesTitle` instead and the navigator's header is off. Every
+          other tab keeps the wordmark, the Leaves pill and the two icons. */}
+      <Tabs.Screen name="trades" options={{ title: "Trades", headerShown: false }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 
       {/* THE OFFER FLOW IS NOT HERE ANY MORE. It lives at `app/offer.tsx`, a

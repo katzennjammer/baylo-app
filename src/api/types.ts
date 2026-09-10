@@ -404,8 +404,14 @@ export interface LiveOffer {
   direction: "sent" | "received";
   status: string;
   /** The listing the offer is ON. `ITEM_BRIEF` — no `valueLeaves`. */
-  post: { id: string; title: string; image: string | null; status: string };
-  offeredItems: { id: string; title: string; image: string | null }[];
+  post: TradeItemBrief;
+  /**
+   * What the sender is putting up. VALUES COME FROM THE ITEM TABLE, not from the
+   * stored blob: `Offer.offeredItems` is JSON the client wrote at offer time and
+   * its titles are client-asserted, so the server looks the ids up and sends the
+   * value it can stand behind. Null carries the same meaning as everywhere else.
+   */
+  offeredItems: { id: string; title: string; image: string | null; valueLeaves: number | null }[];
   offeredLeaves: number | null;
   message: string | null;
   counterparty: { id: string; name: string; avatar: string | null };
@@ -442,13 +448,238 @@ export interface LiveOffer {
  *                            otherwise care about trades.
  *   offers                   see `LiveOffer` above.
  *
- * `trades` is typed as `unknown[]` on purpose. This flow does not render one,
- * and typing 20 fields nobody reads would be a claim about the server that
- * nothing here checks. The Trades screen will type it when it is built.
+ * The Trades screen draws all four blocks, so `trades` is now typed too.
  */
+
+/**
+ * One TradeRequest, as the route's own `trades.map()` shapes it.
+ *
+ * WAS `unknown[]`. The offer flow read this payload for two fields and declined
+ * to type a list it did not draw; the Trades screen draws it, so it is typed
+ * here — against the route's mapper, field for field, and no wider.
+ *
+ * `kind` IS DERIVED FROM `offeredLeaves`, NOT FROM AN ID COMPARISON. The route
+ * says so at length: `offeredItemId === requestedItemId` used to be the tell for
+ * a Leaves-only trade and it never meant anything. On a `leaves` trade
+ * `offeredItem` is null, because the column holds the listing itself as a
+ * placeholder and sending it would show the recipient their own item as the
+ * thing being offered to them.
+ *
+ * BOTH ITEMS CARRY `valueLeaves` NOW. They did not, and that single absence was
+ * what stopped a screen about value gaps from showing a value — §10.6's "Vans
+ * 440 for Air Max 480" degraded to two bare titles. `ITEM_BRIEF` gained the
+ * field on the server; see `TradeItemBrief` for what null still means.
+ */
+export interface ActiveTrade {
+  id: string;
+  /** ACTIVE tab: PENDING | ACCEPTED | CONFIRMING. HISTORY: COMPLETED | REJECTED | CANCELLED. */
+  status: TradeStatus;
+  /** Whether the VIEWER opened this trade. Resolved by the server, never by id. */
+  direction: "sent" | "received";
+  kind: "leaves" | "items";
+  offeredLeaves: number | null;
+  counterparty: { id: string; name: string; avatar: string | null };
+  /** NULL on a `leaves` trade — see the note above. */
+  offeredItem: TradeItemBrief | null;
+  requestedItem: TradeItemBrief;
+  /** Derived from `safeZoneHubId` on the server. Kept on the wire under its old name. */
+  safeZoneMeetup: boolean;
+  /** Which hub, when one was claimed. NULL for every trade that named none. */
+  safeZoneHub: SafeZoneHub | null;
+  /**
+   * Whether this viewer still has a confirmation step to perform.
+   *
+   * ACCEPTED (codes not started) or CONFIRMING with the partner's code either
+   * expired or unused. A real answer from the code rows, not a guess from
+   * `status` — which is why §6's "a confirmation code is live" test can be made
+   * without a second request per trade.
+   */
+  canConfirm: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TradeStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "CONFIRMING"
+  | "COMPLETED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export interface TradeItemBrief {
+  id: string;
+  title: string;
+  image: string | null;
+  status: string;
+  /**
+   * NULL MEANS "NEVER VALUED", NOT "WORTH NOTHING".
+   *
+   * Listings that predate the valuation model have it, and so does an item that
+   * has since been deleted out from under an offer. Rendering either as `0` is
+   * a claim the wire did not make — `swapLine()` drops the figure instead, the
+   * same call the offer flow's picker already makes for an unvalued item.
+   */
+  valueLeaves: number | null;
+}
+
 export interface TradesPayload {
   viewer: { leaves: number; availableLeaves: number };
   pendingIncoming: number;
-  trades: unknown[];
+  trades: ActiveTrade[];
   offers: LiveOffer[];
+}
+
+/* ─────────────── GET /api/v1/contracts — the promise ledger ────────────── */
+
+/**
+ * One DeferredContract, as `v1Contract()` shapes it for a given viewer.
+ *
+ * NOT the same shape as `Contract` above, which is what this app already typed
+ * for the preview endpoint's `contract` block — that one is hand-written and
+ * older, and it names the paid figure `amountPaid`. THIS is the route's real
+ * mapper: `amountPaidLeaves`, plus `remainingLeaves`, `role`, `overdue` and
+ * `defaulted`, none of which the older shape has. The two are left side by side
+ * rather than merged because merging them means editing the contract preview
+ * screen, and the preview block genuinely is a subset.
+ *
+ * `role` IS RESOLVED BY THE SERVER. The client never works out which side of a
+ * promise it is on by comparing ids — the same rule `direction` follows on a
+ * trade and `kind` follows on its value.
+ *
+ * `defaulted` IS REPORTED SEPARATELY FROM `status`, and the difference carries
+ * §1.7's whole distinction: a contract that lapsed and was later paid in full
+ * reads `status: "FULFILLED"` — the debt really is settled, the trading
+ * restriction really is lifted — while `defaulted: true` stays, permanently,
+ * because a creditor deciding on this debtor's next proposal has to see it.
+ * §10.4's `1, settled late` is exactly that pair of facts.
+ */
+export interface V1Contract {
+  id: string;
+  tradeId: string;
+  /** Null would mean the viewer is on neither side, which cannot happen on this route. */
+  role: "debtor" | "creditor" | null;
+  status: ContractStatus;
+  amountLeaves: number;
+  amountPaidLeaves: number;
+  remainingLeaves: number;
+  deadline: string;
+  /** Unpaid AND past the deadline. Not the same as `status: "DEFAULTED"`. */
+  overdue: boolean;
+  /** Permanent. Survives a later FULFILLED. See the note above. */
+  defaulted: boolean;
+  extension: {
+    used: boolean;
+    requestedAt: string | null;
+    requestedDeadline: string | null;
+    pending: boolean;
+  };
+  debtor: ContractParty | null;
+  creditor: ContractParty | null;
+  createdAt: string;
+  acceptedAt: string | null;
+  fulfilledAt: string | null;
+  defaultedAt: string | null;
+}
+
+export type ContractStatus =
+  | "PENDING_ACCEPT"
+  | "ACTIVE"
+  | "FULFILLED"
+  | "DEFAULTED"
+  | "DECLINED";
+
+export interface ContractsPayload {
+  contracts: V1Contract[];
+  asDebtor: {
+    outstandingDebt: number;
+    committedDebt: number;
+    maxOutstandingDebtLeaves: number;
+    openContracts: number;
+    hasUnsettledDefault: boolean;
+    canInitiateTrades: boolean;
+  };
+}
+
+/* ──────── GET /api/trades/[id]/confirm/status — whose turn it is ───────── */
+
+/**
+ * THE TWO BOOLEANS DO NOT MEAN WHAT THEY ARE CALLED, and getting this backwards
+ * puts the wrong half of §6.1 on screen at the car park.
+ *
+ * A code row is marked `used` when the OTHER person types it in correctly — the
+ * submit route's own comment: "Mark the partner's code as used (= I submitted my
+ * partner's code correctly)". So `senderSubmitted` is `senderCode.used`, which
+ * means THE SENDER'S CODE HAS BEEN CONSUMED — that is, the RECEIVER has done
+ * their part. The field is named for whose code it is, not for who acted.
+ *
+ * `confirmSides()` in `src/api/trades.ts` is the only place this is untangled,
+ * and every screen reads its two flags instead of these.
+ */
+export interface ConfirmStatus {
+  /** True once BOTH code rows exist — i.e. `confirm/start` has run. */
+  started: boolean;
+  /** The sender's code has been consumed, by the receiver. See above. */
+  senderSubmitted: boolean;
+  /** The receiver's code has been consumed, by the sender. See above. */
+  receiverSubmitted: boolean;
+  completed: boolean;
+
+  /**
+   * THE CALLER'S OWN CODE, in plain digits. Never the partner's.
+   *
+   * This is the code the OTHER person types in — it is not the one this account
+   * submits, which is why handing it back to an authenticated session does not
+   * let a stolen token complete a trade on its own. The server's route note has
+   * the full reasoning; the client's job is to render it and never to log it.
+   *
+   * NULL IS A NORMAL ANSWER AND MUST BE RENDERED. A deployment with no
+   * SWAP_CODE_KEY, a row issued before sealing existed, a rotated key, an
+   * expired code and a burned code all land here. `codeAvailable` distinguishes
+   * the configuration cases from the state cases.
+   */
+  code: string | null;
+  /** Whether a readable copy was expected to exist. See `code`. */
+  codeAvailable: boolean;
+  /** Guesses the PARTNER has left against this viewer's code. */
+  attemptsRemaining: number | null;
+  /** When this viewer's code stops being typeable. ISO, or null. */
+  expiresAt: string | null;
+}
+
+/* ─────────────────────────── notifications ──────────────────────────── */
+
+/**
+ * One row from GET /api/v1/notifications.
+ *
+ * `type` is the EVENT; `entityType`/`entityId` are WHAT TO OPEN, and the two do
+ * not map one to one — TRADE_ACCEPTED and NEW_MESSAGE both point at a chat
+ * partner, and TRADE_COMPLETED points at a list with no id. The server's note on
+ * the `Notification` model has the full reasoning; the client's job is to route
+ * from the pair and never to infer a target from `type`.
+ *
+ * `entityType` IS A PLAIN STRING, NOT A UNION, on purpose. Two vocabularies live
+ * in that column — the fine-grained v1 set and the coarse pre-v1 set the backfill
+ * could recover — and the server passes both through verbatim rather than
+ * inventing ids the old rows never carried. A union here would be a promise this
+ * client cannot keep about rows it did not write; `notificationTarget()` handles
+ * the ones it knows and returns null for the rest.
+ */
+export interface NotificationItem {
+  id: string;
+  type: string;
+  /** Starts mid-sentence — the actor's name is its subject. See `actor`. */
+  message: string;
+  read: boolean;
+  createdAt: string;
+  entityType: string | null;
+  entityId: string | null;
+  /** Who did it. Null for anything the system itself raised. */
+  actor: { id: string; name: string | null; avatar: string | null } | null;
+}
+
+export interface NotificationsPayload {
+  notifications: NotificationItem[];
+  /** Unread across the WHOLE list, not just this page. Matches the bell. */
+  unreadCount: number;
 }

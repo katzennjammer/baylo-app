@@ -1,5 +1,31 @@
-import { QueryClient } from "@tanstack/react-query";
+import { AppState, Platform } from "react-native";
+import { QueryClient, focusManager } from "@tanstack/react-query";
 import { ApiError } from "./client";
+
+/**
+ * `refetchOnWindowFocus` MEANS NOTHING IN REACT NATIVE UNTIL THIS RUNS.
+ *
+ * The option below is set, and was dead. TanStack's default focus source is the
+ * DOM's `visibilitychange` — there is no window here, the event never fires, and
+ * so a query never refetched on returning to the app no matter what the flag
+ * said. The setting looked like the behaviour and was not it.
+ *
+ * `focusManager` is the documented replacement: hand it AppState and "focused"
+ * becomes "the app is in the foreground". That is what makes a stale list — the
+ * Trades badge's `needsToday` count among them — pick up whatever happened while
+ * the phone was in somebody's pocket.
+ *
+ * Module scope, so it is installed exactly once by the import that creates the
+ * client, rather than re-registered by every mount of a component.
+ */
+focusManager.setEventListener((handleFocus) => {
+  const sub = AppState.addEventListener("change", (state) => {
+    // Guarded because the manager's web path is correct on web and this would
+    // fight it. Expo builds for web from the same source.
+    if (Platform.OS !== "web") handleFocus(state === "active");
+  });
+  return () => sub.remove();
+});
 
 /**
  * The app's single QueryClient.
