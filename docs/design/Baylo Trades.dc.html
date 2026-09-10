@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#EFEEE8; }
+  a { color:#1B4D2B; text-decoration:none; }
+  a:hover { color:#3DBE5A; }
+  .sb::-webkit-scrollbar { width:0; height:0; }
+  @keyframes caret { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:30px;padding:40px;font-family:'Public Sans',system-ui,sans-serif">
+
+  <div style="display:flex;flex-direction:column;gap:7px;max-width:900px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8C8A7E">Turn 9 · Trades · drawn from spec §6</div>
+    <div style="font:700 26px/1.15 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</div>
+    <div style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;max-width:740px;text-wrap:pretty">One prioritised list, no tabs — Needs you today pinned, then Waiting, then History behind one row. Someone standing next to a stranger about to hand over a jacket should not have to navigate to find the code. Section labels are the only chrome; rows are divided by hairlines, cards carry a 1px rule, and the photos are the only colour. Three terminal states are now distinct in History — declined, withdrawn, expired — because they are three different parties.<br><br>The list: <a href="#9a">9a</a> populated, <a href="#9b">9b</a> nothing needs you, <a href="#9c">9c</a> Waiting in full, <a href="#9d">9d</a> History expanded. The code: <a href="#9e">9e</a> waiting for them, <a href="#9f">9f</a> they're waiting for you, keyboard up, <a href="#9g">9g</a> wrong code, <a href="#9h">9h</a> both submitted. Offers and promises: <a href="#9i">9i</a> incoming offer carrying a DPA, <a href="#9j">9j</a> DPA rows as debtor and creditor. States: <a href="#9k">9k</a> empty, <a href="#9l">9l</a> loading, <a href="#9m">9m</a> network error.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <!-- 9a -->
+    <div id="9a" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9a</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">The list, populated</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Needs you today admits three things in this order: a live code, a promise inside seven days, an incoming offer. The live code card is the only one with a filled action, because it is the only one with someone waiting in front of you.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</span></div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:11px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Needs you today</span>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="min-height:88px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;padding:12px;display:flex;align-items:center;gap:12px">
+                <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#C9D6DE 0 8px,#BCCBD4 8px 16px);flex:0 0 auto"></div>
+                <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Code ready · Marco A.</span>
+                  <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Ayala Center Cebu · today</span>
+                  <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">Vans 440 for Air Max 480</span>
+                </div>
+                <div style="height:44px;border-radius:8px;background:#3DBE5A;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:700 14px/1 'Public Sans',sans-serif;color:#0B2A15">Open code</span></div>
+              </div>
+              <div style="min-height:88px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;padding:12px;display:flex;align-items:center;gap:12px">
+                <div style="width:48px;height:48px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15v11h-15z"/><path d="M9 7.5V5.5h6v2M4.5 12.5h15"/></svg></div>
+                <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">100 promised to Jess M.</span>
+                  <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#14140F">due 6 Oct · 4 days</span>
+                  <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">nothing settled yet</span>
+                </div>
+                <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Settle</span></div>
+              </div>
+              <div style="min-height:76px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;padding:12px;display:flex;align-items:center;gap:12px">
+                <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8D2C6 0 8px,#CCC6BA 8px 16px);flex:0 0 auto"></div>
+                <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Offer from Renz P.</span>
+                  <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">His guitar 1,450 for your chair 760</span>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+          </div>
+          <div style="height:18px"></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 0;display:flex;flex-direction:column;gap:11px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Waiting</span>
+          </div>
+          <div style="padding-top:10px">
+            <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#D3DAD6 0 8px,#C7CECA 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Waiting for Marco · promise of 100</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Your jacket 300 for his Air Max 480</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">2 days left</span>
+            </div>
+            <div style="height:1px;background:#EDEBE3"></div>
+            <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCCFC2 0 8px,#D0C2B4 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Sent 2 days ago · expires Tuesday</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Your shirt 120 for Bea's side table 340</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">1 day left</span>
+            </div>
+            <div style="height:1px;background:#EDEBE3"></div>
+            <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#CFD8CF 0 8px,#C3CCC3 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Accepted · meeting not set</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">With Dana L. · pick a hub</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">since 4 Sep</span>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3;margin-top:16px"></div>
+          <div style="min-height:60px;background:#F5F3EC;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <span style="flex:1 1 auto;font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Finished trades</span>
+            <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">14 trades</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="height:40px"></div>
+        </div>
+        <div style="flex:0 0 auto;height:83px;border-top:1px solid #EDEBE3;display:flex;align-items:flex-start;padding-top:9px;position:relative">
+          <div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-6.5 8 6.5v8.5H4z"/></svg><span style="font:500 10px/1 'Public Sans',sans-serif;color:#8C8A7E">Home</span></div>
+          <div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><span style="font:500 10px/1 'Public Sans',sans-serif;color:#8C8A7E">Market</span></div>
+          <div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px">
+            <div style="width:56px;height:56px;border-radius:28px;background:#3DBE5A;position:absolute;top:-22px;left:50%;margin-left:-28px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(20,20,15,.18)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0B2A15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
+            <span style="margin-top:27px;font:500 10px/1 'Public Sans',sans-serif;color:#8C8A7E">Post</span>
+          </div>
+          <div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B4D2B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg><span style="font:600 10px/1 'Public Sans',sans-serif;color:#1B4D2B">Trades</span></div>
+          <div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/></svg><span style="font:500 10px/1 'Public Sans',sans-serif;color:#8C8A7E">Profile</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9b -->
+    <div id="9b" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9b</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Nothing needs you</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The block is absent, label included — an empty container labelled Needs you today would read as a failure to load. One 15px line takes its place and Waiting moves up to y 88.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</span></div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:14px 16px 16px"><span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52">Nothing needs you right now.</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Waiting</span></div>
+          <div>
+            <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCCFC2 0 8px,#D0C2B4 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Sent yesterday · expires Thursday</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Your shirt 120 for Bea's side table 340</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">2 days left</span>
+            </div>
+            <div style="height:1px;background:#EDEBE3"></div>
+            <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15v11h-15z"/><path d="M9 7.5V5.5h6v2M4.5 12.5h15"/></svg></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">120 owed by Renz P.</span>
+                <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 22 Sep · 12 days · 40 settled</span>
+              </div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3;margin-top:16px"></div>
+          <div style="min-height:60px;background:#F5F3EC;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <span style="flex:1 1 auto;font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Finished trades</span>
+            <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">14 trades</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A69A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+        </div>
+        <div style="flex:0 0 auto;height:83px;border-top:1px solid #EDEBE3"></div>
+      </div>
+    </div>
+
+    <!-- 9c -->
+    <div id="9c" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9c</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Waiting, in full</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Outgoing rows carry the three-day clock and a Withdraw that only the sender sees. Incoming rows carry Accept and Decline at equal weight — accept is not the emphasised choice when someone else's item is at stake.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Waiting</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:12px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Offers to you</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#D8D2C6 0 8px,#CCC6BA 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Renz P. · Rising</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">His guitar 1,450 for your chair 760</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">2 days left</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1 1 0;height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Decline</span></div>
+              <div style="flex:1 1 0;height:44px;border-radius:8px;border:1.5px solid #1B4D2B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Accept</span></div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Dana L. · Trusted</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Her jacket 300 for your Air Max 480</span>
+              </div>
+              <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">1 day left</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:8px;border:1.5px solid #C56A4B;box-sizing:border-box">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 4l8.5 15h-17z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+              <span style="flex:1 1 auto;font:600 13px/1.35 'Public Sans',sans-serif;color:#14140F">Includes a promise to settle 100 by 6 Oct</span>
+            </div>
+            <div style="height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #E2E0D6"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#1B4D2B">Read the agreement first</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Offers you sent</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#DCCFC2 0 8px,#D0C2B4 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Sent 2 days ago · expires Tuesday</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Your shirt 120 for Bea's side table 340</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="flex:1 1 auto;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">If Bea does not reply it expires on its own. Nothing is held.</span>
+              <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Withdraw</span></div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#D3DAD6 0 8px,#C7CECA 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Waiting for Marco · promise of 100</span>
+              <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">He has not opened it yet</span>
+            </div>
+            <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">2 days left</span>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Accepted, meeting to set</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#CFD8CF 0 8px,#C3CCC3 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">With Dana L. · pick a hub</span>
+              <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Codes appear once you both agree a time</span>
+            </div>
+            <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Set it</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="height:30px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9d -->
+    <div id="9d" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9d</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">History, expanded</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Deliberately dull, and grouped by month. The three terminal states read as three different sentences, because they are three different parties: they said no, I changed my mind, nobody answered. No accent colour survives here except a default.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Finished trades</span>
+            <span style="margin-left:auto;font:400 12px/1 'JetBrains Mono',monospace;color:#8C8A7E;padding-right:12px">14 trades</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:12px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">September</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#14140F">Traded with Ivy R.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">8 Sep · codes matched 15:42</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Marco declined your offer</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">6 Sep · your Vans 440 for his Air Max 480</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">You withdrew your offer</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">5 Sep · to Bea T.</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Expired with no reply</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">3 Sep · Jess M. did not open it</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#14140F">100 settled to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">2 Sep · settled 4 days early</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">August</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#14140F">Traded with Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">28 Aug · codes matched 11:05</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box;background:#F5F3EC;border-left:3px solid #C56A4B">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#14140F">80 defaulted to Ivy R.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#C56A4B">22 Aug · settled 9 days late</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#14140F">Traded with Dana L.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">19 Aug · codes matched 16:20</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="height:30px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9e -->
+    <div id="9e" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9e</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Code · waiting for them</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Your four digits at 40px mono with +4 tracking, in 56 × 72 cells — readable held at arm's length across a table. Entry sits below, empty and unfocused, because reading yours out comes first.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Meeting Marco A.</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:6px 16px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #EDEBE3">
+            <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#D3DAD6 0 8px,#C7CECA 8px 16px);flex:0 0 auto"></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg>
+            <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#C9D6DE 0 8px,#BCCBD4 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Vans 440 for Air Max 480</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Ayala Center Cebu · 40 added</span></div>
+          </div>
+          <div style="padding:24px 16px 20px;display:flex;flex-direction:column;gap:14px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Show this to Marco</span>
+            <div style="display:flex;gap:14px">
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">4</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">1</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">8</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">2</span></div>
+            </div>
+            <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">Marco hasn't typed yours in yet. You can both do this at the same time.</span>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:20px 16px;display:flex;flex-direction:column;gap:14px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Ask Marco for his four digits</span>
+            <div style="display:flex;gap:12px">
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box"></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box"></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box"></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box"></div>
+            </div>
+            <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">Type them in below. The code changes if either of you leaves the hub.</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="height:52px;border-radius:10px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center"><span style="font:600 16px/1 'Public Sans',sans-serif;color:#14140F">Type Marco's code</span></div>
+          <div style="height:44px;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Something went wrong at the meetup</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9f -->
+    <div id="9f" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9f</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Code · they're waiting, keyboard up</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">IME 358 leaves 486, so the sheet is a hard 486 block: 44 status, 44 nav, instruction at 100, cells at 140, and your own code drops to a single 15px line at 240. The trade summary and both footer buttons drop out.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;height:486px;box-sizing:border-box;padding:44px 12px 0;display:flex;flex-direction:column">
+          <div style="height:44px;display:flex;align-items:center;gap:4px;flex:0 0 auto">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Meeting Marco A.</span>
+            <span style="margin-left:auto;font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B;padding-right:12px">Done</span>
+          </div>
+          <div style="padding:0 4px;flex:1 1 auto;display:flex;flex-direction:column">
+            <div style="height:12px;flex:0 0 auto"></div>
+            <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#14140F;flex:0 0 auto;text-wrap:pretty">Marco has typed yours in. Ask him for his four digits.</span>
+            <div style="height:18px;flex:0 0 auto"></div>
+            <div style="display:flex;gap:12px;flex:0 0 auto">
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">7</span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">3</span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1.5px solid #1B4D2B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="width:2px;height:34px;background:#3DBE5A;animation:caret 1.1s steps(1,end) infinite"></span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1px solid #E2E0D6;box-sizing:border-box"></div>
+            </div>
+            <div style="height:16px;flex:0 0 auto"></div>
+            <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;flex:0 0 auto">Your code is 4182</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;height:358px;background:#D6D4CB;border-top:1px solid #C9C7BC;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:12px 6px 28px">
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">1</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">2</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">3</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">4</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">5</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">6</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">7</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">8</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">9</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1 1 0;height:46px"></div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Public Sans',sans-serif;color:#14140F">0</div>
+            <div style="flex:1 1 0;height:46px;border-radius:6px;display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6H9l-5 6 5 6h11z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <div style="font:400 11px/1.5 'JetBrains Mono',monospace;color:#8C8A7E">486 sheet · 44 status · 44 nav · instruction 100 · cells 140 · own code 240 · 358 pad</div>
+    </div>
+
+    <!-- 9g -->
+    <div id="9g" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9g</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Code · wrong digits</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">The digits stay in the cells — clearing them would make the person read all four out again. Terracotta on the cell rule and the counter, nothing else. No shake, no toast, and no lockout after three; the code simply gets read again.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Meeting Marco A.</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:22px 16px 20px;display:flex;flex-direction:column;gap:14px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Marco's four digits</span>
+            <div style="display:flex;gap:12px">
+              <div style="width:68px;height:84px;border-radius:8px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">7</span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">3</span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">9</span></div>
+              <div style="width:68px;height:84px;border-radius:8px;border:1.5px solid #C56A4B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:500 34px/1 'JetBrains Mono',monospace;letter-spacing:3px;color:#14140F">1</span></div>
+            </div>
+            <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#C56A4B">Not a match · 2 tries left</span>
+            <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">The code changes if either of you leaves the hub. Ask Marco to read it again.</span>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:20px 16px;display:flex;flex-direction:column;gap:12px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Your code, unchanged</span>
+            <div style="display:flex;gap:14px">
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">4</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">1</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">8</span></div>
+              <div style="width:56px;height:72px;border-radius:8px;background:#F1EFE8;display:flex;align-items:center;justify-content:center"><span style="font:500 40px/1 'JetBrains Mono',monospace;letter-spacing:4px;color:#14140F">2</span></div>
+            </div>
+            <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">Marco already typed this one in.</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="height:52px;border-radius:10px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center"><span style="font:600 16px/1 'Public Sans',sans-serif;color:#14140F">Ask Marco to read it again</span></div>
+          <div style="height:44px;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Something went wrong at the meetup</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9h -->
+    <div id="9h" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9h</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Code · both submitted</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">No success colour, no confetti. Both code blocks collapse to a hairline row with the time, the trade moves to History, and the only remaining thing is the promise that outlives the meetup.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Traded with Marco A.</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:20px 16px 18px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:700 25px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.25px">Codes matched 15:42</span>
+            <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">The trade is recorded. It sits in your finished trades now, and Marco's record shows the same.</span>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px;display:flex;align-items:center;gap:12px">
+            <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#D3DAD6 0 8px,#C7CECA 8px 16px);flex:0 0 auto"></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg>
+            <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#C9D6DE 0 8px,#BCCBD4 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Vans 440 for Air Max 480</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">Ayala Center Cebu · 40 added</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px;display:flex;flex-direction:column;gap:12px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Still open</span>
+            <div style="display:flex;align-items:center;gap:12px;min-height:64px;padding:0 14px;border-radius:10px;border:1.5px solid #C56A4B;box-sizing:border-box">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.2 'Public Sans',sans-serif;color:#14140F">100 promised to Marco</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#14140F">due 6 Oct · 26 days</span></div>
+              <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Settle</span></div>
+            </div>
+            <span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E">The trade is done. The promise runs until you settle it.</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="height:52px;border-radius:10px;background:#3DBE5A;display:flex;align-items:center;justify-content:center"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Back to trades</span></div>
+          <div style="height:44px;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Rate how it went</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9i -->
+    <div id="9i" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9i</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Incoming offer with a promise</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Accepting the offer accepts the contract in the same tap, so the record comes before the buttons: four numbers as a plain table, then her open agreements with their deadlines. Waiving the promise is the third, quieter line.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Offer from Dana L.</span>
+            <span style="margin-left:auto;font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E;padding-right:12px">1 day left</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:8px 16px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#E4E1D7 0 8px,#DAD7CB 8px 16px);flex:0 0 auto"></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8C8A7E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M4 9h16M4 9l4-4M20 15H4M20 15l-4 4"/></svg>
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#C9D6DE 0 8px,#BCCBD4 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.25 'Public Sans',sans-serif;color:#14140F">Her jacket 300 for your Air Max 480</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">80 added now · 100 promised</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:10px;border:1.5px solid #C56A4B;box-sizing:border-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M12 4l8.5 15h-17z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+              <span style="flex:1 1 auto;font:600 14px/1.35 'Public Sans',sans-serif;color:#14140F">This offer includes a promise to settle 100 Leaves by 6 Oct.</span>
+            </div>
+          </div>
+          <div style="padding:18px 16px;border-bottom:1px solid #EDEBE3;display:flex;flex-direction:column;gap:12px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Dana's record</span>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Trades completed</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">14</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Settled on time</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">5 of 6</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EDEBE3"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Past defaults</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#C56A4B">1, settled late</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0"><span style="font:400 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">Owed right now</span><span style="font:400 15px/1.3 'JetBrains Mono',monospace;color:#14140F">220 across 2</span></div>
+            </div>
+          </div>
+          <div style="padding:18px 16px;display:flex;flex-direction:column;gap:11px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Her open agreements</span>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:1px solid #EDEBE3">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">120 to Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 22 Sep · 12 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">40 paid</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.2 'Public Sans',sans-serif;color:#14140F">100 to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 1 Oct · 21 days</span></div>
+              <span style="font:400 12px/1 'JetBrains Mono',monospace;color:#5C5B52">nothing paid</span>
+            </div>
+            <span style="padding-top:6px;font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Accepting adds 100 to what Dana owes, making 320 in total. You can also accept the trade and waive the difference.</span>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1 1 0;height:52px;border-radius:10px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Decline</span></div>
+            <div style="flex:1 1 0;height:52px;border-radius:10px;border:1.5px solid #1B4D2B;box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="font:600 15px/1 'Public Sans',sans-serif;color:#1B4D2B">Accept</span></div>
+          </div>
+          <div style="height:44px;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#5C5B52">Accept without the 100</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9j -->
+    <div id="9j" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9j</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Promise rows, both sides</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Six states as a specimen sheet. Debtor rows say promised and carry the action; creditor rows say owed and carry none — you cannot make someone pay. Urgency lives in the mono colour only: grey, then ink at 4–7 days, then terracotta at 3.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 12px 0">
+          <div style="height:44px;display:flex;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14140F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            <span style="font:600 15px/1 'Public Sans',sans-serif;color:#14140F">Promises</span>
+          </div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:12px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">You promised</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">100 to Marco A.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">waiting for him to accept</span></div>
+            <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Withdraw</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">100 to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 1 Oct · 21 days</span></div>
+            <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Settle</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;flex-direction:column;gap:9px;box-sizing:border-box">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">120 to Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">40 of 120 settled · due 22 Sep · 12 days</span></div>
+              <div style="height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Settle</span></div>
+            </div>
+            <div style="height:6px;border-radius:3px;background:#F6EBE6;overflow:hidden;display:flex"><div style="width:33%;background:#C56A4B"></div></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">80 to Bea T.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#C56A4B">due 12 Sep · 2 days</span></div>
+            <div style="height:44px;border-radius:8px;background:#3DBE5A;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:700 14px/1 'Public Sans',sans-serif;color:#0B2A15">Settle</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box;background:#F5F3EC;border-left:3px solid #C56A4B">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">60 to Ivy R.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#C56A4B">defaulted 7 Sep · overdue by 3 days</span></div>
+            <div style="height:44px;border-radius:8px;background:#3DBE5A;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:700 14px/1 'Public Sans',sans-serif;color:#0B2A15">Settle</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:60px;padding:11px 16px;display:flex;align-items:center;box-sizing:border-box">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:3px"><span style="font:500 15px/1.3 'Public Sans',sans-serif;color:#5C5B52">100 to Jess M.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">settled 4 Sep</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Owed to you</span></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;box-sizing:border-box">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">100 owed by Dana L.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">due 6 Oct · 26 days</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;flex-direction:column;gap:9px;box-sizing:border-box">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">120 owed by Renz P.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#5C5B52">40 of 120 settled · due 22 Sep</span></div>
+            <div style="height:6px;border-radius:3px;background:#F6EBE6;overflow:hidden;display:flex"><div style="width:33%;background:#C56A4B"></div></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:13px 16px;display:flex;align-items:center;box-sizing:border-box;background:#F5F3EC;border-left:3px solid #C56A4B">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">90 owed by Ivy R.</span><span style="font:400 11px/1 'JetBrains Mono',monospace;color:#C56A4B">defaulted 30 Aug · her tier dropped</span></div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:14px 16px 30px"><span style="font:400 12px/1.5 'Public Sans',sans-serif;color:#8C8A7E;text-wrap:pretty">Baylo records what is owed and reminds both sides. There is nothing to chase here.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9k -->
+    <div id="9k" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9k</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Empty · a new user</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">No illustration, no section labels for sections that do not exist. Two lines explaining what will appear here, and the one action that makes it happen.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</span></div>
+        </div>
+        <div style="flex:1 1 auto;padding:44px 16px 0;display:flex;flex-direction:column;gap:14px">
+          <span style="font:700 25px/1.2 'Bricolage Grotesque',sans-serif;color:#14140F;letter-spacing:-.25px;text-wrap:pretty">No trades yet</span>
+          <span style="font:400 15px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">When you send or accept an offer it shows up here, along with anything that needs doing on the day.</span>
+          <div style="padding-top:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">01</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F">Offers you send and receive, with three days to reply.</span></div>
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">02</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F">The four-digit codes you swap at the hub.</span></div>
+            <div style="display:flex;gap:10px"><span style="font:400 12px/1.45 'JetBrains Mono',monospace;color:#8C8A7E;flex:0 0 auto">03</span><span style="font:400 14px/1.45 'Public Sans',sans-serif;color:#14140F">Anything you promised to settle later.</span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto;padding:12px 16px 26px;border-top:1px solid #EDEBE3">
+          <div style="height:52px;border-radius:10px;background:#3DBE5A;display:flex;align-items:center;justify-content:center"><span style="font:700 16px/1 'Public Sans',sans-serif;color:#0B2A15">Browse the marketplace</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9l -->
+    <div id="9l" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9l</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Loading</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Section labels render immediately from the local ordering — they are structure, not data, and never skeleton. Only the row bodies are blocks, and they hold the real heights so nothing jumps when the data lands.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</span></div>
+        </div>
+        <div style="flex:1 1 auto">
+          <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:11px">
+            <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Needs you today</span>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:88px;border-radius:10px;background:#F5F3EC"></div>
+              <div style="height:88px;border-radius:10px;background:#F5F3EC"></div>
+            </div>
+          </div>
+          <div style="height:18px"></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Waiting</span></div>
+          <div>
+            <div style="height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:#EDEBE3;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:7px"><div style="height:12px;width:64%;border-radius:3px;background:#F1EFE8"></div><div style="height:10px;width:44%;border-radius:3px;background:#F5F3EC"></div></div>
+            </div>
+            <div style="height:1px;background:#EDEBE3"></div>
+            <div style="height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:#EDEBE3;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:7px"><div style="height:12px;width:52%;border-radius:3px;background:#F1EFE8"></div><div style="height:10px;width:60%;border-radius:3px;background:#F5F3EC"></div></div>
+            </div>
+            <div style="height:1px;background:#EDEBE3"></div>
+            <div style="height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+              <div style="width:44px;height:44px;border-radius:8px;background:#EDEBE3;flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:7px"><div style="height:12px;width:58%;border-radius:3px;background:#F1EFE8"></div><div style="height:10px;width:38%;border-radius:3px;background:#F5F3EC"></div></div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3;margin-top:16px"></div>
+          <div style="height:60px;background:#F5F3EC"></div>
+          <div style="height:1px;background:#EDEBE3"></div>
+        </div>
+        <div style="flex:0 0 auto;height:83px;border-top:1px solid #EDEBE3"></div>
+      </div>
+    </div>
+
+    <!-- 9m -->
+    <div id="9m" style="display:flex;flex-direction:column;gap:12px;width:390px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.1em;background:#14140F;color:#FAFAF7;padding:5px 8px;border-radius:3px">9m</span><span style="font:700 17px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Network error</span></div>
+      <div style="font:400 13px/1.45 'Public Sans',sans-serif;color:#6B6A60;min-height:54px">Terracotta outline, never a fill — outline warns, fill fails, and this is recoverable. Cached rows still render below it under a mono timestamp, because the code someone needs at the hub was already on the device.</div>
+      <div style="width:390px;height:844px;background:#FAFAF7;border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(20,20,15,.16);display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;padding:44px 16px 0">
+          <div style="height:44px;display:flex;align-items:center"><span style="font:700 22px/1 'Bricolage Grotesque',sans-serif;color:#14140F">Trades</span></div>
+        </div>
+        <div class="sb" style="flex:1 1 auto;overflow-y:auto">
+          <div style="padding:14px 16px 18px">
+            <div style="border-radius:10px;border:1.5px solid #C56A4B;box-sizing:border-box;padding:14px;display:flex;gap:11px">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C56A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:1px"><path d="M12 4l8.5 15h-17z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+              <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:5px">
+                <span style="font:600 15px/1.3 'Public Sans',sans-serif;color:#14140F">Can't load your trades</span>
+                <span style="font:400 13px/1.5 'Public Sans',sans-serif;color:#5C5B52;text-wrap:pretty">The connection dropped. Nothing has changed on your side — offers, promises and codes are all still where they were.</span>
+                <div style="margin-top:7px;height:44px;border-radius:8px;border:1px solid #D8D6CC;display:flex;align-items:center;justify-content:center"><span style="font:600 14px/1 'Public Sans',sans-serif;color:#14140F">Try again</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="padding:18px 16px 10px"><span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:1.32px;text-transform:uppercase;color:#8C8A7E">Last loaded 14:20</span></div>
+          <div style="padding:0 16px 11px">
+            <div style="min-height:88px;border-radius:10px;border:1px solid #E2E0D6;box-sizing:border-box;padding:12px;display:flex;align-items:center;gap:12px">
+              <div style="width:48px;height:48px;border-radius:8px;background:repeating-linear-gradient(135deg,#C9D6DE 0 8px,#BCCBD4 8px 16px);flex:0 0 auto"></div>
+              <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px">
+                <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#14140F">Code ready · Marco A.</span>
+                <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#5C5B52">Ayala Center Cebu · today</span>
+                <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#8C8A7E">saved on this phone</span>
+              </div>
+              <div style="height:44px;border-radius:8px;background:#3DBE5A;display:flex;align-items:center;padding:0 14px;flex:0 0 auto"><span style="font:700 14px/1 'Public Sans',sans-serif;color:#0B2A15">Open code</span></div>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+          <div style="min-height:72px;padding:0 16px;display:flex;align-items:center;gap:12px;box-sizing:border-box">
+            <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(135deg,#D3DAD6 0 8px,#C7CECA 8px 16px);flex:0 0 auto"></div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:600 15px/1.25 'Public Sans',sans-serif;color:#5C5B52">Waiting for Marco · promise of 100</span>
+              <span style="font:400 12px/1.3 'Public Sans',sans-serif;color:#8C8A7E">may be out of date</span>
+            </div>
+          </div>
+          <div style="height:1px;background:#EDEBE3"></div>
+        </div>
+        <div style="flex:0 0 auto;height:83px;border-top:1px solid #EDEBE3"></div>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>

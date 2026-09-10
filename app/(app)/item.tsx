@@ -4,6 +4,15 @@ import { useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { useProfileMe } from "../../src/api/profile";
+import { useReach } from "../../src/api/offer";
+import { firstName } from "../../src/components/offer/copy";
+import {
+  WhereYouStand,
+  shouldShowWhereYouStand,
+} from "../../src/components/offer/WhereYouStand";
+import { effectivePromiseCeiling } from "../../src/lib/gap";
+import { toStanding } from "../../src/api/offer";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
 import {
@@ -31,7 +40,7 @@ import {
   textStyle,
   type,
 } from "../../src/theme/tokens";
-import type { SafeZoneHub } from "../../src/api/types";
+import type { Item, SafeZoneHub } from "../../src/api/types";
 
 /**
  * Item detail. Reached from the grid, from the feed's Offer Trade button, and
@@ -81,6 +90,28 @@ export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data, isPending, isError, error, refetch } = useItem(id);
+
+  /*
+   * §7 of the offer spec, fetched HERE rather than below the early returns:
+   * hooks must run in the same order on every render, and three of the branches
+   * under this line return before the item exists.
+   *
+   * Both are the queries the marketplace grid already ran on the way in, so
+   * arriving from a tile costs nothing — TanStack dedupes by key. Arriving by
+   * deep link, it is one extra request for the viewer's own shelf.
+   */
+  const { reach, highestItemValue } = useReach();
+  const me = useProfileMe().data;
+  /** The item §10.8's paragraph names by title. Highest AVAILABLE, per §7.1. */
+  const highestItem = (me?.items ?? []).reduce<Item | null>(
+    (best, row) =>
+      row.status === "AVAILABLE" &&
+      row.valueLeaves !== null &&
+      (best === null || row.valueLeaves > (best.valueLeaves ?? 0))
+        ? row
+        : best,
+    null,
+  );
 
   const report = useReport();
   const block = useBlockUser();
@@ -142,6 +173,33 @@ export default function ItemDetailScreen() {
 
   const { item, viewer } = data;
   const hubs = item.safeZones ?? [];
+
+  /*
+   * §7 of the offer spec — is this listing beyond the viewer's reach?
+   *
+   * `useReach()` and `useProfileMe()` are the same two queries the marketplace
+   * grid already runs, so reaching this screen from a tile costs nothing extra;
+   * TanStack dedupes both by key. Reached by deep link, it is one request.
+   *
+   * The promise ceiling is computed with the same `effectivePromiseCeiling()`
+   * the offer flow uses, so the route copy here ("A Deferred Points Agreement
+   * covers up to 200 as a New Trader") can never promise a ceiling the offer
+   * screen would then refuse to offer.
+   */
+  const showReach = shouldShowWhereYouStand(item.valueLeaves, highestItemValue, reach);
+  const reachInsert =
+    showReach && me && highestItem && highestItem.valueLeaves !== null ? (
+      <WhereYouStand
+        listingValue={item.valueLeaves as number}
+        highestItem={{ title: highestItem.title, valueLeaves: highestItem.valueLeaves }}
+        reach={reach as number}
+        owner={firstName(item.owner.name)}
+        tier={me.reputation.tier}
+        promiseCeiling={effectivePromiseCeiling(
+          toStanding(me.reputation, me.idVerification),
+        )}
+      />
+    ) : null;
 
   /**
    * A reason was picked. The sheet stays up while the request is in flight —
@@ -248,6 +306,19 @@ export default function ItemDetailScreen() {
               router.push({ pathname: "/user", params: { id: item.owner.id } })
             }
           />
+
+          {/*
+            §7.3 of the offer spec — `Where you stand`, "inserted between the
+            value row and *Description*".
+
+            It is drawn only when this listing is beyond the viewer's reach AND
+            the viewer has a valued item to compare against; `shouldShowWhereYouStand`
+            holds both conditions. Note what does NOT change when it appears: the
+            carousel above stays in FULL COLOUR (§7.3 is explicit — the grey
+            belongs to the grid, not the item), and the `Offer Trade` button in
+            the bottom bar stays green and live.
+          */}
+          {reachInsert}
 
           {item.description.trim() ? (
             <Section heading="About this item">
@@ -588,7 +659,15 @@ function ActionBar({
         pressedStyle={s.actionPressed}
       >
         <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-          {existingOfferId ? "Update your offer" : "Offer Trade"}
+          {/*
+            "See your offer", not "Update your offer". Nothing on the server can
+            change or withdraw a sent offer — PATCH /api/offers/[id] is the
+            RECEIVER's accept/decline and 403s the sender, and `OfferStatus` has
+            no WITHDRAWN member. The button leads to §5.2's pending-offer state,
+            which shows what was sent and says it expires on its own; a label
+            promising an edit would be promising a screen that cannot exist yet.
+          */}
+          {existingOfferId ? "See your offer" : "Offer Trade"}
         </Text>
       </Tappable>
     </View>

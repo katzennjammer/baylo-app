@@ -65,6 +65,13 @@ export default function AppLayout() {
       <Tabs.Screen name="trades" options={{ title: "Trades" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 
+      {/* THE OFFER FLOW IS NOT HERE ANY MORE. It lives at `app/offer.tsx`, a
+          root route pushed OVER this navigator, for the same reason `post-item`
+          is: the offer screen pins its own bottom bar and this bar would sit
+          under it. Same arrangement, same reasoning — see the note at the top of
+          `app/offer.tsx`. `router.push("/offer")` still resolves, because the
+          path never depended on the folder. */}
+
       {/* Reachable, not listed. See the header note above.
 
           FLAT FILES, NOT NESTED DIRECTORIES. `item` takes its id as a query
@@ -77,7 +84,6 @@ export default function AppLayout() {
           cannot break on a patch release. */}
       <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
       <Tabs.Screen name="item" options={{ href: null, title: "Item" }} />
-      <Tabs.Screen name="offer" options={{ href: null, title: "Offer" }} />
       <Tabs.Screen name="user" options={{ href: null, title: "Profile" }} />
 
       {/* The Safe-Zone map and one hub's listings. Same flat-file, query-param

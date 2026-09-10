@@ -14,6 +14,9 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
+import { offerType, outOfReach } from "../../theme/offer-tokens";
+import { grouped } from "../../lib/gap";
+import { reach as reachCopy } from "../offer/copy";
 import type { Item } from "../../api/types";
 
 /**
@@ -41,19 +44,53 @@ import type { Item } from "../../api/types";
  * The photo is SQUARE here rather than clamped to its own aspect the way the
  * feed's is. A grid whose rows are different heights is not a grid, and the
  * tile's job is comparison — equal boxes are what make two things comparable.
+ *
+ * ── OUT OF REACH: THREE PROPERTIES CHANGE, AND ONLY THREE ───────────────────
+ *
+ * §1.9 and §7.2 of the offer spec are unusually strict about this, so it is
+ * worth listing what is UNTOUCHED: the border, the radius, the size, the tile's
+ * position in the sort, and the tap behaviour. Only the photo (grayscale then
+ * 62% opacity), the title's ink (#5C5B52) and the value line's ink (#8C8A7E)
+ * move. §7.2's own reasoning for the sort: "sorting out-of-reach items last is
+ * a soft form of hiding".
+ *
+ * THE TILE STAYS TAPPABLE. Grey means "not straightforward", never "locked" —
+ * and the detail screen it opens shows the photo in FULL COLOUR, because the
+ * grey is a grid-level signal about reach rather than a claim about the item.
+ *
+ * The value line changes SHAPE as well as colour when a tile is out of reach:
+ * §10.8 fixes it as `2,000 Leaves · 860 above your reach`, which is a sentence
+ * rather than a figure, so the leaf glyph comes off. A leaf beside a sentence
+ * about distance reads as a price tag, and the number after the interpunct is
+ * not a price.
  */
 export function GridTile({
   item,
   width,
   onPress,
+  reach,
 }: {
   item: Item;
   /** Computed by the screen from the real viewport — see the note there. */
   width: number;
   onPress: (item: Item) => void;
+  /**
+   * The viewer's reach threshold, or null while the shelf is still loading.
+   *
+   * NULL IS NOT ZERO. A grid must not grey tiles on a guess, so an unknown reach
+   * draws every tile in colour and the treatment appears when the answer does.
+   */
+  reach?: number | null;
 }) {
   const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+
+  // Strictly greater — a listing exactly AT the threshold is in reach. An
+  // unvalued listing is never out of reach: there is no distance to state.
+  const beyond =
+    reach != null && item.valueLeaves !== null && item.valueLeaves > reach
+      ? item.valueLeaves - reach
+      : null;
 
   return (
     <Tappable
@@ -63,12 +100,18 @@ export function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
-        (item.valueLeaves !== null ? ` ${item.valueLeaves} Leaves.` : " Unvalued.")
+        (item.valueLeaves !== null ? ` ${item.valueLeaves} Leaves.` : " Unvalued.") +
+        // The grey is invisible to a screen reader, so the distance is said. It
+        // is said as a distance and not as a refusal, per §10.8's closing list
+        // of words this area never uses.
+        (beyond !== null ? ` ${grouped(beyond)} above your reach.` : "")
       }
       style={[s.tile, { width }]}
       pressedStyle={s.tilePressed}
     >
-      <View style={s.photoBox}>
+      {/* §11: "Grey tile: no transition. It renders grey from first paint." So
+          the filter is a style on the box rather than something animated on. */}
+      <View style={[s.photoBox, beyond !== null && { filter: outOfReach.photoFilter }]}>
         {cover && !failed ? (
           <Image
             source={{ uri: cover }}
@@ -89,7 +132,14 @@ export function GridTile({
       </View>
 
       <View style={s.body}>
-        <Text style={[textStyle(type.gridTitle), s.title]} numberOfLines={2}>
+        <Text
+          style={[
+            textStyle(type.gridTitle),
+            s.title,
+            beyond !== null && { color: outOfReach.titleInk },
+          ]}
+          numberOfLines={2}
+        >
           {item.title}
         </Text>
 
@@ -102,7 +152,20 @@ export function GridTile({
           valuation model, exactly as FeedCard does it: an unvalued item is not
           an item worth nothing, and there is no treatment for the difference.
         */}
-        {item.valueLeaves !== null ? (
+        {item.valueLeaves === null ? null : beyond !== null ? (
+          // §10.8's sentence, in §1.9's ink. Public Sans 600 12 rather than the
+          // in-reach line's Bold 12 — §1.9 names the weight explicitly, and at
+          // this length Bold reads as emphasis on a fact that is not the point.
+          <Text
+            style={[
+              textStyle(offerType.tileValueLine),
+              { color: outOfReach.valueInk, marginTop: space.browse.tileMetaToLeaves },
+            ]}
+            numberOfLines={1}
+          >
+            {reachCopy.tileValue(item.valueLeaves, beyond)}
+          </Text>
+        ) : (
           <View style={s.leaves}>
             <LeafIcon
               size={icon.cardLeaf.size}
@@ -113,7 +176,7 @@ export function GridTile({
               {item.valueLeaves}
             </Text>
           </View>
-        ) : null}
+        )}
       </View>
     </Tappable>
   );

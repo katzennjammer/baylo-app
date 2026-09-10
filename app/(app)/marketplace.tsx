@@ -39,7 +39,12 @@ import {
   BrowseSkeleton,
 } from "../../src/components/marketplace/BrowseStates";
 import { GridTile } from "../../src/components/marketplace/GridTile";
+import { useReach } from "../../src/api/offer";
+import { ReachPromptSheet } from "../../src/components/offer/OfferSheet";
+import { prompt as promptCopy } from "../../src/components/offer/copy";
+import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/reach-flag";
 import { color, space, textStyle, type } from "../../src/theme/tokens";
+import { outOfReach } from "../../src/theme/offer-tokens";
 import type { Item } from "../../src/api/types";
 
 /**
@@ -113,6 +118,9 @@ export default function MarketplaceScreen() {
    */
   const hubsQuery = useHubs(view === "map");
 
+  /** §7.1's threshold, from the viewer's own shelf. Null until it has loaded. */
+  const { reach } = useReach();
+
   const {
     items,
     facets,
@@ -176,10 +184,30 @@ export default function MarketplaceScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Item }) => (
-      <GridTile item={item} width={tileWidth} onPress={openItem} />
+      <GridTile item={item} width={tileWidth} onPress={openItem} reach={reach} />
     ),
-    [tileWidth, openItem],
+    [tileWidth, openItem, reach],
   );
+
+  /*
+   * §7.4 — the one-time prompt.
+   *
+   * Two conditions, both from §7.4: the grid must actually contain an
+   * out-of-reach tile, and this account must not have dismissed it before.
+   *
+   * The flag file is read ONCE, in `useState`'s initialiser, because the answer
+   * cannot change while this screen is mounted — the only thing that writes it
+   * is `Got it`, which is on this screen. Reading it on every render would put a
+   * synchronous file read in the render path of a scrolling grid.
+   *
+   * §7.4's "Never shown again, INCLUDING AFTER THE THRESHOLD MOVES" is what
+   * `dismissed` protects: once it is true nothing re-opens the sheet, even if
+   * the shelf changes and a different set of tiles goes grey.
+   */
+  const [dismissed, setDismissed] = useState(() => hasSeenReachExplainer());
+  const anyOutOfReach =
+    reach !== null && items.some((i) => i.valueLeaves !== null && i.valueLeaves > reach);
+  const showPrompt = !dismissed && anyOutOfReach && view === "grid";
 
   const filtering = isFiltered(filters);
   const filterCount = activeFilterCount(filters);
@@ -361,6 +389,28 @@ export default function MarketplaceScreen() {
         }}
         onClose={() => setSheetOpen(false)}
       />
+
+      {/* Mounted last so it sits over the grid and the filter button. It renders
+          nothing until both of §7.4's conditions hold; the Modal inside it is
+          created and destroyed with the prompt rather than kept alive behind the
+          screen — the same arrangement `ReportSheet` uses on item detail. */}
+      {showPrompt ? (
+        <ReachPromptSheet
+          heading={promptCopy.heading}
+          body={promptCopy.body}
+          exampleNear={promptCopy.exampleNear}
+          exampleFar={promptCopy.exampleFar}
+          steps={[promptCopy.step1, promptCopy.step2, promptCopy.step3]}
+          button={promptCopy.button}
+          photoFilter={outOfReach.photoFilter}
+          onGotIt={() => {
+            // The write happens here and nowhere else — §7.4 allows exactly one
+            // way out, and a prompt torn down by a process death was not read.
+            markReachExplainerSeen();
+            setDismissed(true);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
