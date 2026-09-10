@@ -117,7 +117,7 @@ Full setup steps are in **[SETUP.md](./SETUP.md)**.
 | John Vincent Saplad | Developer |
 | Nicole Sandoval | Developer |
 
-Adviser: Ms. Analou S. Cag-ong
+Adviser: Ms. Yan Ando
 
 ---
 
