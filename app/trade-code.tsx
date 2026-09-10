@@ -116,7 +116,7 @@ export default function TradeCodeScreen() {
   const contracts = useContracts();
   const { keyboardUp, imeHeight } = useKeyboardState();
 
-  const trade = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
+  const live = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
 
   const start = useConfirmStart(id);
   const status = useConfirmStatus(id);
@@ -131,6 +131,41 @@ export default function TradeCodeScreen() {
   const [rejection, setRejection] = useState<CodeRejection | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
+  /*
+   * ── THE ROW IS HELD ACROSS THE MOMENT IT COMPLETES ──────────────────────
+   *
+   * `useActiveTrades` is the OPEN list. A trade both people have confirmed is
+   * finished, so the invalidation `confirm/submit` fires drops the row: `find()`
+   * returns undefined the instant the confirmation succeeds, and the `!trade`
+   * branch below then told two people standing in front of each other that
+   * "that trade is not open any more" at the exact moment it went through.
+   *
+   * Same shape as `app/offer-review.tsx`, and the same consequence — the early
+   * return fires before the success state, so §6.1's "Both submitted" screen
+   * could not render off a completed trade at all.
+   *
+   * So the last row seen open is kept, and it is used ONLY when the poll says
+   * the confirmation matched. `confirm/status` is a separate query on a separate
+   * route, and it keeps answering `completed` after the trade has left the open
+   * list — which is what makes this narrow: the held row is drawn on the one
+   * disappearance we can explain. A trade that goes for any other reason — the
+   * other person cancelled it while this screen was open, it expired — still
+   * falls through to the not-open message, because there the message is true.
+   */
+  const [held, setHeld] = useState<ActiveTrade | null>(null);
+  useEffect(() => {
+    if (live) setHeld(live);
+  }, [live]);
+
+  // `direction` only picks which of the two badly-named booleans is mine, and
+  // `matched` is symmetric in them; with no row at all `status.data` is
+  // undefined and `confirmSides` answers false to everything, so the fallback
+  // side is never actually read.
+  const row = live ?? held;
+  const sides = confirmSides(status.data, row?.direction ?? "sent");
+  const state = codeState(sides);
+  const trade = live ?? (state === "matched" ? held : null);
+
   /**
    * Issue the codes on the way in, once.
    *
@@ -144,8 +179,8 @@ export default function TradeCodeScreen() {
    * call that reissues a pair somebody burned.
    */
   useEffect(() => {
-    if (!id || !trade) return;
-    if (trade.status !== "ACCEPTED" && trade.status !== "CONFIRMING") return;
+    if (!id || !live) return;
+    if (live.status !== "ACCEPTED" && live.status !== "CONFIRMING") return;
     if (!start.isIdle) return;
     start.mutate(undefined, {
       onError: (e) =>
@@ -153,7 +188,7 @@ export default function TradeCodeScreen() {
           e instanceof ApiError ? e.message : "Could not start the confirmation just now.",
         ),
     });
-  }, [id, trade, start]);
+  }, [id, live, start]);
 
   const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") {
@@ -178,8 +213,6 @@ export default function TradeCodeScreen() {
   }
 
   const partner = present.firstName(trade.counterparty.name);
-  const sides = confirmSides(status.data, trade.direction);
-  const state = codeState(sides);
 
   const send = () => {
     setRejection(null);
