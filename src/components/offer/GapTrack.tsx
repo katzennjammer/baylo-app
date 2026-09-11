@@ -328,23 +328,32 @@ export function ThresholdBar({
   reach,
   listing,
 }: {
-  /** Your highest item's value. */
-  yourItem: number;
+  /**
+   * Your highest item's value, or null for a viewer with nothing posted. NULL
+   * DRAWS NO SEGMENT, rather than a zero-width one: the bar then starts at the
+   * floor and reads as "the margin, then the distance", which is the honest
+   * shape — a sliver of green with a label under it would claim an item that
+   * does not exist.
+   */
+  yourItem: number | null;
   /** The computed reach — `max(highest × 1.5, 150)`. */
   reach: number;
   /** This listing's value, which is above `reach` or the bar would not be drawn. */
   listing: number;
 }) {
-  const margin = Math.max(0, reach - yourItem);
+  const margin = Math.max(0, reach - (yourItem ?? 0));
   const distance = Math.max(0, listing - reach);
 
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityLabel={
-        `Your highest item is ${grouped(yourItem)}. A swap here is straightforward from about ` +
-        `${grouped(reach)}, and this listing is ${grouped(listing)} — ` +
-        `${grouped(listing - yourItem)} further than your item on its own.`
+        yourItem === null
+          ? `You have nothing posted, so your reach starts at ${grouped(reach)}. ` +
+            `This listing is ${grouped(listing)} — ${grouped(distance)} above that.`
+          : `Your highest item is ${grouped(yourItem)}. A swap here is straightforward from about ` +
+            `${grouped(reach)}, and this listing is ${grouped(listing)} — ` +
+            `${grouped(listing - yourItem)} further than your item on its own.`
       }
       style={{
         height: offerSize.thresholdBar.height,
@@ -354,14 +363,16 @@ export function ThresholdBar({
         overflow: "hidden",
       }}
     >
-      <View
-        style={{
-          flexGrow: yourItem,
-          flexBasis: 0,
-          minWidth: offerSize.track.minSegment,
-          backgroundColor: offerColor.green,
-        }}
-      />
+      {yourItem !== null ? (
+        <View
+          style={{
+            flexGrow: yourItem,
+            flexBasis: 0,
+            minWidth: offerSize.track.minSegment,
+            backgroundColor: offerColor.green,
+          }}
+        />
+      ) : null}
       <View
         style={{
           flexGrow: margin,

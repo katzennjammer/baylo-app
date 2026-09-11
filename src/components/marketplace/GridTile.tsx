@@ -156,12 +156,19 @@ export function GridTile({
           // §10.8's sentence, in §1.9's ink. Public Sans 600 12 rather than the
           // in-reach line's Bold 12 — §1.9 names the weight explicitly, and at
           // this length Bold reads as emphasis on a fact that is not the point.
+          //
+          // TWO LINES, NOT ONE. `425 Leaves · 275 above your reach` is ~200px at
+          // this size and a tile on a 390-wide phone is ~173, so one line
+          // clipped it to "275 above y…" — the design canvas only fit it because
+          // its artboard tiles are wider. §1.9 fixes the line's colour, weight
+          // and size and says nothing about its height; the sentence is the
+          // spec's, and a clipped sentence is worse than a taller tile.
           <Text
             style={[
               textStyle(offerType.tileValueLine),
               { color: outOfReach.valueInk, marginTop: space.browse.tileMetaToLeaves },
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {reachCopy.tileValue(item.valueLeaves, beyond)}
           </Text>

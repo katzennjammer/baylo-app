@@ -100,9 +100,14 @@ export default function ItemDetailScreen() {
    * arriving from a tile costs nothing — TanStack dedupes by key. Arriving by
    * deep link, it is one extra request for the viewer's own shelf.
    */
-  const { reach, highestItemValue } = useReach();
+  const { reach } = useReach();
   const me = useProfileMe().data;
-  /** The item §10.8's paragraph names by title. Highest AVAILABLE, per §7.1. */
+  /**
+   * The item §10.8's paragraph names by title. Highest AVAILABLE, per §7.1.
+   * Null for an empty shelf — which is NOT a reason to skip the insert: the
+   * reach is then §7.1's floor and the grid greys against it, so the insert
+   * draws its empty-shelf variant instead. See the WhereYouStand header.
+   */
   const highestItem = (me?.items ?? []).reduce<Item | null>(
     (best, row) =>
       row.status === "AVAILABLE" &&
@@ -186,12 +191,16 @@ export default function ItemDetailScreen() {
    * covers up to 200 as a New Trader") can never promise a ceiling the offer
    * screen would then refuse to offer.
    */
-  const showReach = shouldShowWhereYouStand(item.valueLeaves, highestItemValue, reach);
+  const showReach = shouldShowWhereYouStand(item.valueLeaves, reach);
   const reachInsert =
-    showReach && me && highestItem && highestItem.valueLeaves !== null ? (
+    showReach && me ? (
       <WhereYouStand
         listingValue={item.valueLeaves as number}
-        highestItem={{ title: highestItem.title, valueLeaves: highestItem.valueLeaves }}
+        highestItem={
+          highestItem && highestItem.valueLeaves !== null
+            ? { title: highestItem.title, valueLeaves: highestItem.valueLeaves }
+            : null
+        }
         reach={reach as number}
         owner={firstName(item.owner.name)}
         tier={me.reputation.tier}
@@ -311,9 +320,11 @@ export default function ItemDetailScreen() {
             §7.3 of the offer spec — `Where you stand`, "inserted between the
             value row and *Description*".
 
-            It is drawn only when this listing is beyond the viewer's reach AND
-            the viewer has a valued item to compare against; `shouldShowWhereYouStand`
-            holds both conditions. Note what does NOT change when it appears: the
+            It is drawn whenever this listing is beyond the viewer's reach — the
+            grid's own test, held in `shouldShowWhereYouStand` — including for a
+            viewer with nothing posted, who gets the empty-shelf variant rather
+            than a greyed tile with no explanation behind it. Note what does NOT
+            change when it appears: the
             carousel above stays in FULL COLOUR (§7.3 is explicit — the grey
             belongs to the grid, not the item), and the `Offer Trade` button in
             the bottom bar stays green and live.

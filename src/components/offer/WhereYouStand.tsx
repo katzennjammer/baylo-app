@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 
+import { PlusIcon } from "../icons";
 import { ArrowsIcon, PromiseIcon } from "./icons";
 import { RouteRow } from "./rows";
 import { Section, SectionLabel } from "./chrome";
@@ -43,6 +44,28 @@ import {
  * `too expensive`, `upgrade`, `unlock` and any figure describing the user's
  * total worth — the last of which is why this insert names the viewer's HIGHEST
  * ITEM and never a sum of everything they own.
+ *
+ * ── THE EMPTY SHELF — A VARIANT THE SPEC DID NOT WRITE ──────────────────────
+ *
+ * §7.1's floor means a viewer with NOTHING posted still has a reach (150), so
+ * the grid greys for them exactly as it does for anyone else — but §10.8's
+ * paragraph names "your highest item", the bar has a "your item" segment, and
+ * the legend reads `Your chair 760`; none of that can be drawn from nothing.
+ * The insert used to gate itself on `highestItemValue > 0` for that reason,
+ * which produced the bug this variant fixes: a greyed tile whose detail
+ * screen said nothing at all about why.
+ *
+ * `highestItem: null` is that viewer. Three things change and nothing else:
+ *
+ *   - a heading line goes in between the label and the paragraph, and the
+ *     paragraph is rewritten around the floor rather than around an item;
+ *   - the bar draws NO "your item" segment — it starts at the floor. Not a
+ *     zero-width one: a sliver with a label under it would claim an item that
+ *     does not exist. The left legend label becomes `Starting reach`;
+ *   - the first route is `Post an item` — the real fix, and the thing the
+ *     standard set is missing — and `Trade up to it` is dropped, because "two
+ *     trades near your own value" is advice about a shelf this viewer has not
+ *     got. The promise route stays, second.
  */
 export function WhereYouStand({
   listingValue,
@@ -54,8 +77,11 @@ export function WhereYouStand({
 }: {
   /** This listing's value. Above `reach`, or the insert would not be drawn. */
   listingValue: number;
-  /** The viewer's highest AVAILABLE item — the one §10.8's paragraph names. */
-  highestItem: { title: string; valueLeaves: number };
+  /**
+   * The viewer's highest AVAILABLE item — the one §10.8's paragraph names — or
+   * null for a viewer with nothing posted. See the header note on the variant.
+   */
+  highestItem: { title: string; valueLeaves: number } | null;
   reach: number;
   owner: string;
   tier: TrustTier;
@@ -73,18 +99,37 @@ export function WhereYouStand({
     <Section pad={offerSpace.section.reachInsert}>
       <SectionLabel>{copy.reach.label}</SectionLabel>
 
+      {highestItem === null ? (
+        <Text
+          style={[
+            textStyle(offerType.reachHeading),
+            { color: offerColor.ink, marginTop: offerSpace.reach.labelToHeading },
+          ]}
+        >
+          {copy.reach.emptyHeading}
+        </Text>
+      ) : null}
+
       <Text
         style={[
           textStyle(offerType.body),
-          { color: offerColor.inkSecondary, marginTop: offerSpace.reach.labelToCopy },
+          {
+            color: offerColor.inkSecondary,
+            marginTop:
+              highestItem === null
+                ? offerSpace.reach.headingToCopy
+                : offerSpace.reach.labelToCopy,
+          },
         ]}
       >
-        {copy.reach.body(highestItem.title, highestItem.valueLeaves, reach, distance)}
+        {highestItem === null
+          ? copy.reach.emptyBody(reach, distance)
+          : copy.reach.body(highestItem.title, highestItem.valueLeaves, reach, distance)}
       </Text>
 
       <View style={{ marginTop: offerSpace.reach.copyToBar }}>
         <ThresholdBar
-          yourItem={highestItem.valueLeaves}
+          yourItem={highestItem === null ? null : highestItem.valueLeaves}
           reach={reach}
           listing={listingValue}
         />
@@ -101,7 +146,9 @@ export function WhereYouStand({
         }}
       >
         <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
-          {copy.reach.legendYours(highestItem.title, highestItem.valueLeaves)}
+          {highestItem === null
+            ? copy.reach.legendStarting
+            : copy.reach.legendYours(highestItem.title, highestItem.valueLeaves)}
         </Text>
         <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
           {copy.reach.legendTheirs(listingValue)}
@@ -109,14 +156,31 @@ export function WhereYouStand({
       </View>
 
       {/* Two rows at 64 with 10 between them — §3.6's own figures, and §4's
-          `min-height 60 / 64` where the 64 is this insert's. Neither takes an
-          `onPress`: both are explanations, so neither gets a chevron. */}
+          `min-height 60 / 64` where the 64 is this insert's. None takes an
+          `onPress`: all are explanations, so none gets a chevron — the Post tab
+          is in the bar under this screen, so `Post an item` does not need to be
+          a second way there. The empty shelf leads with posting and drops
+          `Trade up to it`; see the header note. */}
       <View
         style={{
           marginTop: offerSpace.reach.legendToRoutes,
           gap: offerSpace.reach.routeGap,
         }}
       >
+        {highestItem === null ? (
+          <RouteRow
+            minHeight={offerSize.routeRow.minHeightReach}
+            icon={
+              <PlusIcon
+                size={offerSize.routeRow.icon}
+                stroke={offerIcon.inlineRow.stroke}
+                color={offerColor.inkSecondary}
+              />
+            }
+            title={copy.reach.routePost}
+            subtitle={copy.reach.routePostSub}
+          />
+        ) : null}
         <RouteRow
           minHeight={offerSize.routeRow.minHeightReach}
           icon={
@@ -129,18 +193,20 @@ export function WhereYouStand({
           title={copy.reach.routePromise}
           subtitle={copy.reach.routePromiseSub(tier, promiseCeiling, owner)}
         />
-        <RouteRow
-          minHeight={offerSize.routeRow.minHeightReach}
-          icon={
-            <ArrowsIcon
-              size={offerSize.routeRow.icon}
-              stroke={offerIcon.inlineRow.stroke}
-              color={offerColor.inkSecondary}
-            />
-          }
-          title={copy.reach.routeTradeUp}
-          subtitle={copy.reach.routeTradeUpSub}
-        />
+        {highestItem !== null ? (
+          <RouteRow
+            minHeight={offerSize.routeRow.minHeightReach}
+            icon={
+              <ArrowsIcon
+                size={offerSize.routeRow.icon}
+                stroke={offerIcon.inlineRow.stroke}
+                color={offerColor.inkSecondary}
+              />
+            }
+            title={copy.reach.routeTradeUp}
+            subtitle={copy.reach.routeTradeUpSub}
+          />
+        ) : null}
       </View>
 
       <Text
@@ -160,18 +226,21 @@ export function WhereYouStand({
  *
  * A component that decided this internally and returned null would still cost a
  * hook order and a render on every item detail; a predicate lets the screen skip
- * it. It also states the two things that make the insert MEANINGLESS even when
- * the listing is out of reach: a viewer with no valued items has no "highest" to
- * name, and an unvalued listing has no distance.
+ * it. It also states the one thing that makes the insert MEANINGLESS even when
+ * the listing is out of reach: an unvalued listing has no distance.
+ *
+ * THIS IS THE GRID'S OWN TEST, `isOutOfReach`, and must stay that way. It used
+ * to also require `highestItemValue > 0`, on the reasoning that a viewer with
+ * no valued item has no "highest" to name — true, but the grid never had that
+ * condition, so a viewer with an empty shelf saw greyed tiles whose detail
+ * screens explained nothing. The insert now has an empty-shelf variant; the
+ * two halves of §7 agree on WHEN, and the component decides HOW.
  */
 export function shouldShowWhereYouStand(
   listingValue: number | null,
-  highestItemValue: number,
   reach: number | null,
 ): boolean {
-  return (
-    listingValue !== null && reach !== null && highestItemValue > 0 && listingValue > reach
-  );
+  return listingValue !== null && reach !== null && listingValue > reach;
 }
 
 /** The mono distance line the tile shows, reused where the screen wants it. */

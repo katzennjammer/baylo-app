@@ -186,6 +186,13 @@ export const offerType = {
   helper: { fontFamily: font.sans, fontSize: 12, lineHeight: 18 },
   errorText: { fontFamily: font.sans, fontSize: 13, lineHeight: 20 },
   errorHeading: { fontFamily: font.sansSemi, fontSize: 15, lineHeight: 20 },
+  /**
+   * The empty-shelf heading inside `Where you stand` — one plain-sentence line
+   * between the mono label and the paragraph. Same cut as `errorHeading` but
+   * its own name: §1.4 keeps out-of-reach out of the error vocabulary, and a
+   * heading styled "as an error" would be the first thing to drift back in.
+   */
+  reachHeading: { fontFamily: font.sansSemi, fontSize: 15, lineHeight: 20 },
 
   /* JetBrains Mono */
   sectionLabel: {
@@ -287,6 +294,9 @@ export const offerSpace = {
   /** §3.6 — the detail insert's internals. */
   reach: {
     labelToCopy: 8,
+    /** Empty-shelf variant only: label → heading → paragraph. */
+    labelToHeading: 8,
+    headingToCopy: 4,
     copyToBar: 14,
     barToLegend: 7,
     legendToRoutes: 14,

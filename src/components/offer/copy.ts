@@ -432,9 +432,30 @@ export const reach = {
     `${highestTitle} at ${grouped(highestValue)}, and it takes about ${grouped(reachTo)} ` +
     `before a swap here is straightforward — so there's ${grouped(distance)} to cover ` +
     `another way. Two routes do work.`,
+  /**
+   * The empty-shelf variant. §10.8's paragraph names "your highest item", which
+   * cannot be written for a viewer who has posted nothing — and that viewer is
+   * exactly who §7.1's floor exists for: `max(0 × 1.5, 150)` is 150, so the grid
+   * still greys and the insert still owes an explanation. The heading is the
+   * fact the paragraph would otherwise have to dance around.
+   */
+  emptyHeading: "You haven't posted anything yet",
+  emptyBody: (reachTo: number, distance: number) =>
+    `Your reach starts at ${grouped(reachTo)} Leaves until you post something. ` +
+    `This item is ${grouped(distance)} above that. Two routes work from here.`,
   /** The two legend labels either end of the threshold bar. */
   legendYours: (title: string, value: number) => `Your ${title} ${grouped(value)}`,
+  /** Left legend label when there is no item to name — the bar starts at the floor. */
+  legendStarting: "Starting reach",
   legendTheirs: (value: number) => grouped(value),
+  /**
+   * The empty-shelf variant's first route, in place of "Trade up to it" — two
+   * trades near your own value is advice about a shelf, and this viewer has
+   * none. Posting is the real fix: the line is 1.5× the highest posted item.
+   */
+  routePost: "Post an item",
+  routePostSub:
+    "Your reach is one and a half times your highest posted item, so a single listing moves the line.",
   routePromise: "Offer with a promise",
   routePromiseSub: (tier: TrustTier, ceiling: number, owner: string) =>
     ceiling > 0

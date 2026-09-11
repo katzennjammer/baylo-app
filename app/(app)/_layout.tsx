@@ -49,6 +49,14 @@ export default function AppLayout() {
   return (
     <Tabs
       screenOptions={{ header: () => <AppHeader /> }}
+      // "history", not the navigator's default "firstRoute". The hidden routes
+      // below (item, user, hubs, hub, messages) are TABS, and router.back() on
+      // a tab asks this navigator, not a stack, where to go. Under "firstRoute"
+      // the answer is always the first tab — so opening a listing from
+      // Marketplace and pressing back landed on Home. "history" returns to the
+      // tab that was open before, which is what a hidden tab reached by push
+      // should do.
+      backBehavior="history"
       // The cast, and why it is here rather than an import. BottomTabBarProps
       // lives inside expo-router's vendored copy of react-navigation and has no
       // importable path; reaching into expo-router/build/… for it buys a type

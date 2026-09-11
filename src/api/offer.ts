@@ -290,7 +290,6 @@ export function useReach() {
   return {
     /** Null until the shelf has loaded. A grid must not grey tiles on a guess. */
     reach: me.data ? reachThreshold(highest) : null,
-    highestItemValue: highest,
     isPending: me.isPending,
   };
 }
