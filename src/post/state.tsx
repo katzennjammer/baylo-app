@@ -171,14 +171,6 @@ export interface PostState {
   /** True when "Skip for now" was taken. A real route, not an empty selection. */
   hubsSkipped: boolean;
 
-  /**
-   * Set when this flow was entered from an existing listing rather than from
-   * the Post tab. Changes the header title to "Edit listing", the step-4 footer
-   * to "Save changes", and is what `fetchValuation` spends a re-valuation
-   * against.
-   */
-  editingItemId: string | null;
-
   posting: boolean;
   postError: string | null;
   /** The created listing's id. Non-null only after a successful post. */
@@ -193,7 +185,7 @@ export interface PostState {
   rateLimit: { action: "detect" | "duplicate" | "post"; until: number } | null;
 }
 
-export function initialState(editingItemId: string | null = null): PostState {
+export function initialState(): PostState {
   return {
     step: 0,
     photos: [],
@@ -214,7 +206,6 @@ export function initialState(editingItemId: string | null = null): PostState {
     returnCategories: [],
     hubIds: [],
     hubsSkipped: false,
-    editingItemId,
     posting: false,
     postError: null,
     postedItemId: null,
@@ -542,11 +533,9 @@ interface PostCtx {
 const Ctx = createContext<PostCtx | null>(null);
 
 export function PostStateProvider({
-  editingItemId = null,
   initial,
   children,
 }: {
-  editingItemId?: string | null;
   /**
    * A restored draft, seeded as the reducer's INITIAL state rather than
    * dispatched into it after mount.
@@ -561,7 +550,7 @@ export function PostStateProvider({
 }) {
   const [state, dispatch] = useReducer(
     reduce,
-    initial ?? initialState(editingItemId),
+    initial ?? initialState(),
     (s) => s,
   );
   const value = useMemo(() => ({ state, dispatch }), [state]);

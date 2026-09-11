@@ -52,15 +52,29 @@ export function useNotifications() {
  *     note warns against: a message opens a thread WITH someone, not a page
  *     ABOUT them.
  *
- *   trade          → /trades
+ *   trade          → /trade-code?id=<tradeId>, or /trades with no id
  *
- *     COMPROMISE 2. THE ID IS DROPPED, deliberately. There is no trade-detail
- *     screen; the only id-taking trade route is `/trade-code`, which is valid
- *     only for a CONFIRMING trade and renders "that trade is not open any more"
- *     for every other state. Sending an accepted-trade notification there would
- *     manufacture the same false-negative this session just fixed on
- *     offer-review. The Trades list shows the trade in whatever state it is
- *     actually in, which is worse navigation and better information.
+ *     THE ID IS NO LONGER DROPPED. What stood here said `/trade-code` "is valid
+ *     only for a CONFIRMING trade", and that was not true of the screen even
+ *     when it was written: `trade-code.tsx` starts the confirmation on
+ *     `ACCEPTED || CONFIRMING`, and so does POST …/confirm/start. The claim was
+ *     the same wrong belief that left `MeetingRow` in `trades-waiting.tsx`
+ *     without a tap — and between them they made the confirmation screen
+ *     unreachable, since arriving at it is the only thing that issues the codes.
+ *
+ *     So a trade notification now lands on the trade it is about. The screen's
+ *     own not-open branch still covers the states that really are finished — a
+ *     completed or cancelled trade says so there, which is the honest answer to
+ *     tapping a notification about it. An id-less row still falls back to the
+ *     list, which is what a pre-v1 row without an entityId can support.
+ *
+ *   meetup         → /trade-meetup?id=<tradeId>
+ *
+ *     ITS OWN TOKEN, NOT "trade", and the distinction is the reason it exists.
+ *     A meetup notification is "can you do Saturday?" — routing it to the code
+ *     screen would put a pair of 15-minute codes on screen days before the
+ *     meeting, and arriving there is what ISSUES them. The entityId is the same
+ *     tradeId either way; what differs is which question the tap is answering.
  *
  *   user           → /user?id=<userId>          the pre-v1 vocabulary, and the
  *                                               one target it always got right.
@@ -85,7 +99,9 @@ export function notificationTarget(n: NotificationItem): string | null {
     case "conversation":
       return id ? `/messages?partner=${encodeURIComponent(id)}` : "/messages";
     case "trade":
-      return "/(app)/trades";
+      return id ? `/trade-code?id=${encodeURIComponent(id)}` : "/(app)/trades";
+    case "meetup":
+      return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "user":
       return id ? `/user?id=${encodeURIComponent(id)}` : null;
     case "follow_request":

@@ -155,26 +155,38 @@ export function useBlockUser() {
  */
 
 /**
- * The fields the listing menu's edit sheet may change.
+ * The fields this client's two edit surfaces may change.
  *
- * DELIBERATELY THE THREE THAT COST NOTHING TO TOUCH. The PATCH handler re-runs
- * the valuation model whenever `category`, `condition` or `valueLeaves` is
- * present — and can then refuse the request because the stored price no longer
- * fits the new band — and it rewrites hub associations whenever `hubIds` is,
- * and per-photo hashes whenever `images` is. Every one of those is a step in
- * the post wizard, with its own screen and its own explanation of what the
- * server just decided.
+ * DELIBERATELY NOT THE WHOLE LISTING. The PATCH handler re-runs the valuation
+ * model whenever `category`, `condition` or `valueLeaves` is present — and can
+ * then refuse the request because the stored price no longer fits the new band
+ * — and rewrites per-photo hashes whenever `images` is. Each of those needs the
+ * wizard step that explains what the server just decided, and the wizard has
+ * no edit mode (see post-item.tsx). So neither is here.
  *
  * Omitting a field leaves it alone; that is the handler's own convention, and
- * it is what makes a three-field PATCH safe. Sending `images` unchanged, for
+ * it is what makes a partial PATCH safe. Sending `images` unchanged, for
  * instance, would be read as a photo restatement and drop four of a five-photo
  * listing's hashes out of the duplicate pool.
+ *
+ * TWO SURFACES, TWO SUBSETS. `EditListingSheet` sends the three text fields;
+ * `/edit-hubs` sends `hubIds` alone. Both go through this one mutation because
+ * the endpoint, the ownership check and the cache invalidation are the same —
+ * every field is optional so that each surface sends exactly what it shows.
  */
 export interface EditListingInput {
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   /** "What are you hoping to get?" — free text. `""` clears it. */
-  wantedItems: string;
+  wantedItems?: string;
+  /**
+   * The listing's Safe-Zone hubs, RESTATED IN FULL. The server replaces the
+   * association set with this — `[]` clears it. At most `rules.maxHubs`; the
+   * server refuses a sixth, an unknown id, and a hub that has closed since (a
+   * closed hub the listing ALREADY named is kept, so an edit that leaves it
+   * alone is not refused over it).
+   */
+  hubIds?: string[];
 }
 
 /** Server-side caps, mirrored so the composer can stop rather than be refused. */
@@ -203,6 +215,10 @@ export function useUpdateItem(itemId: string | null) {
       void qc.invalidateQueries({ queryKey: ["home"] });
       void qc.invalidateQueries({ queryKey: ["browse"] });
       if (itemId) void qc.invalidateQueries({ queryKey: ["item", itemId] });
+      // A hub change moves the meetup picker's shared set on every open trade
+      // this listing is in. The picker's key is ["trade", <id>, "meetup"] and
+      // this client does not know which trades those are, so the prefix goes.
+      void qc.invalidateQueries({ queryKey: ["trade"] });
     },
   });
 }

@@ -119,6 +119,7 @@ export function FeedCard({
   onShare,
   onMenu,
   offerLayout = OFFER_LAYOUT,
+  viewerId = null,
 }: {
   item: Item;
   /** The urgency chip's copy. See the note above — nothing supplies it today. */
@@ -132,6 +133,8 @@ export function FeedCard({
   onMenu?: (item: Item) => void;
   /** Per-card override of the constant above. The feed does not pass one. */
   offerLayout?: OfferLayout;
+  /** Own listings suppress the offer action even when the item is still listed. */
+  viewerId?: string | null;
 }) {
   const place = item.owner.location?.trim();
   const when = relativeShort(item.createdAt);
@@ -139,6 +142,8 @@ export function FeedCard({
   // `when` empty — so the separator is joined in rather than typed between
   // them, which would strand a " · " on its own.
   const meta = [place, when].filter(Boolean).join(" · ");
+  const isOwnListing = viewerId !== null && item.owner.id === viewerId;
+  const offerAction = isOwnListing ? undefined : () => onOffer?.(item);
 
   return (
     <View style={s.card}>
@@ -207,7 +212,7 @@ export function FeedCard({
         comments={item.stats.comments}
         layout={offerLayout}
         title={item.title}
-        onOffer={() => onOffer?.(item)}
+        onOffer={offerAction}
         onLike={onLike && (() => onLike(item, !item.stats.liked))}
         onComment={onComment && (() => onComment(item))}
         onShare={onShare && (() => onShare(item))}
@@ -432,7 +437,7 @@ function CardActions({
   comments: number;
   layout: OfferLayout;
   title: string;
-  onOffer: () => void;
+  onOffer?: () => void;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -450,14 +455,14 @@ function CardActions({
           onComment={onComment}
           onShare={onShare}
         />
-        {inline ? <OfferButton layout={layout} title={title} onPress={onOffer} /> : null}
+        {inline && onOffer ? <OfferButton layout={layout} title={title} onPress={onOffer} /> : null}
       </View>
 
-      {inline ? null : (
+      {inline ? null : onOffer ? (
         <View style={s.offerWrap}>
           <OfferButton layout={layout} title={title} onPress={onOffer} />
         </View>
-      )}
+      ) : null}
     </>
   );
 }

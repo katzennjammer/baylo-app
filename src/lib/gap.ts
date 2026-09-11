@@ -281,6 +281,33 @@ export function shortDate(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/**
+ * `Sat 13 Sep, 14:00` — an arranged meeting time, in the device's own timezone.
+ *
+ * ── THE WEEKDAY IS NOT DECORATION ───────────────────────────────────────────
+ *
+ * "13 Sep, 14:00" makes somebody count forwards from today to work out whether
+ * they can be there; "Sat 13 Sep" is the way people actually hold an arrangement
+ * in their heads, and it is the half most likely to catch a mistake — agreeing
+ * to a Tuesday you thought was a Saturday is the error this format exists to
+ * make visible before the tap rather than on the day.
+ *
+ * TODAY AND TOMORROW ARE NAMED. Inside two days the date is noise and the
+ * relation is the whole content.
+ *
+ * 24-HOUR, HAND-FORMATTED, like everything else in here — same argument
+ * `shortDate` and `clockTime` make: the artboards are not locale-flexible.
+ */
+export function meetupWhen(at: Date, now: Date = new Date()): string {
+  const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  const days = daysUntil(at, now);
+  if (days === 0) return `Today, ${time}`;
+  if (days === 1) return `Tomorrow, ${time}`;
+  return `${WEEKDAYS[at.getDay()]} ${at.getDate()} ${MONTHS[at.getMonth()]}, ${time}`;
+}
+
 /**
  * Whole days from now to a deadline, counted in LOCAL CALENDAR DAYS.
  *

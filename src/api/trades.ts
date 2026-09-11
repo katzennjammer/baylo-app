@@ -9,6 +9,8 @@ import type {
   ConfirmStatus,
   ContractsPayload,
   LiveOffer,
+  MeetupPlan,
+  SafeZoneHub,
   TradesPayload,
   V1Contract,
 } from "./types";
@@ -620,6 +622,151 @@ export function useRequestExtension() {
       ),
     onSuccess: () => invalidateTrades(qc),
   });
+}
+
+/* ═══════════════════════ THE MEETUP PLAN (gap 6) ══════════════════════ */
+
+/**
+ * Arranging where and when, after accepting and before meeting.
+ *
+ * ── THE PLAN IS NOT THE CLAIM ───────────────────────────────────────────────
+ *
+ * `ActiveTrade.meetup` is what the two of them ARRANGED. `ActiveTrade.safeZoneHub`
+ * is what they CLAIMED afterwards, and it is the one the Safe-Zone award reads.
+ * Nothing in this section writes the claim, and no screen may present a plan as
+ * evidence that a meeting took place — a proposal is one person typing a place
+ * name into their phone.
+ *
+ * ── AGREEING DOES NOT ISSUE CODES ───────────────────────────────────────────
+ *
+ * These hooks never touch `confirm/start`. Codes live 15 minutes, so a pair
+ * minted when a meeting is agreed for Saturday would be dead days before anybody
+ * could read one out. Codes come from opening the code screen, which is the only
+ * thing that has ever issued them.
+ */
+
+export const meetupKey = (tradeId: string) => ["trade", tradeId, "meetup"] as const;
+
+/** What the picker needs, and the standing plan with it. */
+export interface MeetupOptions {
+  /**
+   * EVERY active hub, not the intersection. The plan is deliberately wider than
+   * the claim: two listings that share no hub can still arrange to meet at any
+   * public place, and the other side agrees or counters. Only a hub in
+   * `sharedHubIds` earns the Safe-Zone reward at confirmation — the claim rule
+   * on the server is unchanged, and a plan it would reject simply pays nothing.
+   */
+  hubs: SafeZoneHub[];
+  /** Both listings named these. The picker sorts them first and badges them. */
+  sharedHubIds: string[];
+  /** The viewer's own listing names these. */
+  yourHubIds: string[];
+  /** The other listing names these — proposing one is not new to them. */
+  theirHubIds: string[];
+  plan: MeetupPlan | null;
+  /** Which side the viewer is — read `plan.proposedBy` against this. */
+  you: "sender" | "receiver";
+  /** The viewer's own listing in this trade, for the add-a-hub route out. */
+  yourItemId: string;
+}
+
+export function useMeetupOptions(tradeId: string | undefined) {
+  return useQuery({
+    queryKey: meetupKey(tradeId ?? ""),
+    queryFn: async () => {
+      const { data } = await apiV1<MeetupOptions>(
+        `/api/v1/trades/${encodeURIComponent(tradeId!)}/meetup`,
+      );
+      return data;
+    },
+    enabled: !!tradeId,
+  });
+}
+
+/**
+ * POST …/meetup — propose a place and time, or counter one.
+ *
+ * A COUNTER IS THE SAME CALL. There is no decline: sending a different hub or
+ * time overwrites the plan and clears the agreement, which leaves the other side
+ * something to answer instead of an empty table. The server is what enforces
+ * that; this hook just posts.
+ *
+ * `at` goes over the wire as an ISO instant with an offset, never as typed text.
+ */
+export function useProposeMeetup(tradeId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { hubId: string; at: Date; note?: string }) => {
+      const { data } = await apiV1<{ plan: MeetupPlan }>(
+        `/api/v1/trades/${encodeURIComponent(tradeId!)}/meetup`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hubId: input.hubId,
+            at: input.at.toISOString(),
+            ...(input.note && input.note.trim().length > 0 ? { note: input.note.trim() } : {}),
+          }),
+        },
+      );
+      return data.plan;
+    },
+    onSuccess: () => {
+      if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+      invalidateTrades(qc);
+    },
+  });
+}
+
+/**
+ * POST …/meetup/accept — the other side agrees.
+ *
+ * THE PLAN IS ECHOED BACK. `confirmHubId`/`confirmAt` are what this viewer
+ * believes they are agreeing to, and the server answers 409 if a counter landed
+ * between the screen rendering and the tap. Agreeing to a plan that changed
+ * underneath is the one failure in this flow that ends with somebody standing in
+ * the wrong car park, so the echo is sent always rather than being optional here.
+ */
+export function useAcceptMeetup(tradeId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { confirmHubId: string; confirmAt: string }) => {
+      const { data } = await apiV1<{ plan: MeetupPlan; alreadyAgreed?: boolean }>(
+        `/api/v1/trades/${encodeURIComponent(tradeId!)}/meetup/accept`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      return data;
+    },
+    onSuccess: () => {
+      if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+      invalidateTrades(qc);
+    },
+  });
+}
+
+/**
+ * Whose turn it is on an accepted trade — the one place that reasoning lives.
+ *
+ * Four states, and every screen that draws a meetup row switches on this rather
+ * than re-deriving it from `proposedBy` and `direction`, which is the comparison
+ * that is easy to get backwards.
+ */
+export type MeetupState = "none" | "yours-to-answer" | "waiting-on-them" | "agreed";
+
+export function meetupState(trade: ActiveTrade): MeetupState {
+  const plan = trade.meetup;
+  if (!plan) return "none";
+  if (plan.agreedAt) return "agreed";
+  // `proposedBy` is a side and `direction` says which side the viewer is, so
+  // "sender proposed it" is the viewer's own proposal exactly when they sent.
+  const mine = plan.proposedBy === (trade.direction === "sent" ? "sender" : "receiver");
+  return mine ? "waiting-on-them" : "yours-to-answer";
 }
 
 /** Everything this screen shows, after anything on it changes. */

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 
-import { BlockIcon, FlagIcon, PencilIcon, TrashIcon } from "../icons";
+import { BlockIcon, FlagIcon, PencilIcon, PinIcon, TrashIcon } from "../icons";
 import { ReportReasonRows } from "../ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../sheet-ui";
 import { ApiError } from "../../api/client";
@@ -55,6 +55,7 @@ export function ListingMenu({
   viewerId,
   onClose,
   onEdit,
+  onEditHubs,
 }: {
   /** The listing whose menu is open. Null closes the sheet. */
   item: Item | null;
@@ -63,6 +64,12 @@ export function ListingMenu({
   onClose: () => void;
   /** Raised instead of editing here: the edit sheet is the screen's to own. */
   onEdit: (item: Item) => void;
+  /**
+   * The hubs are a separate surface from the text fields — `/edit-hubs`, a
+   * route rather than a sheet, because it is also reached from the meetup
+   * screen. Raised for the same reason as `onEdit`: the menu closes first.
+   */
+  onEditHubs: (item: Item) => void;
 }) {
   const [panel, setPanel] = useState<Panel>("menu");
 
@@ -207,6 +214,18 @@ export function ListingMenu({
             label="Edit listing"
             disabled={busy}
             onPress={() => onEdit(item)}
+          />
+          <SheetRow
+            glyph={
+              <PinIcon
+                size={icon.menuRow.size}
+                stroke={icon.menuRow.stroke}
+                color={color.inkSecondary}
+              />
+            }
+            label="Where you can meet"
+            disabled={busy}
+            onPress={() => onEditHubs(item)}
           />
           <SheetRow
             glyph={

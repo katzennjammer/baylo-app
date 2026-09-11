@@ -1,8 +1,8 @@
 import * as copy from "./copy";
-import { offerSwapLine, promiseIsNear, swapLine } from "../../api/trades";
+import { meetupState, offerSwapLine, promiseIsNear, swapLine } from "../../api/trades";
 import type { ActiveTrade, LiveOffer, V1Contract } from "../../api/types";
 import { OFFER_REPLY_DAYS, firstName, replyBy, sentAgo } from "../offer/copy";
-import { daysUntil, deadlineLabel, grouped, shortDate } from "../../lib/gap";
+import { daysUntil, deadlineLabel, grouped, meetupWhen, shortDate } from "../../lib/gap";
 import { offerColor, deadlineInk } from "../../theme/offer-tokens";
 
 /**
@@ -122,6 +122,37 @@ export function acceptedTradeWords(trade: ActiveTrade): RowWords {
     subtitle: copy.waiting.pickAHub(firstName(trade.counterparty.name)),
     trailing: copy.waiting.since(new Date(trade.createdAt)),
   };
+}
+
+/**
+ * The second line on an accepted row — what has been arranged, if anything.
+ *
+ * FOUR STATES, SWITCHED ON `meetupState()` RATHER THAN RE-DERIVED. Comparing
+ * `plan.proposedBy` against `trade.direction` is the kind of two-term comparison
+ * that reads correct and is backwards, and getting it backwards here tells the
+ * person who proposed a time that they are the one who has to answer it. It is
+ * decided once, in `src/api/trades.ts`, and read here.
+ *
+ * `agreed` DESCRIBES THE AGREEMENT, NEVER THE MEETING. Two people have tapped
+ * their phones; neither has left the house. The Safe-Zone claim is a different
+ * column for exactly this reason and the words follow it.
+ */
+export function meetupWords(trade: ActiveTrade): { line: string; detail: string | null } {
+  const partner = firstName(trade.counterparty.name);
+  const plan = trade.meetup;
+  const state = meetupState(trade);
+
+  if (!plan || state === "none") {
+    return { line: copy.meetup.none, detail: null };
+  }
+
+  const where = copy.meetup.where(plan.hub.name, meetupWhen(new Date(plan.at)));
+
+  if (state === "agreed") return { line: `${copy.meetup.agreed} · ${where}`, detail: plan.note };
+  if (state === "yours-to-answer") {
+    return { line: copy.meetup.theyProposed(partner), detail: where };
+  }
+  return { line: copy.meetup.waitingOnThem(partner), detail: where };
 }
 
 /** A CONFIRMING trade the viewer has already done their half of. */

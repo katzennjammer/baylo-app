@@ -1,9 +1,13 @@
-import { useRouter } from "expo-router";
+// Both, and for the reason `(app)/trades.tsx` imports both: the screen wants the
+// hook so it re-renders on route changes, and the module-scope rows below want
+// the singleton, which is the same object without needing it threaded as a prop.
+import { router, useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import {
+  meetupState,
   useActiveTrades,
   useCancelTrade,
   useContracts,
@@ -444,25 +448,99 @@ function SentOfferBlock({ offer, onWithdraw }: { offer: LiveOffer; onWithdraw: (
 }
 
 /**
- * An ACCEPTED trade with no meeting. Frame 9c draws a `Set it` control on this
- * row and it is NOT drawn here.
+ * An ACCEPTED trade with no meeting.
  *
- * There is no endpoint behind it. A meet-up hub is not a field on a trade that
- * can be set in advance: it is claimed at confirmation, as `safeZoneHubId` on
- * POST /api/trades/[id]/confirm/submit, and validated against BOTH traded
- * listings' declared hubs before it is accepted. So the row says what is true —
- * the hub is named when the codes are — and carries no control rather than a
- * control that would have to invent a route.
+ * ══ THIS ROW USED TO BE A DEAD END, AND IT CLOSED THE ONLY LOOP OUT ═════════
+ *
+ * What stood here reasoned: frame 9c draws a `Set it` control, there is no
+ * endpoint that sets a hub in advance, therefore the row carries no control at
+ * all. The premise was true and the conclusion did not follow. It confused
+ * "there is nowhere to set a hub" with "there is nowhere to go", and dropping
+ * the second one severed the confirmation path entirely:
+ *
+ *   `/trade-code` is pushed from exactly one place — the `Needs you today` code
+ *   card — and `buildTradesModel()` only builds that card for a CONFIRMING
+ *   trade. The only thing that makes a trade CONFIRMING is POST …/confirm/start,
+ *   and the only caller of it is `app/trade-code.tsx` on mount. So CONFIRMING
+ *   required reaching the code screen and reaching the code screen required
+ *   CONFIRMING. No trade accepted in this app could ever be completed.
+ *
+ * BOTH ENDS WERE ALREADY BUILT FOR ACCEPTED — `trade-code.tsx` starts the
+ * confirmation on `ACCEPTED || CONFIRMING`, and so does the server route. Only
+ * the navigation was missing, so this is a link rather than a feature.
+ *
+ * The row stays in `Waiting` rather than being promoted to `Needs you today`:
+ * an accepted trade is not urgent until you are standing in front of somebody,
+ * and from here the code screen is one tap. The `Needs you today` card appears
+ * on its own once the codes are live, which is what that block is for.
  */
 function MeetingRow({ trade }: { trade: ActiveTrade }) {
   const words = present.acceptedTradeWords(trade);
+  const plan = present.meetupWords(trade);
+  const state = meetupState(trade);
+
+  const openCodes = () => router.push(`/trade-code?id=${encodeURIComponent(trade.id)}`);
+  const openMeetup = () => router.push(`/trade-meetup?id=${encodeURIComponent(trade.id)}`);
+
+  /*
+   * ── WHICH CONTROL LEADS ─────────────────────────────────────────────────
+   *
+   * Both are always reachable, and which one is filled follows whose move it is.
+   * A proposal sitting unanswered is the only thing on this row that somebody is
+   * actually waiting on, so it takes the filled control; in every other state
+   * the arrangement is either settled or with the other person, and the thing
+   * this row is ultimately for — the codes — leads instead.
+   *
+   * THE ROW ITSELF OPENS THE CODES IN EVERY STATE. Plans fall through and people
+   * meet anyway; a row that could only be tapped once a meeting was arranged
+   * would rebuild the dead end this row used to be, one state further along.
+   */
+  const answerFirst = state === "yours-to-answer";
+
   return (
     <WaitingRow
       thumb={<Thumb image={trade.requestedItem.image} size={offerSize.tradeRow.thumb} />}
       title={words.title}
-      subtitle={copy.waiting.codesWhenAgreed}
+      subtitle={plan.line}
       trailing={words.trailing}
-    />
+      onPress={openCodes}
+    >
+      {plan.detail ? (
+        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+          {plan.detail}
+        </Text>
+      ) : null}
+
+      {/* Two neutral controls, NOT `SplitActions` — that pair is decline/accept
+          and carries its outline/affirm weighting with it. Neither of these is a
+          refusal of the other. */}
+      <View style={{ flexDirection: "row", gap: offerSize.button.splitGap }}>
+        <RowAction
+          label={
+            state === "none"
+              ? copy.meetup.setIt
+              : state === "yours-to-answer"
+                ? copy.meetup.agree
+                : copy.meetup.change
+          }
+          onPress={openMeetup}
+          tone={answerFirst ? "filled" : "outline"}
+          fill
+          accessibilityLabel={
+            state === "none"
+              ? `Set a place and time with ${trade.counterparty.name}`
+              : `Open the meeting arrangement with ${trade.counterparty.name}`
+          }
+        />
+        <RowAction
+          label={copy.waiting.getCodes}
+          onPress={openCodes}
+          tone={answerFirst ? "outline" : "filled"}
+          fill
+          accessibilityLabel={`Get the confirmation codes for the trade with ${trade.counterparty.name}`}
+        />
+      </View>
+    </WaitingRow>
   );
 }
 

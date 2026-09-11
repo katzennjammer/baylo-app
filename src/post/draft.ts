@@ -205,18 +205,12 @@ export function useAutosave(state: PostState) {
  * than paint an empty step 1 and then replace it with a restored step 4 — which
  * would be a visible flash of the wrong screen on every resumed draft.
  */
-export function useStoredDraft(editingItemId: string | null) {
+export function useStoredDraft() {
   const [status, setStatus] = useState<"reading" | "ready">("reading");
   const [draft, setDraft] = useState<DraftEnvelope | null>(null);
 
   useEffect(() => {
     let alive = true;
-    // Editing an existing listing never opens a draft: the two would be
-    // different items sharing one file, and the listing is the source of truth.
-    if (editingItemId) {
-      setStatus("ready");
-      return;
-    }
     void loadDraft().then((found) => {
       if (!alive) return;
       setDraft(found);
@@ -225,9 +219,9 @@ export function useStoredDraft(editingItemId: string | null) {
     return () => {
       alive = false;
     };
-  }, [editingItemId]);
+  }, []);
 
-  return { status, draft, initial: draft?.state ?? initialState(editingItemId) };
+  return { status, draft, initial: draft?.state ?? initialState() };
 }
 
 export type { DraftEnvelope };
