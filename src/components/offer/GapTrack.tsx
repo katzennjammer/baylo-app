@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, Text, View } from "react-native";
 
 import { useOfferBoard, useReducedMotion } from "./chrome";
+import { BRACKET_COUNT, bracketLabel, bracketsWord, type Bracket } from "../../lib/brackets";
 import { grouped, type GapResult } from "../../lib/gap";
 import {
   offerColor,
@@ -305,14 +306,24 @@ export function TrackLegend({ left, right }: { left: string; right: string }) {
   );
 }
 
-/* ───────────────────── §7.3 / §1.9 the threshold bar ────────────────── */
+/* ───────────────────── §7.3 / §1.9 the bracket ticks ────────────────── */
 
 /**
- * Out-of-reach's own bar: your item, the margin, the distance.
+ * Out-of-reach's own bar: one tick per value bracket.
  *
- * `#3DBE5A` your item / `#B7D9BE` the margin between it and the threshold /
- * `#C56A4B` the distance beyond. §1.3 is explicit that `green/soft` appears
- * here and nowhere else in the app.
+ * `#3DBE5A` the brackets your highest item covers / `#B7D9BE` the margin up to
+ * your reach / `#C56A4B` the brackets beyond it, up to the listing's / the
+ * `#EAF6EC` wash for everything above. §1.3 is explicit that `green/soft`
+ * appears here and nowhere else in the app.
+ *
+ * ── EQUAL CELLS, NOT PROPORTIONAL SEGMENTS ──────────────────────────────────
+ *
+ * The threshold bar this replaces drew its segments as flex ratios on the true
+ * Leaves values, which was right when the legend under it printed those values
+ * and wrong the moment it stopped: a bar whose widths follow the numbers still
+ * leaks the ratio the bracket exists to withhold — a listing four times your
+ * item's value is visibly four times as long. Ten equal cells say what the
+ * copy says, "two brackets above", and nothing more.
  *
  * THE TERRACOTTA HERE IS NOT AN ERROR COLOUR. §1.4's closing line — "Never used
  * for out-of-reach. Out-of-reach is not an error" — refers to the four warm
@@ -320,75 +331,63 @@ export function TrackLegend({ left, right }: { left: string; right: string }) {
  * table then assigns the distance segment `#C56A4B` explicitly. The two agree:
  * the hex marks a distance, and nothing around it is styled as a failure.
  *
- * No animation. This bar is drawn once from a threshold that only moves when
- * the shelf does, and §11 gives it no transition.
+ * No animation. This bar is drawn once from a reach that only moves when the
+ * shelf does, and §11 gives it no transition.
  */
-export function ThresholdBar({
-  yourItem,
+export function BracketTicks({
+  yourBracket,
   reach,
   listing,
 }: {
   /**
-   * Your highest item's value, or null for a viewer with nothing posted. NULL
-   * DRAWS NO SEGMENT, rather than a zero-width one: the bar then starts at the
-   * floor and reads as "the margin, then the distance", which is the honest
-   * shape — a sliver of green with a label under it would claim an item that
-   * does not exist.
+   * Your highest item's bracket, or null for a viewer with nothing posted.
+   * NULL DRAWS NO GREEN: the ticks then start at the floor and read as "the
+   * margin, then the distance", which is the honest shape — a green cell with
+   * a label under it would claim an item that does not exist.
    */
-  yourItem: number | null;
-  /** The computed reach — `max(highest × 1.5, 150)`. */
-  reach: number;
-  /** This listing's value, which is above `reach` or the bar would not be drawn. */
-  listing: number;
+  yourBracket: Bracket | null;
+  /** The reach bracket — one above your best, floored at bracket 2. */
+  reach: Bracket;
+  /** This listing's bracket, above `reach` or the bar would not be drawn. */
+  listing: Bracket;
 }) {
-  const margin = Math.max(0, reach - (yourItem ?? 0));
-  const distance = Math.max(0, listing - reach);
+  const cells = Array.from({ length: BRACKET_COUNT }, (_, i) => i + 1);
+  const tone = (b: Bracket): string =>
+    yourBracket !== null && b <= yourBracket
+      ? offerColor.green
+      : b <= reach
+        ? offerColor.soft
+        : b <= listing
+          ? offerColor.warm
+          : offerColor.trackGreen;
 
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityLabel={
-        yourItem === null
-          ? `You have nothing posted, so your reach starts at ${grouped(reach)}. ` +
-            `This listing is ${grouped(listing)} — ${grouped(distance)} above that.`
-          : `Your highest item is ${grouped(yourItem)}. A swap here is straightforward from about ` +
-            `${grouped(reach)}, and this listing is ${grouped(listing)} — ` +
-            `${grouped(listing - yourItem)} further than your item on its own.`
+        yourBracket === null
+          ? `You have nothing posted, so your reach starts at ${bracketLabel(reach)}. ` +
+            `This listing is in ${bracketLabel(listing)}, ${bracketsWord(listing - reach)} above that.`
+          : `Your highest item is in ${bracketLabel(yourBracket)} and reaches into ` +
+            `${bracketLabel(reach)}. This listing is in ${bracketLabel(listing)}, ` +
+            `${bracketsWord(listing - reach)} above your reach.`
       }
       style={{
-        height: offerSize.thresholdBar.height,
-        borderRadius: offerSize.thresholdBar.radius,
-        backgroundColor: offerColor.trackGreen,
+        height: offerSize.bracketTicks.height,
         flexDirection: "row",
-        overflow: "hidden",
+        gap: offerSize.bracketTicks.gap,
       }}
     >
-      {yourItem !== null ? (
+      {cells.map((b) => (
         <View
+          key={b}
           style={{
-            flexGrow: yourItem,
-            flexBasis: 0,
-            minWidth: offerSize.track.minSegment,
-            backgroundColor: offerColor.green,
+            flex: 1,
+            borderRadius: offerSize.bracketTicks.radius,
+            backgroundColor: tone(b),
           }}
         />
-      ) : null}
-      <View
-        style={{
-          flexGrow: margin,
-          flexBasis: 0,
-          minWidth: margin > 0 ? offerSize.track.minSegment : 0,
-          backgroundColor: offerColor.soft,
-        }}
-      />
-      <View
-        style={{
-          flexGrow: distance,
-          flexBasis: 0,
-          minWidth: offerSize.track.minSegment,
-          backgroundColor: offerColor.warm,
-        }}
-      />
+      ))}
     </View>
   );
 }

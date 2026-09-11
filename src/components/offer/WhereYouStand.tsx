@@ -4,9 +4,10 @@ import { PlusIcon } from "../icons";
 import { ArrowsIcon, PromiseIcon } from "./icons";
 import { RouteRow } from "./rows";
 import { Section, SectionLabel } from "./chrome";
-import { ThresholdBar } from "./GapTrack";
+import { BracketTicks } from "./GapTrack";
 import * as copy from "./copy";
-import { grouped } from "../../lib/gap";
+import { bracketOf, type Bracket } from "../../lib/brackets";
+import { bracketsBeyondReach, isOutOfReach } from "../../lib/gap";
 import type { TrustTier } from "../../lib/trust";
 import {
   offerColor,
@@ -30,7 +31,7 @@ import {
  *
  * ── THE ORDER IS FIXED BY §7.3 ──────────────────────────────────────────────
  *
- *   label → one paragraph → threshold bar → legend → two route rows → footnote
+ *   label → one paragraph → bracket ticks → legend → two route rows → footnote
  *
  * and §3.6 fixes every gap between them. Both routes are ROWS, not buttons —
  * §7.3 again — because a route here is an explanation of what would work, not a
@@ -39,15 +40,27 @@ import {
  * ── NOT AN ERROR, AND THE COPY IS POLICED FOR IT ────────────────────────────
  *
  * §1.4's closing line keeps the warm accent out of this area as a failure
- * signal; the one place it appears is the bar's distance segment, where it marks
+ * signal; the one place it appears is the bar's distance cells, where it marks
  * a distance. §10.8's closing list bans `locked`, `unavailable`, `you can't`,
  * `too expensive`, `upgrade`, `unlock` and any figure describing the user's
  * total worth — the last of which is why this insert names the viewer's HIGHEST
  * ITEM and never a sum of everything they own.
  *
+ * ── THE LISTING IS A BRACKET; YOUR OWN ITEM IS A NUMBER ─────────────────────
+ *
+ * The paragraph names your highest item at its exact value — it is yours to
+ * know — and the listing only by bracket. The distance is stated in brackets,
+ * the ticks are drawn in brackets, and the reach itself is a bracket (see
+ * `reachBracket()` in gap.ts), so no line of this insert can put an exact
+ * figure on somebody else's listing or contradict the grey on the grid.
+ *
+ * NOT DRAWN UNDER A PREMIUM LOCK. This insert ends "you can send an offer
+ * regardless", and above a locked control that sentence is false. Item detail
+ * decides — see `PremiumLockedBar` — and the lock wins.
+ *
  * ── THE EMPTY SHELF — A VARIANT THE SPEC DID NOT WRITE ──────────────────────
  *
- * §7.1's floor means a viewer with NOTHING posted still has a reach (150), so
+ * §7.1's floor means a viewer with NOTHING posted still has a reach (bracket 2), so
  * the grid greys for them exactly as it does for anyone else — but §10.8's
  * paragraph names "your highest item", the bar has a "your item" segment, and
  * the legend reads `Your chair 760`; none of that can be drawn from nothing.
@@ -59,8 +72,8 @@ import {
  *
  *   - a heading line goes in between the label and the paragraph, and the
  *     paragraph is rewritten around the floor rather than around an item;
- *   - the bar draws NO "your item" segment — it starts at the floor. Not a
- *     zero-width one: a sliver with a label under it would claim an item that
+ *   - the ticks draw NO green "your item" cells — they start at the floor. Not
+ *     one cell: a green cell with a label under it would claim an item that
  *     does not exist. The left legend label becomes `Starting reach`;
  *   - the first route is `Post an item` — the real fix, and the thing the
  *     standard set is missing — and `Trade up to it` is dropped, because "two
@@ -75,14 +88,15 @@ export function WhereYouStand({
   tier,
   promiseCeiling,
 }: {
-  /** This listing's value. Above `reach`, or the insert would not be drawn. */
+  /** This listing's value. Its bracket is above `reach`, or the insert would not be drawn. */
   listingValue: number;
   /**
    * The viewer's highest AVAILABLE item — the one §10.8's paragraph names — or
    * null for a viewer with nothing posted. See the header note on the variant.
    */
   highestItem: { title: string; valueLeaves: number } | null;
-  reach: number;
+  /** The reach BRACKET. */
+  reach: Bracket;
   owner: string;
   tier: TrustTier;
   /**
@@ -93,7 +107,7 @@ export function WhereYouStand({
    */
   promiseCeiling: number;
 }) {
-  const distance = listingValue - reach;
+  const listingBracket = bracketOf(listingValue);
 
   return (
     <Section pad={offerSpace.section.reachInsert}>
@@ -123,21 +137,21 @@ export function WhereYouStand({
         ]}
       >
         {highestItem === null
-          ? copy.reach.emptyBody(reach, distance)
-          : copy.reach.body(highestItem.title, highestItem.valueLeaves, reach, distance)}
+          ? copy.reach.emptyBody(reach, listingBracket)
+          : copy.reach.body(highestItem.title, highestItem.valueLeaves, reach, listingBracket)}
       </Text>
 
       <View style={{ marginTop: offerSpace.reach.copyToBar }}>
-        <ThresholdBar
-          yourItem={highestItem === null ? null : highestItem.valueLeaves}
+        <BracketTicks
+          yourBracket={highestItem === null ? null : bracketOf(highestItem.valueLeaves)}
           reach={reach}
-          listing={listingValue}
+          listing={listingBracket}
         />
       </View>
 
-      {/* §7.3's legend: your item on the left, the listing's value on the right.
-          Same two-mono-labels-space-between shape as the gap track's, which is
-          why it reads as the same kind of bar. */}
+      {/* §7.3's legend: your item on the left, the listing's BRACKET on the
+          right. Same two-mono-labels-space-between shape as the gap track's,
+          which is why it reads as the same kind of bar. */}
       <View
         style={{
           marginTop: offerSpace.reach.barToLegend,
@@ -151,7 +165,7 @@ export function WhereYouStand({
             : copy.reach.legendYours(highestItem.title, highestItem.valueLeaves)}
         </Text>
         <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
-          {copy.reach.legendTheirs(listingValue)}
+          {copy.reach.legendTheirs(listingBracket)}
         </Text>
       </View>
 
@@ -215,7 +229,7 @@ export function WhereYouStand({
           { color: offerColor.inkTertiary, marginTop: offerSpace.reach.routesToFootnote },
         ]}
       >
-        {copy.reach.footnote(owner)}
+        {copy.reach.footnote}
       </Text>
     </Section>
   );
@@ -238,12 +252,12 @@ export function WhereYouStand({
  */
 export function shouldShowWhereYouStand(
   listingValue: number | null,
-  reach: number | null,
+  reach: Bracket | null,
 ): boolean {
-  return listingValue !== null && reach !== null && listingValue > reach;
+  return listingValue !== null && reach !== null && isOutOfReach(listingValue, reach);
 }
 
-/** The mono distance line the tile shows, reused where the screen wants it. */
-export function reachDistance(listingValue: number, reach: number): string {
-  return grouped(listingValue - reach);
+/** The bracket distance the tile states, reused where a screen wants it. */
+export function reachDistance(listingValue: number, reach: Bracket): number {
+  return bracketsBeyondReach(listingValue, reach);
 }

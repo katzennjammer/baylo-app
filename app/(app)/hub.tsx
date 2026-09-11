@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { useSession } from "../../src/auth/session";
 import { Splash } from "../../src/components/Splash";
 import { useHubItems } from "../../src/api/hubs";
 import type { Item } from "../../src/api/types";
@@ -60,6 +61,8 @@ import {
  */
 export default function HubScreen() {
   const router = useRouter();
+  /** Own tiles show the exact value, everyone else's a bracket — see GridTile. */
+  const viewerId = useSession().session?.user.id ?? null;
   const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -94,7 +97,11 @@ export default function HubScreen() {
     return (
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
-        <BrowseError message="No Safe Zone was named in that link." onRetry={() => router.back()} />
+        <BrowseError
+          headline="Could not open this Safe Zone"
+          message="No Safe Zone was named in that link."
+          onRetry={() => router.back()}
+        />
       </View>
     );
   }
@@ -190,6 +197,7 @@ export default function HubScreen() {
             item={item}
             width={tileWidth}
             onPress={(it) => router.push({ pathname: "/item", params: { id: it.id } })}
+            viewerId={viewerId}
           />
         )}
         numColumns={2}
@@ -201,6 +209,11 @@ export default function HubScreen() {
             <BrowseSkeleton tileWidth={tileWidth} />
           ) : isError ? (
             <BrowseError
+              headline={
+                apiError?.code === "NOT_FOUND"
+                  ? "Safe Zone unavailable"
+                  : "Could not load this Safe Zone"
+              }
               message={
                 apiError?.code === "NOT_FOUND"
                   ? "That Safe Zone no longer exists."

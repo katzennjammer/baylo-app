@@ -17,39 +17,66 @@
  * disagree it is said so at the call site.
  */
 
+import { BRACKET_COUNT, bracketOf, type Bracket } from "./brackets";
 import type { TrustTier } from "./trust";
 
-/* ───────────────────────── §7.1 the reach threshold ─────────────────── */
+/* ───────────────────────── §7.1 the reach, in brackets ──────────────── */
 
 /**
- * `reach = max(highest_available_item_value × 1.5, 150)`.
+ * `reach = bracketOf(highest AVAILABLE item) + 1`, floored at bracket 2.
  *
- * The floor matters more than the multiplier: a user with one 40-Leaf item
- * would otherwise have a reach of 60, and nearly the whole grid would go grey
- * on their first session. 150 is the number that keeps a new account looking at
- * a marketplace rather than at a wall.
+ * ── WHY A BRACKET AND NOT `max(highest × 1.5, 150)` ─────────────────────────
+ *
+ * The threshold used to be a Leaves figure. Once other people's listings are
+ * shown as brackets (see `src/lib/brackets.ts`), a Leaves threshold contradicts
+ * the sentence beside it: a 700-Leaf listing greyed against a 638 reach sits in
+ * the SAME bracket as the reach, so the tile says "further off" while the copy
+ * says "Bracket 4, same as yours". That is the §7 disagreement between the grid
+ * and the insert in a new form, and the fix is the same — one test, in one
+ * unit, that both halves read.
+ *
+ * "One bracket above your best item" is also a rule a person can hold. The 1.5×
+ * multiplier was a number; this is a sentence. Checked against the old rule it
+ * is never NARROWER below 9,000: at the top of a bracket the two agree, and at
+ * the bottom (a best item at 101, 251 or 600) this one reaches one bracket
+ * further, because 1.5× of a bottom-of-bracket value does not clear the next
+ * ceiling. Above 9,000 the old rule reached bracket 10 and this one stops at 9.
+ *
+ * THE FLOOR IS BRACKET 2 (up to 250). The old floor was 150 Leaves, which is in
+ * bracket 2, so a new account looks at the same marketplace it did before: a
+ * user with one 40-Leaf item would otherwise reach only bracket 2 anyway, and a
+ * user with nothing posted needs a reach or the whole grid goes grey.
  *
  * AVAILABLE MEANS POSTED, NOT PROMISED TO ANOTHER TRADE (§7.1). See the note in
  * `src/api/offer.ts` on what the endpoints can and cannot tell us about the
  * second half of that sentence.
  */
-export const REACH_MULTIPLIER = 1.5;
-export const REACH_FLOOR = 150;
+export const REACH_BRACKETS_ABOVE_BEST = 1;
+export const REACH_FLOOR_BRACKET: Bracket = 2;
 
-export function reachThreshold(highestAvailableItemValue: number): number {
-  return Math.max(Math.round(highestAvailableItemValue * REACH_MULTIPLIER), REACH_FLOOR);
+export function reachBracket(highestAvailableItemValue: number): Bracket {
+  const fromBest =
+    highestAvailableItemValue > 0
+      ? bracketOf(highestAvailableItemValue) + REACH_BRACKETS_ABOVE_BEST
+      : REACH_FLOOR_BRACKET;
+  return Math.min(BRACKET_COUNT, Math.max(REACH_FLOOR_BRACKET, fromBest));
 }
 
 /**
- * §7.1. Strictly greater — a listing exactly AT the threshold is in reach, and
- * the tile stays in colour.
+ * §7.1. Strictly greater — a listing IN the reach bracket is in reach, and the
+ * tile stays in colour.
  *
  * An unvalued listing (`valueLeaves === null`) is never out of reach. There is
- * no distance to state, and greying a tile whose value nobody knows would be a
+ * no bracket to compare, and greying a tile whose value nobody knows would be a
  * claim the data does not support.
  */
-export function isOutOfReach(listingValue: number | null, reach: number): boolean {
-  return listingValue !== null && listingValue > reach;
+export function isOutOfReach(listingValue: number | null, reach: Bracket): boolean {
+  return listingValue !== null && bracketOf(listingValue) > reach;
+}
+
+/** How many brackets past the reach a listing sits. 0 when it is in reach. */
+export function bracketsBeyondReach(listingValue: number, reach: Bracket): number {
+  return Math.max(0, bracketOf(listingValue) - reach);
 }
 
 /* ───────────────────────── §5.1 the five situations ─────────────────── */

@@ -385,7 +385,13 @@ export const offerSize = {
   sectionHeader: { labelToFirst: 21 },
 
   /** §7.3 / §4 — the threshold bar. Same flex rule as the gap track. */
-  thresholdBar: { height: 14, radius: offerRadius.track },
+  /**
+   * §7.3's bar, redrawn as one tick per value bracket. Ten equal cells with a
+   * 2px gap: equal cells rather than proportional segments, because a bar
+   * whose widths follow the true values leaks the ratio the bracket exists to
+   * withhold. Same height and radius as the threshold bar it replaces.
+   */
+  bracketTicks: { height: 14, radius: offerRadius.track, gap: 2 },
 
   /** §4 — buttons. */
   button: { primary: 52, secondary: 52, tertiary: 44, splitGap: 8 },

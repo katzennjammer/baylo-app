@@ -8,11 +8,12 @@ import {
   effectivePromiseCeiling,
   isOutOfReach,
   promiseBlock,
-  reachThreshold,
+  reachBracket,
   type GapResult,
   type PromiseBlock,
   type StandingInput,
 } from "../lib/gap";
+import type { Bracket } from "../lib/brackets";
 import type {
   ContractPreviewPayload,
   Item,
@@ -120,9 +121,17 @@ export interface OfferContext {
   promiseBlocked: PromiseBlock;
   /** What may actually be promised: the headroom, or 0 when anything refuses. */
   promiseCeiling: number;
-  /** §7.1 — highest AVAILABLE item value, and the reach it produces. */
+  /** §7.1 — highest AVAILABLE item value, and the reach BRACKET it produces. */
   highestItemValue: number;
-  reach: number;
+  reach: Bracket;
+  /**
+   * `viewer.offerLock === "premium"`: the listing sits in PREMIUM_MIN_BRACKET
+   * or above and this viewer has no live subscription. The server's own
+   * verdict, mirrored by `enforcePremiumForListing()` on POST /api/offers;
+   * the composer draws the locked panel instead of composing. Above the tier
+   * cap in precedence — see `PremiumLockedPanel` for why.
+   */
+  premiumLocked: boolean;
   /**
    * The tier's item-value ceiling applied to the LISTING, which is what
    * `enforceItemValueCeiling()` caps on POST /api/offers. Null when the tier is
@@ -226,7 +235,8 @@ export function useOfferContext(itemId: string | undefined) {
       promiseBlocked: promiseBlock(standing),
       promiseCeiling: effectivePromiseCeiling(standing),
       highestItemValue,
-      reach: reachThreshold(highestItemValue),
+      reach: reachBracket(highestItemValue),
+      premiumLocked: detail.viewer.offerLock === "premium",
       maxItemValueLeaves: cap,
       tierItemCapExceeded:
         cap !== null && detail.item.valueLeaves !== null && detail.item.valueLeaves > cap,
@@ -288,14 +298,18 @@ export function useReach() {
   );
 
   return {
-    /** Null until the shelf has loaded. A grid must not grey tiles on a guess. */
-    reach: me.data ? reachThreshold(highest) : null,
+    /**
+     * The reach BRACKET, or null until the shelf has loaded. A grid must not
+     * grey tiles on a guess. A bracket rather than a Leaves figure — see
+     * `reachBracket()` for why the two cannot be mixed.
+     */
+    reach: me.data ? reachBracket(highest) : null,
     isPending: me.isPending,
   };
 }
 
 /** `isOutOfReach`, curried against a possibly-not-yet-known reach. */
-export function tileOutOfReach(item: Item, reach: number | null): boolean {
+export function tileOutOfReach(item: Item, reach: Bracket | null): boolean {
   return reach !== null && isOutOfReach(item.valueLeaves, reach);
 }
 

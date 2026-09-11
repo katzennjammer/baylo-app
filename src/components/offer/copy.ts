@@ -51,6 +51,7 @@
  *                         to §10's own rules above.
  */
 
+import { bracketLabel, bracketsWord, PREMIUM_MIN_BRACKET } from "../../lib/brackets";
 import { grouped } from "../../lib/gap";
 import type { PromiseBlock } from "../../lib/gap";
 import type { TrustTier } from "../../lib/trust";
@@ -423,39 +424,53 @@ export const sendFailed = {
 /* ─────────────────────────── §10.8 out-of-reach ─────────────────────── */
 
 export const reach = {
-  /** `2,000 Leaves · 860 above your reach` */
-  tileValue: (value: number, above: number) =>
-    `${grouped(value)} Leaves · ${grouped(above)} above your reach`,
+  /**
+   * `Bracket 6 · 2 brackets above your reach`. The tile's out-of-reach line.
+   *
+   * A BRACKET, NOT A FIGURE. §10.8 wrote `2,000 Leaves · 860 above your reach`
+   * when the grid showed exact values; it shows brackets now (see
+   * `src/lib/brackets.ts`), and the distance is in the same unit as the value
+   * beside it, or the two would contradict.
+   */
+  tileValue: (bracket: number, above: number) =>
+    `${bracketLabel(bracket)} · ${bracketsWord(above)} above your reach`,
   label: label.whereYouStand,
-  body: (highestTitle: string, highestValue: number, reachTo: number, distance: number) =>
+  /**
+   * The viewer's OWN highest item is named with its exact value — it is theirs
+   * to know — and the listing is named by bracket only.
+   */
+  body: (highestTitle: string, highestValue: number, reachTo: number, listingBracket: number) =>
     `This one is further than your items reach on their own. Your highest is the ` +
-    `${highestTitle} at ${grouped(highestValue)}, and it takes about ${grouped(reachTo)} ` +
-    `before a swap here is straightforward — so there's ${grouped(distance)} to cover ` +
-    `another way. Two routes do work.`,
+    `${highestTitle} at ${grouped(highestValue)}, which reaches into ${bracketLabel(reachTo)}. ` +
+    `This listing is in ${bracketLabel(listingBracket)}, ` +
+    `${bracketsWord(listingBracket - reachTo)} above that. Two routes do work.`,
   /**
    * The empty-shelf variant. §10.8's paragraph names "your highest item", which
    * cannot be written for a viewer who has posted nothing — and that viewer is
-   * exactly who §7.1's floor exists for: `max(0 × 1.5, 150)` is 150, so the grid
-   * still greys and the insert still owes an explanation. The heading is the
-   * fact the paragraph would otherwise have to dance around.
+   * exactly who the reach floor exists for: an empty shelf still reaches
+   * bracket 2, so the grid still greys and the insert still owes an
+   * explanation. The heading is the fact the paragraph would otherwise have to
+   * dance around.
    */
   emptyHeading: "You haven't posted anything yet",
-  emptyBody: (reachTo: number, distance: number) =>
-    `Your reach starts at ${grouped(reachTo)} Leaves until you post something. ` +
-    `This item is ${grouped(distance)} above that. Two routes work from here.`,
-  /** The two legend labels either end of the threshold bar. */
+  emptyBody: (reachTo: number, listingBracket: number) =>
+    `Your reach starts at ${bracketLabel(reachTo)} until you post something. ` +
+    `This item is in ${bracketLabel(listingBracket)}, ` +
+    `${bracketsWord(listingBracket - reachTo)} above that. Two routes work from here.`,
+  /** The two legend labels either end of the bracket ticks. */
   legendYours: (title: string, value: number) => `Your ${title} ${grouped(value)}`,
-  /** Left legend label when there is no item to name — the bar starts at the floor. */
+  /** Left legend label when there is no item to name — the ticks start at the floor. */
   legendStarting: "Starting reach",
-  legendTheirs: (value: number) => grouped(value),
+  legendTheirs: (bracket: number) => bracketLabel(bracket),
   /**
    * The empty-shelf variant's first route, in place of "Trade up to it" — two
    * trades near your own value is advice about a shelf, and this viewer has
-   * none. Posting is the real fix: the line is 1.5× the highest posted item.
+   * none. Posting is the real fix: the reach is one bracket above the highest
+   * posted item.
    */
   routePost: "Post an item",
   routePostSub:
-    "Your reach is one and a half times your highest posted item, so a single listing moves the line.",
+    "Your reach is one bracket above your highest posted item, so a single listing moves the line.",
   routePromise: "Offer with a promise",
   routePromiseSub: (tier: TrustTier, ceiling: number, owner: string) =>
     ceiling > 0
@@ -468,9 +483,39 @@ export const reach = {
   routeTradeUp: "Trade up to it",
   routeTradeUpSub:
     "Two trades near your own value usually move the line further than one big offer does.",
-  footnote: (owner: string) =>
-    `You can send an offer regardless. ${owner} sees the same numbers you do.`,
+  /**
+   * Used to end "…{owner} sees the same numbers you do." That clause is gone:
+   * the owner sees their own exact value and the viewer sees a bracket, so it
+   * stopped being true. The half that survives is the half that makes this
+   * insert an explanation rather than a refusal.
+   */
+  footnote: "You can send an offer regardless.",
   button: "Offer a trade",
+} as const;
+
+/**
+ * The premium lock on item detail and the composer.
+ *
+ * ── WHAT THIS STATE MUST NOT DO ─────────────────────────────────────────────
+ *
+ * It must not imply a purchase is possible today: no price, no "Upgrade" or
+ * "Subscribe" control, no button that leads nowhere. There is no billing yet
+ * and a control that pretends there is would be a promise the app cannot keep.
+ * And it must not make the listing feel hidden — the photo, title, bracket,
+ * owner, hubs, share, comments and likes are all untouched. The lock explains
+ * the CONTROL, not the listing. `locked` is used here and nowhere else in the
+ * offer area, and only because this one is a lock.
+ */
+export const premium = {
+  bar: "Premium needed to trade here",
+  heading: "Trading at bracket 7 and above needs a premium subscription",
+  body: (bracket: number, owner: string) =>
+    `This listing is in ${bracketLabel(bracket)}. Premium is coming soon — there is nothing ` +
+    `to buy yet, and nothing here is hidden. ${owner}'s listing stays in view; only proposing ` +
+    `on it is locked until then.`,
+  a11y: (bracket: number) =>
+    `Offer locked. Trading at bracket ${PREMIUM_MIN_BRACKET} and above needs a premium ` +
+    `subscription, which is coming soon. This listing is in ${bracketLabel(bracket)}.`,
 } as const;
 
 /** §10.8 — the one-time prompt. */

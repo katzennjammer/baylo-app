@@ -39,7 +39,8 @@ import {
   BrowseSkeleton,
 } from "../../src/components/marketplace/BrowseStates";
 import { GridTile } from "../../src/components/marketplace/GridTile";
-import { useReach } from "../../src/api/offer";
+import { useReach, tileOutOfReach } from "../../src/api/offer";
+import { useSession } from "../../src/auth/session";
 import { ReachPromptSheet } from "../../src/components/offer/OfferSheet";
 import { prompt as promptCopy } from "../../src/components/offer/copy";
 import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/reach-flag";
@@ -118,8 +119,15 @@ export default function MarketplaceScreen() {
    */
   const hubsQuery = useHubs(view === "map");
 
-  /** §7.1's threshold, from the viewer's own shelf. Null until it has loaded. */
+  /** §7.1's reach bracket, from the viewer's own shelf. Null until it has loaded. */
   const { reach } = useReach();
+  /**
+   * Whose grid this is. The browse route includes the viewer's own listings,
+   * and those tiles show the exact value where everyone else's show a bracket
+   * — the same owner test `FeedCard` makes. The session is guaranteed by the
+   * (app) layout gate, so this is never null here.
+   */
+  const viewerId = useSession().session?.user.id ?? null;
 
   const {
     items,
@@ -184,9 +192,15 @@ export default function MarketplaceScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Item }) => (
-      <GridTile item={item} width={tileWidth} onPress={openItem} reach={reach} />
+      <GridTile
+        item={item}
+        width={tileWidth}
+        onPress={openItem}
+        reach={reach}
+        viewerId={viewerId}
+      />
     ),
-    [tileWidth, openItem, reach],
+    [tileWidth, openItem, reach, viewerId],
   );
 
   /*
@@ -205,8 +219,9 @@ export default function MarketplaceScreen() {
    * the shelf changes and a different set of tiles goes grey.
    */
   const [dismissed, setDismissed] = useState(() => hasSeenReachExplainer());
+  // The tile's own predicate, so the prompt and the grey cannot disagree.
   const anyOutOfReach =
-    reach !== null && items.some((i) => i.valueLeaves !== null && i.valueLeaves > reach);
+    reach !== null && items.some((i) => i.owner.id !== viewerId && tileOutOfReach(i, reach));
   const showPrompt = !dismissed && anyOutOfReach && view === "grid";
 
   const filtering = isFiltered(filters);

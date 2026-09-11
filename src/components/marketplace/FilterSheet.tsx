@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { CheckIcon } from "../icons";
 import { Tappable } from "../Tappable";
@@ -14,33 +14,36 @@ import {
   type,
 } from "../../theme/tokens";
 import { CONDITIONS, MAX_CATEGORIES, type BrowseFilters } from "../../api/browse";
+import { BRACKET_COUNT, bracketOf, bracketRange, type Bracket } from "../../lib/brackets";
 
 /**
- * Category, condition and Leaf range, in a sheet.
+ * Category, condition and value bracket, in a sheet.
  *
  * ── IT EDITS A DRAFT ────────────────────────────────────────────────────────
  *
  * Nothing here touches the live filters until Apply. The sheet holds its own
  * copy, seeded from the current filters each time it opens, and Cancel throws
  * it away. That is the difference between a control panel and a slot machine:
- * live-applying a Leaf range as somebody types "1", "12", "120" fires three
- * queries, two of which are for numbers they never meant.
+ * live-applying a range as somebody narrows it fires a query per tap, most of
+ * them for ranges they never meant.
  *
  * The category RAIL outside the sheet is the opposite — one tap, applied
  * immediately — and the two are not inconsistent. A chip is a single complete
- * decision; a range is not complete until the person stops typing, and there is
- * no reliable way to know when that is.
+ * decision; a range is not complete until the person stops adjusting it.
  *
- * ── THE RANGE INPUTS ────────────────────────────────────────────────────────
+ * ── THE RANGE IS IN BRACKETS, NOT LEAVES ────────────────────────────────────
  *
- * Kept as STRINGS in state and only parsed on Apply. Holding them as numbers
- * means an empty field has to be represented as null and "0" and "" become
- * indistinguishable while typing — the field would erase itself the moment
- * somebody cleared it to start again.
+ * Other people's listings show a bracket, not a figure (`src/lib/brackets.ts`),
+ * so a "Min Leaves / Max Leaves" pair of number fields would be asking for a
+ * unit the results never display — and would let somebody bisect a listing's
+ * exact value by narrowing the range until it dropped out. Two rows of bracket
+ * chips instead: pick a lowest, pick a highest. Nothing typed.
  *
- * The server refuses min > max with a 400. Rather than let that reach the user
- * as an error banner, Apply is disabled while the pair is inverted and the
- * reason is said under the inputs.
+ * THE WIRE IS UNCHANGED. `/api/v1/browse` still takes `minLeaves`/`maxLeaves`;
+ * Apply converts the chosen brackets to their Leaf bounds, and reopening
+ * converts the live bounds back to brackets with `bracketOf`, so a range set by
+ * any older build still reads correctly here. An inverted pair cannot be
+ * built: tapping a lowest above the highest drags the highest with it.
  */
 
 export function FilterSheet({
@@ -58,8 +61,9 @@ export function FilterSheet({
 }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [condition, setCondition] = useState<string | null>(null);
-  const [min, setMin] = useState("");
-  const [max, setMax] = useState("");
+  /** Lowest and highest bracket, or null for "no bound on that side". */
+  const [minBracket, setMinBracket] = useState<Bracket | null>(null);
+  const [maxBracket, setMaxBracket] = useState<Bracket | null>(null);
 
   // Reseed on each open. Without the `visible` dependency the draft would keep
   // whatever the last session left in it, so reopening after a Cancel would
@@ -68,36 +72,43 @@ export function FilterSheet({
     if (!visible) return;
     setCategories([...(filters.categories ?? [])]);
     setCondition(filters.condition ?? null);
-    setMin(filters.minLeaves != null ? String(filters.minLeaves) : "");
-    setMax(filters.maxLeaves != null ? String(filters.maxLeaves) : "");
+    setMinBracket(filters.minLeaves != null ? bracketOf(filters.minLeaves) : null);
+    setMaxBracket(filters.maxLeaves != null ? bracketOf(filters.maxLeaves) : null);
   }, [visible, filters]);
 
-  const minN = min.trim() === "" ? null : Number(min);
-  const maxN = max.trim() === "" ? null : Number(max);
-
-  const badNumber =
-    (minN !== null && !Number.isFinite(minN)) || (maxN !== null && !Number.isFinite(maxN));
-  const inverted = minN !== null && maxN !== null && minN > maxN;
-  const blocked = badNumber || inverted;
-
   const apply = () => {
-    if (blocked) return;
     onApply({
       // `q` is owned by the search field, not by this sheet. Carrying it
       // through unchanged is what stops Apply from clearing the search box.
       q: filters.q,
       categories,
       condition,
-      minLeaves: minN,
-      maxLeaves: maxN,
+      // The bracket's own bounds, so the server's inclusive range covers
+      // exactly the brackets chosen. The open top has no ceiling to send.
+      minLeaves: minBracket !== null ? bracketRange(minBracket).min : null,
+      maxLeaves: maxBracket !== null ? bracketRange(maxBracket).max : null,
     });
   };
 
   const clearAll = () => {
     setCategories([]);
     setCondition(null);
-    setMin("");
-    setMax("");
+    setMinBracket(null);
+    setMaxBracket(null);
+  };
+
+  // Tapping the selected chip clears that side. A lowest above the current
+  // highest drags the highest up to it, and the reverse, so the pair can
+  // never invert — which is the 400 the server would otherwise answer.
+  const pickMin = (b: Bracket) => {
+    if (minBracket === b) return setMinBracket(null);
+    setMinBracket(b);
+    if (maxBracket !== null && maxBracket < b) setMaxBracket(b);
+  };
+  const pickMax = (b: Bracket) => {
+    if (maxBracket === b) return setMaxBracket(null);
+    setMaxBracket(b);
+    if (minBracket !== null && minBracket > b) setMinBracket(b);
   };
 
   const toggleCategory = (c: string) =>
@@ -173,33 +184,46 @@ export function FilterSheet({
             </View>
           </View>
 
-          {/* ── leaf range ── */}
+          {/* ── value bracket ── */}
           <View style={s.group}>
-            <Text style={[textStyle(type.sheetLabel), s.label]}>Value in Leaves</Text>
-            <View style={s.range}>
-              <RangeInput value={min} onChange={setMin} placeholder="Min" label="Minimum Leaves" />
-              <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>to</Text>
-              <RangeInput value={max} onChange={setMax} placeholder="Max" label="Maximum Leaves" />
+            <Text style={[textStyle(type.sheetLabel), s.label]}>
+              Lowest bracket
+              <Text style={[textStyle(type.gridMeta), { color: color.inkMuted }]}>
+                {"   1 is the smallest"}
+              </Text>
+            </Text>
+            <View style={s.options}>
+              {BRACKETS.map((b) => (
+                <Option
+                  key={`min-${b}`}
+                  label={String(b)}
+                  selected={minBracket === b}
+                  onPress={() => pickMin(b)}
+                />
+              ))}
             </View>
+          </View>
 
-            {inverted ? (
-              <Text style={[textStyle(type.gridMeta), s.warning]}>
-                The minimum is above the maximum, so nothing could match.
-              </Text>
-            ) : null}
-            {badNumber ? (
-              <Text style={[textStyle(type.gridMeta), s.warning]}>
-                Leaf values have to be whole numbers.
-              </Text>
-            ) : null}
+          <View style={s.group}>
+            <Text style={[textStyle(type.sheetLabel), s.label]}>Highest bracket</Text>
+            <View style={s.options}>
+              {BRACKETS.map((b) => (
+                <Option
+                  key={`max-${b}`}
+                  label={String(b)}
+                  selected={maxBracket === b}
+                  onPress={() => pickMax(b)}
+                />
+              ))}
+            </View>
 
             {/*
               Said plainly because the server's behaviour is not guessable: a
               range EXCLUDES listings with no value at all, rather than treating
-              them as zero. An unpriced item is not an item worth nothing.
+              them as bracket 1. An unpriced item is not an item worth nothing.
             */}
             <Text style={[textStyle(type.gridMeta), s.note]}>
-              Listings with no value set are hidden while a range is on.
+              Listings with no value set are hidden while a bracket range is on.
             </Text>
           </View>
         </ScrollView>
@@ -218,10 +242,8 @@ export function FilterSheet({
 
           <Tappable
             onPress={apply}
-            disabled={blocked}
             accessibilityRole="button"
-            accessibilityState={{ disabled: blocked }}
-            style={[s.primary, blocked && s.primaryDisabled]}
+            style={s.primary}
             pressedStyle={s.primaryPressed}
           >
             <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
@@ -269,33 +291,8 @@ function Option({
   );
 }
 
-function RangeInput({
-  value,
-  onChange,
-  placeholder,
-  label,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  placeholder: string;
-  label: string;
-}) {
-  return (
-    <TextInput
-      value={value}
-      // Stripped to digits on the way in rather than validated on the way out.
-      // `keyboardType` is a hint, not a constraint — a hardware keyboard, a
-      // paste, or several Android IMEs will all happily deliver letters.
-      onChangeText={(t) => onChange(t.replace(/[^0-9]/g, ""))}
-      keyboardType="number-pad"
-      inputMode="numeric"
-      placeholder={placeholder}
-      placeholderTextColor={color.inkMuted}
-      accessibilityLabel={label}
-      style={[textStyle(type.searchInput), s.rangeInput]}
-    />
-  );
-}
+/** 1..BRACKET_COUNT, once. */
+const BRACKETS: readonly Bracket[] = Array.from({ length: BRACKET_COUNT }, (_, i) => i + 1);
 
 const s = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: color.captionFill },
@@ -346,23 +343,6 @@ const s = StyleSheet.create({
   optionBlocked: { opacity: 0.5 },
   optionPressed: { opacity: 0.75 },
 
-  range: {
-    marginTop: space.sheet.labelToOptions,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sheet.rangeGap,
-  },
-  rangeInput: {
-    flex: 1,
-    height: size.sheet.rangeInput,
-    paddingHorizontal: 12,
-    borderRadius: radius.rangeInput,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
-    color: color.ink,
-  },
-  warning: { marginTop: 8, color: color.urgent },
   note: { marginTop: 8, color: color.inkMuted },
 
   actions: {
@@ -391,6 +371,5 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryDisabled: { opacity: 0.45 },
   primaryPressed: { opacity: 0.85 },
 });

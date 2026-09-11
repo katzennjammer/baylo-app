@@ -139,15 +139,28 @@ export function BrowseNoMatches({
  * A read failure. The copy says nothing was lost for the same reason FeedError
  * does — the fear a failed load produces is about the person's OWN listings,
  * which is the one thing a failed browse says nothing about.
+ *
+ * `headline` names WHAT failed to load. The default is the marketplace grid,
+ * which is where this card started; the item, hub and map screens reuse the
+ * card and must say so, because "Could not load the marketplace" on a listing
+ * that will not open tells the person the wrong thing is broken.
  */
-export function BrowseError({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function BrowseError({
+  message,
+  onRetry,
+  headline = "Could not load the marketplace",
+}: {
+  message: string;
+  onRetry: () => void;
+  headline?: string;
+}) {
   return (
     <View style={s.wrap}>
       <View style={s.circleError}>
         <WarningIcon size={icon.errorMark.size} stroke={icon.errorMark.stroke} color={color.urgent} />
       </View>
 
-      <Text style={[textStyle(type.errorHeadline), s.headline]}>Could not load the marketplace</Text>
+      <Text style={[textStyle(type.errorHeadline), s.headline]}>{headline}</Text>
       <Text style={[textStyle(type.emptyBody), s.body]}>{message}</Text>
 
       <Tappable

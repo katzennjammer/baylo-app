@@ -155,6 +155,14 @@ export interface ItemDetailPayload {
     isOwner: boolean;
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
+    /**
+     * Why the offer control is LOCKED, when it is. `"premium"`: the listing is
+     * in bracket 7 or above and this viewer has no live subscription. Separate
+     * from `canOffer` because the two draw different controls — an inert
+     * button versus an explanation with the listing left fully in view.
+     * Advisory; POST /api/offers re-checks and answers 403 PREMIUM_REQUIRED.
+     */
+    offerLock: "premium" | null;
     leaves: number;
     tradeableItems: { id: string; title: string; image: string | null }[];
     /** Non-null when this viewer already has a PENDING offer on this listing. */
@@ -219,6 +227,12 @@ export interface ViewerReputation {
   /** COMPLETED TradeRequest rows. Never `user.totalTrades`, which drifts high. */
   completedTrades: number;
   rating: number;
+  /**
+   * isPremium(User.premiumUntil) on the server. Optional because a server
+   * older than this field omits it, and a missing flag must read as "not
+   * subscribed", never as a crash. Advisory: enforced on POST /api/offers.
+   */
+  premium?: boolean;
   limits: {
     /** The most valuable item this tier may ACQUIRE. `null` is unlimited. */
     maxItemValueLeaves: number | null;

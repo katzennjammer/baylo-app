@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { ArrowsIcon, WarningTriangleIcon } from "./icons";
+import { ArrowsIcon, LockIcon, WarningTriangleIcon } from "./icons";
 import { ItemRow, NumberedStep, RecordRow, RouteRow } from "./rows";
 import {
   Hairline,
@@ -538,6 +538,72 @@ export function LoadFailedPanel({
 
       <View style={{ marginTop: offerSpace.labelToContent }}>
         <SecondaryButton label="Try again" onPress={onRetry} />
+      </View>
+    </Section>
+  );
+}
+
+/* ───────────────────────── the premium lock ─────────────────────────── */
+
+/**
+ * The composer under a premium lock, reached by deep link or a stale detail.
+ *
+ * Item detail normally replaces the offer control before anyone gets here —
+ * see `PremiumLockedBar` — so this panel is the belt to that brace: a viewer
+ * who arrives with `viewer.offerLock === "premium"` is told the same thing in
+ * the same words, and POST /api/offers would answer 403 PREMIUM_REQUIRED if
+ * they somehow sent anyway.
+ *
+ * NOT `LoadFailedPanel`. That panel is a warm-bordered alert with a warning
+ * triangle and a "Try again" button, and none of the three is true here:
+ * nothing failed, there is nothing to retry, and §1.4 keeps the warm accent
+ * for failures, debts and defaults. This is a quiet border, a lock, and a way
+ * back. See the copy module for what this state must not do — no price, no
+ * purchase control, and nothing that makes the listing feel hidden.
+ */
+export function PremiumLockedPanel({
+  bracket,
+  owner,
+  onBack,
+}: {
+  bracket: number;
+  owner: string;
+  onBack: () => void;
+}) {
+  return (
+    <Section pad={offerSpace.section.gap}>
+      <View
+        style={{
+          borderWidth: offerBorder.hairline,
+          borderColor: offerColor.hairline,
+          borderRadius: offerRadius.row,
+          backgroundColor: offerColor.paper,
+          padding: 14,
+          flexDirection: "row",
+          gap: 12,
+        }}
+        accessibilityRole="text"
+        accessibilityLabel={copy.premium.a11y(bracket)}
+      >
+        <LockIcon
+          size={offerIcon.warning.size}
+          stroke={offerIcon.warning.stroke}
+          color={offerColor.inkSecondary}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={[textStyle(offerType.errorHeading), { color: offerColor.ink }]}>
+            {copy.premium.heading}
+          </Text>
+          <Text
+            style={[textStyle(offerType.errorText), { color: offerColor.inkSecondary, marginTop: 4 }]}
+          >
+            {copy.premium.body(bracket, owner)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ marginTop: offerSpace.labelToContent }}>
+        <SecondaryButton label="Back to the listing" onPress={onBack} />
       </View>
     </Section>
   );

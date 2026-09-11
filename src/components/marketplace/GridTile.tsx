@@ -15,7 +15,8 @@ import {
   type,
 } from "../../theme/tokens";
 import { offerType, outOfReach } from "../../theme/offer-tokens";
-import { grouped } from "../../lib/gap";
+import { bracketLabel, bracketOf, bracketsWord, type Bracket } from "../../lib/brackets";
+import { bracketsBeyondReach } from "../../lib/gap";
 import { reach as reachCopy } from "../offer/copy";
 import type { Item } from "../../api/types";
 
@@ -59,37 +60,50 @@ import type { Item } from "../../api/types";
  * grey is a grid-level signal about reach rather than a claim about the item.
  *
  * The value line changes SHAPE as well as colour when a tile is out of reach:
- * §10.8 fixes it as `2,000 Leaves · 860 above your reach`, which is a sentence
- * rather than a figure, so the leaf glyph comes off. A leaf beside a sentence
- * about distance reads as a price tag, and the number after the interpunct is
- * not a price.
+ * §10.8 fixes it as a sentence rather than a figure, so the leaf glyph comes
+ * off. A leaf beside a sentence about distance reads as a price tag, and the
+ * number after the interpunct is not a price.
+ *
+ * ── A BRACKET FOR OTHER PEOPLE'S TILES, THE NUMBER FOR YOUR OWN ─────────────
+ *
+ * The browse grid includes the viewer's own listings, and those keep their
+ * exact value — a person needs to see what their item is worth. Everyone
+ * else's shows `Bracket 3`. See `src/lib/brackets.ts` for why, and note that
+ * the accessibility label follows the same rule: a screen reader announcing
+ * the exact number would defeat the point of the bracket.
  */
 export function GridTile({
   item,
   width,
   onPress,
   reach,
+  viewerId = null,
 }: {
   item: Item;
   /** Computed by the screen from the real viewport — see the note there. */
   width: number;
   onPress: (item: Item) => void;
   /**
-   * The viewer's reach threshold, or null while the shelf is still loading.
+   * The viewer's reach BRACKET, or null while the shelf is still loading.
    *
    * NULL IS NOT ZERO. A grid must not grey tiles on a guess, so an unknown reach
    * draws every tile in colour and the treatment appears when the answer does.
    */
-  reach?: number | null;
+  reach?: Bracket | null;
+  /** Own listings show the exact value; everyone else's show a bracket. */
+  viewerId?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const own = viewerId !== null && item.owner.id === viewerId;
+  const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
 
-  // Strictly greater — a listing exactly AT the threshold is in reach. An
-  // unvalued listing is never out of reach: there is no distance to state.
+  // Strictly greater — a listing IN the reach bracket is in reach. An unvalued
+  // listing is never out of reach: there is no distance to state. Own listings
+  // are never greyed either: reach is about what you can trade FOR.
   const beyond =
-    reach != null && item.valueLeaves !== null && item.valueLeaves > reach
-      ? item.valueLeaves - reach
+    reach != null && item.valueLeaves !== null && !own
+      ? bracketsBeyondReach(item.valueLeaves, reach) || null
       : null;
 
   return (
@@ -100,11 +114,15 @@ export function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
-        (item.valueLeaves !== null ? ` ${item.valueLeaves} Leaves.` : " Unvalued.") +
+        (item.valueLeaves === null
+          ? " Unvalued."
+          : own
+            ? ` Your listing, ${item.valueLeaves} Leaves.`
+            : ` ${bracketLabel(bracket as number)}.`) +
         // The grey is invisible to a screen reader, so the distance is said. It
         // is said as a distance and not as a refusal, per §10.8's closing list
         // of words this area never uses.
-        (beyond !== null ? ` ${grouped(beyond)} above your reach.` : "")
+        (beyond !== null ? ` ${bracketsWord(beyond)} above your reach.` : "")
       }
       style={[s.tile, { width }]}
       pressedStyle={s.tilePressed}
@@ -157,12 +175,12 @@ export function GridTile({
           // in-reach line's Bold 12 — §1.9 names the weight explicitly, and at
           // this length Bold reads as emphasis on a fact that is not the point.
           //
-          // TWO LINES, NOT ONE. `425 Leaves · 275 above your reach` is ~200px at
-          // this size and a tile on a 390-wide phone is ~173, so one line
-          // clipped it to "275 above y…" — the design canvas only fit it because
-          // its artboard tiles are wider. §1.9 fixes the line's colour, weight
-          // and size and says nothing about its height; the sentence is the
-          // spec's, and a clipped sentence is worse than a taller tile.
+          // TWO LINES, NOT ONE. `Bracket 6 · 2 brackets above your reach` is
+          // over 200px at this size and a tile on a 390-wide phone is ~173, so
+          // one line clipped it — the design canvas only fit it because its
+          // artboard tiles are wider. §1.9 fixes the line's colour, weight and
+          // size and says nothing about its height; the sentence is the spec's,
+          // and a clipped sentence is worse than a taller tile.
           <Text
             style={[
               textStyle(offerType.tileValueLine),
@@ -170,7 +188,7 @@ export function GridTile({
             ]}
             numberOfLines={2}
           >
-            {reachCopy.tileValue(item.valueLeaves, beyond)}
+            {reachCopy.tileValue(bracket as number, beyond)}
           </Text>
         ) : (
           <View style={s.leaves}>
@@ -180,7 +198,7 @@ export function GridTile({
               color={color.forest}
             />
             <Text style={[textStyle(type.gridLeaves), { color: color.forest }]}>
-              {item.valueLeaves}
+              {own ? item.valueLeaves : bracketLabel(bracket as number)}
             </Text>
           </View>
         )}

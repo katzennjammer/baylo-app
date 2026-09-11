@@ -44,6 +44,7 @@ import {
   LoadFailedPanel,
   NoItemsState,
   PendingOfferState,
+  PremiumLockedPanel,
   SendFailedPanel,
   SettlementSkeleton,
   TierTooLowState,
@@ -62,6 +63,7 @@ import {
   type PromiseBlock,
   type SettlementChoice,
 } from "../src/lib/gap";
+import { bracketOf } from "../src/lib/brackets";
 import type { TrustTier } from "../src/lib/trust";
 import {
   offerColor,
@@ -394,6 +396,29 @@ export default function OfferScreen() {
             owner={owner}
             theirItem={context.item.title}
             onPost={() => router.push("/post-item")}
+          />
+        </ScrollView>
+      </OfferScreenHost>
+    );
+  }
+
+  /**
+   * The premium lock: bracket 7 and above, no live subscription. ABOVE the tier
+   * cap, matching `enforceInitiateTrade()`'s order on the server — the lock is
+   * a property of the listing, the cap a property of the viewer, and the same
+   * listing must refuse everyone for the same reason. See `PremiumLockedPanel`.
+   */
+  if (context.premiumLocked && context.item.valueLeaves !== null) {
+    return (
+      <OfferScreenHost imeInset={0}>
+        <OfferNav title={copy.chrome.navTitle} onBack={() => router.back()} />
+        <ScrollView>
+          <ListingHeader context={context} />
+          <Hairline />
+          <PremiumLockedPanel
+            bracket={bracketOf(context.item.valueLeaves)}
+            owner={owner}
+            onBack={() => router.back()}
           />
         </ScrollView>
       </OfferScreenHost>
