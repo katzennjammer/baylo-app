@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -89,13 +89,24 @@ import {
  */
 
 export default function PostItemRoute() {
-  // `?itemId=` puts the flow in edit mode: the header says "Edit listing", step
-  // 4's footer says "Save changes", and a valuation spends the listing's one
-  // re-valuation rather than being free.
-  const { itemId } = useLocalSearchParams<{ itemId?: string }>();
-  const editingItemId = typeof itemId === "string" && itemId ? itemId : null;
-
-  const { status, initial } = useStoredDraft(editingItemId);
+  /*
+   * ── THERE IS NO EDIT MODE, AND THE ROUTE NO LONGER PRETENDS THERE IS ──────
+   *
+   * This route used to read `?itemId=` and call it "edit mode": the header said
+   * "Edit listing", step 4's footer said "Save changes", and nothing else
+   * changed. The listing was never fetched, no step was prefilled, "Save
+   * changes" was `next`, and the last step called POST /api/items — so anybody
+   * who re-shot their photos and pushed through created a SECOND listing, after
+   * step 4 had spent the original's one re-valuation. A duplicate-listing trap
+   * with a reassuring title.
+   *
+   * The two things a posted listing can change on the phone have their own
+   * surfaces: the text fields in `EditListingSheet`, the hubs at `/edit-hubs`.
+   * Both go straight to PATCH. A real wizard edit mode — fetch, prefill every
+   * step, PATCH at the end — is its own task, and until it exists the honest
+   * thing is for this route to be what it is: the way to post a new item.
+   */
+  const { status, initial } = useStoredDraft();
 
   /**
    * The ID gate, checked before the wizard is drawn.
@@ -105,8 +116,8 @@ export default function PostItemRoute() {
    * The Post FAB is a synchronous press and this is an asynchronous question,
    * so gating there would mean either a spinner on a tab bar button or a
    * cached answer that can be wrong. This route is the ONE way into the
-   * wizard — the FAB pushes it, and so does the edit path — so checking it
-   * here covers every entry with one piece of code.
+   * wizard — the FAB pushes it — so checking it here covers every entry with
+   * one piece of code.
    *
    * ── IT IS A COURTESY, NOT THE GATE ──────────────────────────────────────
    *
@@ -116,16 +127,10 @@ export default function PostItemRoute() {
    * upload, rather than at the end of them. The `catch` in `post()` below
    * still handles the 403, because this check can be stale — an approval can
    * be revoked, or the answer can have been fetched a minute ago.
-   *
-   * EDIT MODE IS NOT GATED. `editingItemId` means the listing already exists,
-   * which means it was posted by an account that was verified at the time, and
-   * PATCH is not one of the two acts the gate covers. Blocking an edit would
-   * strand a listing its owner can no longer correct.
    */
   const gate = useQuery({
     queryKey: ["id-verification"],
     queryFn: fetchIdVerification,
-    enabled: editingItemId === null,
     staleTime: 60_000,
   });
 
@@ -138,16 +143,16 @@ export default function PostItemRoute() {
   // nothing. A gate that FAILS to load is treated as open — the server is the
   // real check, and a flaky network must not be a second way to be locked out
   // of posting.
-  if (status === "reading" || (editingItemId === null && gate.isPending)) {
+  if (status === "reading" || gate.isPending) {
     return <View style={{ flex: 1, backgroundColor: postColor.surface }} />;
   }
 
-  if (editingItemId === null && gate.data && !gate.data.verified) {
+  if (gate.data && !gate.data.verified) {
     return <IdGatePrompt state={gate.data} />;
   }
 
   return (
-    <PostStateProvider editingItemId={editingItemId} initial={initial}>
+    <PostStateProvider initial={initial}>
       {/* The pipeline is mounted HERE, above every step, so an upload survives
           the Next that the spec's own copy promises it will: "Baylo keeps
           trying quietly in the background while you carry on with the next
@@ -469,16 +474,14 @@ function Wizard() {
       ? state.posting
         ? "Posting…"
         : "Post this item"
-      : step === 3 && state.editingItemId
-        ? "Save changes"
-        : checkingPhotos
+      : checkingPhotos
           ? "Checking your photo…"
           : "Next";
 
   return (
     <PostScreenHost imeInset={imeInset}>
       <PostHeader
-        title={state.editingItemId ? "Edit listing" : "Post an item"}
+        title="Post an item"
         leading={step === 0 ? "close" : "back"}
         onLeading={back}
         actionLabel="Save draft"

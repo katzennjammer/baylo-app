@@ -116,6 +116,7 @@ export default function HubsMapScreen() {
           </View>
         ) : isError ? (
           <BrowseError
+            headline="Could not load the Safe Zones"
             message={
               apiError?.message ??
               "Check your mobile data or Wi-Fi and try again."

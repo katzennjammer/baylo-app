@@ -106,7 +106,9 @@ import {
  * §8.4's budget: a 358 IME on the 844 canvas leaves 486. The nav keeps its 44,
  * the instruction sits at 100, the cells at 140, and the viewer's own code drops
  * to one 15px line at 240. The trade summary and both footer controls drop out —
- * which is what `keyboardUp` gates below.
+ * which is what `keyboardUp` gates below, INSIDE ONE TREE. It is not a second
+ * `return`: see "ONE TREE, NOT TWO" in the body for why a second tree is a
+ * keyboard that closes the frame it opens.
  */
 export default function TradeCodeScreen() {
   const router = useRouter();
@@ -116,7 +118,7 @@ export default function TradeCodeScreen() {
   const contracts = useContracts();
   const { keyboardUp, imeHeight } = useKeyboardState();
 
-  const trade = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
+  const live = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
 
   const start = useConfirmStart(id);
   const status = useConfirmStatus(id);
@@ -131,6 +133,41 @@ export default function TradeCodeScreen() {
   const [rejection, setRejection] = useState<CodeRejection | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
+  /*
+   * ── THE ROW IS HELD ACROSS THE MOMENT IT COMPLETES ──────────────────────
+   *
+   * `useActiveTrades` is the OPEN list. A trade both people have confirmed is
+   * finished, so the invalidation `confirm/submit` fires drops the row: `find()`
+   * returns undefined the instant the confirmation succeeds, and the `!trade`
+   * branch below then told two people standing in front of each other that
+   * "that trade is not open any more" at the exact moment it went through.
+   *
+   * Same shape as `app/offer-review.tsx`, and the same consequence — the early
+   * return fires before the success state, so §6.1's "Both submitted" screen
+   * could not render off a completed trade at all.
+   *
+   * So the last row seen open is kept, and it is used ONLY when the poll says
+   * the confirmation matched. `confirm/status` is a separate query on a separate
+   * route, and it keeps answering `completed` after the trade has left the open
+   * list — which is what makes this narrow: the held row is drawn on the one
+   * disappearance we can explain. A trade that goes for any other reason — the
+   * other person cancelled it while this screen was open, it expired — still
+   * falls through to the not-open message, because there the message is true.
+   */
+  const [held, setHeld] = useState<ActiveTrade | null>(null);
+  useEffect(() => {
+    if (live) setHeld(live);
+  }, [live]);
+
+  // `direction` only picks which of the two badly-named booleans is mine, and
+  // `matched` is symmetric in them; with no row at all `status.data` is
+  // undefined and `confirmSides` answers false to everything, so the fallback
+  // side is never actually read.
+  const row = live ?? held;
+  const sides = confirmSides(status.data, row?.direction ?? "sent");
+  const state = codeState(sides);
+  const trade = live ?? (state === "matched" ? held : null);
+
   /**
    * Issue the codes on the way in, once.
    *
@@ -144,8 +181,8 @@ export default function TradeCodeScreen() {
    * call that reissues a pair somebody burned.
    */
   useEffect(() => {
-    if (!id || !trade) return;
-    if (trade.status !== "ACCEPTED" && trade.status !== "CONFIRMING") return;
+    if (!id || !live) return;
+    if (live.status !== "ACCEPTED" && live.status !== "CONFIRMING") return;
     if (!start.isIdle) return;
     start.mutate(undefined, {
       onError: (e) =>
@@ -153,7 +190,7 @@ export default function TradeCodeScreen() {
           e instanceof ApiError ? e.message : "Could not start the confirmation just now.",
         ),
     });
-  }, [id, trade, start]);
+  }, [id, live, start]);
 
   const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") {
@@ -178,8 +215,6 @@ export default function TradeCodeScreen() {
   }
 
   const partner = present.firstName(trade.counterparty.name);
-  const sides = confirmSides(status.data, trade.direction);
-  const state = codeState(sides);
 
   const send = () => {
     setRejection(null);
@@ -227,51 +262,43 @@ export default function TradeCodeScreen() {
   }
 
   const burned = rejection?.locked === true;
-
-  /* ═══════════ §8.4 — the keyboard-up arrangement, and nothing else ══════ */
-  if (keyboardUp) {
-    return (
-      <OfferScreenHost imeInset={imeHeight}>
-        <TradesBackTitle
-          title={copy.nav.meeting(trade.counterparty.name)}
-          onBack={() => router.back()}
-          trailing={<NavDone onPress={() => entry.inputRef.current?.blur()} />}
-        />
-
-        <View style={{ paddingHorizontal: offerSpace.screenX + 4, flex: 1 }}>
-          <View style={{ height: 12 }} />
-          <Text style={[textStyle(offerType.body), { color: offerColor.ink }]}>
-            {state === "they-wait-for-you"
-              ? copy.code.theyTypedYours(partner)
-              : copy.code.askFor(partner)}
-          </Text>
-
-          <View style={{ height: 18 }} />
-          <CodeEntry
-            entry={entry}
-            rejected={!!rejection}
-            onSubmit={entry.complete ? send : undefined}
-            label={copy.code.askFor(partner)}
-          />
-
-          {rejection ? (
-            <View style={{ marginTop: 12 }}>
-              <CodeCounter remaining={rejection.remaining} />
-            </View>
-          ) : null}
-
-          <View style={{ height: 16 }} />
-          {/* §8.4: the viewer's own code drops to a single 15px line at y 240. */}
-          <CodeDisplayLine code={myCode} />
-        </View>
-      </OfferScreenHost>
-    );
-  }
-
-  /* ═══════════════ §6.1 at rest — the two blocks, in turn order ═════════ */
   const entryFirst = state === "they-wait-for-you";
 
-  const displayBlock = (
+  /*
+   * ── ONE TREE, NOT TWO ─────────────────────────────────────────────────────
+   *
+   * This screen used to `return` a second, shorter tree while the IME was up,
+   * and the keyboard could not stay open for longer than a frame. The field
+   * focuses, the IME arrives, `keyboardUp` flips, and the `ScrollView` under the
+   * nav became a `View`. React reconciles children BY POSITION, and a different
+   * element type at the same index is an unmount — the `TextInput` went with
+   * it, its focus went with that, the IME closed, `keyboardUp` flipped back,
+   * and the resting tree remounted. Every state of it looked like a keyboard
+   * that refused to open. `app/(auth)/register.tsx` documents the same trap.
+   *
+   * So there is one tree and only its CONTENTS change with `keyboardUp`: the
+   * summary and the bar drop out as `null` in slots that stay put, the display
+   * block collapses to its one line in a slot that stays put, and the entry
+   * block keeps the same shape in both states so `CodeEntry` — and the native
+   * field under it — is never at a new index.
+   *
+   * The two blocks swap ORDER between states, and that swap is the same trap
+   * in another coat: moving the entry from the third child to the first is a
+   * remove and an insert on the native side, and Android clears focus on the
+   * view it removes. `flexDirection: "column-reverse"` swaps what the eye sees
+   * without moving a node. TalkBack and VoiceOver both walk siblings by
+   * on-screen position, so the reading order follows the visual one. This
+   * particular swap is the one the POLL drives — the partner typing your code
+   * in lands as "They're waiting for you" mid-keystroke — so it, of all of
+   * them, must never touch the field.
+   */
+
+  const displayBlock = keyboardUp ? (
+    // §8.4: the viewer's own code drops to a single 15px line at y 240.
+    <Gutter style={{ paddingTop: 16 }}>
+      <CodeDisplayLine code={myCode} />
+    </Gutter>
+  ) : (
     <Section pad={{ top: entryFirst ? 20 : 24, bottom: 20 }}>
       <View style={{ gap: 14 }}>
         <TradesSectionLabel>
@@ -292,10 +319,24 @@ export default function TradeCodeScreen() {
     </Section>
   );
 
+  /*
+   * Same shape in both keyboard states — a Section, a gap View, a heading, then
+   * the entry fragment — so the field keeps its index. What differs is the
+   * heading (§8.4's instruction sentence at 100 rather than the section label)
+   * and the helper line, which drops out under the IME.
+   */
   const entryBlock = (
-    <Section pad={{ top: 20, bottom: 20 }}>
-      <View style={{ gap: 14 }}>
-        <TradesSectionLabel>{copy.code.askFor(partner)}</TradesSectionLabel>
+    <Section pad={keyboardUp ? { top: 12, bottom: 0 } : { top: 20, bottom: 20 }}>
+      <View style={{ gap: keyboardUp ? 18 : 14 }}>
+        {keyboardUp ? (
+          <Text style={[textStyle(offerType.body), { color: offerColor.ink }]}>
+            {state === "they-wait-for-you"
+              ? copy.code.theyTypedYours(partner)
+              : copy.code.askFor(partner)}
+          </Text>
+        ) : (
+          <TradesSectionLabel>{copy.code.askFor(partner)}</TradesSectionLabel>
+        )}
 
         {sides.iSubmitted ? (
           // Already typed theirs in correctly. The cells would be a control for
@@ -314,14 +355,16 @@ export default function TradeCodeScreen() {
 
             {rejection ? <CodeCounter remaining={rejection.remaining} /> : null}
 
-            <Text
-              style={[
-                textStyle(rejection ? offerType.body : offerType.helper),
-                { color: rejection ? offerColor.inkSecondary : offerColor.inkTertiary },
-              ]}
-            >
-              {rejection ? copy.code.readItAgain(partner) : copy.code.typeBelowLong}
-            </Text>
+            {keyboardUp ? null : (
+              <Text
+                style={[
+                  textStyle(rejection ? offerType.body : offerType.helper),
+                  { color: rejection ? offerColor.inkSecondary : offerColor.inkTertiary },
+                ]}
+              >
+                {rejection ? copy.code.readItAgain(partner) : copy.code.typeBelowLong}
+              </Text>
+            )}
           </>
         )}
       </View>
@@ -329,20 +372,33 @@ export default function TradeCodeScreen() {
   );
 
   return (
-    <OfferScreenHost imeInset={0} dimmed={submit.isPending}>
+    <OfferScreenHost imeInset={keyboardUp ? imeHeight : 0} dimmed={submit.isPending}>
       <TradesBackTitle
         title={copy.nav.meeting(trade.counterparty.name)}
         onBack={() => router.back()}
+        trailing={
+          keyboardUp ? <NavDone onPress={() => entry.inputRef.current?.blur()} /> : undefined
+        }
       />
 
-      <ScrollView>
-        {/* The trade itself, so nobody reads a code out for the wrong meeting. */}
-        <TradeSummary trade={trade} />
-        <Hairline />
+      <ScrollView keyboardShouldPersistTaps="handled">
+        {/*
+          The trade itself, so nobody reads a code out for the wrong meeting.
+          §8.4 drops it under the IME — as null, in a slot that stays.
+        */}
+        {keyboardUp ? null : (
+          <>
+            <TradeSummary trade={trade} />
+            <Hairline />
+          </>
+        )}
 
-        {entryFirst ? entryBlock : displayBlock}
-        <Hairline />
-        {entryFirst ? displayBlock : entryBlock}
+        {/* §6.1's turn order, drawn by direction rather than by moving nodes. */}
+        <View style={{ flexDirection: entryFirst || keyboardUp ? "column" : "column-reverse" }}>
+          {entryBlock}
+          {keyboardUp ? null : <Hairline />}
+          {displayBlock}
+        </View>
 
         {failure ? (
           <Gutter style={{ paddingTop: 14 }}>
@@ -358,7 +414,7 @@ export default function TradeCodeScreen() {
 
       {/*
         The bar. Two controls, and which pair depends on whether the code is
-        burned.
+        burned. §8.4 drops the whole bar under the IME.
 
         §6.1's "After 3, the cells clear and a 52px `Ask Marco to read it again`
         outline button appears. No lockout." The server's budget is five rather
@@ -367,51 +423,53 @@ export default function TradeCodeScreen() {
         `confirm/start`, which is exactly what "the code simply gets read again"
         means. So the burned state clears the cells and swaps the primary.
       */}
-      <OfferBottomBar>
-        {burned ? (
-          <SecondaryButton
-            label={copy.code.readItAgainButton(partner)}
-            onPress={() => {
-              entry.clear();
-              setRejection(null);
-              start.mutate(undefined, {
-                onError: (e) =>
-                  setFailure(
-                    e instanceof ApiError ? e.message : "Could not issue new codes just now.",
-                  ),
-              });
-            }}
-          />
-        ) : sides.iSubmitted ? (
-          <SecondaryButton label={copy.code.matchedPrimary} onPress={() => router.back()} />
-        ) : entry.complete ? (
-          <PrimaryButton
-            label={copy.code.typeTheirs(partner)}
-            onPress={send}
-            accessibilityLabel={`Submit ${partner}'s code`}
-          />
-        ) : (
-          <SecondaryButton
-            label={copy.code.typeTheirs(partner)}
-            onPress={() => entry.focus()}
-          />
-        )}
+      {keyboardUp ? null : (
+        <OfferBottomBar>
+          {burned ? (
+            <SecondaryButton
+              label={copy.code.readItAgainButton(partner)}
+              onPress={() => {
+                entry.clear();
+                setRejection(null);
+                start.mutate(undefined, {
+                  onError: (e) =>
+                    setFailure(
+                      e instanceof ApiError ? e.message : "Could not issue new codes just now.",
+                    ),
+                });
+              }}
+            />
+          ) : sides.iSubmitted ? (
+            <SecondaryButton label={copy.code.matchedPrimary} onPress={() => router.back()} />
+          ) : entry.complete ? (
+            <PrimaryButton
+              label={copy.code.typeTheirs(partner)}
+              onPress={send}
+              accessibilityLabel={`Submit ${partner}'s code`}
+            />
+          ) : (
+            <SecondaryButton
+              label={copy.code.typeTheirs(partner)}
+              onPress={() => entry.focus()}
+            />
+          )}
 
-        {/*
-          Frame 9e's tertiary, `Something went wrong at the meetup`.
+          {/*
+            Frame 9e's tertiary, `Something went wrong at the meetup`.
 
-          It goes to Messages rather than to a support form. There is no dispute
-          endpoint, and the honest thing a phone can do at a hub where something
-          has gone wrong is put the two people in a conversation — which is the
-          route the app already has.
-        */}
-        <TertiaryButton
-          label={copy.code.somethingWrong}
-          onPress={() =>
-            router.push(`/(app)/messages?userId=${encodeURIComponent(trade.counterparty.id)}`)
-          }
-        />
-      </OfferBottomBar>
+            It goes to Messages rather than to a support form. There is no dispute
+            endpoint, and the honest thing a phone can do at a hub where something
+            has gone wrong is put the two people in a conversation — which is the
+            route the app already has.
+          */}
+          <TertiaryButton
+            label={copy.code.somethingWrong}
+            onPress={() =>
+              router.push(`/(app)/messages?userId=${encodeURIComponent(trade.counterparty.id)}`)
+            }
+          />
+        </OfferBottomBar>
+      )}
     </OfferScreenHost>
   );
 }

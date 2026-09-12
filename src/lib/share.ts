@@ -1,6 +1,7 @@
 import { Share } from "react-native";
 
 import { getApiBase } from "../api/config";
+import { bracketLabel, bracketOf } from "./brackets";
 
 /**
  * Sharing a listing, and the honest state of the link it shares.
@@ -91,11 +92,15 @@ export async function shareListing(item: {
   const url = listingUrl(item.id);
   if (!url) return { ok: false };
 
-  // The value is included when there is one because it is the single most
-  // useful fact in a link preview that has no image — and omitted rather than
-  // written as "0 Leaves" when there is not, for the same reason the card omits
-  // the chip: an unvalued item is not an item worth nothing.
-  const worth = item.valueLeaves !== null ? ` — ${item.valueLeaves} Leaves` : "";
+  // The BRACKET is included when there is a value because it is the single
+  // most useful fact in a link preview that has no image — and omitted rather
+  // than written as "Bracket 1" when there is not, for the same reason the card
+  // omits the chip: an unvalued item is not an item worth nothing.
+  //
+  // Never the exact figure, whoever is sharing. This text leaves the platform,
+  // and a number in a group chat is exactly the "425 against your 150" read
+  // that brackets exist to avoid — the recipient is not the owner.
+  const worth = item.valueLeaves !== null ? ` — ${bracketLabel(bracketOf(item.valueLeaves))}` : "";
 
   try {
     await Share.share(

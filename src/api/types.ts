@@ -155,6 +155,14 @@ export interface ItemDetailPayload {
     isOwner: boolean;
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
+    /**
+     * Why the offer control is LOCKED, when it is. `"premium"`: the listing is
+     * in bracket 7 or above and this viewer has no live subscription. Separate
+     * from `canOffer` because the two draw different controls — an inert
+     * button versus an explanation with the listing left fully in view.
+     * Advisory; POST /api/offers re-checks and answers 403 PREMIUM_REQUIRED.
+     */
+    offerLock: "premium" | null;
     leaves: number;
     tradeableItems: { id: string; title: string; image: string | null }[];
     /** Non-null when this viewer already has a PENDING offer on this listing. */
@@ -219,6 +227,12 @@ export interface ViewerReputation {
   /** COMPLETED TradeRequest rows. Never `user.totalTrades`, which drifts high. */
   completedTrades: number;
   rating: number;
+  /**
+   * isPremium(User.premiumUntil) on the server. Optional because a server
+   * older than this field omits it, and a missing flag must read as "not
+   * subscribed", never as a crash. Advisory: enforced on POST /api/offers.
+   */
+  premium?: boolean;
   limits: {
     /** The most valuable item this tier may ACQUIRE. `null` is unlimited. */
     maxItemValueLeaves: number | null;
@@ -487,6 +501,22 @@ export interface ActiveTrade {
   /** Which hub, when one was claimed. NULL for every trade that named none. */
   safeZoneHub: SafeZoneHub | null;
   /**
+   * Where and when the two of them have ARRANGED to meet.
+   *
+   * A DIFFERENT FACT FROM `safeZoneHub` ABOVE, and the distinction is the whole
+   * reason this is a separate field rather than an early write to that one:
+   *
+   *   `safeZoneHub`  the CLAIM — "we met here", recorded after the codes match.
+   *                  It is what the Safe-Zone award reads.
+   *   `meetup`       the PLAN — "let us meet here", agreed beforehand. It awards
+   *                  nothing, and a client must never present it as proof that a
+   *                  meeting happened.
+   *
+   * NULL until somebody proposes. `meetup.agreedAt` is null while one proposal
+   * is standing unanswered, which is the state the other party has to act on.
+   */
+  meetup: MeetupPlan | null;
+  /**
    * Whether this viewer still has a confirmation step to perform.
    *
    * ACCEPTED (codes not started) or CONFIRMING with the partner's code either
@@ -497,6 +527,25 @@ export interface ActiveTrade {
   canConfirm: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The arrangement on an ACCEPTED trade. See `ActiveTrade.meetup`.
+ *
+ * `proposedBy` is a SIDE, not a user id — the server stores which of the two
+ * parties put the plan on the table, which is a thing that cannot be wrong. Read
+ * it against `direction` on the same trade: `proposedBy === "sender"` is the
+ * viewer's own proposal exactly when `direction === "sent"`.
+ */
+export interface MeetupPlan {
+  hub: SafeZoneHub;
+  /** ISO-8601. A real instant, so it can be formatted in the device's locale. */
+  at: string;
+  /** "the bench outside, I'll have the blue bag". Never load-bearing. */
+  note: string | null;
+  proposedBy: "sender" | "receiver";
+  /** NULL while the proposal is still waiting on the other person. */
+  agreedAt: string | null;
 }
 
 export type TradeStatus =

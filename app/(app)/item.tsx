@@ -6,11 +6,13 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiError } from "../../src/api/client";
 import { useProfileMe } from "../../src/api/profile";
 import { useReach } from "../../src/api/offer";
-import { firstName } from "../../src/components/offer/copy";
+import { firstName, premium as premiumCopy } from "../../src/components/offer/copy";
+import { LockIcon } from "../../src/components/offer/icons";
 import {
   WhereYouStand,
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
+import { bracketLabel, bracketOf } from "../../src/lib/brackets";
 import { effectivePromiseCeiling } from "../../src/lib/gap";
 import { toStanding } from "../../src/api/offer";
 import { Splash } from "../../src/components/Splash";
@@ -100,9 +102,14 @@ export default function ItemDetailScreen() {
    * arriving from a tile costs nothing — TanStack dedupes by key. Arriving by
    * deep link, it is one extra request for the viewer's own shelf.
    */
-  const { reach, highestItemValue } = useReach();
+  const { reach } = useReach();
   const me = useProfileMe().data;
-  /** The item §10.8's paragraph names by title. Highest AVAILABLE, per §7.1. */
+  /**
+   * The item §10.8's paragraph names by title. Highest AVAILABLE, per §7.1.
+   * Null for an empty shelf — which is NOT a reason to skip the insert: the
+   * reach is then §7.1's floor and the grid greys against it, so the insert
+   * draws its empty-shelf variant instead. See the WhereYouStand header.
+   */
   const highestItem = (me?.items ?? []).reduce<Item | null>(
     (best, row) =>
       row.status === "AVAILABLE" &&
@@ -140,7 +147,11 @@ export default function ItemDetailScreen() {
     return (
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
-        <BrowseError message="No item was named in that link." onRetry={() => router.back()} />
+        <BrowseError
+          headline="Could not open this listing"
+          message="No item was named in that link."
+          onRetry={() => router.back()}
+        />
       </View>
     );
   }
@@ -159,6 +170,9 @@ export default function ItemDetailScreen() {
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
         <BrowseError
+          headline={
+            apiError?.code === "NOT_FOUND" ? "Listing unavailable" : "Could not open this listing"
+          }
           message={
             apiError?.code === "NOT_FOUND"
               ? "This listing is no longer available. It may have been traded, removed by its owner, or taken down."
@@ -186,12 +200,25 @@ export default function ItemDetailScreen() {
    * covers up to 200 as a New Trader") can never promise a ceiling the offer
    * screen would then refuse to offer.
    */
-  const showReach = shouldShowWhereYouStand(item.valueLeaves, highestItemValue, reach);
+  /**
+   * THE LOCK WINS OVER THE INSERT. `Where you stand` ends "you can send an
+   * offer regardless", and the premium lock says you cannot; drawing both
+   * would put a contradiction on one screen. Precedence on this screen, top
+   * to bottom: owner / unavailable → premium lock → tier cap (the composer's)
+   * → out-of-reach, which is advisory. The server applies the same order in
+   * `enforceInitiateTrade()`.
+   */
+  const locked = viewer.offerLock === "premium";
+  const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
   const reachInsert =
-    showReach && me && highestItem && highestItem.valueLeaves !== null ? (
+    showReach && me ? (
       <WhereYouStand
         listingValue={item.valueLeaves as number}
-        highestItem={{ title: highestItem.title, valueLeaves: highestItem.valueLeaves }}
+        highestItem={
+          highestItem && highestItem.valueLeaves !== null
+            ? { title: highestItem.title, valueLeaves: highestItem.valueLeaves }
+            : null
+        }
         reach={reach as number}
         owner={firstName(item.owner.name)}
         tier={me.reputation.tier}
@@ -276,18 +303,33 @@ export default function ItemDetailScreen() {
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
           {/* Omitted, never "0", for a listing that predates the valuation
-              model — an unvalued item is not an item worth nothing. */}
+              model — an unvalued item is not an item worth nothing.
+
+              YOUR OWN LISTING SHOWS THE NUMBER; ANYONE ELSE'S SHOWS THE
+              BRACKET. See `src/lib/brackets.ts`. The row keeps its shape — the
+              leaf, the figure slot, the unit — so the two read as the same
+              row with a different resolution rather than as two rows. */}
           {item.valueLeaves !== null ? (
-            <View style={s.leavesRow}>
+            <View
+              style={s.leavesRow}
+              accessibilityRole="text"
+              accessibilityLabel={
+                viewer.isOwner
+                  ? `Your listing, valued at ${item.valueLeaves} Leaves`
+                  : bracketLabel(bracketOf(item.valueLeaves))
+              }
+            >
               <LeafIcon
                 size={icon.detailLeaf.size}
                 stroke={icon.detailLeaf.stroke}
                 color={color.forest}
               />
               <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {item.valueLeaves}
+                {viewer.isOwner ? item.valueLeaves : bracketLabel(bracketOf(item.valueLeaves))}
               </Text>
-              <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>Leaves</Text>
+              {viewer.isOwner ? (
+                <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>Leaves</Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -311,9 +353,11 @@ export default function ItemDetailScreen() {
             §7.3 of the offer spec — `Where you stand`, "inserted between the
             value row and *Description*".
 
-            It is drawn only when this listing is beyond the viewer's reach AND
-            the viewer has a valued item to compare against; `shouldShowWhereYouStand`
-            holds both conditions. Note what does NOT change when it appears: the
+            It is drawn whenever this listing is beyond the viewer's reach — the
+            grid's own test, held in `shouldShowWhereYouStand` — including for a
+            viewer with nothing posted, who gets the empty-shelf variant rather
+            than a greyed tile with no explanation behind it. Note what does NOT
+            change when it appears: the
             carousel above stays in FULL COLOUR (§7.3 is explicit — the grey
             belongs to the grid, not the item), and the `Offer Trade` button in
             the bottom bar stays green and live.
@@ -396,15 +440,19 @@ export default function ItemDetailScreen() {
         </View>
       </ScrollView>
 
-      <ActionBar
-        canOffer={viewer.canOffer}
-        isOwner={viewer.isOwner}
-        status={item.status}
-        existingOfferId={viewer.existingOfferId}
-        onOffer={() =>
-          router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } })
-        }
-      />
+      {locked && item.valueLeaves !== null ? (
+        <PremiumLockedBar bracket={bracketOf(item.valueLeaves)} owner={firstName(item.owner.name)} />
+      ) : (
+        <ActionBar
+          canOffer={viewer.canOffer}
+          isOwner={viewer.isOwner}
+          status={item.status}
+          existingOfferId={viewer.existingOfferId}
+          onOffer={() =>
+            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } })
+          }
+        />
+      )}
 
       {/*
         Mounted last so it sits over the sticky ActionBar. It renders nothing
@@ -674,6 +722,42 @@ function ActionBar({
   );
 }
 
+/**
+ * The offer control under a premium lock: bracket 7 and above, no subscription.
+ *
+ * ── WHAT IT MUST NOT DO ─────────────────────────────────────────────────────
+ *
+ * It must not imply a purchase is possible today. There is no billing — Play
+ * Billing needs a Console account this project does not have — so there is no
+ * price, no "Upgrade" or "Subscribe" control, and no button that leads
+ * nowhere. The bar is a `View`, not a `Tappable`: a control that looks like a
+ * button and does nothing is worse than a sentence.
+ *
+ * And it must not make the listing feel hidden. Everything above this bar —
+ * the photos in full colour, the title, the bracket, the owner, the hubs, the
+ * report and block rows — is untouched, and the tile in the grid is not greyed
+ * for this reason. The lock explains the CONTROL, not the listing: the whole
+ * point of showing bracket 7+ listings to everyone is that people can see
+ * what is up there.
+ *
+ * It replaces `ActionBar` rather than sitting beside it. A locked line above
+ * a live green "Offer Trade" would be the contradiction the server would then
+ * resolve with a 403.
+ */
+function PremiumLockedBar({ bracket, owner }: { bracket: number; owner: string }) {
+  return (
+    <View style={s.actionBar} accessibilityRole="text" accessibilityLabel={premiumCopy.a11y(bracket)}>
+      <View style={[s.action, s.actionInert, s.actionLocked]}>
+        <LockIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.inkSecondary} />
+        <Text style={[textStyle(type.primaryButton), { color: color.inkSecondary }]}>
+          {premiumCopy.bar}
+        </Text>
+      </View>
+      <Text style={[textStyle(type.gridMeta), s.lockedBody]}>{premiumCopy.body(bracket, owner)}</Text>
+    </View>
+  );
+}
+
 function DetailSkeleton() {
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -830,6 +914,8 @@ const s = StyleSheet.create({
   },
   actionInert: { backgroundColor: color.control },
   actionPressed: { opacity: 0.85 },
+  actionLocked: { flexDirection: "row", gap: 8 },
+  lockedBody: { color: color.inkMuted, marginTop: 8 },
 
   skeletonPhoto: {
     width: "100%",

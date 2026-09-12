@@ -149,8 +149,20 @@ export const waiting = {
   acceptedNoMeeting: "Accepted · meeting not set",
   /** Frame 9c's second line on that row. */
   pickAHub: (partner: string) => `With ${partner} · pick a hub`,
-  /** Frame 9c. NOT a control — see gap 6. */
-  codesWhenAgreed: "Codes appear once you both agree a time",
+  /**
+   * Frame 9c's second line on an accepted row.
+   *
+   * WAS `Codes appear once you both agree a time`, which was false in both
+   * directions: nothing in the app watched for agreement, nothing made codes
+   * appear on their own, and agreeing a time was not something the app could do
+   * at all. It described a mechanism that did not exist, on the one row whose
+   * missing tap made confirmation unreachable.
+   *
+   * What replaces it is what actually happens: opening the row issues the pair.
+   */
+  codesWhenReady: "Open this when you meet to get your codes",
+  /** The control on that row. Opens `/trade-code`, which issues the codes. */
+  getCodes: "Get codes",
   /** Frame 9a's right-hand mono, and frame 9c's `since 4 Sep`. */
   daysLeft: (n: number) => (n === 1 ? "1 day left" : `${n} days left`),
   lastDay: "today is the last day",
@@ -169,6 +181,73 @@ export const waiting = {
   includesPromise: (amount: number, date: Date) =>
     `Includes a promise to settle ${grouped(amount)} by ${shortDate(date)}`,
   readFirst: "Read the agreement first",
+} as const;
+
+/**
+ * Arranging the meeting — gap 6's words.
+ *
+ * NOTHING HERE MAY CALL A PLAN A MEETING. "Meeting set" would be a claim about
+ * the world; these two have agreed something on their phones and neither has
+ * left the house. The Safe-Zone award reads a different column for that reason
+ * and this copy keeps the same line: `agreed` describes the agreement, never the
+ * meeting.
+ */
+export const meetup = {
+  /** No plan yet. The control that starts one. */
+  setIt: "Set a place and time",
+  none: "No place or time yet",
+
+  /** One proposal standing, made by the viewer. */
+  waitingOnThem: (partner: string) => `Waiting for ${partner} to agree`,
+
+  /** One proposal standing, made by the other person — the viewer's move. */
+  theyProposed: (partner: string) => `${partner} suggested a place and time`,
+  agree: "Agree",
+  /** A counter is a proposal. There is no decline, and this is why it reads so. */
+  suggestAnother: "Suggest another",
+
+  /** Agreed by both. */
+  agreed: "Agreed",
+  change: "Change",
+
+  /** `Parkmall · Sat, 14:00`. The one line that says what was arranged. */
+  where: (hub: string, when: string) => `${hub} · ${when}`,
+
+  /* ── The picker ──────────────────────────────────────────────────────── */
+  pickHub: "Where",
+  pickTime: "When",
+  noteLabel: "Anything else (optional)",
+  notePlaceholder: "the bench outside, I'll have the blue bag",
+  propose: "Send this",
+  counter: "Send this instead",
+  /** Shown on a hub row that both listings name. */
+  bothNamed: "You both offer this hub",
+  /** A hub the other listing does not name — they will be seeing it for the first time. */
+  newToThem: (partner: string) => `New to ${partner} — they can agree or suggest another`,
+  /** A hub only the other listing names: fine for them, not on yours. */
+  theyOffer: (partner: string) => `${partner} offers this hub`,
+  /** Said once, above the rows, when the shared ones are not the whole list. */
+  sharedEarns: "Meeting at a hub you both offer earns the Safe-Zone reward.",
+
+  /* ── The empty intersection. NOT A DEAD END — the picker is still below. ── */
+  noSharedTitle: "You have no hub in common yet",
+  noSharedBody: (partner: string) =>
+    `Your listing and ${partner}'s do not name the same Safe-Zone hub. You can still ` +
+    `suggest any hub below — but only a meeting at one you both offer earns the ` +
+    `Safe-Zone reward. Either of you can fix that by adding one to your own listing.`,
+  /** The other listing's hubs — the shortlist worth adding from. */
+  theyAlreadyOffer: (partner: string) => `${partner} already offers`,
+  addToMine: "Add a hub to my listing",
+  /** When even the other listing names none. */
+  neitherHasHubs: (partner: string) =>
+    `Neither listing names a Safe-Zone hub yet. Add one to yours and ask ${partner} to ` +
+    `add the same one to theirs.`,
+  /** When there is no hub anywhere — the server's list came back empty. */
+  noHubsAtAll: "There are no Safe-Zone hubs to choose from right now. Agree a place in chat.",
+
+  /* ── Failures the client branches on, by `meta.rule`. ─────────────────── */
+  hubClosed: "That hub is closed at the moment. Pick another one.",
+  planChanged: "That plan changed before you agreed. Have another look.",
 } as const;
 
 /** §10.6's `Nothing needs you right now.` — one 15px line, in place of the block. */

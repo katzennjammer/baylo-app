@@ -138,7 +138,7 @@ export function TickRail({ step }: { step: number }) {
 /* ───────────────────────────── the header ───────────────────────────── */
 
 export interface HeaderProps {
-  /** "Post an item", or "Edit listing" when reached from an existing listing. */
+  /** "Post an item". */
   title: string;
   /** A back chevron on every step but the first, where it is a close cross. */
   leading: "back" | "close";

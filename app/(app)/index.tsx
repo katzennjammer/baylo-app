@@ -218,6 +218,7 @@ export default function HomeScreen() {
           */}
           <FeedCard
             item={row.item}
+            viewerId={viewer?.id ?? null}
             onOffer={openItem}
             onLike={onLike}
             onComment={openComments}
@@ -325,6 +326,10 @@ export default function HomeScreen() {
           // Closed first, then opened. See the note above the component.
           setMenuId(null);
           setEditingId(item.id);
+        }}
+        onEditHubs={(item) => {
+          setMenuId(null);
+          router.push({ pathname: "/edit-hubs", params: { itemId: item.id } });
         }}
       />
 

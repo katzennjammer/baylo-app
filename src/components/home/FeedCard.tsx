@@ -18,6 +18,7 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
+import { bracketLabel, bracketOf } from "../../lib/brackets";
 import type { Item } from "../../api/types";
 
 /**
@@ -119,6 +120,7 @@ export function FeedCard({
   onShare,
   onMenu,
   offerLayout = OFFER_LAYOUT,
+  viewerId = null,
 }: {
   item: Item;
   /** The urgency chip's copy. See the note above — nothing supplies it today. */
@@ -132,6 +134,8 @@ export function FeedCard({
   onMenu?: (item: Item) => void;
   /** Per-card override of the constant above. The feed does not pass one. */
   offerLayout?: OfferLayout;
+  /** Own listings suppress the offer action even when the item is still listed. */
+  viewerId?: string | null;
 }) {
   const place = item.owner.location?.trim();
   const when = relativeShort(item.createdAt);
@@ -139,6 +143,8 @@ export function FeedCard({
   // `when` empty — so the separator is joined in rather than typed between
   // them, which would strand a " · " on its own.
   const meta = [place, when].filter(Boolean).join(" · ");
+  const isOwnListing = viewerId !== null && item.owner.id === viewerId;
+  const offerAction = isOwnListing ? undefined : () => onOffer?.(item);
 
   return (
     <View style={s.card}>
@@ -190,7 +196,9 @@ export function FeedCard({
           rather than shown as "0" or "—": an unvalued item is not an item worth
           nothing, and the artboard has no state for the difference.
         */}
-        {item.valueLeaves !== null ? <LeavesChip value={item.valueLeaves} /> : null}
+        {item.valueLeaves !== null ? (
+          <LeavesChip value={item.valueLeaves} own={isOwnListing} />
+        ) : null}
       </View>
 
       {/* ── chips ── */}
@@ -207,7 +215,7 @@ export function FeedCard({
         comments={item.stats.comments}
         layout={offerLayout}
         title={item.title}
-        onOffer={() => onOffer?.(item)}
+        onOffer={offerAction}
         onLike={onLike && (() => onLike(item, !item.stats.liked))}
         onComment={onComment && (() => onComment(item))}
         onShare={onShare && (() => onShare(item))}
@@ -368,16 +376,26 @@ function TierBadge({ tier }: { tier: TrustTier }) {
   );
 }
 
-/** The item's worth. Never shrinks — the title is the flexible half of that row. */
-function LeavesChip({ value }: { value: number }) {
+/**
+ * The item's worth. Never shrinks — the title is the flexible half of that row.
+ *
+ * THE EXACT NUMBER ONLY ON YOUR OWN LISTING. Everyone else's shows its bracket
+ * — see `src/lib/brackets.ts` for the reasoning — and `own` is the same
+ * `isOwnListing` that already decides whether the card gets an offer button,
+ * so the two cannot disagree about whose listing this is. The accessibility
+ * label follows the same rule: a reader announcing the exact figure would
+ * defeat the bracket.
+ */
+function LeavesChip({ value, own }: { value: number; own: boolean }) {
+  const shown = own ? String(value) : bracketLabel(bracketOf(value));
   return (
     <View
       style={s.leavesChip}
       accessibilityRole="text"
-      accessibilityLabel={`Valued at ${value} Leaves`}
+      accessibilityLabel={own ? `Your listing, valued at ${value} Leaves` : shown}
     >
       <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
-      <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>{value}</Text>
+      <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>{shown}</Text>
     </View>
   );
 }
@@ -432,7 +450,7 @@ function CardActions({
   comments: number;
   layout: OfferLayout;
   title: string;
-  onOffer: () => void;
+  onOffer?: () => void;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -450,14 +468,14 @@ function CardActions({
           onComment={onComment}
           onShare={onShare}
         />
-        {inline ? <OfferButton layout={layout} title={title} onPress={onOffer} /> : null}
+        {inline && onOffer ? <OfferButton layout={layout} title={title} onPress={onOffer} /> : null}
       </View>
 
-      {inline ? null : (
+      {inline ? null : onOffer ? (
         <View style={s.offerWrap}>
           <OfferButton layout={layout} title={title} onPress={onOffer} />
         </View>
-      )}
+      ) : null}
     </>
   );
 }
