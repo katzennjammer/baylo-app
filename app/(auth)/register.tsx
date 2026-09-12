@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { TextInput, View } from "react-native";
+import { Linking, Platform, TextInput, View } from "react-native";
 import { router } from "expo-router";
 
 import {
@@ -27,6 +27,7 @@ import {
   FooterPrompt,
   Headline,
   LegalCopy,
+  OutlineButton,
   PrimaryButton,
   Subhead,
   Wordmark,
@@ -70,16 +71,19 @@ import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
  */
 
 /**
- * The welcome grant, in Leaves.
+ * What verifying credits, in Leaves — the figure the user will watch land.
  *
- * A SERVER FACT, NOT A DESIGN VALUE. The backend pays this in
- * `../baylo/src/lib/verification.ts`, gated on `signupGrantClaimed`, and a
- * screen that promises a different number than the API pays is a bug no amount
- * of visual polish covers. It lives here as a named constant so the next person
- * to change the grant has one obvious place to look, and it should become an
+ * A SERVER FACT, NOT A DESIGN VALUE. It mirrors VERIFY_CREDIT_LEAVES in the
+ * backend's task-constants.ts: the 20-Leaf signup grant PLUS the 10-Leaf
+ * VERIFY_ACCOUNT task, which `markVerified()` pays in the same call. The grant
+ * alone is 20, and quoting 20 here while the balance moves by 30 is a small lie
+ * in the wrong direction, so this deliberately quotes the total. A screen that
+ * promises a different number than the API pays is a bug no amount of visual
+ * polish covers; it lives here as a named constant so the next person to change
+ * either half has one obvious place to look, and it should become an
  * API-supplied value the first time the two are allowed to disagree.
  */
-const WELCOME_GRANT_LEAVES = 50;
+const VERIFY_CREDIT_LEAVES = 30;
 
 interface PendingSignup {
   email: string;
@@ -524,15 +528,25 @@ function RegisterForm({
  * do not sit next to each other in the same flow.
  *
  * It says three things, in this order, because that is the order they matter:
- * where the email went, what confirming it is worth, and that logging in works
- * regardless. The last one is not filler — a screen that only says "check your
- * email" reads as a wall, and this one is not: verification gates the grant,
- * not access.
+ * where the email went, what opening it is worth, and that the app is usable
+ * without it. The last one is not filler — a screen that only says "check your
+ * email" reads as a wall, and this one is not: verification gates the Leaves,
+ * not access. But it is the THIRD thing, and it is phrased as the lesser
+ * option, because the email is the point of this screen.
  *
- * WHICH ACTION GETS THE BUTTON. Continue is unambiguously the more important —
- * it adopts the session and opens the app, while Resend is the recovery path
- * for a mail that did not arrive. Putting the recovery path on the primary
- * control and hiding the way forward in a link would be a worse screen.
+ * WHICH ACTION GETS THE BUTTON. Until 12 Sep 2026 "Continue to Baylo" was the
+ * primary, and a filled green button that opens the app reads as "you're
+ * done" — people tapped it and never came back for the email. So the primary
+ * now points AT the email: it opens the mail app. Continue is the outline
+ * button beneath it, still one tap, still not a wall, just visibly the second
+ * choice. Resend stays on the footer as the recovery path for a mail that did
+ * not arrive.
+ *
+ * Opening the mail app is best-effort. iOS has a `message:` scheme that lands
+ * on the inbox; Android has no app-agnostic inbox intent without a native
+ * module, so `mailto:` opens the default mail client on a blank compose — one
+ * back-press from the inbox, which is close enough. If neither resolves, say so
+ * in the banner rather than failing silently.
  */
 function CheckYourEmail({ state }: { state: PendingSignup }) {
   const { adoptSession } = useSession();
@@ -570,6 +584,16 @@ function CheckYourEmail({ state }: { state: PendingSignup }) {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onOpenMail() {
+    setError(null);
+    const url = Platform.OS === "ios" ? "message:" : "mailto:";
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setError("Could not open a mail app. Open your inbox and tap the link in the email from Baylo.");
     }
   }
 
@@ -614,8 +638,9 @@ function CheckYourEmail({ state }: { state: PendingSignup }) {
 
       <View style={{ height: gap.headlineToBody }} />
       <Body>
-        We sent a verification link to {state.email}. Open it and {WELCOME_GRANT_LEAVES} Leaves land
-        in your balance. You can log in either way — verifying is what unlocks the grant.
+        We sent a verification link to {state.email}. Open it and {VERIFY_CREDIT_LEAVES} Leaves land
+        in your balance. You can look around without it — browse, message and accept trades — but
+        the Leaves wait until you do.
       </Body>
 
       {message ? (
@@ -625,7 +650,10 @@ function CheckYourEmail({ state }: { state: PendingSignup }) {
       ) : null}
 
       <View style={{ height: gap.bodyToControl.signIn }} />
-      <PrimaryButton
+      <PrimaryButton label="Open my email" onPress={onOpenMail} disabled={continuing} />
+
+      <View style={{ height: gap.buttonToDivider }} />
+      <OutlineButton
         label={state.session ? "Continue to Baylo" : "Go to log in"}
         onPress={onContinue}
         busy={continuing}

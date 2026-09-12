@@ -515,6 +515,21 @@ export async function resendVerification(accessToken: string): Promise<ResendRes
   return (await res.json().catch(() => ({}))) as ResendResult;
 }
 
+/**
+ * The same POST, from INSIDE the app.
+ *
+ * The Home reminder for an unverified account needs a resend too, and there the
+ * situation is the reverse of the register screen's: a session IS installed,
+ * and its access token may be hours old. So this one goes through request(),
+ * which attaches `memory` and refreshes on a 401 like every other in-app call.
+ * Same endpoint, same 3-an-hour limit, same ResendResult.
+ */
+export async function resendVerificationSignedIn(): Promise<ResendResult> {
+  const res = await request("/api/auth/resend-verification", { method: "POST" });
+  if (!res.ok) await legacyFailure(res, "Could not send the verification email");
+  return (await res.json().catch(() => ({}))) as ResendResult;
+}
+
 export interface VerifyEmailResult {
   ok: boolean;
   verified: boolean;

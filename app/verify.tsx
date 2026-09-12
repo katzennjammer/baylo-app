@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, verifyEmailToken } from "../src/api/client";
 import { useSession } from "../src/auth/session";
@@ -40,6 +41,7 @@ import {
  */
 export default function VerifyScreen() {
   const { session } = useSession();
+  const qc = useQueryClient();
   const params = useLocalSearchParams<{ token?: string }>();
   const token = typeof params.token === "string" ? params.token.trim() : "";
 
@@ -63,6 +65,11 @@ export default function VerifyScreen() {
       try {
         const result = await verifyEmailToken(token);
         if (cancelled) return;
+        // The cached home payload still says isVerified: false, and Home's
+        // reminder bar reads that. Drop it so the next paint agrees with the
+        // server — otherwise "Continue to Baylo" lands on a screen still asking
+        // the user to do the thing they just did.
+        void qc.invalidateQueries({ queryKey: ["home"] });
         setState({
           status: "done",
           alreadyVerified: result.alreadyVerified,
@@ -83,7 +90,7 @@ export default function VerifyScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, qc]);
 
   // Signed in → the app. Signed out → sign in, which is the only useful place
   // to be: verification does not create a session, it only marks an account.

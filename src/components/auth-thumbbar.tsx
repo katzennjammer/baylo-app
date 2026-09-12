@@ -26,7 +26,6 @@ import { Tappable } from "./Tappable";
 import {
   AlertIcon,
   ArrowIcon,
-  AuthLeafIcon,
   BackIcon,
   ChevronIcon,
   EyeIcon,
@@ -1045,53 +1044,5 @@ export function ActionBar({
         )}
       </View>
     </Tappable>
-  );
-}
-
-/* ──────────────────────── check-your-email parts ────────────────────── */
-
-/** Body copy with the address emphasised. */
-export function CheckEmailBody({ email }: { email: string }) {
-  return (
-    <Text style={[authText(authType.checkEmailBody), { color: authColor.cream72 }]}>
-      We sent a verification link to{" "}
-      <Text style={[authText(authType.checkEmailStrong), { color: authColor.cream }]}>{email}</Text>.
-      Open it and you&rsquo;re in.
-    </Text>
-  );
-}
-
-/**
- * The welcome-grant strip — the only radius in the entire flow, and the only
- * bordered element. It earns both by being the reward.
- *
- * `leaves` is a prop rather than a literal because the number is a server fact
- * (`signupGrantClaimed` in the backend's verification module), not a design
- * value, and a screen that promises a different figure than the API pays is a
- * bug no amount of visual polish covers.
- */
-export function LeafStrip({ leaves }: { leaves: number }) {
-  const s = authSize.leafStrip;
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: s.gap,
-        minHeight: s.minHeight,
-        padding: s.padding,
-        borderWidth: s.border,
-        borderColor: authColor.leafLine,
-        borderRadius: s.radius,
-      }}
-    >
-      <AuthLeafIcon color={authColor.green} />
-      <Text style={[authText(authType.leafStrip), { color: authColor.cream88, flex: 1 }]}>
-        <Text style={authText(authType.leafStripStrong)}>
-          <Text style={{ color: authColor.cream }}>{leaves} Leaves</Text>
-        </Text>{" "}
-        are added to your balance the moment you verify.
-      </Text>
-    </View>
   );
 }
