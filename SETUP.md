@@ -921,7 +921,7 @@ route would just make the wrong owner's screen prettier.
 
 Signing in with Google marks the account verified server-side — the route calls
 the same `markVerified()` the emailed link does — which awards VERIFY_ACCOUNT
-and the one-time 50-Leaf signup grant. Idempotent: a returning user's second
+and the one-time 20-Leaf signup grant. Idempotent: a returning user's second
 Google sign-in credits nothing.
 
 ## Creating an account
@@ -947,7 +947,7 @@ IP. A 429 carries `Retry-After` and the screen turns it into "try again in N
 minutes".
 
 Verification is not a wall. Login works unverified; verifying is what unlocks
-the 50-Leaf welcome grant.
+the 20-Leaf welcome grant.
 
 ### The verification link
 

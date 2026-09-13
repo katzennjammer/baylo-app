@@ -6,15 +6,18 @@ import { border, color, icon, radius, size, space, textStyle, type } from "../..
 import { Tappable } from "../Tappable";
 
 /**
- * The signup grant, as the copy names it.
+ * What a verified account starts with, as the copy names it.
  *
- * Mirrors SIGNUP_GRANT_LEAVES in the server's task-constants.ts, and mirrors is
- * the honest word — /api/v1/home does not return it, so this is a hand-kept
- * copy that goes stale silently if the grant ever changes. It is written as a
- * named constant rather than inlined in the sentence so that the day someone
- * greps for the number, this is one of the places they find.
+ * Mirrors VERIFY_CREDIT_LEAVES in the server's task-constants.ts — the 20-Leaf
+ * signup grant plus the 10-Leaf VERIFY_ACCOUNT task, paid together at
+ * verification — and mirrors is the honest word: /api/v1/home does not return
+ * it, so this is a hand-kept copy that goes stale silently if either half ever
+ * changes. It quotes the total rather than the grant because the total is what
+ * the balance actually shows. It is written as a named constant rather than
+ * inlined in the sentence so that the day someone greps for the number, this
+ * is one of the places they find.
  */
-const SIGNUP_GRANT_LEAVES = 50;
+const VERIFY_CREDIT_LEAVES = 30;
 
 /**
  * Nothing in the feed, one thing to do about it.
@@ -75,8 +78,8 @@ export function EmptyFeed({ location }: { location: string | null }) {
       </Pressable>
 
       <Text style={[textStyle(type.sectionSubcopy), s.note]}>
-        You start with {SIGNUP_GRANT_LEAVES} Leaves. You earn more by completing trades, never by
-        paying.
+        You start with {VERIFY_CREDIT_LEAVES} Leaves once your email is verified. You earn more by
+        completing trades, never by paying.
       </Text>
     </View>
   );

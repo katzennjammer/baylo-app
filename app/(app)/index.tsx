@@ -14,6 +14,7 @@ import { FeedSkeleton } from "../../src/components/home/FeedSkeleton";
 import { ListingMenu } from "../../src/components/home/ListingMenu";
 import { StoriesRow } from "../../src/components/home/StoriesRow";
 import { TrendingStrip } from "../../src/components/home/TrendingStrip";
+import { VerifyEmailBar } from "../../src/components/home/VerifyEmailBar";
 import { color, space } from "../../src/theme/tokens";
 import { useHome } from "../../src/api/home";
 import { useLike } from "../../src/api/social";
@@ -285,7 +286,18 @@ export default function HomeScreen() {
         data={rows}
         keyExtractor={keyOf}
         renderItem={renderItem}
-        ListHeaderComponent={<StoriesRow matches={matches} />}
+        ListHeaderComponent={
+          <>
+            {/*
+              The unverified-email reminder, when there is one to give. Above
+              the stories so it is the first thing on arrival, and inside the
+              list so it scrolls away with the feed rather than pinning like
+              the offline bar — see VerifyEmailBar for why.
+            */}
+            {viewer && !viewer.isVerified ? <VerifyEmailBar viewerId={viewer.id} /> : null}
+            <StoriesRow matches={matches} />
+          </>
+        }
         ListEmptyComponent={
           <View>
             <EmptyFeed location={viewer?.location ?? null} />
