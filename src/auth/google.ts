@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
+import { Prompt } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 
@@ -171,6 +172,7 @@ export function useGoogleSignIn(options: GoogleSignInOptions = {}): GoogleSignIn
     iosClientId: IOS_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
     webClientId: WEB_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
     redirectUri: Platform.OS === "web" ? undefined : NATIVE_REDIRECT_URI,
+    prompt: Prompt.SelectAccount,
     // Only what the backend reads off the token. Asking for more would put
     // scopes on the consent screen that nothing in this app uses, which is both
     // a worse first impression and a larger blast radius on the access token

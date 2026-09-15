@@ -37,6 +37,7 @@ export const defaultApiBase = normalise(process.env.EXPO_PUBLIC_API_URL ?? "");
 
 let override: string | null = null;
 let hydrated = false;
+let changeGeneration = 0;
 
 type BaseListener = (base: string) => void;
 const listeners = new Set<BaseListener>();
@@ -70,14 +71,17 @@ export function isApiBaseHydrated(): boolean {
 
 /** Reads the stored override into the mirror. Called once, at boot. */
 export async function hydrateApiBase(): Promise<string> {
+  const generationAtStart = changeGeneration;
   try {
     const stored = await SecureStore.getItemAsync(API_BASE_KEY);
-    override = stored ? normalise(stored) : null;
+    if (changeGeneration === generationAtStart) {
+      override = stored ? normalise(stored) : null;
+    }
   } catch {
     // A store that cannot be read is not a reason to fail to start. The
     // compiled-in default is a working URL on at least one setup, which is
     // strictly better than no URL at all.
-    override = null;
+    if (changeGeneration === generationAtStart) override = null;
   }
   hydrated = true;
   publish();
@@ -115,6 +119,7 @@ export async function setApiBase(raw: string): Promise<void> {
   if (problem) throw new Error(problem);
 
   const value = normalise(raw);
+  changeGeneration += 1;
   override = value;
   publish();
   await SecureStore.setItemAsync(API_BASE_KEY, value);
@@ -122,6 +127,7 @@ export async function setApiBase(raw: string): Promise<void> {
 
 /** Drops the override and goes back to the compiled-in default. */
 export async function resetApiBase(): Promise<void> {
+  changeGeneration += 1;
   override = null;
   publish();
   await SecureStore.deleteItemAsync(API_BASE_KEY);

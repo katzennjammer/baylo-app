@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ImageIcon, LeafIcon } from "../icons";
@@ -72,7 +72,7 @@ import type { Item } from "../../api/types";
  * the accessibility label follows the same rule: a screen reader announcing
  * the exact number would defeat the point of the bracket.
  */
-export function GridTile({
+export const GridTile = memo(function GridTile({
   item,
   width,
   onPress,
@@ -205,7 +205,7 @@ export function GridTile({
       </View>
     </Tappable>
   );
-}
+});
 
 const s = StyleSheet.create({
   tile: {

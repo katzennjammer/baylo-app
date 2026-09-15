@@ -1,8 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useConversations } from "../../src/api/messages";
+import { subscribeToUserChannel } from "../../src/api/pusher";
+import { useSession } from "../../src/auth/session";
 import { MessageIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
@@ -23,6 +26,8 @@ function relativeTime(dateIso: string): string {
 export default function MessagesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ partner?: string }>();
+  const { session } = useSession();
+  const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useConversations(params.partner ?? null);
   const conversations = useMemo(
     () => [...(data?.conversations ?? [])].sort(
@@ -30,6 +35,14 @@ export default function MessagesScreen() {
     ),
     [data],
   );
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+
+    return subscribeToUserChannel(session.user.id, () => {
+      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    }) ?? undefined;
+  }, [queryClient, session?.user.id]);
 
   if (isPending) {
     return (
@@ -76,7 +89,14 @@ export default function MessagesScreen() {
 
           return (
             <Tappable
-              onPress={() => router.push({ pathname: "/messages/thread", params: { partner: item.partnerId } })}
+              onPress={() => router.push({
+                pathname: "/messages/thread",
+                params: {
+                  partner: item.partnerId,
+                  partnerName: item.partnerName,
+                  partnerAvatar: item.partnerAvatar ?? "",
+                },
+              })}
               style={styles.row}
               pressedStyle={styles.rowPressed}
             >

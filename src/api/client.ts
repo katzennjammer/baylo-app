@@ -245,6 +245,10 @@ export async function legacyFailure(res: Response, fallback: string): Promise<ne
   );
 }
 
+/** How long an interactive sign-in request may wait for an API response. */
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+const API_REQUEST_TIMEOUT_MS = 15_000;
+
 /** A POST to an /api/auth endpoint: no Bearer header, no envelope. */
 async function postAuth<T>(path: string, body: unknown, fallback: string): Promise<T> {
   // Resolved OUTSIDE the try. requireBase() throws a CONFIG_ERROR when no URL
@@ -254,10 +258,59 @@ async function postAuth<T>(path: string, body: unknown, fallback: string): Promi
   const url = `${requireBase()}${path}`;
 
   let res: Response;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), AUTH_REQUEST_TIMEOUT_MS);
+
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+      signal: abort.signal,
+    });
+  } catch (cause) {
+    networkFailure(
+      cause instanceof Error && cause.name === "AbortError"
+        ? new Error(`The API did not respond within ${AUTH_REQUEST_TIMEOUT_MS / 1000} seconds`)
+        : cause,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) await legacyFailure(res, fallback);
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+/**
+ * A POST to an /api/auth endpoint WITH an explicit Bearer token.
+ *
+ * The shared transport for submitDateOfBirth() and resendVerification(): both
+ * callers hold a session they have deliberately not installed, so the token is
+ * taken as an argument rather than read from `memory`, and neither can use the
+ * normal request() path. Keeping the requireBase/try-fetch/legacyFailure
+ * sequence here means it is written once, not once per endpoint.
+ */
+async function postAuthWithToken<T>(
+  path: string,
+  body: unknown,
+  accessToken: string,
+  fallback: string,
+): Promise<T> {
+  // Resolved OUTSIDE the try, for the same reason as postAuth(): a CONFIG_ERROR
+  // must not be re-reported as a network failure.
+  const url = `${requireBase()}${path}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(body),
       credentials: "omit",
     });
@@ -266,7 +319,32 @@ async function postAuth<T>(path: string, body: unknown, fallback: string): Promi
   }
 
   if (!res.ok) await legacyFailure(res, fallback);
-  return (await res.json().catch(() => ({}))) as T;
+  // The body is validated as an OBJECT before it is claimed as T. A 200 whose
+  // body is not JSON (a proxy error page, an empty 204) must not silently
+  // become {} typed as the result and read as real data downstream.
+  const parsed: unknown = await res.json().catch(() => null);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ApiError(res.status, "MALFORMED_RESPONSE", `${path} did not return a JSON object`);
+  }
+  return parsed as T;
+}
+
+/**
+ * Minimal field check for a register response. The endpoint answers every
+ * field on success, so a missing one means the body is not what this client
+ * was written against — throwing beats letting undefined.id surface later.
+ */
+function requireRegisterFields(body: RegisterResult): RegisterResult {
+  if (
+    typeof body.id !== "string" ||
+    typeof body.name !== "string" ||
+    typeof body.email !== "string" ||
+    typeof body.isVerified !== "boolean" ||
+    typeof body.verificationEmailSent !== "boolean"
+  ) {
+    throw new ApiError(200, "MALFORMED_RESPONSE", "Register returned an unexpected response");
+  }
+  return body;
 }
 
 function toSession(body: Partial<TokenResponse>, what: string): StoredSession {
@@ -288,8 +366,15 @@ function toSession(body: Partial<TokenResponse>, what: string): StoredSession {
  */
 export async function adoptSession(session: StoredSession): Promise<StoredSession> {
   memory = session;
-  await saveSession(session);
   publish();
+  try {
+    await saveSession(session);
+  } catch (cause) {
+    // Do not leave an in-memory session that cannot survive the next reload.
+    memory = null;
+    publish();
+    throw cause;
+  }
   return session;
 }
 
@@ -404,26 +489,12 @@ export async function submitDateOfBirth(
   accessToken: string,
   dateOfBirth: string,
 ): Promise<{ ok: boolean }> {
-  const url = `${requireBase()}/api/auth/date-of-birth`;
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ dateOfBirth }),
-      credentials: "omit",
-    });
-  } catch (cause) {
-    networkFailure(cause);
-  }
-
-  if (!res.ok) await legacyFailure(res, "Could not save your date of birth");
-  return (await res.json().catch(() => ({ ok: true }))) as { ok: boolean };
+  return postAuthWithToken<{ ok: boolean }>(
+    "/api/auth/date-of-birth",
+    { dateOfBirth },
+    accessToken,
+    "Could not save your date of birth",
+  );
 }
 
 export interface RegisterResult {
@@ -453,7 +524,9 @@ export async function registerAccount(input: {
    *  for why the wire format has no time and no zone in it. */
   dateOfBirth: string;
 }): Promise<RegisterResult> {
-  return postAuth<RegisterResult>("/api/auth/register", input, "Could not create the account");
+  return requireRegisterFields(
+    await postAuth<RegisterResult>("/api/auth/register", input, "Could not create the account"),
+  );
 }
 
 /**
@@ -498,21 +571,12 @@ export interface ResendResult {
  * show rather than something to retry through.
  */
 export async function resendVerification(accessToken: string): Promise<ResendResult> {
-  const url = `${requireBase()}/api/auth/resend-verification`;
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
-      credentials: "omit",
-    });
-  } catch (cause) {
-    networkFailure(cause);
-  }
-
-  if (!res.ok) await legacyFailure(res, "Could not send the verification email");
-  return (await res.json().catch(() => ({}))) as ResendResult;
+  return postAuthWithToken<ResendResult>(
+    "/api/auth/resend-verification",
+    {},
+    accessToken,
+    "Could not send the verification email",
+  );
 }
 
 /**
@@ -782,6 +846,27 @@ function parseHeaders(raw: string): Record<string, string> {
 }
 
 /**
+ * Normalizes whatever a caller passed as `init.headers` into a plain record.
+ *
+ * A Headers instance or an array of tuples spread as a Record yields nothing
+ * usable — a Headers object has no enumerable own properties — so the request
+ * would silently go out without the caller's headers, and here without the
+ * Bearer token. new Headers() accepts all three shapes, and forEach reads
+ * every one of them back the same way.
+ */
+function toHeaderRecord(
+  init: HeadersInit | undefined,
+  accessToken: string | null,
+): Record<string, string> {
+  const out: Record<string, string> = { Accept: "application/json" };
+  if (init) new Headers(init).forEach((value, name) => {
+    out[name] = value;
+  });
+  if (accessToken) out.Authorization = `Bearer ${accessToken}`;
+  return out;
+}
+
+/**
  * A multipart body sent over XMLHttpRequest instead of fetch, because on this
  * SDK `fetch` cannot send one.
  *
@@ -824,11 +909,7 @@ function sendMultipart(
     // No cookie may ever enter the jar. See the note at the top of this file.
     xhr.withCredentials = false;
 
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      ...(init.headers as Record<string, string> | undefined),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    };
+    const headers: Record<string, string> = toHeaderRecord(init.headers, accessToken);
     for (const [name, value] of Object.entries(headers)) {
       if (name.toLowerCase() === "content-type") continue;
       xhr.setRequestHeader(name, value);
@@ -887,18 +968,23 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
 
   const send = async (accessToken: string | null) => {
     if (multipart) return sendMultipart(url, init, accessToken);
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), API_REQUEST_TIMEOUT_MS);
     try {
       return await fetch(url, {
         ...init,
         credentials: "omit",
-        headers: {
-          Accept: "application/json",
-          ...(init.headers as Record<string, string> | undefined),
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
+        headers: toHeaderRecord(init.headers, accessToken),
+        signal: init.signal ?? abort.signal,
       });
     } catch (cause) {
-      sendFailure(cause);
+      sendFailure(
+        cause instanceof Error && cause.name === "AbortError"
+          ? new Error(`The API did not respond within ${API_REQUEST_TIMEOUT_MS / 1000} seconds`)
+          : cause,
+      );
+    } finally {
+      clearTimeout(timer);
     }
   };
 

@@ -14,7 +14,7 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
-import { buildMapHtml, parseMapMessage, type MapHub } from "./map-html";
+import { buildMapHtml, parseMapMessage, type MapHub, type MapUserLocation } from "./map-html";
 import { ATTRIBUTION_TEXT, ATTRIBUTION_URL, TILE_USER_AGENT } from "./osm";
 
 /**
@@ -25,23 +25,16 @@ import { ATTRIBUTION_TEXT, ATTRIBUTION_URL, TILE_USER_AGENT } from "./osm";
  * SDK and needs an API key, and its `<UrlTile>` has no way to set the User-Agent
  * that OSM's tile policy requires. Both are hard requirements here.
  *
- * ── THIS MAP NEVER ASKS FOR LOCATION ────────────────────────────────────────
+ * ── LOCATION IS OPTIONAL, AND THIS COMPONENT NEVER ASKS ─────────────────────
  *
- * There is no `expo-location` in this app and no permission prompt anywhere in
- * this component, and that is a design decision rather than an omission.
+ * There is no `expo-location` call here. The marketplace screen may pass
+ * `userLocation` after it has already detected a position; this view only
+ * draws a "You are here" marker and a nearby highlight when that payload is
+ * present. Item detail and listing maps pass nothing, and still show every
+ * hub they were given.
  *
- * The map's job is "where are the Safe Zones", which is answered completely by
- * a fixed set of 22 public coordinates and a view of Metro Cebu. Knowing where
- * the USER is would only ever reorder that list. Asking for location before
- * showing a map is the pattern that trains people to refuse permissions, and it
- * puts a modal in front of a screen that does not need one — on a screen whose
- * entire premise is that this app is careful with where people are.
- *
- * So the "location permission not granted" state is not a degraded mode here:
- * IT IS THE ONLY MODE. There is no blue dot, no "centre on me", and nothing on
- * this screen behaves differently for a user who has granted location to some
- * other app. If a "hubs near me" feature is ever wanted, it should ask at the
- * moment somebody taps something that needs it — never as a gate on the map.
+ * Missing location is therefore not a degraded mode: it is the complete map
+ * of public Safe-Zone coordinates. A denied permission must not blank pins.
  *
  * ── THE STATES ──────────────────────────────────────────────────────────────
  *
@@ -62,6 +55,7 @@ import { ATTRIBUTION_TEXT, ATTRIBUTION_URL, TILE_USER_AGENT } from "./osm";
 
 export interface HubMapProps {
   hubs: MapHub[];
+  userLocation?: MapUserLocation | null;
   /**
    * False draws a still map: no dragging, no zoom, and the WebView takes no
    * touches at all, so a parent `Tappable` can own the whole surface. That is
@@ -80,6 +74,7 @@ export interface HubMapProps {
 
 export function HubMap({
   hubs,
+  userLocation = null,
   interactive = true,
   focusHubId,
   selectedHubId = null,
@@ -109,10 +104,12 @@ export function HubMap({
    * rather than rebuilt to be different.
    */
   const html = useMemo(
-    () => buildMapHtml({ hubs, focusHubId, interactive }),
+    () => buildMapHtml({ hubs, userLocation, focusHubId, interactive }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      hubs.map((h) => `${h.id}:${h.isActive}`).join("|"),
+      hubs.map((h) => `${h.id}:${h.isActive}:${h.nearby ? 1 : 0}`).join("|"),
+      userLocation?.latitude,
+      userLocation?.longitude,
       focusHubId,
       interactive,
     ],
@@ -201,6 +198,14 @@ export function HubMap({
           // request the page makes, tiles included. See osm.ts.
           userAgent={TILE_USER_AGENT}
           onMessage={onMessage}
+          // Leaflet can initialize before the native WebView has its final
+          // measured size. Recalculate after the document finishes loading so
+          // the fitted view and hub markers are positioned in the real viewport.
+          onLoadEnd={() => {
+            webRef.current?.injectJavaScript(
+              "window.__baylo && window.__baylo.invalidate(); true;",
+            );
+          }}
           // The tile cache. Both platforms keep an on-disk HTTP cache honouring
           // the tile server's Cache-Control, which is what stops a pan back
           // over ground already seen from re-fetching it.

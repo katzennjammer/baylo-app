@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Keyboard,
   ScrollView,
   StyleSheet,
@@ -32,7 +33,11 @@ function relativeTime(dateIso: string): string {
 export default function MessagesThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { partner } = useLocalSearchParams<{ partner?: string }>();
+  const { partner, partnerName, partnerAvatar } = useLocalSearchParams<{
+    partner?: string;
+    partnerName?: string;
+    partnerAvatar?: string;
+  }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -69,6 +74,8 @@ export default function MessagesThreadScreen() {
   };
 
   const currentUserId = thread.data?.currentUserId ?? "";
+  const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
+  const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
 
   return (
     <View style={[styles.screen, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -76,7 +83,7 @@ export default function MessagesThreadScreen() {
         <Tappable onPress={() => router.back()} style={styles.backButton} pressedStyle={styles.backButtonPressed}>
           <Text style={styles.backText}>←</Text>
         </Tappable>
-        <Text style={styles.title}>{thread.data?.partnerName ?? "Conversation"}</Text>
+        <Text style={styles.title}>{otherName}</Text>
       </View>
 
       {thread.isPending ? (
@@ -99,10 +106,23 @@ export default function MessagesThreadScreen() {
               const mine = message.senderId === currentUserId;
               return (
                 <View key={message.id} style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheir]}>
-                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheir]}>
-                    {renderMessageBody({ content: message.content, mine })}
+                  {!mine ? (
+                    <View style={styles.avatarColumn}>
+                      {otherAvatar ? (
+                        <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
+                      ) : (
+                        <View style={styles.messageAvatarFallback}>
+                          <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+                  <View style={styles.messageContent}>
+                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheir]}>
+                      {renderMessageBody({ content: message.content, mine })}
+                    </View>
+                    <Text style={styles.time}>{relativeTime(message.createdAt)}</Text>
                   </View>
-                  <Text style={styles.time}>{relativeTime(message.createdAt)}</Text>
                 </View>
               );
             })}
@@ -202,13 +222,40 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   bubbleRowTheir: {
-    alignItems: "flex-start",
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: 8,
+  },
+  avatarColumn: {
+    width: 28,
+    alignSelf: "flex-end",
+  },
+  messageAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  messageAvatarFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.forest,
+  },
+  messageAvatarInitial: {
+    fontFamily: font.displaySemi,
+    fontSize: 12,
+    color: color.surface,
   },
   bubble: {
     maxWidth: "80%",
     borderRadius: 16,
     padding: 10,
     borderWidth: 1,
+  },
+  messageContent: {
+    maxWidth: "80%",
   },
   bubbleMine: {
     backgroundColor: color.forest,

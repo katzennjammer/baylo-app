@@ -107,6 +107,7 @@ export function PhotoCarousel({ images, title }: { images: string[]; title: stri
           </View>
         </>
       ) : null}
+
     </View>
   );
 }

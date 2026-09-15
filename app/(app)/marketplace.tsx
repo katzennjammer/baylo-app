@@ -1,9 +1,13 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import * as Location from "expo-location";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
+  Linking,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -30,7 +34,8 @@ import { useHubs } from "../../src/api/hubs";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
 import { HubSheet } from "../../src/components/map/HubSheet";
-import { MapLegend } from "../../src/components/map/MapLegend";
+import { HubTypeGlyph, MapLegend } from "../../src/components/map/MapLegend";
+import { Tappable } from "../../src/components/Tappable";
 import { FilterSheet } from "../../src/components/marketplace/FilterSheet";
 import {
   BrowseEmpty,
@@ -44,9 +49,27 @@ import { useSession } from "../../src/auth/session";
 import { ReachPromptSheet } from "../../src/components/offer/OfferSheet";
 import { prompt as promptCopy } from "../../src/components/offer/copy";
 import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/reach-flag";
-import { color, space, textStyle, type } from "../../src/theme/tokens";
+import { withTimeout } from "../../src/lib/with-timeout";
+import { border, color, radius, space, textStyle, type } from "../../src/theme/tokens";
 import { outOfReach } from "../../src/theme/offer-tokens";
-import type { Item } from "../../src/api/types";
+import type { Item, SafeZoneHub } from "../../src/api/types";
+import type { MapHub } from "../../src/components/map/map-html";
+
+/** How many nearest active hubs get the map glow and the strip under the status. */
+const NEARBY_HUB_LIMIT = 3;
+
+/**
+ * How long to wait for a live GPS fix before falling back to showing all hubs.
+ *
+ * Ten seconds is chosen against the alternative, which is not "wait longer" but
+ * "wait forever": indoor, in a basement, or on a phone whose GPS has not warmed
+ * up, `getCurrentPositionAsync` can simply never settle, and the screen that
+ * waits on it is a screen permanently announcing that it is finding nearby Safe
+ * Zones. A slightly stale answer is worth more here than a perfect one, because
+ * the cost of being wrong is the nearby strip listing a hub 200 m from where it
+ * should be — and the cost of waiting is the feature appearing not to exist.
+ */
+const LOCATION_FIX_TIMEOUT_MS = 10_000;
 
 /**
  * The Marketplace tab — category browsing and search.
@@ -82,10 +105,9 @@ import type { Item } from "../../src/api/types";
  * box above a map that ignores it is a bug report waiting to be filed; an
  * absent one is a mode. See the note on `ViewToggle`.
  *
- * `sort=nearest` and `radiusKm` exist on the browse route and are still unused.
- * Distance-sorting needs the user's location, and this app does not ask for it
- * — see the note on `HubMap`. It is also a different feature from a map and can
- * land on its own.
+ * `sort=nearest` and `radiusKm` exist on the browse route and are still unused
+ * for LISTINGS. Hub distance is computed on-device once the map has a position,
+ * so listing search never receives coordinates.
  *
  * ── SEARCH IS SUBMITTED, NOT LIVE ───────────────────────────────────────────
  *
@@ -108,6 +130,9 @@ export default function MarketplaceScreen() {
   const [view, setView] = useState<BrowseView>("grid");
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<Location.LocationObjectCoords | null>(null);
+  const [locationState, setLocationState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
+  const [locationDenied, setLocationDenied] = useState(false);
 
   /**
    * The hub query runs only once the map has been asked for.
@@ -118,6 +143,214 @@ export default function MarketplaceScreen() {
    * hour — the table is curated, not live.
    */
   const hubsQuery = useHubs(view === "map");
+
+  /**
+   * Bumped to ask for another detection attempt.
+   *
+   * ── WHY THIS COUNTER EXISTS, AND WHY `locationState` COULD NOT DO THE JOB ────
+   *
+   * The detection effect below must not depend on `locationState`: it WRITES
+   * that state (to "loading"), so having it in the dep array made the effect
+   * cancel its own in-flight run and then bail on its own guard — the permanent
+   * "Finding nearby Safe Zones…" hang. Depending on `[view]` alone fixed the
+   * hang, but it took away the only trigger a SECOND attempt had: setting the
+   * state back to "idle" no longer re-ran anything, so both the Try again button
+   * and the return-from-Settings path would have silently stopped working.
+   *
+   * A counter restores that trigger without reintroducing the feedback loop: it
+   * is incremented only from OUTSIDE the effect, the effect never writes it, so
+   * a bump is always a deliberate "try again" and never a reaction to the
+   * effect's own work. `view` stays in the deps beside it: opening the map is an
+   * attempt, and so is every explicit retry afterwards.
+   */
+  const [locationAttempt, setLocationAttempt] = useState(0);
+
+  const retryLocation = useCallback(() => {
+    setUserLocation(null);
+    setLocationDenied(false);
+    setLocationState("idle");
+    setLocationAttempt((n) => n + 1);
+  }, []);
+
+  /**
+   * Detect position when the map opens. Location OFF / denied is not a gate:
+   * hubs still load; this effect only fills the marker and the nearby sort.
+   */
+  useEffect(() => {
+    if (view !== "map") return;
+    //
+    // THE DEPS ARE `[view, locationAttempt]` AND MUST NEVER INCLUDE
+    // `locationState`, which is the whole "Finding nearby Safe Zones…" hang.
+    //
+    // This effect WRITES the state it used to depend on: it calls
+    // setLocationState("loading") a line down. With `locationState` in the dep
+    // array, that write re-ran the effect, whose cleanup set `cancelled = true`
+    // for the run already in flight — so when the position finally arrived, the
+    // `if (!cancelled)` guard discarded it. The re-run then hit the
+    // `!== "idle"` guard and returned immediately. The net effect was a screen
+    // that announced it was finding nearby Safe Zones and then waited forever,
+    // doing nothing, with no error to show for it: every path that could have
+    // set a final state had been cancelled by the state it was about to set.
+    //
+    // Re-entry is driven by `locationAttempt` instead — bumped only from outside
+    // this effect, by retryLocation() and by the AppState listener below — while
+    // the `!== "idle"` guard stays, so a re-render that is not an attempt (the
+    // hub query resolving, the viewport measuring) cannot restart a request
+    // that is already running.
+    if (locationState !== "idle") return;
+    let cancelled = false;
+    setLocationState("loading");
+    void (async () => {
+      try {
+        let permission = await Location.getForegroundPermissionsAsync();
+        if (permission.status !== Location.PermissionStatus.GRANTED) {
+          permission = await Location.requestForegroundPermissionsAsync();
+        }
+        if (!permission.granted) {
+          if (!cancelled) {
+            setLocationDenied(true);
+            setLocationState("unavailable");
+          }
+          return;
+        }
+        if (!cancelled) setLocationDenied(false);
+        if (!(await Location.hasServicesEnabledAsync())) {
+          // GPS is off. `enableNetworkProviderAsync` raises the system sheet that
+          // offers to turn it on, and it settles when the user dismisses that
+          // sheet — which they may never do. This is the one place a timeout is
+          // NOT treated as a failure of its own: "they ignored the sheet" and
+          // "they said yes" are then told apart by re-reading the setting below,
+          // which is the only authority on whether services are on. A throw from
+          // the OS call itself IS a real error and still takes the catch.
+          try {
+            await withTimeout(Location.enableNetworkProviderAsync(), 8_000);
+          } catch {
+            if (!cancelled) setLocationState("unavailable");
+            return;
+          }
+          if (!(await Location.hasServicesEnabledAsync())) {
+            if (!cancelled) setLocationState("unavailable");
+            return;
+          }
+        }
+
+        const lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: 15 * 60 * 1000,
+          requiredAccuracy: 2000,
+        });
+        if (lastKnown && !cancelled) {
+          setUserLocation(lastKnown.coords);
+          setLocationState("ready");
+          return;
+        }
+
+        // `getCurrentPositionAsync` does not reliably reject when there is no
+        // fix — indoors, or with GPS on but nothing in view — so it cannot be
+        // awaited on its own. It also cannot simply be raced against a timer:
+        // the losing timer keeps running, and worse, a race makes "no fix yet"
+        // and "the phone refused" arrive as the same rejection, which the catch
+        // below turns into the same message. Both are handled by the helper.
+        const position = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          LOCATION_FIX_TIMEOUT_MS,
+        );
+        // A late fix arriving after the timeout is not an error to report: the
+        // timeout already put up the honest "showing all Safe Zones" state, and
+        // silently swapping it now would move the map under someone reading it.
+        if (position && !cancelled) {
+          setUserLocation(position.coords);
+          setLocationState("ready");
+        } else if (!cancelled) {
+          setLocationState("unavailable");
+        }
+      } catch {
+        if (!cancelled) setLocationState("unavailable");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, locationAttempt]);
+
+  /**
+   * Turning Location ON in system settings should take on the next return.
+   *
+   * ── WHY THIS RE-TESTS THE PERMISSION RATHER THAN TRUSTING `locationDenied` ──
+   *
+   * The obvious guard is "only re-run if we did NOT fail on permission", and it
+   * is wrong in the one case this effect exists for. A denial is a decision the
+   * user is allowed to reverse, and the whole point of returning to the app is
+   * that they just did. Gating on the remembered denial meant somebody who went
+   * to Settings, granted location, and came back was told "Location unavailable"
+   * by a screen that refused to look again — they had to find the "Try again"
+   * button to undo a decision the OS had already forgotten.
+   *
+   * So the check on return is the OS's, not ours: ask whether anything has
+   * changed since the last look. `getForegroundPermissionsAsync` is a cheap,
+   * non-prompting read, so this cannot re-raise a dialog a user already
+   * dismissed — the effect below understands a denied result and returns to
+   * `unavailable`, which is the same screen they left.
+   *
+   * Re-entering `idle` when permission HAS changed is what makes the detection
+   * effect re-run; leaving the state alone is what stops an app the user never
+   * left from restarting a healthy location request on every foreground.
+   */
+  useEffect(() => {
+    if (view !== "map") return;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next !== "active" || locationState !== "unavailable") return;
+      void (async () => {
+        try {
+          const permission = await Location.getForegroundPermissionsAsync();
+          // Anything other than an outright denial is worth another attempt:
+          // granted is the case this exists for, and undetermined means the
+          // user has not answered yet and is entitled to be asked.
+          if (permission.status !== Location.PermissionStatus.DENIED) {
+            setLocationDenied(false);
+            setLocationState("idle");
+            // The bump is what actually re-runs detection — setting the state
+            // back to "idle" no longer does it on its own, now that the effect
+            // does not depend on `locationState`. Without this line, granting
+            // location in Settings would clear the message and then sit there.
+            setLocationAttempt((n) => n + 1);
+          }
+        } catch {
+          // A permission read that throws is not a reason to change anything;
+          // the screen is already showing its honest "unavailable" state.
+        }
+      })();
+    });
+    return () => sub.remove();
+  }, [view, locationState]);
+
+  const orderedHubs = useMemo(() => {
+    const hubs = hubsQuery.data?.hubs ?? [];
+    if (!userLocation) return hubs;
+    return [...hubs].sort(
+      (a, b) =>
+        distanceKm(userLocation.latitude, userLocation.longitude, a) -
+        distanceKm(userLocation.latitude, userLocation.longitude, b),
+    );
+  }, [hubsQuery.data?.hubs, userLocation]);
+
+  const nearbyHubs = useMemo(() => {
+    if (!userLocation) return [];
+    return orderedHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT);
+  }, [orderedHubs, userLocation]);
+
+  const mapHubs: MapHub[] = useMemo(() => {
+    const nearbyIds = new Set(nearbyHubs.map((hub) => hub.id));
+    return orderedHubs.map((hub) => ({
+      id: hub.id,
+      name: hub.name,
+      type: hub.type,
+      latitude: hub.latitude,
+      longitude: hub.longitude,
+      isActive: hub.isActive,
+      nearby: nearbyIds.has(hub.id),
+    }));
+  }, [orderedHubs, nearbyHubs]);
 
   /** §7.1's reach bracket, from the viewer's own shelf. Null until it has loaded. */
   const { reach } = useReach();
@@ -278,8 +511,7 @@ export default function MarketplaceScreen() {
      FlatList's header would keep the item query's states (skeleton, no
      matches, end-of-list spinner) mounted around a list that is not there. */
   if (view === "map") {
-    const hubs = hubsQuery.data?.hubs ?? [];
-    const selected = hubs.find((h) => h.id === selectedHubId) ?? null;
+    const selected = orderedHubs.find((h) => h.id === selectedHubId) ?? null;
     const hubsError = hubsQuery.error instanceof ApiError ? hubsQuery.error : null;
 
     return (
@@ -290,6 +522,56 @@ export default function MarketplaceScreen() {
 
         <View style={s.legend}>
           <MapLegend />
+        </View>
+
+        <View style={s.locationRow}>
+          <Text style={s.locationStatus} accessibilityLiveRegion="polite">
+            {locationState === "loading"
+              ? "Finding nearby Safe Zones…"
+              : locationState === "ready"
+                ? "Nearby Safe Zones are highlighted first"
+                : locationState === "unavailable"
+                  ? locationDenied
+                    ? // Naming the actual cause, because "Location unavailable" is
+                      // what you see whether the permission was refused, the
+                      // phone's GPS is off, or the fix simply timed out -- three
+                      // different fixes behind one sentence. Denied is the one
+                      // that needs Settings, so it is the one that says so.
+                      "Location is off for Baylo. All Safe Zones are shown."
+                    : "Location unavailable. Showing all Safe Zones."
+                  : ""}
+          </Text>
+          {locationState === "unavailable" ? (
+            <Tappable
+              onPress={() => {
+                if (locationDenied) {
+                  // Settings, and then STOP. The retry that used to follow this
+                  // line reset the state to `idle` while the app was still on
+                  // its way out to Settings, so the detection effect re-ran
+                  // against a permission the user had not changed yet, failed,
+                  // and put back the same card -- a button that visibly did
+                  // nothing. Coming back is handled instead by the AppState
+                  // listener, which re-reads the permission at the moment the
+                  // user actually returns.
+                  void Linking.openSettings().catch(() => {});
+                  return;
+                }
+                retryLocation();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                locationDenied
+                  ? "Open settings to allow location"
+                  : "Try locating again"
+              }
+              style={s.locationRetry}
+              pressedStyle={s.locationRetryPressed}
+            >
+              <Text style={[textStyle(type.photoCaption), { color: color.forest }]}>
+                {locationDenied ? "Allow" : "Try again"}
+              </Text>
+            </Tappable>
+          ) : null}
         </View>
 
         <View style={s.mapWrap}>
@@ -309,11 +591,12 @@ export default function MarketplaceScreen() {
               {/* Degrades to the hub list rather than a blank map view.
                   See MapErrorBoundary. */}
               <MapErrorBoundary
-                hubs={hubs}
+                hubs={orderedHubs}
                 onOpenHub={(hubId) => router.push({ pathname: "/hub", params: { id: hubId } })}
               >
                 <HubMap
-                  hubs={hubs}
+                  hubs={mapHubs}
+                  userLocation={userLocation}
                   interactive
                   selectedHubId={selectedHubId}
                   onSelectHub={setSelectedHubId}
@@ -321,6 +604,17 @@ export default function MarketplaceScreen() {
                   style={s.map}
                 />
               </MapErrorBoundary>
+
+              {locationState === "ready" && userLocation && nearbyHubs.length > 0 && !selected ? (
+                <View style={s.nearbyOverlay} pointerEvents="box-none">
+                  <NearestHubsStrip
+                    hubs={nearbyHubs}
+                    origin={userLocation}
+                    selectedHubId={selectedHubId}
+                    onSelect={setSelectedHubId}
+                  />
+                </View>
+              ) : null}
 
               {selected ? (
                 <HubSheet
@@ -432,6 +726,72 @@ export default function MarketplaceScreen() {
 
 const keyOf = (item: Item) => item.id;
 
+function distanceKm(latitude: number, longitude: number, hub: SafeZoneHub): number {
+  const earthRadiusKm = 6371;
+  const latDelta = ((hub.latitude - latitude) * Math.PI) / 180;
+  const lngDelta = ((hub.longitude - longitude) * Math.PI) / 180;
+  const originLatitude = (latitude * Math.PI) / 180;
+  const hubLatitude = (hub.latitude * Math.PI) / 180;
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.sin(lngDelta / 2) ** 2 * Math.cos(originLatitude) * Math.cos(hubLatitude);
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistanceKm(km: number): string {
+  if (km < 0.1) return "Nearby";
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${Math.round(km)} km`;
+}
+
+function NearestHubsStrip({
+  hubs,
+  origin,
+  selectedHubId,
+  onSelect,
+}: {
+  hubs: SafeZoneHub[];
+  origin: { latitude: number; longitude: number };
+  selectedHubId: string | null;
+  onSelect: (hubId: string) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.nearbyRow}
+      accessibilityRole="summary"
+      accessibilityLabel="Nearest Safe Zones, listed first"
+    >
+      {hubs.map((hub) => {
+        const selected = hub.id === selectedHubId;
+        return (
+          <Tappable
+            key={hub.id}
+            onPress={() => onSelect(hub.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${hub.name}, ${formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub))}`}
+            style={[s.nearbyChip, selected && s.nearbyChipSelected]}
+            pressedStyle={s.nearbyChipPressed}
+          >
+            <View style={s.nearbyWell}>
+              <HubTypeGlyph hubType={hub.type} size={13} />
+            </View>
+            <View style={s.nearbyCopy}>
+              <Text style={[textStyle(type.gridMeta), s.nearbyName]} numberOfLines={1}>
+                {hub.name}
+              </Text>
+              <Text style={[textStyle(type.photoCaption), s.nearbyMeta]} numberOfLines={1}>
+                {formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub))}
+              </Text>
+            </View>
+          </Tappable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
   searchRow: {
@@ -458,10 +818,72 @@ const s = StyleSheet.create({
     paddingTop: space.browse.searchY,
   },
   legend: { paddingVertical: space.browse.chipsY },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.browse.searchGap,
+    paddingHorizontal: space.screenX,
+    minHeight: 18,
+  },
+  locationStatus: {
+    flex: 1,
+    color: color.inkMuted,
+    ...textStyle(type.photoCaption),
+  },
+  locationRetry: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.photoCaption,
+    borderWidth: border.hairline,
+    borderColor: color.greenLine,
+    backgroundColor: color.greenWash,
+  },
+  locationRetryPressed: { backgroundColor: color.greenLine },
+  nearbyRow: {
+    paddingHorizontal: space.screenX,
+    paddingTop: 8,
+    paddingBottom: 6,
+    gap: space.browse.chipGap,
+    alignItems: "center",
+  },
+  nearbyChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    maxWidth: 200,
+    paddingLeft: 6,
+    paddingRight: 10,
+    paddingVertical: 6,
+    borderRadius: radius.hubRow,
+    borderWidth: border.hairline,
+    borderColor: color.greenLine,
+    backgroundColor: color.greenWash,
+  },
+  nearbyChipSelected: { borderColor: color.forest, backgroundColor: color.greenLine },
+  nearbyChipPressed: { backgroundColor: color.greenLine },
+  nearbyWell: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.surface,
+  },
+  nearbyCopy: { flexShrink: 1 },
+  nearbyName: { color: color.ink },
+  nearbyMeta: { color: color.inkMuted },
   mapWrap: {
+    position: "relative",
     flex: 1,
     paddingHorizontal: space.screenXTight,
     paddingBottom: space.screenXTight,
+  },
+  nearbyOverlay: {
+    position: "absolute",
+    left: space.screenXTight,
+    right: space.screenXTight,
+    bottom: space.screenXTight + 8,
+    zIndex: 2,
   },
   map: { flex: 1 },
   mapCentre: { flex: 1, alignItems: "center", justifyContent: "center" },

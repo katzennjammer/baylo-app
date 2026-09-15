@@ -40,17 +40,19 @@ export const hubsKey = ["hubs"] as const;
 /**
  * Every active hub, for the marketplace map.
  *
- * `staleTime` is long because this table is curated rather than live: it
- * changes when somebody seeds a city or an admin deactivates a place, neither
- * of which happens while a user is looking at the map. Refetching it on every
- * focus would spend a request to be told the same 22 rows.
+ * The table is curated, but it can change from the separate admin console while
+ * this app is installed. Hubs therefore refresh when a hub screen mounts and
+ * when the app returns to the foreground. Cached hubs remain visible while the
+ * refresh runs, so a new request never blanks the map or picker.
  */
 export function useHubs(enabled = true) {
   return useQuery({
     queryKey: hubsKey,
     queryFn: () => apiV1<HubsPayload>("/api/v1/hubs"),
     select: (r) => r.data,
-    staleTime: 30 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     // The marketplace passes false until its map is opened. The key does not
     // change with it, so a grid session that later opens the map hits the same
     // cache entry the full-screen map already filled — one fetch per app run,

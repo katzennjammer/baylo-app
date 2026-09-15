@@ -145,10 +145,10 @@ export const ATTRIBUTION_URL = "https://www.openstreetmap.org/copyright";
 /**
  * Metro Cebu, and the map opens here when it has nothing better to show.
  *
- * "Nothing better" is the ordinary case rather than a failure: this app never
- * asks for location permission (see HubMap), so on a first open with no hubs
- * loaded yet, this is the view. Roughly the middle of the Mandaue/Lapu-Lapu
- * channel, which puts both cities' hubs on screen at `DEFAULT_ZOOM`.
+ * "Nothing better" is the ordinary case rather than a failure: no hubs yet,
+ * or location off / denied, so the view is Metro Cebu. Roughly the middle of
+ * the Mandaue/Lapu-Lapu channel, which puts both cities' hubs on screen at
+ * `DEFAULT_ZOOM`. The marketplace map recentres when it does have a position.
  */
 export const DEFAULT_CENTER = { latitude: 10.3157, longitude: 123.9554 };
 

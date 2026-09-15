@@ -69,6 +69,16 @@ export interface MapHub {
   latitude: number;
   longitude: number;
   isActive: boolean;
+  /**
+   * True for the nearest hubs when the marketplace map has a user position.
+   * Optional so item-detail and listing maps stay unmarked.
+   */
+  nearby?: boolean;
+}
+
+export interface MapUserLocation {
+  latitude: number;
+  longitude: number;
 }
 
 export type MapMessage =
@@ -181,6 +191,7 @@ const PIN = {
   inactive: { body: "#A8A69A", disc: "#F1EFE8", glyph: "#8C8A7E" },
   ring: "#FAFAF7",
   selectedRing: "#3DBE5A",
+  nearbyRing: "#3DBE5A",
 };
 
 /* ─────────────────────────────── the page ───────────────────────────── */
@@ -196,6 +207,7 @@ const safeJson = (value: unknown): string =>
 
 export interface MapHtmlOptions {
   hubs: MapHub[];
+  userLocation?: MapUserLocation | null;
   /**
    * Open focused on one hub rather than fitted to all of them. Used by the item
    * detail map, where one card's worth of hubs is the whole subject.
@@ -205,7 +217,7 @@ export interface MapHtmlOptions {
   interactive: boolean;
 }
 
-export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions): string {
+export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: MapHtmlOptions): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,6 +243,61 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
      never reflows the tile layer underneath. */
   .baylo-pin.is-selected svg { transform: scale(1.14); transform-origin: 50% 100%; }
   .baylo-pin svg { transition: transform 120ms ease-out; }
+  /* Nearby is a glow + ring, not a second colour: type glyphs stay the legend. */
+  .baylo-pin.is-nearby svg { filter: drop-shadow(0 0 7px rgba(61, 190, 90, 0.95)); }
+
+  .baylo-user-location {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 128px !important;
+    height: 72px !important;
+    margin: -72px 0 0 -24px;
+    color: #FFFFFF;
+    font: 700 12px sans-serif;
+    white-space: nowrap;
+  }
+
+  .baylo-user-location-label {
+    display: block;
+    padding: 5px 9px;
+    border: 2px solid #FAFAF7;
+    border-radius: 12px;
+    background: #1167D8;
+    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.3);
+  }
+
+  .baylo-user-location-badge {
+    display: block;
+    position: relative;
+    width: 40px;
+    height: 40px;
+    margin-top: 3px;
+    border: 3px solid #FAFAF7;
+    border-radius: 50%;
+    background: #1167D8;
+    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.35);
+  }
+
+  .baylo-user-location-badge::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    left: 12px;
+    width: 11px;
+    height: 11px;
+    border-right: 3px solid #FAFAF7;
+    border-bottom: 3px solid #FAFAF7;
+    background: #1167D8;
+    transform: rotate(45deg);
+  }
+
+  .baylo-user-location-badge svg {
+    position: relative;
+    z-index: 1;
+    display: block;
+    margin: 7px auto;
+  }
 
   /* Kills the blue tap flash Android WebView paints over the pin. */
   * { -webkit-tap-highlight-color: transparent; }
@@ -242,6 +309,7 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
 <script>
 (function () {
   var HUBS = ${safeJson(hubs)};
+  var USER_LOCATION = ${safeJson(userLocation ?? null)};
   var FOCUS_ID = ${safeJson(focusHubId ?? null)};
   var INTERACTIVE = ${interactive ? "true" : "false"};
   var GLYPHS = ${safeJson(GLYPHS)};
@@ -332,7 +400,7 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
   function pinSvg(hub, selected) {
     var c = hub.isActive ? PIN.active : PIN.inactive;
     var glyph = GLYPHS[hub.type] || FALLBACK_GLYPH;
-    var ring = selected ? PIN.selectedRing : PIN.ring;
+    var ring = selected ? PIN.selectedRing : (hub.nearby ? PIN.nearbyRing : PIN.ring);
     return (
       '<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">' +
         '<path d="M16 1.6c-7.9 0-14.4 6.4-14.4 14.4 0 10.1 14.4 24 14.4 24s14.4-13.9 14.4-24c0-8-6.5-14.4-14.4-14.4z"' +
@@ -348,7 +416,7 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
 
   function iconFor(hub, selected) {
     return L.divIcon({
-      className: 'baylo-pin' + (selected ? ' is-selected' : ''),
+      className: 'baylo-pin' + (selected ? ' is-selected' : '') + (hub.nearby ? ' is-nearby' : ''),
       html: pinSvg(hub, selected),
       iconSize: [32, 42],
       // The point of the teardrop, not its middle — the pin marks the ground
@@ -368,7 +436,7 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
       alt: hub.name,
       // Active hubs sit above deactivated ones where they overlap: the one you
       // can still be sent to should be the one you can hit.
-      zIndexOffset: hub.isActive ? 1000 : 0,
+      zIndexOffset: hub.nearby ? 1600 : hub.isActive ? 1000 : 0,
       interactive: INTERACTIVE
     });
     marker.on('click', function () {
@@ -378,6 +446,23 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
     marker.addTo(map);
     markers[hub.id] = { hub: hub, marker: marker };
   });
+
+  if (USER_LOCATION) {
+    L.marker([USER_LOCATION.latitude, USER_LOCATION.longitude], {
+      icon: L.divIcon({
+        className: 'baylo-user-location',
+        html: '<span class="baylo-user-location-label">You are here</span>' +
+          '<span class="baylo-user-location-badge"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
+          '<circle cx="12" cy="7" r="3" fill="none" stroke="#FFFFFF" stroke-width="2"/>' +
+          '<path d="M6.5 20c.5-4.2 2.3-6.5 5.5-6.5s5 2.3 5.5 6.5M12 13.5v5.5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '</svg></span>',
+        iconSize: [128, 72],
+        iconAnchor: [24, 72]
+      }),
+      interactive: false,
+      zIndexOffset: 2000
+    }).addTo(map);
+  }
 
   function select(id) {
     if (selectedId === id) return;
@@ -401,8 +486,7 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
     [${FIT_PADDING.bottom}, ${FIT_PADDING.right}]
   ];
 
-  function fitAll(animate) {
-    var pts = HUBS.map(function (h) { return [h.latitude, h.longitude]; });
+  function fitPoints(pts, animate) {
     if (pts.length === 0) {
       // No hubs is a legitimate state, not an error — the shell draws the copy
       // for it over this. Metro Cebu is still the right thing to be looking at.
@@ -423,10 +507,39 @@ export function buildMapHtml({ hubs, focusHubId, interactive }: MapHtmlOptions):
     });
   }
 
+  function fitAll(animate) {
+    fitPoints(HUBS.map(function (h) { return [h.latitude, h.longitude]; }), animate);
+  }
+
+  function userInBounds() {
+    return USER_LOCATION &&
+      USER_LOCATION.latitude >= ${MAX_BOUNDS.southWest.latitude} &&
+      USER_LOCATION.latitude <= ${MAX_BOUNDS.northEast.latitude} &&
+      USER_LOCATION.longitude >= ${MAX_BOUNDS.southWest.longitude} &&
+      USER_LOCATION.longitude <= ${MAX_BOUNDS.northEast.longitude};
+  }
+
+  /* You + the highlighted nearby hubs, so "near me" is the opening picture.
+     Falls back to every hub when location is off or outside Metro Cebu. */
+  function fitNearby(animate) {
+    var pts = [];
+    if (userInBounds()) pts.push([USER_LOCATION.latitude, USER_LOCATION.longitude]);
+    HUBS.forEach(function (h) {
+      if (h.nearby) pts.push([h.latitude, h.longitude]);
+    });
+    if (pts.length === 0) {
+      fitAll(animate);
+      return;
+    }
+    fitPoints(pts, animate);
+  }
+
   if (FOCUS_ID && markers[FOCUS_ID]) {
     var f = markers[FOCUS_ID].hub;
     map.setView([f.latitude, f.longitude], ${SINGLE_HUB_ZOOM});
     select(FOCUS_ID);
+  } else if (USER_LOCATION) {
+    fitNearby(false);
   } else {
     fitAll(false);
   }

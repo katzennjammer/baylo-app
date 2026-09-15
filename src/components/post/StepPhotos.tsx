@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useCallback, useState } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
 
 import { clampAspect } from "../../lib/format";
 import { PHOTO_ERRORS, usePhotos } from "../../post/photos";
@@ -395,8 +395,9 @@ function EmptyHero({ board }: { board: Board }) {
 /* ──────────────────────── the thumbnail rail ────────────────────────── */
 
 /**
- * Four 78 tiles at gap 8 = 336 of the 358 available. At 360 the tile drops to
- * 72 and the four fill the 336 exactly.
+ * The rail is horizontally scrollable so every allowed photo remains reachable
+ * on narrow phones. The fifth tile intentionally continues beyond the viewport
+ * and can be revealed with a horizontal swipe.
  *
  * The NEXT empty slot is a dashed 1.5 tile with a plus; the ones after it are a
  * lighter dashed 1 with nothing in them. That difference is the whole
@@ -419,9 +420,10 @@ function ThumbnailRail({
   const slots = Array.from({ length: rules.maxPhotos }, (_, i) => i);
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{
         gap: postSpace.photos.thumbGap,
         paddingHorizontal: board.stackX,
       }}
@@ -525,7 +527,7 @@ function ThumbnailRail({
           />
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, request } from "./client";
+import { ApiError, apiV1, currentSession, request } from "./client";
 
 export interface ConversationListItem {
   partnerId: string;
@@ -64,9 +64,11 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
   const messages = Array.isArray(body) ? body : body.messages ?? [];
   const partnerName = Array.isArray(body) ? "Conversation" : body.partnerName ?? "Conversation";
   const partnerAvatar = Array.isArray(body) ? null : body.partnerAvatar ?? null;
+  // The legacy endpoint returns a bare message array, so it cannot carry the
+  // viewer id. Use the authenticated mobile session for bubble ownership.
   const currentUserId = Array.isArray(body)
-    ? ""
-    : body.currentUserId ?? body.viewerId ?? "";
+    ? currentSession()?.user.id ?? ""
+    : body.currentUserId ?? body.viewerId ?? currentSession()?.user.id ?? "";
   const partnerIdValue = Array.isArray(body) ? partnerId : body.partnerId ?? partnerId;
 
   return {
@@ -85,11 +87,7 @@ export async function fetchConversations(
   fallbackPartnerId?: string | null,
 ): Promise<ConversationListResponse> {
   try {
-    const res = await request("/api/v1/messages/conversations");
-    if (!res.ok) {
-      throw new ApiError(res.status, "MESSAGES_LIST_FAILED", "Could not load your conversations.");
-    }
-    const body = (await res.json()) as ConversationListResponse;
+    const { data: body } = await apiV1<ConversationListResponse>("/api/v1/messages/conversations");
     return {
       conversations: Array.isArray(body.conversations) ? body.conversations : [],
       nextCursor: body.nextCursor ?? null,

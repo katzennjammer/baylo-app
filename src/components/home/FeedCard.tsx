@@ -1,5 +1,5 @@
 import { Image, type ImageLoadEventData } from "expo-image";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
@@ -111,7 +111,7 @@ export type OfferLayout = "inline" | "pill";
 
 export const OFFER_LAYOUT: OfferLayout = "inline";
 
-export function FeedCard({
+export const FeedCard = memo(function FeedCard({
   item,
   urgency = null,
   onOffer,
@@ -222,7 +222,7 @@ export function FeedCard({
       />
     </View>
   );
-}
+});
 
 /* ───────────────────────────── photo ────────────────────────────────── */
 
