@@ -58,6 +58,13 @@ run you need the Next.js server in the sibling repo
 `npm run dev` there serves <http://localhost:3000> and you can sign in as
 `maria@baylo.test`.
 
+> **Since 2026-09-15 the API's database is Postgres on Supabase**, not the
+> MariaDB/XAMPP setup it used before. Nothing in this repo changes — the phone
+> only ever talks to `/api/v1` — but if your copy of `../baylo` still runs on
+> MySQL, read its [SETUP.md](../baylo/SETUP.md#coming-from-mysql-teammates-read-this)
+> before pulling it: three steps, and the failure modes if you skip them are
+> spelled out there.
+
 Everything below assumes that is done, and that both repos are checked out
 side by side:
 
