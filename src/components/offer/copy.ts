@@ -314,6 +314,20 @@ export const notVerified = {
 } as const;
 
 /**
+ * The same row while an ID is UNDER REVIEW. §10.5 does not have this state —
+ * it assumes "not verified" means "has not tried" — and treating the two the
+ * same shows "Verify your ID" to somebody who did exactly that an hour ago,
+ * with a button that walks them back toward a form. So: the time it was sent,
+ * how long it usually takes, and no button.
+ */
+export const idPending = {
+  rowSub: "Your ID is under review. Usually within a day.",
+  footnote: (sentAt: string | null) =>
+    `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. ` +
+    "Nothing else waits for it — only promises do.",
+} as const;
+
+/**
  * §10.5 "Tier too low" — the ceiling screen.
  *
  * NOT VERBATIM, and this is the first of the two places §10 has to be departed
@@ -379,6 +393,8 @@ export function promiseUnavailable(block: PromiseBlock, s: {
       return null;
     case "idUnverified":
       return notVerified.rowSub;
+    case "idPending":
+      return idPending.rowSub;
     case "minTrades":
       return `Promises open after three completed trades. You have ${s.completedTrades}.`;
     case "tierMayNotPropose":
@@ -489,7 +505,7 @@ export const reach = {
    * stopped being true. The half that survives is the half that makes this
    * insert an explanation rather than a refusal.
    */
-  footnote: "You can send an offer regardless.",
+  footnote: "This listing is outside your current reach. Trade closer to what you own first.",
   button: "Offer a trade",
 } as const;
 
@@ -526,7 +542,7 @@ export const prompt = {
     "We keep them in view on purpose, so you can see what things are worth around here.",
   exampleNear: "within reach",
   exampleFar: "further off",
-  step1: "Faded ones open like any other listing, and you can still send an offer.",
+  step1: "Faded ones open like any other listing, but you cannot offer on them yet.",
   step2:
     "Inside, you'll see the distance and the two ways across it — " +
     "a promise to settle later, or trading up first.",

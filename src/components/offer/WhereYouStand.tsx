@@ -54,9 +54,9 @@ import {
  * `reachBracket()` in gap.ts), so no line of this insert can put an exact
  * figure on somebody else's listing or contradict the grey on the grid.
  *
- * NOT DRAWN UNDER A PREMIUM LOCK. This insert ends "you can send an offer
- * regardless", and above a locked control that sentence is false. Item detail
- * decides — see `PremiumLockedBar` — and the lock wins.
+ * NOT DRAWN UNDER A PREMIUM LOCK. This insert explains why an out-of-reach
+ * listing cannot be offered on yet. Item detail decides, and a premium lock
+ * wins over this explanation.
  *
  * ── THE EMPTY SHELF — A VARIANT THE SPEC DID NOT WRITE ──────────────────────
  *

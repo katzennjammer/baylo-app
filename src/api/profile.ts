@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiV1 } from "./client";
-import type { ProfileMePayload } from "./types";
+import { apiV1, request } from "./client";
+import type { ProfileMePayload, PublicProfilePayload } from "./types";
 
 /**
  * GET /api/v1/profile/me — the viewer's own shelf, standing and ID gate.
@@ -50,5 +50,32 @@ export function useProfileMe(enabled = true) {
     enabled,
     select: (r) => r.data,
     staleTime: 60_000,
+  });
+}
+
+export function usePublicProfile(id: string | undefined) {
+  return useQuery({
+    queryKey: ["profile", id],
+    queryFn: () => apiV1<PublicProfilePayload>(`/api/v1/profile/${encodeURIComponent(id!)}`),
+    enabled: !!id,
+    select: (r) => r.data,
+    staleTime: 60_000,
+  });
+}
+
+export function useFollow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const response = await request("/api/follows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ followeeId: userId }),
+      });
+      if (!response.ok) throw new Error("Could not send follow request");
+    },
+    onSuccess: (_data, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+    },
   });
 }

@@ -80,6 +80,22 @@ export interface IdVerificationPayload extends IdVerificationState {
   };
 }
 
+/**
+ * `latest.submittedAt` as a person reads it — "16 Sep 2026, 2:19 PM" — or null
+ * when there is nothing submitted.
+ *
+ * One function because three screens say "sent <when>" for a pending ID: the
+ * status screen, the post wizard's gate, and the DPA row on the offer screen.
+ * They must agree on the format, or somebody reading the time off one screen
+ * and then the other reads two submissions where there is one.
+ */
+export function formatSubmittedAt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 /** Where this account stands, plus everything the submit screen renders from. */
 export async function fetchIdVerification(): Promise<IdVerificationPayload> {
   const { data } = await apiV1<IdVerificationPayload>("/api/v1/id-verification");

@@ -36,6 +36,7 @@ export function subscribeToUserChannel(
     content: string;
     createdAt: string;
   }) => void,
+  onTyping?: (event: { senderId: string; senderName: string; isTyping: boolean }) => void,
 ): (() => void) | null {
   const pusher = getClient();
   if (!pusher) return null;
@@ -43,9 +44,11 @@ export function subscribeToUserChannel(
   const channelName = `private-user-${userId}`;
   const channel = pusher.subscribe(channelName);
   channel.bind("new-message", onNewMessage);
+  if (onTyping) channel.bind("typing", onTyping);
 
   return () => {
     channel.unbind("new-message", onNewMessage);
+    if (onTyping) channel.unbind("typing", onTyping);
     pusher.unsubscribe(channelName);
   };
 }

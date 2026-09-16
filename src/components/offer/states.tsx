@@ -119,6 +119,27 @@ export function VerifyPromiseBlock({ onVerify }: { onVerify: () => void }) {
   );
 }
 
+/**
+ * The same slot while the ID is under review: the footnote, no button.
+ *
+ * No button is the point. A "See where it is up to" here would be harmless —
+ * /verify-id renders its pending branch, not the form — but the row above
+ * already says under review, and a control that goes somewhere invites a
+ * second look for a second thing to do. There is nothing to do.
+ */
+export function PendingPromiseBlock({ sentAt }: { sentAt: string | null }) {
+  return (
+    <Text
+      style={[
+        textStyle(offerType.helper),
+        { color: offerColor.inkTertiary, marginTop: offerSpace.rowGap },
+      ]}
+    >
+      {copy.idPending.footnote(sentAt)}
+    </Text>
+  );
+}
+
 /* ─────────────────── §5.2 tier too low (§10.5) ──────────────────────── */
 
 /**

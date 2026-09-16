@@ -17,10 +17,11 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../src/api/client";
 import {
   fetchIdVerification,
+  formatSubmittedAt,
   isIdGateError,
   type IdVerificationPayload,
 } from "../src/api/id-verification";
-import { createItem, type Category, type Condition } from "../src/api/post";
+import { useCreateItem, type Category, type Condition } from "../src/api/post";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import {
   PostFooter,
@@ -42,6 +43,7 @@ import { CloseIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { useDetection } from "../src/post/detection";
 import { discardDraft, saveDraft, useAutosave, useStoredDraft } from "../src/post/draft";
+import { announcePosted } from "../src/post/posted-notice";
 import { PhotoPipelineProvider, usePhotos } from "../src/post/photos";
 import { useValuation } from "../src/post/valuation";
 import {
@@ -190,11 +192,16 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const sentAt = formatSubmittedAt(state.latest?.submittedAt);
   const copy =
     state.status === "pending"
       ? {
           title: "Your ID is being reviewed",
-          body: "We usually get to it within a day. As soon as it is approved you can post.",
+          // The time is the sentence that stops a second submission: "sent an
+          // hour ago" reads as done, where "being reviewed" alone reads as a
+          // status the app might have forgotten. The CTA opens /verify-id,
+          // whose pending branch has no form on it.
+          body: `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. As soon as it is approved you can post.`,
           cta: "See where it is up to",
         }
       : state.status === "exhausted"
@@ -282,6 +289,7 @@ function Wizard() {
   const { keyboardUp, imeHeight, tallIme } = useKeyboardState();
   const { addFromCamera } = usePhotos();
   const saveNow = useAutosave(state);
+  const createItem = useCreateItem();
 
   /**
    * BOTH AI EFFECTS LIVE HERE, NOT ON THE STEP THAT SHOWS THEIR RESULT.
@@ -379,8 +387,9 @@ function Wizard() {
     if (!state.category || photos.length === 0 || value === null) return;
 
     dispatch({ type: "post/start" });
+    let created: { id: string };
     try {
-      const created = await createItem({
+      created = await createItem.mutateAsync({
         title: state.title.trim(),
         // There is no description field in this flow. The server falls back to
         // the title when this is empty, and a listing whose description is its
@@ -402,7 +411,7 @@ function Wizard() {
       // out means a crash between posting and leaving cannot resurrect a draft
       // for an item that already exists.
       await discardDraft();
-      dispatch({ type: "post/done", itemId: created.id });
+      dispatch({ type: "post/done" });
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         dispatch({ type: "rate-limit", action: "post", seconds: e.retryAfter ?? 240 });
@@ -439,21 +448,19 @@ function Wizard() {
             ? "No connection. We saved your draft — try again once you are back online."
             : "We could not post this just now. Your draft is safe. Try again in a moment.",
       });
+      return;
     }
-  }, [dispatch, state]);
 
-  /* ── posted ── */
-
-  const postedId = state.postedItemId;
-  if (postedId) {
-    return (
-      <Posted
-        itemId={postedId}
-        onSeeInFeed={() => router.replace({ pathname: "/item", params: { id: postedId } })}
-        onClose={() => router.back()}
-      />
-    );
-  }
+    // Back to wherever the FAB was pressed, and the popup over it. The
+    // mutation's onSuccess has already marked the marketplace, the feed and
+    // profile/me stale, so the screen underneath is refetching by now and the
+    // listing is in it before the card says so. Nothing here navigates TO the
+    // item: a success screen was a page for one sentence. Outside the try on
+    // purpose — the item exists, and a navigation hiccup must not be reported
+    // as "we could not post this".
+    router.back();
+    announcePosted(created.id);
+  }, [createItem, dispatch, router, state]);
 
   /* ── the footer ── */
 
@@ -714,97 +721,6 @@ function ImeAccessory({
           {label}
         </Text>
       </Tappable>
-    </View>
-  );
-}
-
-/* ──────────────────────────── after posting ─────────────────────────── */
-
-/**
- * After the listing is up.
- *
- * The spec gives this screen two strings and no more: `Your listing is up.` and
- * `See it in the feed` as a TEXT button. It is deliberately not a celebration —
- * the item is posted, the work is over, and a full-width primary here would be
- * a fourth call to action after a seven-step form.
- *
- * The close cross is the only thing added, because without it "See it in the
- * feed" is the sole exit and somebody who does not want to look at their own
- * listing has nowhere to go. It is the same 44 target and the same glyph as the
- * wizard's own header, so it does not read as a new control.
- */
-function Posted({
-  itemId,
-  onSeeInFeed,
-  onClose,
-}: {
-  itemId: string;
-  onSeeInFeed: () => void;
-  onClose: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: postColor.surface,
-        paddingTop: Math.max(insets.top, chrome.statusBar),
-      }}
-    >
-      <View
-        style={{
-          height: chrome.headerRow,
-          justifyContent: "center",
-          paddingHorizontal: chrome.headerX,
-        }}
-      >
-        <Tappable
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          style={{
-            width: chrome.headerRow,
-            height: chrome.headerRow,
-            alignItems: "center",
-            justifyContent: "center",
-            marginLeft: -chrome.headerX + 4,
-          }}
-        >
-          <CloseIcon size={22} stroke={1.9} color={postColor.ink} />
-        </Tappable>
-      </View>
-
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: 32,
-        }}
-      >
-        <Text
-          style={[
-            textStyle(postType.stepHeading),
-            { color: postColor.ink, textAlign: "center" },
-          ]}
-        >
-          Your listing is up.
-        </Text>
-        <Tappable
-          onPress={onSeeInFeed}
-          accessibilityRole="button"
-          accessibilityLabel={`See listing ${itemId} in the feed`}
-          style={{
-            height: postSize.button.text,
-            justifyContent: "center",
-            marginTop: 10,
-          }}
-        >
-          <Text style={[textStyle(postType.textLabel), { color: postColor.forest }]}>
-            See it in the feed
-          </Text>
-        </Tappable>
-      </View>
     </View>
   );
 }

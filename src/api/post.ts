@@ -1,3 +1,5 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { ApiError, apiV1, currentSession, legacyFailure, request } from "./client";
 import { getApiBase } from "./config";
 import type { SafeZoneHub } from "./types";
@@ -556,6 +558,34 @@ export async function createItem(input: CreateItemInput): Promise<CreatedItem> {
   });
   if (!res.ok) return legacyFailure(res, "We could not post this just now.");
   return (await res.json()) as CreatedItem;
+}
+
+/**
+ * `createItem` as a mutation, so that the cache learns about the new listing
+ * in the one place a listing is created.
+ *
+ * INVALIDATED, NOT INSERTED. The wizard knows the title and the photos, but
+ * `valueLeaves` is re-derived on the server and the bracket every grid tile
+ * is drawn from depends on it — so a hand-built cache entry would be a guess
+ * that the next refetch corrects, visibly. Marking the three queries stale
+ * makes the mounted marketplace and feed refetch at once (they sit under the
+ * wizard, still mounted), which is why the item is already in the grid by the
+ * time the wizard has slid away.
+ *
+ * `profile/me` is in the list because a post can move the viewer's reach:
+ * greying on the marketplace is computed from that payload, and a listing
+ * that changes it must not leave the grid drawn against the old one.
+ */
+export function useCreateItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createItem,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["browse"] });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+      void qc.invalidateQueries({ queryKey: ["profile", "me"] });
+    },
+  });
 }
 
 /* ─────────────────── the matched listing, for self / warned ─────────── */

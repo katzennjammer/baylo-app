@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
+import { formatSubmittedAt } from "../src/api/id-verification";
 import {
   useOfferContext,
   useSendOffer,
@@ -48,6 +49,7 @@ import {
   SendFailedPanel,
   SettlementSkeleton,
   TierTooLowState,
+  PendingPromiseBlock,
   VerifyPromiseBlock,
 } from "../src/components/offer/states";
 import {
@@ -712,6 +714,7 @@ export default function OfferScreen() {
             outstandingDebt: context.reputation.contracts.outstandingDebt,
           })}
           onVerify={() => router.push("/verify-id")}
+          idSentAt={formatSubmittedAt(context.idVerification.latest?.submittedAt)}
           owner={owner}
           balance={spendable}
           myItemCount={context.myItems.length}
@@ -893,6 +896,7 @@ function SettlementSection({
   promiseBlocked,
   promiseUnavailableNote,
   onVerify,
+  idSentAt,
   owner,
   balance,
   myItemCount,
@@ -908,6 +912,8 @@ function SettlementSection({
   promiseBlocked: PromiseBlock;
   promiseUnavailableNote: string | null;
   onVerify: () => void;
+  /** When the pending ID was sent, formatted; only read for `idPending`. */
+  idSentAt: string | null;
   owner: string;
   balance: number;
   myItemCount: number;
@@ -1094,9 +1100,12 @@ function SettlementSection({
         </View>
 
         {/* §5.2's "Not ID-verified": a 48px verify button below the rows and a
-            12px footnote. Only for the ID gate — the other four refusals have no
-            control that would fix them, so they stop at the row's subtitle. */}
+            12px footnote. Only for the ID gate — the other refusals have no
+            control that would fix them, so they stop at the row's subtitle.
+            An ID under review gets the footnote WITHOUT the button: the one
+            thing that would fix it is already done. */}
         {promiseBlocked === "idUnverified" ? <VerifyPromiseBlock onVerify={onVerify} /> : null}
+        {promiseBlocked === "idPending" ? <PendingPromiseBlock sentAt={idSentAt} /> : null}
       </Section>
     </>
   );

@@ -18,6 +18,8 @@ import { VerifyEmailBar } from "../../src/components/home/VerifyEmailBar";
 import { color, space } from "../../src/theme/tokens";
 import { useHome } from "../../src/api/home";
 import { useLike } from "../../src/api/social";
+import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
+import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { shareListing } from "../../src/lib/share";
 import type { Item } from "../../src/api/types";
 
@@ -137,13 +139,17 @@ export default function HomeScreen() {
     isPending,
     isError,
     error,
-    isRefetching,
     dataUpdatedAt,
     refetch,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
   } = useHome();
+
+  // Another device's post shows up here when this tab is returned to. Ours is
+  // already here — the post mutation invalidated this query before it closed.
+  useRefetchOnFocus(refetch);
+  const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
@@ -318,11 +324,10 @@ export default function HomeScreen() {
         onEndReachedThreshold={0.6}
         refreshControl={
           <RefreshControl
-            // Not while paginating. Both are refetches as far as TanStack is
-            // concerned, and without the guard reaching the bottom of the feed
-            // spins the pull-to-refresh indicator at the top of it.
-            refreshing={isRefetching && !isFetchingNextPage}
-            onRefresh={refetch}
+            // The pull, and only the pull. Background refetches (focus, foreground,
+            // invalidation) update the list without spinning this.
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             tintColor={color.green}
             colors={[color.green]}
             progressBackgroundColor={color.surface}

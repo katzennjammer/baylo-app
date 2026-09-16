@@ -24,7 +24,9 @@ import {
   FlagIcon,
   LeafIcon,
   PinIcon,
+  WarningIcon,
 } from "../../src/components/icons";
+import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportSheet } from "../../src/components/ReportSheet";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
@@ -123,6 +125,7 @@ export default function ItemDetailScreen() {
   const report = useReport();
   const block = useBlockUser();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
+  const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
    * Whether the reason picker is up.
    *
@@ -210,6 +213,10 @@ export default function ItemDetailScreen() {
    */
   const locked = viewer.offerLock === "premium";
   const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
+  const outOfReach =
+    !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
+  const bracketsAbove =
+    item.valueLeaves !== null && reach !== null ? bracketOf(item.valueLeaves) - reach : 0;
   const reachInsert =
     showReach && me ? (
       <WhereYouStand
@@ -359,8 +366,8 @@ export default function ItemDetailScreen() {
             than a greyed tile with no explanation behind it. Note what does NOT
             change when it appears: the
             carousel above stays in FULL COLOUR (§7.3 is explicit — the grey
-            belongs to the grid, not the item), and the `Offer Trade` button in
-            the bottom bar stays green and live.
+            belongs to the grid, not the item), while the bottom bar explains
+            the reach block when the listing is outside the viewer's bracket.
           */}
           {reachInsert}
 
@@ -448,11 +455,27 @@ export default function ItemDetailScreen() {
           isOwner={viewer.isOwner}
           status={item.status}
           existingOfferId={viewer.existingOfferId}
-          onOffer={() =>
-            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } })
-          }
+          onOffer={() => {
+            if (outOfReach && reach !== null) {
+              setReachDialogOpen(true);
+              return;
+            }
+            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
+          }}
         />
       )}
+
+      <NoticeDialog
+        visible={reachDialogOpen}
+        title="This item is outside your reach"
+        body={
+          `You can't send an offer for this item because it is ${bracketsAbove} ` +
+          `${bracketsAbove === 1 ? "bracket" : "brackets"} above your current reach. ` +
+          "Trade for items closer to what you own to move your reach higher."
+        }
+        icon={<WarningIcon size={24} stroke={2} color={color.forest} />}
+        onDismiss={() => setReachDialogOpen(false)}
+      />
 
       {/*
         Mounted last so it sits over the sticky ActionBar. It renders nothing

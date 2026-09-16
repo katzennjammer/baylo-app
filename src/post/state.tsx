@@ -173,8 +173,6 @@ export interface PostState {
 
   posting: boolean;
   postError: string | null;
-  /** The created listing's id. Non-null only after a successful post. */
-  postedItemId: string | null;
 
   /**
    * A live 429. Holds the SECONDS remaining and which action is blocked, so the
@@ -208,7 +206,6 @@ export function initialState(): PostState {
     hubsSkipped: false,
     posting: false,
     postError: null,
-    postedItemId: null,
     rateLimit: null,
   };
 }
@@ -242,7 +239,7 @@ export type PostAction =
   | { type: "hub/toggle"; id: string }
   | { type: "hub/skip" }
   | { type: "post/start" }
-  | { type: "post/done"; itemId: string }
+  | { type: "post/done" }
   | { type: "post/fail"; message: string }
   | { type: "rate-limit"; action: "detect" | "duplicate" | "post"; seconds: number }
   | { type: "rate-limit/clear" }
@@ -442,7 +439,7 @@ export function reduce(s: PostState, a: PostAction): PostState {
     case "post/start":
       return { ...s, posting: true, postError: null };
     case "post/done":
-      return { ...s, posting: false, postedItemId: a.itemId };
+      return { ...s, posting: false };
     case "post/fail":
       return { ...s, posting: false, postError: a.message };
 

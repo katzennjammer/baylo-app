@@ -160,6 +160,7 @@ export function toStanding(
 ): StandingInput {
   return {
     idVerified: idVerification.verified,
+    idPending: idVerification.status === "pending",
     tier: reputation.tier,
     mayProposeDpa: reputation.limits.mayProposeDpa,
     completedTrades: reputation.completedTrades,

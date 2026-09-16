@@ -1,5 +1,4 @@
 import type * as ExpoVideo from "expo-video";
-import { Platform } from "react-native";
 
 /**
  * `expo-video`, behind a load that cannot take the app down with it.
@@ -36,9 +35,7 @@ import { Platform } from "react-native";
 let kit: typeof ExpoVideo | null = null;
 let failure: string | null = null;
 
-if (Platform.OS === "android") {
-  failure = "expo-video disabled on Android because the device renderer crashes on its surface";
-} else try {
+try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const loaded = require("expo-video") as typeof ExpoVideo;
 
@@ -56,7 +53,7 @@ if (Platform.OS === "android") {
   failure = err instanceof Error ? err.message : String(err);
 }
 
-if (failure && Platform.OS !== "android") {
+if (failure) {
   // Logged once, at load, rather than per render. Without it a build that
   // silently lost the native module looks identical to a build where the
   // footage simply has not downloaded yet, and those want different fixes:

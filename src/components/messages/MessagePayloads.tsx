@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   offerLabel: {
     fontFamily: font.mono,
     fontSize: 10,
-    color: color.forest,
+    color: color.surface, // Changed offer label color for better contrast
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 6,
@@ -182,25 +182,25 @@ const styles = StyleSheet.create({
   offerLine: {
     fontFamily: font.sansSemi,
     fontSize: 14,
-    color: color.ink,
+    color: color.surface, // Changed offer line color for better contrast
     marginBottom: 4,
   },
   offerFor: {
     fontFamily: font.sans,
     fontSize: 13,
-    color: color.inkSecondary,
+    color: color.surface, // Changed offer for color for better contrast
     marginBottom: 6,
   },
   offerMessage: {
     fontFamily: font.sans,
     fontSize: 13,
-    color: color.ink,
+    color: color.surface, // Changed offer message color for better contrast
     marginBottom: 6,
   },
   offerStatus: {
     fontFamily: font.mono,
     fontSize: 10,
-    color: color.forest,
+    color: color.surface, // Changed offer status color for better contrast
     textTransform: "uppercase",
   },
   statusPill: {

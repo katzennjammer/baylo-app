@@ -49,6 +49,8 @@ import { useSession } from "../../src/auth/session";
 import { ReachPromptSheet } from "../../src/components/offer/OfferSheet";
 import { prompt as promptCopy } from "../../src/components/offer/copy";
 import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/reach-flag";
+import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
+import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { withTimeout } from "../../src/lib/with-timeout";
 import { border, color, radius, space, textStyle, type } from "../../src/theme/tokens";
 import { outOfReach } from "../../src/theme/offer-tokens";
@@ -369,11 +371,15 @@ export default function MarketplaceScreen() {
     isError,
     error,
     refetch,
-    isRefetching,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
   } = useBrowse(filters);
+
+  // Another device's post shows up here when this tab is returned to. Ours is
+  // already here — the post mutation invalidated this query before it closed.
+  useRefetchOnFocus(refetch);
+  const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
   /**
    * Tile width, from the real viewport rather than a percentage.
@@ -676,10 +682,10 @@ export default function MarketplaceScreen() {
         onEndReachedThreshold={0.6}
         refreshControl={
           <RefreshControl
-            // Not while paginating: both are refetches to TanStack, and without
-            // the guard reaching the bottom spins the indicator at the top.
-            refreshing={isRefetching && !isFetchingNextPage}
-            onRefresh={refetch}
+            // The pull, and only the pull. Background refetches (focus, foreground,
+            // invalidation) update the list without spinning this.
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             tintColor={color.green}
             colors={[color.green]}
             progressBackgroundColor={color.surface}

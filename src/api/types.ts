@@ -328,6 +328,19 @@ export interface ProfileMePayload {
   idVerification: ViewerIdVerification;
 }
 
+export interface PublicProfilePayload {
+  user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
+    rank: { label: string };
+  };
+  counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following">;
+  follow: {
+    status: "NONE" | "PENDING" | "ACCEPTED";
+    followsYou: boolean;
+  };
+  items: Item[];
+  reviews: unknown[];
+}
+
 /* ──────────── GET /api/v1/contracts/[id]/preview — the creditor ────────── */
 
 /** One party on a contract, as `v1Contract()` shapes them. */

@@ -15,9 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError } from "../src/api/client";
 import {
   fetchIdVerification,
+  formatSubmittedAt,
   submitIdVerification,
   type IdVerificationPayload,
 } from "../src/api/id-verification";
+import { PROFILE_ME_KEY } from "../src/api/profile";
 import { ChevronLeftIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { color, radius, textStyle, type } from "../src/theme/tokens";
@@ -121,7 +123,14 @@ export default function VerifyIdScreen() {
       ) : (
         <SubmitForm
           payload={data}
-          onSubmitted={() => qc.invalidateQueries({ queryKey: ["id-verification"] })}
+          onSubmitted={() => {
+            qc.invalidateQueries({ queryKey: ["id-verification"] });
+            // The offer screen reads the ID state off /profile/me, not off
+            // this query, and caches it for a minute. Without this a person
+            // who submits and goes straight to an offer sees "Verify your
+            // ID" on the DPA row for up to sixty seconds after doing so.
+            qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+          }}
         />
       )}
     </Shell>
@@ -235,15 +244,14 @@ function Approved({ payload, onDone }: { payload: IdVerificationPayload; onDone:
 }
 
 function Pending({ payload }: { payload: IdVerificationPayload }) {
-  const at = payload.latest?.submittedAt ? new Date(payload.latest.submittedAt) : null;
+  const sentAt = formatSubmittedAt(payload.latest?.submittedAt);
   return (
     <>
       <Text style={[textStyle(type.emptyHeadline), { color: color.ink }]}>
         Your ID is being reviewed
       </Text>
       <Note>
-        Sent {at ? at.toLocaleString() : "recently"}. A person looks at every one, usually within
-        a day.
+        Sent {sentAt ?? "recently"}. A person looks at every one, usually within a day.
       </Note>
       {/*
         The most useful thing this screen can say, and the reason it says it

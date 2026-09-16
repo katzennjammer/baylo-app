@@ -153,10 +153,17 @@ cd baylo && npm run dev:lan
 cd baylo-mobile && npm run phone
 
 # Terminal 3 — Metro
-cd baylo-mobile && npm start
+cd baylo-mobile && npm run start:go     # Expo Go
+cd baylo-mobile && npm start            # development build (expo-dev-client)
 ```
 
 Then press **a** in terminal 3, or scan the QR with Expo Go.
+
+> **`npm start` targets the development build, not Expo Go.** Since the
+> realtime-messaging change it runs `expo start --dev-client`, whose QR code is
+> a `baylo://` deep link that Expo Go cannot open. For Expo Go use
+> `npm run start:go` (`expo start --go`), or press **s** in a running Metro to
+> switch. `npm run phone` is unaffected: it starts Metro itself.
 
 `npm run phone` will start Metro and the API itself if they are not already up,
 so you can skip terminals 1 and 3 once you trust it. Three terminals is the
@@ -977,7 +984,8 @@ Setting up for the first time? [Setup](#setup) is the ordered version of this,
 including the API server that has to be up before any of it means anything.
 
 ```bash
-npm start                 # Metro; press a for Android, i for iOS
+npm run start:go          # Metro for Expo Go; press a for Android, i for iOS
+npm start                 # Metro for the development build (--dev-client)
 npm run typecheck         # tsc --noEmit
 npm run verify:api        # the API client acceptance harness (see below)
 

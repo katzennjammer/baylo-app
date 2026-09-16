@@ -1,10 +1,13 @@
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 
 import { colors } from "../../src/theme/palette";
+import { useProfileMe } from "../../src/api/profile";
 import { useSession } from "../../src/auth/session";
+import type { Item } from "../../src/api/types";
 
 /**
  * Profile — the account block, and the way out.
@@ -24,7 +27,9 @@ import { useSession } from "../../src/auth/session";
  * to check whose account this is before signing out of it.
  */
 export default function ProfileScreen() {
+  const router = useRouter();
   const { session, signOut } = useSession();
+  const { data: profile } = useProfileMe();
   const [busy, setBusy] = useState(false);
   // A ref as well as the state flag: Alert's onPress can fire twice on a fast
   // double-tap, before the re-render that disables the button has landed. A
@@ -68,44 +73,32 @@ export default function ProfileScreen() {
     );
   }, [performSignOut]);
 
+  const items = profile?.items ?? [];
   return (
-    <ScrollView className="flex-1 bg-bg" contentContainerClassName="px-4 py-5 pb-10">
-      <View className="flex-row items-center gap-4 rounded-2xl border border-line bg-card px-4 py-4">
-        <Avatar uri={user?.image ?? null} name={user?.name ?? "?"} />
-        <View className="flex-1">
-          <Text className="text-text text-lg font-bold tracking-tight" numberOfLines={1}>
-            {user?.name ?? "Signed in"}
-          </Text>
-          {user?.email ? (
-            <Text className="text-muted text-sm mt-0.5" numberOfLines={1}>
-              {user.email}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      <View className="mt-4 rounded-2xl border border-line bg-card px-4 py-5">
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="person-outline" size={16} color={colors.accent} />
-          <Text className="text-text text-sm font-semibold">Your profile</Text>
-        </View>
-        <Text className="text-muted text-sm mt-2 leading-5">
-          Your listings, your Leaves, your rank and your trade history will live here.
-        </Text>
-        <Text className="text-muted/60 text-[11px] uppercase tracking-[2px] mt-4">
-          Not built yet
-        </Text>
-      </View>
-
-      <View className="mt-8">
-        <SignOutButton onPress={confirmSignOut} busy={busy} />
-        <Text className="text-muted/70 text-xs text-center mt-3 leading-4">
-          Signing out revokes this device's session on the server. You will need your
-          password to get back in.
-        </Text>
-      </View>
-    </ScrollView>
+    <FlatList
+      className="flex-1 bg-bg"
+      data={items}
+      numColumns={3}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={<ProfileHeader name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} />}
+      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />}
+      ListEmptyComponent={<Text className="text-muted text-center py-12">Your listings will appear here.</Text>}
+      ListFooterComponent={<View className="px-4 pt-8 pb-10"><SignOutButton onPress={confirmSignOut} busy={busy} /></View>}
+      contentContainerStyle={{ paddingTop: 12 }}
+    />
   );
+}
+
+function ProfileHeader({ name, avatar, bio, posts, followers, following }: { name: string; avatar: string | null; bio: string | null | undefined; posts: number; followers: number; following: number }) {
+  return <View className="px-4 pb-5"><View className="flex-row items-center"><Avatar uri={avatar} name={name} /><View className="flex-1 flex-row justify-around ml-5"><Stat label="Posts" value={posts} /><Stat label="Followers" value={followers} /><Stat label="Following" value={following} /></View></View><Text className="text-text text-lg font-bold mt-4">{name}</Text>{bio ? <Text className="text-muted text-sm mt-1 leading-5">{bio}</Text> : null}<View className="border-b border-line mt-5" /></View>;
+}
+
+function Stat({ label, value }: { label: string; value: number }) { return <View className="items-center"><Text className="text-text text-base font-bold">{value}</Text><Text className="text-muted text-xs mt-1">{label}</Text></View>; }
+
+function ProfileTile({ item, onPress }: { item: Item; onPress: () => void }) {
+  return <Pressable onPress={onPress} className="w-1/3 aspect-square border-r border-b border-bg bg-card" accessibilityRole="button" accessibilityLabel={`Open ${item.title}`}>
+    {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : <View className="flex-1 items-center justify-center bg-card"><Ionicons name="image-outline" size={24} color={colors.muted} /></View>}
+  </Pressable>;
 }
 
 /**

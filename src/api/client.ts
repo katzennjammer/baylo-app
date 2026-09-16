@@ -245,9 +245,21 @@ export async function legacyFailure(res: Response, fallback: string): Promise<ne
   );
 }
 
-/** How long an interactive sign-in request may wait for an API response. */
-const AUTH_REQUEST_TIMEOUT_MS = 15_000;
-const API_REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * How long a request may wait for an API response before it is abandoned.
+ *
+ * Thirty seconds, not fifteen. The API is `next dev`, which compiles a route
+ * the FIRST time it is hit, and a cold compile can outlast fifteen seconds.
+ * When it does, the first request after a restart aborts, React Query retries
+ * twice into the same compile, and the query settles as an error: for
+ * /api/v1/profile/me that leaves `useReach()` null, so no tile greys and
+ * nothing on screen says why. A warm route answers in one to four seconds
+ * (measured 16 Sep 2026 against Supabase), so the ceiling is never felt when
+ * things are working; it only decides how long a genuinely dead server keeps
+ * a spinner up.
+ */
+const AUTH_REQUEST_TIMEOUT_MS = 30_000;
+const API_REQUEST_TIMEOUT_MS = 30_000;
 
 /** A POST to an /api/auth endpoint: no Bearer header, no envelope. */
 async function postAuth<T>(path: string, body: unknown, fallback: string): Promise<T> {

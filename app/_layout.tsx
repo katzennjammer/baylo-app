@@ -7,6 +7,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { createQueryClient } from "../src/api/queryClient";
+import { PostedDialog } from "../src/components/PostedDialog";
 import { Splash } from "../src/components/Splash";
 import { SessionProvider, useSession } from "../src/auth/session";
 import { sheetColor } from "../src/theme/auth-sheet-tokens";
@@ -145,6 +146,10 @@ export default function RootLayout() {
               options={{ contentStyle: { backgroundColor: sheetColor.frame } }}
             />
           </Stack>
+          {/* The "Your listing is up." popup. Here, under every screen, because
+              the wizard that triggers it has already popped by the time it
+              shows — see src/post/posted-notice.ts. */}
+          <PostedDialog />
         </SafeAreaProvider>
       </SessionProvider>
     </QueryClientProvider>

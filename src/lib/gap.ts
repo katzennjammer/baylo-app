@@ -239,6 +239,7 @@ export function splitFor(
 export type PromiseBlock =
   | "none"
   | "idUnverified"
+  | "idPending"
   | "tierMayNotPropose"
   | "minTrades"
   | "openContract"
@@ -247,6 +248,13 @@ export type PromiseBlock =
 
 export interface StandingInput {
   idVerified: boolean;
+  /**
+   * An ID is submitted and waiting on a reviewer. Only read when `idVerified`
+   * is false. It exists so the offer screen can say "under review, sent at…"
+   * rather than "verify your ID" to somebody who did that an hour ago — and,
+   * more to the point, so it never shows a second way to submit one.
+   */
+  idPending: boolean;
   tier: TrustTier;
   mayProposeDpa: boolean;
   completedTrades: number;
@@ -272,7 +280,7 @@ export const MAX_CONCURRENT_AS_DEBTOR = 1;
  */
 export function promiseBlock(s: StandingInput): PromiseBlock {
   if (s.hasUnsettledDefault) return "unsettledDefault";
-  if (!s.idVerified) return "idUnverified";
+  if (!s.idVerified) return s.idPending ? "idPending" : "idUnverified";
   if (s.completedTrades < MIN_COMPLETED_TRADES_TO_OWE) return "minTrades";
   if (!s.mayProposeDpa) return "tierMayNotPropose";
   if (s.openContracts >= MAX_CONCURRENT_AS_DEBTOR) return "openContract";

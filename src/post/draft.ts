@@ -73,7 +73,6 @@ function serialisable(state: PostState): PostState {
     valuationPending: false,
     posting: false,
     postError: null,
-    postedItemId: null,
     rateLimit: null,
   };
 }

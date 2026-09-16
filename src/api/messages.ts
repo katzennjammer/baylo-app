@@ -62,8 +62,18 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
 
   const body = (await res.json()) as LegacyThreadEnvelope | ThreadMessage[];
   const messages = Array.isArray(body) ? body : body.messages ?? [];
-  const partnerName = Array.isArray(body) ? "Conversation" : body.partnerName ?? "Conversation";
-  const partnerAvatar = Array.isArray(body) ? null : body.partnerAvatar ?? null;
+  let partnerName = Array.isArray(body) ? "Conversation" : body.partnerName ?? "Conversation";
+  let partnerAvatar = Array.isArray(body) ? null : body.partnerAvatar ?? null;
+  if (Array.isArray(body)) {
+    try {
+      const { data } = await apiV1<ConversationListResponse>("/api/v1/messages/conversations");
+      const conversation = data.conversations.find((item) => item.partnerId === partnerId);
+      partnerName = conversation?.partnerName ?? partnerName;
+      partnerAvatar = conversation?.partnerAvatar ?? partnerAvatar;
+    } catch {
+      // The thread itself is still useful when the conversation summary is unavailable.
+    }
+  }
   // The legacy endpoint returns a bare message array, so it cannot carry the
   // viewer id. Use the authenticated mobile session for bubble ownership.
   const currentUserId = Array.isArray(body)
