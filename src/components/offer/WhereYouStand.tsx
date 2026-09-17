@@ -1,14 +1,13 @@
 import { Text, View } from "react-native";
 
 import { PlusIcon } from "../icons";
-import { ArrowsIcon, PromiseIcon } from "./icons";
+import { ArrowsIcon } from "./icons";
 import { RouteRow } from "./rows";
 import { Section, SectionLabel } from "./chrome";
-import { BracketTicks } from "./GapTrack";
+import { BracketTicks } from "./BracketTicks";
 import * as copy from "./copy";
 import { bracketOf, type Bracket } from "../../lib/brackets";
 import { bracketsBeyondReach, isOutOfReach } from "../../lib/gap";
-import type { TrustTier } from "../../lib/trust";
 import {
   offerColor,
   offerIcon,
@@ -46,13 +45,14 @@ import {
  * total worth — the last of which is why this insert names the viewer's HIGHEST
  * ITEM and never a sum of everything they own.
  *
- * ── THE LISTING IS A BRACKET; YOUR OWN ITEM IS A NUMBER ─────────────────────
+ * ── EVERYTHING IS A BRACKET ─────────────────────────────────────────────────
  *
- * The paragraph names your highest item at its exact value — it is yours to
- * know — and the listing only by bracket. The distance is stated in brackets,
- * the ticks are drawn in brackets, and the reach itself is a bracket (see
- * `reachBracket()` in gap.ts), so no line of this insert can put an exact
- * figure on somebody else's listing or contradict the grey on the grid.
+ * The paragraph names your highest item by bracket and the listing by
+ * bracket. The distance is stated in brackets, the ticks are drawn in
+ * brackets, and the reach itself is a bracket (see `reachBracket()` in
+ * gap.ts), so no line of this insert can put an exact figure on either item
+ * or contradict the grey on the grid. Your own exact value is on your own
+ * listing page; this insert is on somebody else's.
  *
  * NOT DRAWN UNDER A PREMIUM LOCK. This insert explains why an out-of-reach
  * listing cannot be offered on yet. Item detail decides, and a premium lock
@@ -75,18 +75,23 @@ import {
  *   - the ticks draw NO green "your item" cells — they start at the floor. Not
  *     one cell: a green cell with a label under it would claim an item that
  *     does not exist. The left legend label becomes `Starting reach`;
- *   - the first route is `Post an item` — the real fix, and the thing the
- *     standard set is missing — and `Trade up to it` is dropped, because "two
- *     trades near your own value" is advice about a shelf this viewer has not
- *     got. The promise route stays, second.
+ *   - the route is `Post an item` — the real fix, and the thing the standard
+ *     set is missing — instead of `Trade up to it`, because "a trade or two
+ *     near your own value" is advice about a shelf this viewer has not got.
+ *
+ * ── ONE ROUTE, NOT TWO (17 Sep 2026) ────────────────────────────────────────
+ *
+ * §10.8 wrote two routes: trade up, or offer with a promise. Deferred
+ * agreements are gone, and the second route with them. What replaced the
+ * promise — a bridging fee one bracket up — is not a route past THIS listing:
+ * a listing beyond the reach is by definition more than one bracket above the
+ * best item, and no fee bridges two brackets. So the insert says the one true
+ * thing, which is that the line moves with the shelf.
  */
 export function WhereYouStand({
   listingValue,
   highestItem,
   reach,
-  owner,
-  tier,
-  promiseCeiling,
 }: {
   /** This listing's value. Its bracket is above `reach`, or the insert would not be drawn. */
   listingValue: number;
@@ -97,15 +102,6 @@ export function WhereYouStand({
   highestItem: { title: string; valueLeaves: number } | null;
   /** The reach BRACKET. */
   reach: Bracket;
-  owner: string;
-  tier: TrustTier;
-  /**
-   * What this viewer may actually promise, after every server gate. Zero for a
-   * New Trader, which is why §10.8's route copy has a zero-ceiling variant: "A
-   * Deferred Points Agreement covers up to 200" is a sentence that cannot be
-   * written when the ceiling is nothing.
-   */
-  promiseCeiling: number;
 }) {
   const listingBracket = bracketOf(listingValue);
 
@@ -138,7 +134,7 @@ export function WhereYouStand({
       >
         {highestItem === null
           ? copy.reach.emptyBody(reach, listingBracket)
-          : copy.reach.body(highestItem.title, highestItem.valueLeaves, reach, listingBracket)}
+          : copy.reach.body(highestItem.title, bracketOf(highestItem.valueLeaves), reach, listingBracket)}
       </Text>
 
       <View style={{ marginTop: offerSpace.reach.copyToBar }}>
@@ -162,19 +158,17 @@ export function WhereYouStand({
         <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
           {highestItem === null
             ? copy.reach.legendStarting
-            : copy.reach.legendYours(highestItem.title, highestItem.valueLeaves)}
+            : copy.reach.legendYours(highestItem.title, bracketOf(highestItem.valueLeaves))}
         </Text>
         <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
           {copy.reach.legendTheirs(listingBracket)}
         </Text>
       </View>
 
-      {/* Two rows at 64 with 10 between them — §3.6's own figures, and §4's
-          `min-height 60 / 64` where the 64 is this insert's. None takes an
-          `onPress`: all are explanations, so none gets a chevron — the Post tab
-          is in the bar under this screen, so `Post an item` does not need to be
-          a second way there. The empty shelf leads with posting and drops
-          `Trade up to it`; see the header note. */}
+      {/* One row at 64 — §3.6's own figure. It takes no `onPress`: it is an
+          explanation, so it gets no chevron — the Post tab is in the bar under
+          this screen, so `Post an item` does not need to be a second way there.
+          The empty shelf gets posting; a shelf gets trading up. */}
       <View
         style={{
           marginTop: offerSpace.reach.legendToRoutes,
@@ -195,18 +189,6 @@ export function WhereYouStand({
             subtitle={copy.reach.routePostSub}
           />
         ) : null}
-        <RouteRow
-          minHeight={offerSize.routeRow.minHeightReach}
-          icon={
-            <PromiseIcon
-              size={offerSize.routeRow.icon}
-              stroke={offerIcon.inlineRow.stroke}
-              color={offerColor.inkSecondary}
-            />
-          }
-          title={copy.reach.routePromise}
-          subtitle={copy.reach.routePromiseSub(tier, promiseCeiling, owner)}
-        />
         {highestItem !== null ? (
           <RouteRow
             minHeight={offerSize.routeRow.minHeightReach}

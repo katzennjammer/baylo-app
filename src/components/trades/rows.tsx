@@ -1,12 +1,10 @@
 import { Image } from "expo-image";
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { PromiseCaseIcon } from "./icons";
 import { ChevronRightIcon, ImageIcon } from "../icons";
 import { WarningTriangleIcon } from "../offer/icons";
 import { Tappable } from "../Tappable";
 import {
-  deadlineInk,
   offerBorder,
   offerColor,
   offerIcon,
@@ -82,32 +80,6 @@ export function Thumb({
         ))
       )}
     </View>
-  );
-}
-
-/**
- * The well a promise sits in, where a trade would show a photo.
- *
- * `#EDEBE3` rather than `#E6E4DA`: §1.1 calls the first "inert fills" and the
- * second "value blocks with no photo". A promise is not a photo that failed to
- * load, so the heavier placeholder would be a claim about a missing image. The
- * mark is terracotta — §1.4's job 2, a promise, at 1.5px of nothing — and the
- * well itself is never terracotta, because §1.4 says the accent is never a large
- * fill.
- */
-export function PromiseWell({ size }: { size: number }) {
-  return (
-    <Thumb
-      image={null}
-      size={size}
-      icon={
-        <PromiseCaseIcon
-          size={size === offerSize.tradeCard.thumb ? 20 : 19}
-          stroke={offerIcon.inlineRow.stroke}
-          color={offerColor.warm}
-        />
-      }
-    />
   );
 }
 
@@ -571,184 +543,6 @@ export function HistoryRow({
       >
         {meta}
       </Text>
-    </View>
-  );
-}
-
-/* ───────────────────────── §1.7 the promise row ─────────────────────── */
-
-/**
- * §1.7's six states in one row, and the six differ in three properties only.
- *
- *   Pending acceptance   a 1.5px `#C56A4B` outline round the row
- *   Active               the deadline's mono, coloured by §1.8 and nothing else
- *   Partially paid       a meter under the row, track `#F6EBE6`, fill `#C56A4B`
- *   Deadline near        §1.8's scale again — this is not a separate treatment
- *   Defaulted            row fill `#F5F4EE`, a 3px `#C56A4B` left rule
- *   Fulfilled            a hairline row, mono `settled 4 Oct`, NO accent at all
- *
- * NO FILL ANYWHERE EXCEPT THE DEFAULTED ROW'S `#F5F4EE`, and that one is a sunk
- * grey rather than a warm one. §1.4's rule for the whole system is "outline
- * warns, fill fails", and §1.4 reserves a filled terracotta for hard failures,
- * "which do not occur in these three areas".
- */
-export function PromiseRow({
-  title,
-  meta,
-  state,
-  deadline,
-  paid,
-  total,
-  action,
-  onPress,
-}: {
-  title: string;
-  meta: string;
-  state: "pending" | "active" | "defaulted" | "fulfilled";
-  /** Drives §1.8's mono ink. Omitted on a fulfilled row, which has no urgency. */
-  deadline?: Date | null;
-  paid?: number;
-  total?: number;
-  action?: React.ReactNode;
-  onPress?: () => void;
-}) {
-  const fulfilled = state === "fulfilled";
-  const defaulted = state === "defaulted";
-  const pending = state === "pending";
-  const showMeter = !fulfilled && typeof paid === "number" && typeof total === "number" && paid > 0;
-
-  // §1.8: days remaining drive the MONO COLOUR ONLY. A fulfilled row has no
-  // deadline left to be near, and a defaulted one is terracotta on its own
-  // account rather than on the scale's.
-  const metaInk = fulfilled
-    ? offerColor.inkTertiary
-    : defaulted
-      ? offerColor.warm
-      : deadline
-        ? deadlineInk(daysLeft(deadline))
-        : offerColor.inkTertiary;
-
-  // A pending row is drawn as an outlined BLOCK inset by the gutter rather than
-  // as a full-bleed band, so §1.4's "never as a large fill" holds at row scale.
-  // Inside the block the side padding is the block's own 14, not the screen's 16.
-  const padX = pending ? 14 : offerSpace.screenX;
-
-  const body = (
-    <View
-      style={{
-        minHeight: fulfilled ? offerSize.historyRow.height : offerSize.tradeRow.height,
-        paddingHorizontal: padX,
-        paddingVertical: fulfilled ? 11 : 13,
-        justifyContent: "center",
-        gap: showMeter ? 9 : 0,
-        // §1.7's "Defaulted": a `#F5F4EE` fill and a solid 3px terracotta left
-        // rule. The rule eats into the gutter rather than sitting outside it, so
-        // the text stays on the 16 every other row's text is on.
-        ...(defaulted
-          ? {
-              backgroundColor: offerColor.sunk,
-              borderLeftWidth: offerBorder.dpaActiveRule,
-              borderLeftColor: offerColor.warm,
-              paddingLeft: padX - offerBorder.dpaActiveRule,
-            }
-          : {}),
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: offerSize.tradeRow.gap }}>
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <Text
-            style={[
-              // A fulfilled promise drops to Medium, like a History row and for
-              // the same reason: §1.7's "Fulfilled agreements lose all accent
-              // colour. Nothing congratulates."
-              textStyle(
-                fulfilled
-                  ? { ...offerType.itemTitleRow, fontFamily: font.sansMedium }
-                  : offerType.itemTitleRow,
-              ),
-              { color: fulfilled ? offerColor.inkSecondary : offerColor.ink },
-            ]}
-            numberOfLines={2}
-          >
-            {title}
-          </Text>
-          <Text style={[textStyle(offerType.deadline), { color: metaInk }]} numberOfLines={2}>
-            {meta}
-          </Text>
-        </View>
-        {action}
-      </View>
-
-      {showMeter ? <Meter paid={paid!} total={total!} /> : null}
-    </View>
-  );
-
-  const wrapped = pending ? (
-    // §1.7's "Pending acceptance": a 1.5px `#C56A4B` outline block, no fill.
-    <View
-      style={{
-        marginHorizontal: offerSpace.screenX,
-        marginVertical: 8,
-        borderWidth: offerBorder.promise,
-        borderColor: offerColor.promise,
-        borderRadius: offerRadius.row,
-      }}
-    >
-      {body}
-    </View>
-  ) : (
-    body
-  );
-
-  if (!onPress) return wrapped;
-
-  return (
-    <Tappable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}. ${meta}`}
-      pressedStyle={{ backgroundColor: offerColor.quiet }}
-    >
-      {wrapped}
-    </Tappable>
-  );
-}
-
-/** Local copy of §1.8's day count, so this file does not import the gap module. */
-function daysLeft(deadline: Date, now: Date = new Date()): number {
-  const a = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
-  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((a.getTime() - b.getTime()) / 86_400_000);
-}
-
-/**
- * §1.7's "Partially paid" meter. Track `#F6EBE6`, fill `#C56A4B`, radius 3.
- *
- * 6px tall — the frames' figure. §4 sizes the gap track at 14 and the Leaves
- * meter with it; a progress strip under a row is not that element and reads as a
- * second gap track at 14. The radius is `offerRadius.track`, which is the 3 §3.7
- * gives every meter.
- *
- * The fill never rounds up past what has actually been paid: a meter that shows
- * a full bar at 99% tells a debtor they are square when they are not.
- */
-export function Meter({ paid, total }: { paid: number; total: number }) {
-  const ratio = total > 0 ? Math.min(1, Math.max(0, paid / total)) : 0;
-
-  return (
-    <View
-      accessibilityRole="progressbar"
-      accessibilityValue={{ min: 0, max: total, now: paid }}
-      style={{
-        height: 6,
-        borderRadius: offerRadius.track,
-        backgroundColor: offerColor.trackWarm,
-        overflow: "hidden",
-      }}
-    >
-      <View
-        style={{ width: `${ratio * 100}%`, height: "100%", backgroundColor: offerColor.warm }}
-      />
     </View>
   );
 }

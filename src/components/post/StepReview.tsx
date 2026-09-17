@@ -3,7 +3,9 @@ import { Text, View } from "react-native";
 
 import { useHubs } from "../../api/hubs";
 import { categoryLabel, conditionLabel } from "../../api/post";
-import { effectiveValue, isPostable, usePost } from "../../post/state";
+import { bracketLabel, bracketOf } from "../../lib/brackets";
+import { classifyValue } from "../../lib/trade-rules";
+import { effectiveValue, isPostable, usePost, type PostState } from "../../post/state";
 import {
   postColor,
   postLines,
@@ -99,11 +101,7 @@ export function StepReview({ board }: { board: Board }) {
             { color: postColor.inkMuted, marginTop: postSpace.review.contentToTags },
           ]}
         >
-          {state.valuation?.valuationSource === "comparables"
-            ? `From ${state.valuation.sampleSize} similar trade${
-                state.valuation.sampleSize === 1 ? "" : "s"
-              }`
-            : "Category estimate"}
+          {reviewLine(state)}
         </Text>
       </Section>
 
@@ -290,3 +288,27 @@ function PhotoRail({
     </View>
   );
 }
+
+/**
+ * The mono line under the value chip: where the number came from, its
+ * bracket, and — when the owner typed one past the cap — that a person
+ * checks it first. Said here as well as on the value step, because this is
+ * the last screen before Post and the review is the one thing about the
+ * listing the owner cannot see from the marketplace afterwards.
+ */
+function reviewLine(state: PostState): string {
+  const value = effectiveValue(state);
+  const v = state.valuation;
+  const source =
+    v?.valuationSource === "comparables"
+      ? `From ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
+      : "Category estimate";
+  if (value === null) return source;
+  const bracket = bracketLabel(bracketOf(value));
+  if (!state.ownValue || !v) return `${source} · ${bracket}`;
+  const decision = classifyValue(value, v.suggestedLeaves);
+  if (decision === "needsReview") return `Your own value · ${bracket} · checked by a person before it goes live`;
+  if (decision === "suggested") return `${source} · ${bracket}`;
+  return `Your own value · ${bracket} · goes live right away`;
+}
+

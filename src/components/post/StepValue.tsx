@@ -2,6 +2,8 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useRef, useState } from "react";
 import { PanResponder, Text, View } from "react-native";
 
+import { bracketLabel, bracketOf } from "../../lib/brackets";
+import { classifyValue, valueCap } from "../../lib/trade-rules";
 import { effectiveValue, usePost } from "../../post/state";
 import {
   postBorder,
@@ -16,25 +18,39 @@ import {
   textStyle,
   type Board,
 } from "../../theme/post-tokens";
-import { LeafIcon, SwapIcon } from "../icons";
-import { ClockIcon } from "./post-icons";
-import { HelperRow, NoticePanel, Skeleton } from "./ui";
+import { LeafIcon, PencilIcon, SwapIcon } from "../icons";
+import { ClockIcon, InfoIcon } from "./post-icons";
+import { Field, HelperRow, NoticePanel, Skeleton, TextButton } from "./ui";
 
 /**
  * Step 4 — what it is worth in Leaves.
  *
- * ── THE TRACK IS THE BAND ───────────────────────────────────────────────────
+ * ── THE SUGGESTION IS THE DEFAULT; "SET MY OWN VALUE" IS THE OTHER ROUTE ────
  *
- * This is the one idea the whole step is built on. The server accepts any value
- * within ±25 % of its own suggestion and refuses everything else, and there are
- * two ways to express that: draw a long slider and reject part of it, or make
- * the slider exactly as long as the acceptable range. The spec chose the
- * second, and every consequence is a good one — the wall is visible before the
- * first drag, the thumb simply stops, and there is no over-drag, no rubber band
- * and no toast, because there is nothing left to refuse.
+ * Two ways through this step, and the first is the one almost everybody
+ * takes: the suggested value, nudged with the slider inside its ±25 % band,
+ * posted as-is. That path is unchanged. The second is the typed field, and it
+ * exists because the server stopped refusing values on 16 Sep 2026:
  *
- * A rejection after the fact would arrive at POST time, four steps later, about
- * a number the user had every reason to believe was acceptable.
+ *   lower than the suggestion       always fine, however far
+ *   up to ONE bracket above it      goes live at once
+ *   more than that                  saved as asked, but PARKED — the listing
+ *                                   shows to nobody else until a person
+ *                                   approves the value
+ *
+ * The rule lives in `classifyValue()` (mirrored from the server) and the step
+ * applies it LIVE, under the field, so the third case is something the owner
+ * reads before they post rather than discovers from a listing nobody can see.
+ * The resulting bracket is printed beside every keystroke for the same
+ * reason: the bracket is what trading is judged on, and this is the one place
+ * a person can move their own.
+ *
+ * ── THE SLIDER'S TRACK IS THE QUICK RANGE, NOT A WALL ───────────────────────
+ *
+ * The ±25 % band used to be the server's rule. It is the slider's range now,
+ * and nothing more: a fast way to adjust that never leaves the bracket you
+ * would expect. Anything past it is the typed field's job, and the helper line
+ * says so.
  *
  * ── AND WHY THE SUGGESTION IS NOT PRESENTED AS AN AI OPINION ────────────────
  *
@@ -56,10 +72,11 @@ export function StepValue({ board }: { board: Board }) {
   const valuation = state.valuation;
   const value = effectiveValue(state);
   const locked = state.revaluationSpent;
+  const own = state.ownValue;
 
-  if (!valuation || value === null) return <ValueSkeleton board={board} />;
+  if (!valuation || (value === null && !own)) return <ValueSkeleton board={board} />;
 
-  const { allowed, valuationSource, sampleSize } = valuation;
+  const { allowed, valuationSource, sampleSize, suggestedLeaves } = valuation;
 
   const provenance =
     valuationSource === "comparables"
@@ -108,7 +125,7 @@ export function StepValue({ board }: { board: Board }) {
             },
           ]}
         >
-          {value.toLocaleString("en-US")}
+          {value === null ? "—" : value.toLocaleString("en-US")}
         </Text>
       </View>
 
@@ -131,15 +148,24 @@ export function StepValue({ board }: { board: Board }) {
         </Text>
       </View>
 
-      <ValueSlider
-        min={allowed.min}
-        max={allowed.max}
-        value={value}
-        locked={locked}
-        onChange={(leaves) => dispatch({ type: "value/set", leaves })}
-      />
+      {own ? (
+        <OwnValue
+          value={value}
+          suggested={suggestedLeaves}
+          onChange={(leaves) => dispatch({ type: "value/typed", leaves })}
+          onUseSuggestion={() => dispatch({ type: "value/suggestion" })}
+        />
+      ) : (
+        <ValueSlider
+          min={allowed.min}
+          max={allowed.max}
+          value={value ?? suggestedLeaves}
+          locked={locked}
+          onChange={(leaves) => dispatch({ type: "value/set", leaves })}
+        />
+      )}
 
-      {locked ? (
+      {own ? null : locked ? (
         <>
           <View style={{ marginTop: postSpace.value.bandToPanel }}>
             <NoticePanel
@@ -156,7 +182,7 @@ export function StepValue({ board }: { board: Board }) {
               // /api/v1/valuation's 409, whose meta carries only
               // `revaluationCount` and `maxRevaluations`, so the sentence is
               // written without it rather than with a date this client invented.
-              body={`Each listing can be valued again once, and this one already was. The value stays at ${value.toLocaleString(
+              body={`Each listing can be valued again once, and this one already was. The value stays at ${(value ?? suggestedLeaves).toLocaleString(
                 "en-US",
               )} Leaves for as long as it is posted.`}
             />
@@ -179,14 +205,130 @@ export function StepValue({ board }: { board: Board }) {
           />
           <View style={{ marginTop: postSpace.value.dividerToHelper }}>
             <HelperRow gap={postSpace.value.helperIconGap}>
-              You can move the value 25% either way. After you post, you can ask us to value it
+              The slider moves the value 25% either way. After you post, you can ask us to value it
               again once.
             </HelperRow>
+          </View>
+
+          {/* The other route. A text control at 44, forest ink, the pencil
+              beside it — the same register as every "change this" in the flow. */}
+          <View
+            style={{
+              marginTop: postSpace.value.dividerToHelper,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <PencilIcon size={16} stroke={1.8} color={postColor.forest} />
+            <TextButton label="Set my own value" onPress={() => dispatch({ type: "value/own" })} />
           </View>
         </>
       )}
 
       <View style={{ height: 24 }} />
+    </View>
+  );
+}
+
+/* ─────────────────────────── the typed value ────────────────────────── */
+
+/**
+ * "Set my own value". A 56 field on the number pad, the bracket it lands in
+ * printed live, and one of four sentences under it — see the header.
+ *
+ * ── THE FIELD HOLDS TEXT; THE STATE HOLDS A NUMBER ──────────────────────────
+ *
+ * The input's string is local so a person can clear the field and type a new
+ * figure without the numeral above snapping to `1` on the empty keystroke.
+ * Digits only reach the store, as whole Leaves, and an empty field is `null`
+ * — which is what gates Next, so nothing posts with no number in it.
+ *
+ * `value` / `Leaves` throughout, never `price`; there is no currency here and
+ * the copy does not borrow one.
+ */
+function OwnValue({
+  value,
+  suggested,
+  onChange,
+  onUseSuggestion,
+}: {
+  value: number | null;
+  suggested: number;
+  onChange: (leaves: number | null) => void;
+  onUseSuggestion: () => void;
+}) {
+  const [text, setText] = useState(value === null ? "" : String(value));
+  const decision = classifyValue(value, suggested);
+  const cap = valueCap(suggested);
+  const bracket = value === null ? null : bracketOf(value);
+
+  const line =
+    value === null
+      ? "Type a value in Leaves."
+      : decision === "suggested"
+        ? `${bracketLabel(bracket as number)} · the suggested value`
+        : decision === "lowered"
+          ? `${bracketLabel(bracket as number)} · below the suggestion. Lowering is always fine.`
+          : decision === "raisedWithinCap"
+            ? `${bracketLabel(bracket as number)} · above the suggestion, within one bracket. Goes live right away.`
+            : `${bracketLabel(bracket as number)} · more than one bracket above the suggestion.`;
+
+  return (
+    <View style={{ marginTop: postSpace.value.provenanceToSlider }}>
+      <Field
+        label="Your value in Leaves"
+        value={text}
+        placeholder={String(suggested)}
+        keyboardType="number-pad"
+        maxLength={7}
+        autoFocus
+        onChangeText={(t) => {
+          const digits = t.replace(/[^0-9]/g, "");
+          setText(digits);
+          onChange(digits === "" ? null : Number(digits));
+        }}
+      />
+
+      <Text
+        accessibilityLiveRegion="polite"
+        style={[
+          textStyle(postType.provenance),
+          {
+            color: decision === "needsReview" ? postColor.ink : postColor.inkSecondary,
+            marginTop: 12,
+          },
+        ]}
+      >
+        {line}
+      </Text>
+
+      <Text style={[textStyle(postType.helper), { color: postColor.inkMuted, marginTop: 6 }]}>
+        {`Suggested ${suggested.toLocaleString("en-US")} · ${bracketLabel(cap.suggestedBracket)}. ` +
+          `Live without a check up to ${bracketLabel(cap.maxBracketWithoutReview)}` +
+          (cap.maxValueWithoutReview !== null
+            ? ` (${cap.maxValueWithoutReview.toLocaleString("en-US")} Leaves).`
+            : ".")}
+      </Text>
+
+      {decision === "needsReview" ? (
+        <View style={{ marginTop: postSpace.value.bandToPanel }}>
+          <NoticePanel
+            icon={<InfoIcon size={postIcon.clock.size} stroke={postIcon.clock.stroke} color={postColor.inkSecondary} />}
+            heading="A person checks this value first"
+            body={
+              `Values more than one bracket above the suggestion are reviewed before they go live. ` +
+              `You can still post it now — the listing will show only to you until an admin approves ` +
+              `the value, and you will be told either way.`
+            }
+          />
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: postSpace.value.dividerToHelper, alignItems: "center" }}>
+        <TextButton label="Use the suggestion instead" onPress={onUseSuggestion} />
+      </View>
     </View>
   );
 }
@@ -409,7 +551,7 @@ function ValueSlider({
           exactly while the limit is the thing under the user's finger. */}
       {!locked && (value <= min || value >= max) ? (
         <Text style={[textStyle(postType.helper), { color: postColor.inkMuted, marginTop: 8 }]}>
-          That is as far as the value can move — 25% from what we suggested.
+          That is as far as the slider goes — 25% from what we suggested. Set your own value to go further.
         </Text>
       ) : null}
     </View>

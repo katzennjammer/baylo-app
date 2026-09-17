@@ -13,8 +13,7 @@ import {
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf } from "../../src/lib/brackets";
-import { effectivePromiseCeiling } from "../../src/lib/gap";
-import { toStanding } from "../../src/api/offer";
+import { shelfMisses } from "../../src/lib/gap";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
 import {
@@ -198,10 +197,6 @@ export default function ItemDetailScreen() {
    * grid already runs, so reaching this screen from a tile costs nothing extra;
    * TanStack dedupes both by key. Reached by deep link, it is one request.
    *
-   * The promise ceiling is computed with the same `effectivePromiseCeiling()`
-   * the offer flow uses, so the route copy here ("A Deferred Points Agreement
-   * covers up to 200 as a New Trader") can never promise a ceiling the offer
-   * screen would then refuse to offer.
    */
   /**
    * THE LOCK WINS OVER THE INSERT. `Where you stand` ends "you can send an
@@ -215,8 +210,20 @@ export default function ItemDetailScreen() {
   const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
   const outOfReach =
     !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
-  const bracketsAbove =
-    item.valueLeaves !== null && reach !== null ? bracketOf(item.valueLeaves) - reach : 0;
+  /**
+   * THE RULE, NOT THE REACH. The reach is the upper edge — one bracket above
+   * the best item — and the grid greys against it. But an offer may also be
+   * one bracket BELOW the listing, so the real test for "can this person
+   * offer on this at all" is whether ANY item on their shelf is within a
+   * bracket of it, in either direction. `shelfMisses()` answers that and says
+   * which way it missed, so the notice can name the actual reason.
+   */
+  const listingBracket = item.valueLeaves !== null ? bracketOf(item.valueLeaves) : null;
+  const shelfValues = (me?.items ?? [])
+    .filter((row) => row.status === "AVAILABLE")
+    .map((row) => row.valueLeaves);
+  const misses = listingBracket !== null && me ? shelfMisses(shelfValues, listingBracket) : null;
+  const cannotOffer = !locked && listingBracket !== null && (outOfReach || misses !== null);
   const reachInsert =
     showReach && me ? (
       <WhereYouStand
@@ -227,11 +234,6 @@ export default function ItemDetailScreen() {
             : null
         }
         reach={reach as number}
-        owner={firstName(item.owner.name)}
-        tier={me.reputation.tier}
-        promiseCeiling={effectivePromiseCeiling(
-          toStanding(me.reputation, me.idVerification),
-        )}
       />
     ) : null;
 
@@ -456,7 +458,7 @@ export default function ItemDetailScreen() {
           status={item.status}
           existingOfferId={viewer.existingOfferId}
           onOffer={() => {
-            if (outOfReach && reach !== null) {
+            if (cannotOffer) {
               setReachDialogOpen(true);
               return;
             }
@@ -465,13 +467,35 @@ export default function ItemDetailScreen() {
         />
       )}
 
+      {/*
+        THE ONE-BRACKET RULE, STATED THE RIGHT WAY ROUND.
+
+        This used to say the item was "N brackets above your reach", which
+        read as though one bracket up were not allowed — and it is. An offer
+        may be the same bracket as the listing, one below, or one above; what
+        is not allowed is two or more apart, in either direction. So the
+        sentence names the rule and then the direction this shelf missed in.
+        `misses === null` with `outOfReach` true cannot happen (the reach is
+        one above the best item, so anything past it is two above), but the
+        fallback wording is still true if it ever did.
+      */}
       <NoticeDialog
         visible={reachDialogOpen}
-        title="This item is outside your reach"
+        title={
+          misses === "below"
+            ? "This item is below everything you have"
+            : "This item is too far above your items"
+        }
         body={
-          `You can't send an offer for this item because it is ${bracketsAbove} ` +
-          `${bracketsAbove === 1 ? "bracket" : "brackets"} above your current reach. ` +
-          "Trade for items closer to what you own to move your reach higher."
+          listingBracket === null
+            ? "This listing has no value yet, so there is no bracket to match it against."
+            : misses === "below"
+              ? `An offer can be the same bracket as the listing, one below, or one above. ` +
+                `This listing is in ${bracketLabel(listingBracket)}, and everything you have posted ` +
+                `is two or more brackets above it. Post something smaller, or find a listing nearer your own.`
+              : `Trading for an item 2 or more brackets above your item isn't allowed — one bracket ` +
+                `above at most. This listing is in ${bracketLabel(listingBracket)}. ` +
+                `Trade for items closer to what you own to move your reach higher.`
         }
         icon={<WarningIcon size={24} stroke={2} color={color.forest} />}
         onDismiss={() => setReachDialogOpen(false)}

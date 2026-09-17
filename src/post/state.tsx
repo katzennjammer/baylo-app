@@ -161,6 +161,15 @@ export interface PostState {
   valuationPending: boolean;
   /** The user's number. Null means "use the suggestion untouched". */
   valueLeaves: number | null;
+  /**
+   * TRUE WHEN THE OWNER CHOSE "SET MY OWN VALUE". The typed field replaces the
+   * slider and `valueLeaves` is no longer clamped to the band: lowering is
+   * always allowed, raising up to ONE bracket above the suggestion's goes
+   * live, and anything higher is saved as asked and parked for review. The
+   * step says which of those the typed number is BEFORE the post, so nobody
+   * finds out from a hidden listing. See `classifyValue()` in trade-rules.
+   */
+  ownValue: boolean;
   /** True once the one re-valuation is gone. Locks the slider flat. */
   revaluationSpent: boolean;
 
@@ -199,6 +208,7 @@ export function initialState(): PostState {
     valuation: null,
     valuationPending: false,
     valueLeaves: null,
+    ownValue: false,
     revaluationSpent: false,
     wanted: "",
     returnCategories: [],
@@ -234,6 +244,12 @@ export type PostAction =
   | { type: "valuation/spent" }
   | { type: "valuation/failed" }
   | { type: "value/set"; leaves: number }
+  /** "Set my own value": the typed field takes over from the slider. */
+  | { type: "value/own" }
+  /** A keystroke in the typed field. Null when the field is empty. Never clamped. */
+  | { type: "value/typed"; leaves: number | null }
+  /** "Use the suggestion instead": back to the default, slider and all. */
+  | { type: "value/suggestion" }
   | { type: "field/wanted"; value: string }
   | { type: "return/toggle"; category: Category }
   | { type: "hub/toggle"; id: string }
@@ -371,6 +387,10 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // falls inside the NEW band. Keeping it outside would leave the thumb
       // pinned past the end of its own track and the server would refuse the
       // post — the exact discovery-after-the-fact the band is drawn to prevent.
+      // A typed value is the owner's own and survives a re-valuation as
+      // typed: the suggestion under it moves, and the step re-classifies the
+      // same number against the new suggestion.
+      if (s.ownValue) return { ...s, valuation: a.payload, valuationPending: false };
       const inBand =
         s.valueLeaves !== null &&
         s.valueLeaves >= a.payload.allowed.min &&
@@ -402,6 +422,24 @@ export function reduce(s: PostState, a: PostAction): PostState {
       const clamped = Math.max(v.allowed.min, Math.min(v.allowed.max, a.leaves));
       return { ...s, valueLeaves: clamped };
     }
+
+    case "value/own": {
+      if (!s.valuation || s.revaluationSpent) return s;
+      // Starts from whatever is on screen, so the field opens with a number
+      // rather than empty and the numeral above it does not jump.
+      return { ...s, ownValue: true, valueLeaves: effectiveValue(s) };
+    }
+
+    case "value/typed": {
+      if (!s.ownValue) return s;
+      // Whole Leaves, at least 1, no ceiling — the ceiling is a REVIEW, not a
+      // refusal, and the step says so live. `null` is an empty field.
+      const n = a.leaves === null ? null : Math.max(1, Math.trunc(a.leaves));
+      return { ...s, valueLeaves: n };
+    }
+
+    case "value/suggestion":
+      return { ...s, ownValue: false, valueLeaves: null };
 
     /* ── in return ── */
 
@@ -480,11 +518,12 @@ function sentenceCase(s: string): string {
 /**
  * Whether Next is enabled, per step.
  *
- * Four of the seven are ALWAYS enabled, and that is a decision rather than an
- * oversight: condition is prefilled, value has a suggestion, "in return" is
- * wholly optional and hubs have "Skip for now" as a real route. The only two
- * gates are the two where continuing would produce a listing that cannot exist
- * — no photo, or no category and no title.
+ * Three of the seven are ALWAYS enabled, and that is a decision rather than an
+ * oversight: condition is prefilled, "in return" is wholly optional and hubs
+ * have "Skip for now" as a real route. Value is enabled on the suggestion and
+ * gated only on an EMPTY typed field. The other two gates are the two where
+ * continuing would produce a listing that cannot exist — no photo, or no
+ * category and no title.
  */
 export function canAdvance(s: PostState): boolean {
   switch (s.step) {
@@ -495,6 +534,12 @@ export function canAdvance(s: PostState): boolean {
       return s.photos.some(isPostable);
     case 1:
       return s.category !== null && s.title.trim().length >= rules.titleMin;
+    case 3:
+      // The suggestion always advances. A typed field only advances with a
+      // number in it — an empty own-value field is not "use the suggestion",
+      // it is nothing, and posting nothing would post the suggestion under a
+      // heading that said the owner set it.
+      return !s.ownValue || (s.valueLeaves !== null && s.valueLeaves >= 1);
     default:
       return true;
   }

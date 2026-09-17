@@ -5,7 +5,6 @@ import { ImageIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { Radio } from "./rows";
 import { useOfferBoard } from "./chrome";
-import { grouped } from "../../lib/gap";
 import {
   offerBorder,
   offerColor,
@@ -22,46 +21,45 @@ import {
  * 60 + 12 + 12 = 84 exactly, which is why the photo is the row's height rather
  * than the row being sized independently — the two cannot drift.
  *
- * ── THE VALUE LINE IS THE ROW'S SUBJECT ─────────────────────────────────────
+ * ── SELECTABLE, OR GREYED WITH A REASON ─────────────────────────────────────
  *
- * The picker's job is "which of my things is worth about what theirs is worth",
- * so the mono figure is the second line and nothing else competes for it — no
- * condition, no category, no date. §12 records Direction B's version of this
- * row, which drew each item as a mini-column against theirs with `440 · reaches
- * 92%`; that is not built and the percentage is not shown here.
+ * The picker's job is "which of my things is within a bracket of theirs". A
+ * row that is not — two or more brackets away in either direction, unvalued,
+ * or already promised to another trade — stays VISIBLE and greyed, with one
+ * short line saying why. Hiding it would read as "that item is gone"; greying
+ * it without a reason would read as broken. The reason is the second line in
+ * place of the bracket, so the row's shape never changes.
+ *
+ * Greyed rows are not tappable and say so to the accessibility layer, rather
+ * than accepting a tap that the send would then refuse.
  */
 export function PickerRow({
   title,
   image,
-  valueLeaves,
+  meta,
+  reason,
   selected,
-  multi,
   onPress,
-  unvaluedNote,
 }: {
   title: string;
   image: string | null;
-  /** Null means the value did not load. See the note on `PickerItem`. */
-  valueLeaves: number | null;
+  /** The mono line under the title when the row is selectable: `Bracket 3 · 300 Leaves`. */
+  meta: string;
+  /** Non-null greys the row and replaces `meta` with this short line. */
+  reason: string | null;
   selected: boolean;
-  /** Checkbox semantics instead of radio. See the note in `OfferSheet.tsx`. */
-  multi: boolean;
   onPress: () => void;
-  /** What stands in for the figure when there is none. */
-  unvaluedNote: string;
 }) {
   const board = useOfferBoard();
-  const selectable = valueLeaves !== null;
+  const selectable = reason === null;
 
   return (
     <Tappable
       onPress={selectable ? onPress : undefined}
       disabled={!selectable}
-      accessibilityRole={multi ? "checkbox" : "radio"}
+      accessibilityRole="radio"
       accessibilityState={{ selected, disabled: !selectable }}
-      accessibilityLabel={
-        selectable ? `${title}, ${grouped(valueLeaves)} Leaves` : `${title}. ${unvaluedNote}`
-      }
+      accessibilityLabel={selectable ? `${title}, ${meta}` : `${title}. ${reason}`}
       style={{
         height: offerSize.pickerRow.height,
         borderRadius: offerRadius.row,
@@ -87,10 +85,10 @@ export function PickerRow({
           overflow: "hidden",
           alignItems: "center",
           justifyContent: "center",
-          // An unvalued item is dimmed rather than greyed. §1.9's grayscale is
-          // the reach signal and reusing it here would say something about
-          // reach, which this is not — this is "we do not know its value".
-          opacity: selectable ? 1 : 0.6,
+          // Dimmed, not §1.9's grayscale: that filter is the grid's reach
+          // signal and reusing it here would say something about reach, which
+          // this is not — this is "not for this listing".
+          opacity: selectable ? 1 : 0.55,
         }}
       >
         {image ? (
@@ -109,7 +107,7 @@ export function PickerRow({
         <Text
           style={[
             textStyle(offerType.itemTitleRow),
-            { color: selectable ? offerColor.ink : offerColor.inkSecondary },
+            { color: selectable ? offerColor.ink : offerColor.inkTertiary },
           ]}
           numberOfLines={2}
         >
@@ -122,7 +120,7 @@ export function PickerRow({
               { color: offerColor.inkSecondary, marginTop: 4 },
             ]}
           >
-            {grouped(valueLeaves)} Leaves
+            {meta}
           </Text>
         ) : (
           <Text
@@ -131,7 +129,7 @@ export function PickerRow({
               { color: offerColor.inkTertiary, marginTop: 4 },
             ]}
           >
-            {unvaluedNote}
+            {reason}
           </Text>
         )}
       </View>

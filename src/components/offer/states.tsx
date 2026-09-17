@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 
-import { ArrowsIcon, LockIcon, WarningTriangleIcon } from "./icons";
-import { ItemRow, NumberedStep, RecordRow, RouteRow } from "./rows";
+import { LockIcon, WarningTriangleIcon } from "./icons";
+import { ItemRow, NumberedStep, RecordRow } from "./rows";
 import {
   Hairline,
   PrimaryButton,
@@ -11,8 +11,6 @@ import {
   TertiaryButton,
 } from "./chrome";
 import * as copy from "./copy";
-import { ceilingTable, grouped, nextRung, shortTier, type CeilingRow } from "../../lib/gap";
-import type { TrustTier } from "../../lib/trust";
 import {
   offerBorder,
   offerColor,
@@ -88,234 +86,6 @@ export function NoItemsState({
   );
 }
 
-/* ────────────────── §5.2 not ID-verified (§10.5) ────────────────────── */
-
-/**
- * ONLY THE DPA ROW CHANGES. §5.2 is precise about this and it is the whole
- * point of the state: Leaves and send-as-is stay live, so the person can still
- * make an offer — they simply cannot promise. The greyed row, the 48px verify
- * button below the rows, and a 12px footnote.
- *
- * The row itself is drawn by `SettlementRow` with `locked`, so its fill, its
- * dashed edge and its lock icon come from §1.7's table rather than from here.
- */
-export function VerifyPromiseBlock({ onVerify }: { onVerify: () => void }) {
-  return (
-    <View style={{ marginTop: offerSpace.rowGap }}>
-      <SecondaryButton
-        label={copy.notVerified.button}
-        onPress={onVerify}
-        height={offerSize.verifyButton}
-      />
-      <Text
-        style={[
-          textStyle(offerType.helper),
-          { color: offerColor.inkTertiary, marginTop: offerSpace.labelToContent },
-        ]}
-      >
-        {copy.notVerified.footnote}
-      </Text>
-    </View>
-  );
-}
-
-/**
- * The same slot while the ID is under review: the footnote, no button.
- *
- * No button is the point. A "See where it is up to" here would be harmless —
- * /verify-id renders its pending branch, not the form — but the row above
- * already says under review, and a control that goes somewhere invites a
- * second look for a second thing to do. There is nothing to do.
- */
-export function PendingPromiseBlock({ sentAt }: { sentAt: string | null }) {
-  return (
-    <Text
-      style={[
-        textStyle(offerType.helper),
-        { color: offerColor.inkTertiary, marginTop: offerSpace.rowGap },
-      ]}
-    >
-      {copy.idPending.footnote(sentAt)}
-    </Text>
-  );
-}
-
-/* ─────────────────── §5.2 tier too low (§10.5) ──────────────────────── */
-
-/**
- * A FULL SCREEN REPLACING THE DPA PROPOSAL, not a panel inside it.
- *
- * §5.2 says so, and the reason shows in the content: this is not "that number
- * is too big", it is "promises of this size are not open to you yet, here is
- * the ladder and here is where you are on it". A panel would put that inside a
- * form the person cannot complete.
- *
- * ── THE CEILING TABLE'S NUMBERS ─────────────────────────────────────────────
- *
- * The viewer's own row is the server's `maxOutstandingDebtLeaves`; the other
- * three are `TIER_LADDER`'s hand-kept mirror, and the reasoning for both is on
- * `ceilingTable()`. §10.5's own figures (200 / 900 / 2,500) are NOT used —
- * they would promise ceilings the server refuses.
- */
-export function TierTooLowState({
-  tier,
-  serverCeiling,
-  completedTrades,
-  gapNeeded,
-  balance,
-  owner,
-  alternativeItem,
-  onSendLargestLegal,
-  onChangeItem,
-}: {
-  tier: TrustTier;
-  serverCeiling: number;
-  completedTrades: number;
-  /** The shortfall that could not be covered. §10.5's "This gap needs 640". */
-  gapNeeded: number;
-  balance: number;
-  owner: string;
-  /** The viewer's highest-value item, for §10.5's second `From here` row. */
-  alternativeItem: { title: string; valueLeaves: number } | null;
-  onSendLargestLegal: () => void;
-  onChangeItem: () => void;
-}) {
-  const rows = ceilingTable(tier, serverCeiling);
-  const next = nextRung(tier);
-  const moreTrades = next ? Math.max(0, next.minTrades - completedTrades) : 0;
-
-  // §10.5's primary "sends the largest legal combination": everything the
-  // balance covers plus everything the ceiling allows.
-  const legalLeaves = Math.min(balance, gapNeeded);
-  const legalPromise = Math.min(serverCeiling, Math.max(0, gapNeeded - legalLeaves));
-  const remainder = Math.max(0, gapNeeded - legalLeaves - legalPromise);
-
-  return (
-    <View>
-      <Section pad={offerSpace.section.gap}>
-        <Text style={[textStyle(offerType.screenHeading), { color: offerColor.ink }]}>
-          {copy.tierTooLow.heading(tier, serverCeiling)}
-        </Text>
-        <Text
-          style={[
-            textStyle(offerType.body),
-            { color: offerColor.inkSecondary, marginTop: offerSpace.labelToContent },
-          ]}
-        >
-          {copy.tierTooLow.body(gapNeeded, serverCeiling)}
-        </Text>
-      </Section>
-
-      <Hairline />
-
-      <Section pad={offerSpace.section.settle}>
-        <SectionLabel>{copy.label.ceilings}</SectionLabel>
-        <View style={{ marginTop: offerSpace.labelToContent }}>
-          {rows.map((row, i) => (
-            <CeilingTableRow key={row.tier} row={row} first={i === 0} />
-          ))}
-        </View>
-
-        {next ? (
-          <Text
-            style={[
-              textStyle(offerType.body),
-              { color: offerColor.inkSecondary, marginTop: offerSpace.paragraphToControl },
-            ]}
-          >
-            {copy.tierTooLow.progress(completedTrades, moreTrades, shortTier(next.tier))}
-          </Text>
-        ) : null}
-      </Section>
-
-      <Hairline />
-
-      <Section pad={offerSpace.section.settle}>
-        <SectionLabel>{copy.label.fromHere}</SectionLabel>
-        <View style={{ marginTop: offerSpace.labelToContent, gap: offerSpace.rowGap }}>
-          <RouteRow
-            icon={
-              <ArrowsIcon
-                size={offerSize.routeRow.icon}
-                stroke={offerIcon.inlineRow.stroke}
-                color={offerColor.inkSecondary}
-              />
-            }
-            title={copy.tierTooLow.fromHereAdd(legalLeaves, legalPromise)}
-            subtitle={copy.tierTooLow.fromHereAddSub(remainder, owner)}
-            onPress={onSendLargestLegal}
-          />
-          {alternativeItem ? (
-            <RouteRow
-              icon={
-                <ArrowsIcon
-                  size={offerSize.routeRow.icon}
-                  stroke={offerIcon.inlineRow.stroke}
-                  color={offerColor.inkSecondary}
-                />
-              }
-              title={copy.tierTooLow.fromHereOther}
-              subtitle={copy.tierTooLow.fromHereOtherSub(
-                alternativeItem.title,
-                alternativeItem.valueLeaves,
-              )}
-              onPress={onChangeItem}
-            />
-          ) : null}
-        </View>
-      </Section>
-    </View>
-  );
-}
-
-/**
- * One rung: the tier, what reaches it, and what it permits.
- *
- * `you are here` is §1.6's ONE exception to "tiers are typographic, not
- * coloured" — it is `#1B4D2B` mono, and it is the only coloured tier marker
- * anywhere in the app. Nothing else in this table takes a colour.
- */
-function CeilingTableRow({ row, first }: { row: CeilingRow; first: boolean }) {
-  return (
-    <View
-      style={{
-        borderTopWidth: first ? 0 : offerBorder.hairline,
-        borderTopColor: offerColor.hairline,
-        paddingVertical: offerSize.recordRow.padYWide,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-      }}
-      accessibilityLabel={
-        `${row.tier}. ${row.here ? "You are here. " : `${copy.tierTooLow.tradesToReach(row.minTrades)}. `}` +
-        (row.ceiling === null ? copy.tierTooLow.noLimit : `${grouped(row.ceiling)} Leaves`)
-      }
-    >
-      <Text
-        style={[
-          textStyle(offerType.body),
-          { color: offerColor.ink, flex: 1 },
-        ]}
-      >
-        {shortTier(row.tier)}
-      </Text>
-
-      <Text
-        style={[
-          textStyle(offerType.trustTier),
-          { color: row.here ? offerColor.deep : offerColor.inkSecondary, flex: 1 },
-        ]}
-      >
-        {row.here ? copy.tierTooLow.youAreHere : copy.tierTooLow.tradesToReach(row.minTrades)}
-      </Text>
-
-      <Text style={[textStyle(offerType.tableFigure), { color: offerColor.ink }]}>
-        {row.ceiling === null ? copy.tierTooLow.noLimit : grouped(row.ceiling)}
-      </Text>
-    </View>
-  );
-}
-
 /* ──────────────── §5.2 a pending offer already exists ───────────────── */
 
 /**
@@ -337,7 +107,7 @@ export function PendingOfferState({
   owner,
   sentIso,
   offeredItems,
-  offeredLeaves,
+  termsLine,
   message,
   hubName,
   withdrawLabel,
@@ -348,7 +118,8 @@ export function PendingOfferState({
   owner: string;
   sentIso: string;
   offeredItems: { id: string; title: string; image: string | null }[];
-  offeredLeaves: number | null;
+  /** `Bracket 2 for Bracket 3 · 20 Leaves held`. The offer's terms, in one mono line. */
+  termsLine: string;
   message: string | null;
   /** The listing's first Safe Zone, when it has one. §5.2's "meetup row". */
   hubName: string | null;
@@ -388,13 +159,7 @@ export function PendingOfferState({
             />
           ))}
 
-          {offeredLeaves && offeredLeaves > 0 ? (
-            <RecordRow
-              first
-              label="Leaves added"
-              value={grouped(offeredLeaves)}
-            />
-          ) : null}
+          <RecordRow first label="Terms" value={termsLine} />
 
           {message ? (
             <Text

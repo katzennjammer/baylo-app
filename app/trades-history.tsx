@@ -2,8 +2,7 @@ import { useRouter } from "expo-router";
 import { useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { useContracts, useTradeHistory } from "../src/api/trades";
-import type { V1Contract } from "../src/api/types";
+import { useTradeHistory } from "../src/api/trades";
 import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
 import {
   BlockHeader,
@@ -16,7 +15,6 @@ import * as present from "../src/components/trades/present";
 import { HistoryRow } from "../src/components/trades/rows";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { clockTime } from "../src/lib/format";
-import { shortDate } from "../src/lib/gap";
 import { offerColor, offerType, textStyle } from "../src/theme/offer-tokens";
 
 /**
@@ -46,30 +44,19 @@ import { offerColor, offerType, textStyle } from "../src/theme/offer-tokens";
  * against — this screen renders the finished TRADES it can see and states, in
  * one line under them, what is not in the list. See gap 4 in `src/api/trades.ts`.
  *
- * ══ NO ACCENT COLOUR SURVIVES HERE EXCEPT A DEFAULT ═════════════════════════
+ * ══ NO ACCENT COLOUR SURVIVES HERE ══════════════════════════════════════════
  *
- * §1.7's closing line: "Fulfilled agreements lose all accent colour. Nothing
- * congratulates." A completed trade is `#14140F` on paper with a `#5C5B52` mono
- * under it and nothing else. The single exception is a defaulted promise, which
- * keeps its `#F5F4EE` fill and 3px terracotta rule because a default is a
- * permanent part of a record rather than a passing state.
+ * §1.7's closing line: "Nothing congratulates." A completed trade is `#14140F`
+ * on paper with a `#5C5B52` mono under it and nothing else. The finished
+ * promises that used to sit under the months went with deferred agreements
+ * on 17 Sep 2026.
  */
 export default function TradesHistoryScreen() {
   const router = useRouter();
   const history = useTradeHistory();
-  const contracts = useContracts();
 
   const trades = history.data?.trades ?? [];
   const months = useMemo(() => present.groupByMonth(trades), [trades]);
-
-  // Settled and defaulted promises belong in a record of finished things. They
-  // are keyed by their own end date rather than by a trade's, so they are shown
-  // as their own block rather than interleaved into the months — interleaving
-  // would need a merge on two different timestamps and would put a promise
-  // settled in October above a trade completed in September.
-  const finishedPromises = (contracts.data?.contracts ?? []).filter(
-    (c) => c.status === "FULFILLED" || c.status === "DEFAULTED",
-  );
 
   const count = copy.history.count(trades.length, trades.length >= 50);
 
@@ -114,20 +101,7 @@ export default function TradesHistoryScreen() {
           </View>
         ))}
 
-        {finishedPromises.length > 0 ? (
-          <View>
-            <BlockHeader label={copy.label.youPromised} top={18} />
-            <Hairline />
-            {finishedPromises.map((contract) => (
-              <View key={contract.id}>
-                <FinishedPromiseRow contract={contract} />
-                <Hairline />
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {trades.length === 0 && finishedPromises.length === 0 && !history.isError ? (
+        {trades.length === 0 && !history.isError ? (
           <Gutter style={{ paddingTop: 18 }}>
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
               {copy.empty.body}
@@ -149,33 +123,5 @@ export default function TradesHistoryScreen() {
         </Gutter>
       </ScrollView>
     </OfferScreenHost>
-  );
-}
-
-/**
- * A promise that has ended. §1.7's `Fulfilled` and `Defaulted` rows.
- *
- * A FULFILLED contract that defaulted along the way still reads as defaulted
- * here, and that is the point of `defaulted` being reported separately from
- * `status`: the debt is settled, the trading restriction is lifted, and the fact
- * that it lapsed is permanent. §10.4's `1, settled late` is the same pair of
- * facts one screen over.
- */
-function FinishedPromiseRow({ contract }: { contract: V1Contract }) {
-  const words = present.promiseWords(contract);
-  const lateButPaid = contract.status === "FULFILLED" && contract.defaulted;
-
-  return (
-    <HistoryRow
-      title={words.title}
-      meta={
-        lateButPaid && contract.fulfilledAt
-          ? `${copy.promise.settled(new Date(contract.fulfilledAt))} · ${shortDate(
-              new Date(contract.deadline),
-            )} deadline missed`
-          : (words.subtitle ?? "")
-      }
-      tone={contract.status === "DEFAULTED" || lateButPaid ? "default" : "quiet"}
-    />
   );
 }
