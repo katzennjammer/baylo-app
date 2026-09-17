@@ -1,5 +1,6 @@
 import { Redirect, Tabs } from "expo-router";
 
+import { useTradeRealtime } from "../../src/api/trade-realtime";
 import { AppHeader } from "../../src/components/AppHeader";
 import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
@@ -42,6 +43,10 @@ import { useSession } from "../../src/auth/session";
  */
 export default function AppLayout() {
   const { session, isLoading } = useSession();
+
+  // The partner's phone. Held here, for exactly as long as there is a session,
+  // and released — socket and all — when there is not. See trade-realtime.ts.
+  useTradeRealtime(session?.user.id);
 
   if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
   if (!session) return <Redirect href="/(auth)/login" />;

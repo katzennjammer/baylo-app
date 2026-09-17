@@ -671,13 +671,20 @@ export function useAcceptMeetup(tradeId: string | undefined) {
 export type MeetupState = "none" | "yours-to-answer" | "waiting-on-them" | "agreed";
 
 export function meetupState(trade: ActiveTrade): MeetupState {
-  const plan = trade.meetup;
+  // `direction` says which side the viewer is; the plan says which side spoke.
+  return meetupStateOf(trade.meetup, trade.direction === "sent" ? "sender" : "receiver");
+}
+
+/**
+ * The same four states from a plan and a side, for the one screen that reads
+ * the plan from GET …/meetup (which answers `you`) rather than from a list
+ * row. One derivation, two callers, so the comparison that is easy to get
+ * backwards is written exactly once.
+ */
+export function meetupStateOf(plan: MeetupPlan | null, you: "sender" | "receiver"): MeetupState {
   if (!plan) return "none";
   if (plan.agreedAt) return "agreed";
-  // `proposedBy` is a side and `direction` says which side the viewer is, so
-  // "sender proposed it" is the viewer's own proposal exactly when they sent.
-  const mine = plan.proposedBy === (trade.direction === "sent" ? "sender" : "receiver");
-  return mine ? "waiting-on-them" : "yours-to-answer";
+  return plan.proposedBy === you ? "waiting-on-them" : "yours-to-answer";
 }
 
 /** Everything this screen shows, after anything on it changes. */

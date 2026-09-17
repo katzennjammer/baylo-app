@@ -138,8 +138,16 @@ export const waiting = {
   forPartner: (partner: string) => `Waiting for ${partner}`,
   /** §10.6 `Sent 2 days ago · expires Tuesday` */
   sentExpires: (ago: string, weekday: string) => `Sent ${ago} · expires ${weekday}`,
-  /** §10.6 `Accepted · meeting not set` */
+  /**
+   * The title of an accepted row, one per `meetupState`. §10.6 wrote only the
+   * first, and the row said it in every state — "meeting not set" over a plan
+   * the other person had just suggested, which read as the plan not existing.
+   */
   acceptedNoMeeting: "Accepted · meeting not set",
+  acceptedYoursToAnswer: "Accepted · meeting suggested, waiting for you",
+  acceptedWaitingOnThem: "Accepted · meeting suggested, waiting for them",
+  /** `date` is `meetupWhen()`'s string: `Today, 14:00` / `Sat 20 Sep, 14:00`. */
+  acceptedMeetingSet: (date: string) => `Accepted · meeting set for ${date}`,
   /** Frame 9c's second line on that row. */
   pickAHub: (partner: string) => `With ${partner} · pick a hub`,
   /**

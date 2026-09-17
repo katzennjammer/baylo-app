@@ -1,5 +1,5 @@
 import { router, useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
@@ -31,6 +31,8 @@ import {
 } from "../../src/components/trades/states";
 import * as present from "../../src/components/trades/present";
 import { clockTime } from "../../src/lib/format";
+import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
+import { useTradeLiveness } from "../../src/lib/trade-liveness";
 import { offerColor, offerSize } from "../../src/theme/offer-tokens";
 
 /**
@@ -84,6 +86,19 @@ export default function TradesScreen() {
     [active.data, history.data],
   );
 
+  // The spinner follows the GESTURE, not `isRefetching`: the liveness hook
+  // below and the push channel both refetch this list silently, and each of
+  // those used to flick the pull indicator at the top of a list nobody pulled.
+  const refetchAll = useCallback(
+    () => Promise.all([active.refetch(), history.refetch()]),
+    [active.refetch, history.refetch],
+  );
+  const { refreshing, onRefresh } = usePullToRefresh(refetchAll);
+
+  // Regained-focus refetch, and a 20s poll while the socket is down. Only the
+  // active list: history moves on status changes, which the push covers.
+  useTradeLiveness(active.refetch);
+
   // A 401 anywhere means the refresh interceptor gave up and the session is
   // being torn down by the (app) layout. An error panel over that would blame
   // the network for a sign-out.
@@ -91,12 +106,6 @@ export default function TradesScreen() {
   if (apiError?.code === "UNAUTHENTICATED") {
     return <Splash waitingOn="Signing you back in" />;
   }
-
-  const refreshing = active.isRefetching;
-  const refetchAll = () => {
-    void active.refetch();
-    void history.refetch();
-  };
 
   /* ── §6's loading row. Labels render immediately; only bodies are blocks. ── */
   if (active.isPending && !active.data) {
@@ -145,7 +154,7 @@ export default function TradesScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={refetchAll}
+            onRefresh={onRefresh}
             tintColor={offerColor.inkTertiary}
             colors={[offerColor.deep]}
           />
@@ -153,7 +162,7 @@ export default function TradesScreen() {
       >
         {failed ? (
           <>
-            <TradesErrorPanel onRetry={refetchAll} />
+            <TradesErrorPanel onRetry={() => void refetchAll()} />
             {hasCache && lastLoaded ? (
               <>
                 <Hairline />

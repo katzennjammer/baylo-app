@@ -1,11 +1,11 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Platform, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import {
-  meetupState,
+  meetupStateOf,
   useAcceptMeetup,
   useActiveTrades,
   useMeetupOptions,
@@ -26,6 +26,7 @@ import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import * as copy from "../src/components/trades/copy";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { meetupWhen } from "../src/lib/gap";
+import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { offerColor, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
 
 /**
@@ -86,8 +87,31 @@ export default function TradeMeetupScreen() {
   const accept = useAcceptMeetup(id);
 
   const trade = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
-  const plan = trade?.meetup ?? null;
-  const state = trade ? meetupState(trade) : "none";
+
+  /*
+   * ── THE PLAN COMES FROM THIS SCREEN'S OWN REQUEST, NOT THE LIST ───────────
+   *
+   * `useMeetupOptions` is fetched fresh on every mount of this screen and its
+   * answer carries the standing plan. The list row carries the same plan but
+   * from a cache that can be 30 seconds old — and this screen is where a
+   * "Renz suggested a place" notification lands, which is precisely the moment
+   * that cache is most likely to predate the thing being looked at. Reading
+   * `trade.meetup` here was how a tap on that notification opened onto "no
+   * place or time yet". The list is kept as the fallback for the first paint
+   * only, while the fresh answer is in flight.
+   */
+  const plan = options.data ? options.data.plan : (trade?.meetup ?? null);
+  const you = options.data?.you ?? (trade?.direction === "sent" ? "sender" : "receiver");
+  const state = meetupStateOf(plan, you);
+
+  // The push channel invalidates both of these on the partner's move; this is
+  // the net under it for a phone whose socket is down. See trade-liveness.ts.
+  useTradeLiveness(
+    useCallback(
+      (o: { cancelRefetch: boolean }) => Promise.all([active.refetch(o), options.refetch(o)]),
+      [active.refetch, options.refetch],
+    ),
+  );
 
   const [hubId, setHubId] = useState<string | null>(null);
   const [when, setWhen] = useState<Date | null>(null);
@@ -126,18 +150,32 @@ export default function TradeMeetupScreen() {
   const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") return <Splash waitingOn="Signing you back in" />;
 
-  if (!trade || options.isPending) {
+  /*
+   * The gate is this screen's own request. The list row is wanted for the
+   * partner's name and nothing else, so a trade the (possibly stale) list does
+   * not hold yet is not a reason to refuse a plan the server just answered
+   * with — "not open any more" is said only when neither request knows it.
+   */
+  if (options.isPending || (!trade && active.isPending)) {
     return (
       <OfferScreenHost imeInset={0}>
         <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
-        {!trade && !active.isPending ? (
+        <TradesSkeleton />
+      </OfferScreenHost>
+    );
+  }
+  if (!trade && !options.data) {
+    return (
+      <OfferScreenHost imeInset={0}>
+        <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
+        {options.isError ? (
+          <TradesErrorPanel onRetry={() => void Promise.all([active.refetch(), options.refetch()])} />
+        ) : (
           <Gutter style={{ paddingTop: 18 }}>
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
               That trade is not open any more.
             </Text>
           </Gutter>
-        ) : (
-          <TradesSkeleton />
         )}
       </OfferScreenHost>
     );

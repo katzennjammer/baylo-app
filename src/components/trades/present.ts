@@ -120,11 +120,35 @@ export function tradeRequestWords(trade: ActiveTrade): RowWords {
   };
 }
 
-/** An ACCEPTED trade with no meeting yet. §10.6's `Accepted · meeting not set`. */
+/**
+ * An ACCEPTED trade. The title says where the meeting stands.
+ *
+ * It used to be §10.6's `Accepted · meeting not set` in every state, which was
+ * a lie in three of the four: a partner who had just suggested Saturday saw
+ * "not set" on the Trades tab and reasonably concluded the suggestion had not
+ * reached them. The title now follows `meetupState()` like the second line
+ * does, so the tab and the pushed list tell the same story from the same row.
+ */
 export function acceptedTradeWords(trade: ActiveTrade): RowWords {
+  const state = meetupState(trade);
+  const title =
+    state === "agreed" && trade.meetup
+      ? copy.waiting.acceptedMeetingSet(meetupWhen(new Date(trade.meetup.at)))
+      : state === "yours-to-answer"
+        ? copy.waiting.acceptedYoursToAnswer
+        : state === "waiting-on-them"
+          ? copy.waiting.acceptedWaitingOnThem
+          : copy.waiting.acceptedNoMeeting;
+  // `pick a hub` only while there is nothing picked; once there is a plan the
+  // second line is the plan, or a "meeting set for Saturday" title sits over
+  // an instruction to pick one.
+  const partner = firstName(trade.counterparty.name);
+  const second = trade.meetup
+    ? `With ${partner} · ${copy.meetup.where(trade.meetup.hub.name, meetupWhen(new Date(trade.meetup.at)))}`
+    : copy.waiting.pickAHub(partner);
   return {
-    title: copy.waiting.acceptedNoMeeting,
-    subtitle: withFee(copy.waiting.pickAHub(firstName(trade.counterparty.name)), tradeFeeLine(trade)),
+    title,
+    subtitle: withFee(second, tradeFeeLine(trade)),
     trailing: copy.waiting.since(new Date(trade.createdAt)),
   };
 }

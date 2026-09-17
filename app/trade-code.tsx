@@ -46,6 +46,7 @@ import * as present from "../src/components/trades/present";
 import { Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
 import { clockTime } from "../src/lib/format";
+import { useTradeLiveness } from "../src/lib/trade-liveness";
 import {
   offerColor,
   offerIcon,
@@ -117,6 +118,10 @@ export default function TradeCodeScreen() {
   const { keyboardUp, imeHeight } = useKeyboardState();
 
   const live = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
+
+  // The codes poll on their own (useConfirmStatus, 2s). This keeps the ROW
+  // current — status, plan — when the socket is down. See trade-liveness.ts.
+  useTradeLiveness(active.refetch);
 
   const start = useConfirmStart(id);
   const status = useConfirmStatus(id);

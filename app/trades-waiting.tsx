@@ -31,6 +31,7 @@ import {
   WaitingRow,
 } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
+import { useTradeLiveness } from "../src/lib/trade-liveness";
 import {
   offerColor,
   offerSize,
@@ -76,6 +77,10 @@ import {
 export default function TradesWaitingScreen() {
   const router = useRouter();
   const active = useActiveTrades();
+
+  // Every row here draws a plan or an offer the OTHER person can move. The
+  // push channel invalidates the list on their move; this is the net under it.
+  useTradeLiveness(active.refetch);
 
   const decide = useOfferDecision();
   const decideTrade = useTradeDecision();
