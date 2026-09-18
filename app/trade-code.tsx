@@ -11,11 +11,11 @@ import {
   useConfirmStart,
   useConfirmStatus,
   useConfirmSubmit,
-  useContracts,
   ownCode,
   type CodeRejection,
+  type ConfirmSubmitResult,
 } from "../src/api/trades";
-import type { ActiveTrade, V1Contract } from "../src/api/types";
+import type { ActiveTrade } from "../src/api/types";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import { Splash } from "../src/components/Splash";
 import {
@@ -43,14 +43,14 @@ import {
 } from "../src/components/trades/code";
 import * as copy from "../src/components/trades/copy";
 import * as present from "../src/components/trades/present";
-import { PromiseRow, Thumb } from "../src/components/trades/rows";
+import { Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
 import { clockTime } from "../src/lib/format";
+import { useTradeLiveness } from "../src/lib/trade-liveness";
 import {
   offerColor,
   offerIcon,
   offerSize,
-  offerSpace,
   offerType,
   textStyle,
 } from "../src/theme/offer-tokens";
@@ -115,10 +115,13 @@ export default function TradeCodeScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
 
   const active = useActiveTrades();
-  const contracts = useContracts();
   const { keyboardUp, imeHeight } = useKeyboardState();
 
   const live = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
+
+  // The codes poll on their own (useConfirmStatus, 2s). This keeps the ROW
+  // current — status, plan — when the socket is down. See trade-liveness.ts.
+  useTradeLiveness(active.refetch);
 
   const start = useConfirmStart(id);
   const status = useConfirmStatus(id);
@@ -132,6 +135,14 @@ export default function TradeCodeScreen() {
   const myCode = ownCode(status.data);
   const [rejection, setRejection] = useState<CodeRejection | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /**
+   * What the completing submit answered — THIS caller's reward, issued in the
+   * same transaction that completed the trade. Held here because the poll that
+   * flips `state` to "matched" carries no reward, and the other party's screen
+   * (the one that did not submit last) gets the figure from their
+   * notification instead. Null on that screen, and the block is not drawn.
+   */
+  const [completion, setCompletion] = useState<ConfirmSubmitResult | null>(null);
 
   /*
    * ── THE ROW IS HELD ACROSS THE MOMENT IT COMPLETES ──────────────────────
@@ -229,6 +240,9 @@ export default function TradeCodeScreen() {
         safeZoneHubId: trade.safeZoneHub?.id ?? null,
       },
       {
+        onSuccess: (r) => {
+          if (r.completed) setCompletion(r);
+        },
         onError: (e) => {
           if (isCodeRejection(e)) {
             setRejection(e);
@@ -251,11 +265,7 @@ export default function TradeCodeScreen() {
         trade={trade}
         partner={partner}
         matchedAt={clockTime(Date.parse(trade.updatedAt) || Date.now())}
-        promise={
-          (contracts.data?.contracts ?? []).find(
-            (c) => c.tradeId === trade.id && (c.status === "ACTIVE" || c.status === "PENDING_ACCEPT"),
-          ) ?? null
-        }
+        completion={completion}
         onBack={() => router.back()}
       />
     );
@@ -486,11 +496,8 @@ export default function TradeCodeScreen() {
  * half of the line is real.
  */
 function TradeSummary({ trade }: { trade: ActiveTrade }) {
-  const added = trade.offeredLeaves ?? 0;
   const hub = trade.safeZoneHub?.name ?? null;
-  const meta = [hub, added > 0 ? `${present.grouped(added)} added` : null]
-    .filter(Boolean)
-    .join(" · ");
+  const meta = [hub, present.tradeFeeLine(trade)].filter(Boolean).join(" · ");
 
   return (
     <Gutter style={{ paddingTop: 6, paddingBottom: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -524,8 +531,9 @@ function TradeSummary({ trade }: { trade: ActiveTrade }) {
  * §1.10 is explicit: "No colour event. The screen changes to the next state and
  * a mono line states what happened. There is no success green flash and no
  * confetti anywhere in Baylo." So the heading is a fact with a timestamp, the
- * body says where the trade now lives, and the only accent left on the screen
- * belongs to a promise that outlives the meeting.
+ * body says where the trade now lives, and the reward — when this screen is
+ * the one that completed the trade — is one mono figure under a label. A
+ * number is not a congratulation.
  *
  * The time is the trade's `updatedAt` — the completion transaction is the last
  * write on the row, so it is the instant the second code landed. There is no
@@ -535,16 +543,21 @@ function MatchedScreen({
   trade,
   partner,
   matchedAt,
-  promise,
+  completion,
   onBack,
 }: {
   trade: ActiveTrade;
   partner: string;
   matchedAt: string;
-  promise: V1Contract | null;
+  /** The completing submit's answer, or null when the OTHER phone completed it. */
+  completion: ConfirmSubmitResult | null;
   onBack: () => void;
 }) {
-  const words = promise ? present.promiseWords(promise) : null;
+  const fee = trade.bridgeFeeLeaves ?? 0;
+  const viewerPaid =
+    fee > 0 && trade.bridgeFeePaidBySender != null
+      ? trade.bridgeFeePaidBySender === (trade.direction === "sent")
+      : null;
 
   return (
     <OfferScreenHost imeInset={0}>
@@ -568,23 +581,30 @@ function MatchedScreen({
         <Hairline />
         <TradeSummary trade={trade} />
 
-        {promise && words ? (
+        {completion ? (
           <>
             <Hairline />
             <Section pad={{ top: 18, bottom: 18 }}>
-              <View style={{ gap: 12 }}>
-                <TradesSectionLabel>{copy.label.stillOpen}</TradesSectionLabel>
-                <PromiseRow
-                  title={words.title}
-                  meta={words.subtitle ?? ""}
-                  state={present.promiseRowState(promise)}
-                  deadline={new Date(promise.deadline)}
-                  paid={promise.amountPaidLeaves}
-                  total={promise.amountLeaves}
-                />
-                <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
-                  {copy.code.promiseOutlives}
+              <View style={{ gap: 6 }}>
+                <TradesSectionLabel>{copy.code.rewardLabel}</TradesSectionLabel>
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[textStyle(offerType.leavesDetail), { color: offerColor.ink }]}
+                >
+                  {(completion.reward ?? 0) > 0
+                    ? copy.code.rewardLine(completion.reward ?? 0)
+                    : copy.code.rewardNone}
                 </Text>
+                {(completion.reward ?? 0) <= 0 && completion.rewardNote ? (
+                  <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
+                    {completion.rewardNote}
+                  </Text>
+                ) : null}
+                {viewerPaid !== null ? (
+                  <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
+                    {viewerPaid ? copy.code.feePaidOut(fee, partner) : copy.code.feeReceived(fee, partner)}
+                  </Text>
+                ) : null}
               </View>
             </Section>
           </>

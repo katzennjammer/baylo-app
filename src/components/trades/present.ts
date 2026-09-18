@@ -1,9 +1,8 @@
 import * as copy from "./copy";
-import { meetupState, offerSwapLine, promiseIsNear, swapLine } from "../../api/trades";
-import type { ActiveTrade, LiveOffer, V1Contract } from "../../api/types";
+import { meetupState, offerFeeLine, offerSwapLine, swapLine, tradeFeeLine } from "../../api/trades";
+import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { OFFER_REPLY_DAYS, firstName, replyBy, sentAgo } from "../offer/copy";
-import { daysUntil, deadlineLabel, grouped, meetupWhen, shortDate } from "../../lib/gap";
-import { offerColor, deadlineInk } from "../../theme/offer-tokens";
+import { grouped, meetupWhen, shortDate } from "../../lib/gap";
 
 /**
  * What each row SAYS — one place, so the list and the pushed Waiting screen
@@ -61,21 +60,27 @@ export interface RowWords {
 
 /** An offer the viewer SENT and is waiting on. §10.6's `Sent 2 days ago · expires Tuesday`. */
 export function sentOfferWords(offer: LiveOffer): RowWords {
-  const partner = firstName(offer.counterparty.name);
   return {
     title: copy.waiting.sentExpires(sentAgo(offer.createdAt), replyBy(offer.createdAt)),
-    subtitle: offer.contract
-      ? copy.waiting.forPartner(partner, offer.contract.amountLeaves)
-      : offerSwapLine(offer),
+    subtitle: withFee(offerSwapLine(offer), offerFeeLine(offer)),
     trailing: offerClock(offer.createdAt),
   };
+}
+
+/**
+ * `Your Vans 440 for their Bracket 4 · 20-Leaf fee held`. The bridge, when
+ * there is one, rides the swap line rather than taking a line of its own — a
+ * row is two lines and the fee is a fact about the swap, not a third thing.
+ */
+function withFee(line: string, fee: string | null): string {
+  return fee ? `${line} · ${fee}` : line;
 }
 
 /** An offer the viewer RECEIVED. §10.6's `Offer from Renz P.` */
 export function incomingOfferWords(offer: LiveOffer): RowWords {
   return {
     title: copy.card.offerFrom(firstName(offer.counterparty.name)),
-    subtitle: offerSwapLine(offer),
+    subtitle: withFee(offerSwapLine(offer), offerFeeLine(offer)),
     trailing: offerClock(offer.createdAt),
   };
 }
@@ -115,11 +120,35 @@ export function tradeRequestWords(trade: ActiveTrade): RowWords {
   };
 }
 
-/** An ACCEPTED trade with no meeting yet. §10.6's `Accepted · meeting not set`. */
+/**
+ * An ACCEPTED trade. The title says where the meeting stands.
+ *
+ * It used to be §10.6's `Accepted · meeting not set` in every state, which was
+ * a lie in three of the four: a partner who had just suggested Saturday saw
+ * "not set" on the Trades tab and reasonably concluded the suggestion had not
+ * reached them. The title now follows `meetupState()` like the second line
+ * does, so the tab and the pushed list tell the same story from the same row.
+ */
 export function acceptedTradeWords(trade: ActiveTrade): RowWords {
+  const state = meetupState(trade);
+  const title =
+    state === "agreed" && trade.meetup
+      ? copy.waiting.acceptedMeetingSet(meetupWhen(new Date(trade.meetup.at)))
+      : state === "yours-to-answer"
+        ? copy.waiting.acceptedYoursToAnswer
+        : state === "waiting-on-them"
+          ? copy.waiting.acceptedWaitingOnThem
+          : copy.waiting.acceptedNoMeeting;
+  // `pick a hub` only while there is nothing picked; once there is a plan the
+  // second line is the plan, or a "meeting set for Saturday" title sits over
+  // an instruction to pick one.
+  const partner = firstName(trade.counterparty.name);
+  const second = trade.meetup
+    ? `With ${partner} · ${copy.meetup.where(trade.meetup.hub.name, meetupWhen(new Date(trade.meetup.at)))}`
+    : copy.waiting.pickAHub(partner);
   return {
-    title: copy.waiting.acceptedNoMeeting,
-    subtitle: copy.waiting.pickAHub(firstName(trade.counterparty.name)),
+    title,
+    subtitle: withFee(second, tradeFeeLine(trade)),
     trailing: copy.waiting.since(new Date(trade.createdAt)),
   };
 }
@@ -159,134 +188,9 @@ export function meetupWords(trade: ActiveTrade): { line: string; detail: string 
 export function confirmingTradeWords(trade: ActiveTrade): RowWords {
   const partner = firstName(trade.counterparty.name);
   return {
-    title: copy.waiting.forPartner(partner, null),
+    title: copy.waiting.forPartner(partner),
     subtitle: copy.code.notYetTyped(partner),
     trailing: null,
-  };
-}
-
-/**
- * A promise, from whichever side the viewer is on.
- *
- * DEBTOR ROWS SAY `promised`; CREDITOR ROWS SAY `owed`. Frame 9j's note is the
- * rule and it is not cosmetic — the two sentences describe two different
- * obligations, and a row that read the same from both sides would let a creditor
- * think they had something to do.
- */
-export function promiseWords(contract: V1Contract, now: Date = new Date()): RowWords {
-  const debtor = contract.role === "debtor";
-  const other = debtor ? contract.creditor : contract.debtor;
-  const otherName = firstName(other?.name ?? "them");
-  const deadline = new Date(contract.deadline);
-
-  const title = debtor
-    ? copy.promise.toCreditor(contract.amountLeaves, otherName)
-    : copy.promise.owedBy(contract.amountLeaves, otherName);
-
-  if (contract.status === "PENDING_ACCEPT") {
-    return {
-      title,
-      subtitle: debtor ? copy.promise.waitingToAccept(otherName) : copy.promise.waitingOnYou,
-      trailing: null,
-      // Not yet a debt, so §1.8's scale does not apply: nothing is due until it
-      // is accepted, and colouring an unaccepted proposal by its deadline would
-      // put terracotta on something nobody owes yet.
-      trailingInk: offerColor.inkTertiary,
-    };
-  }
-
-  if (contract.status === "FULFILLED") {
-    const settledOn = contract.fulfilledAt ? new Date(contract.fulfilledAt) : null;
-    return {
-      title,
-      // §1.7: a fulfilled agreement loses all accent colour. Nothing congratulates.
-      subtitle: settledOn ? copy.promise.settled(settledOn) : "settled",
-      trailing: null,
-    };
-  }
-
-  if (contract.status === "DEFAULTED" || contract.defaulted) {
-    const on = contract.defaultedAt ? new Date(contract.defaultedAt) : deadline;
-    return {
-      title,
-      subtitle: debtor
-        ? copy.promise.defaulted(on, contract.remainingLeaves)
-        : copy.promise.defaultedTheirs(on, otherName),
-      trailing: null,
-    };
-  }
-
-  // ACTIVE. §5.3's two sub-states are one row: the deadline always, the settled
-  // figure as well once anything has been paid.
-  const paidPart =
-    contract.amountPaidLeaves > 0
-      ? `${copy.promise.partSettled(contract.amountPaidLeaves, contract.amountLeaves)} · `
-      : "";
-
-  return {
-    title,
-    subtitle: `${paidPart}${deadlineLabel(deadline, now)}`,
-    trailing: null,
-    trailingInk: deadlineInk(daysUntil(deadline, now)),
-  };
-}
-
-/** §1.8's ink for a promise's mono line, which is the only place urgency shows. */
-export function promiseInk(contract: V1Contract, now: Date = new Date()): string {
-  if (contract.status === "FULFILLED") return offerColor.inkTertiary;
-  if (contract.status === "DEFAULTED" || contract.defaulted) return offerColor.warm;
-  if (contract.status === "PENDING_ACCEPT") return offerColor.inkTertiary;
-  return deadlineInk(daysUntil(new Date(contract.deadline), now));
-}
-
-/** §1.7's four visual states, as `PromiseRow` takes them. */
-export function promiseRowState(
-  contract: V1Contract,
-): "pending" | "active" | "defaulted" | "fulfilled" {
-  if (contract.status === "PENDING_ACCEPT") return "pending";
-  if (contract.status === "FULFILLED") return "fulfilled";
-  if (contract.status === "DEFAULTED") return "defaulted";
-  return "active";
-}
-
-/* ───────────────────── the "Needs you today" card ───────────────────── */
-
-/**
- * The promise card in §6's top block. §10.6's `100 promised to Jess M.`
- *
- * Two mono lines, per frame 9a: the deadline in §1.8's ink, then what has been
- * settled in tertiary. `promiseIsNear()` is what put it here, and the card
- * repeats the deadline rather than assuming the reader remembers why it was
- * promoted.
- */
-export interface PromiseCardLines {
-  title: string;
-  deadline: string;
-  settled: string;
-  ink: string;
-}
-
-export function promiseCardLines(
-  contract: V1Contract,
-  now: Date = new Date(),
-): PromiseCardLines {
-  const creditor = firstName(contract.creditor?.name ?? "them");
-  const deadline = new Date(contract.deadline);
-
-  return {
-    title: copy.card.promised(contract.amountLeaves, creditor),
-    deadline:
-      contract.status === "DEFAULTED"
-        ? copy.promise.defaulted(
-            contract.defaultedAt ? new Date(contract.defaultedAt) : deadline,
-            contract.remainingLeaves,
-          )
-        : deadlineLabel(deadline, now),
-    settled:
-      contract.amountPaidLeaves > 0
-        ? copy.card.partSettled(contract.amountPaidLeaves, contract.amountLeaves)
-        : copy.card.nothingSettled,
-    ink: promiseInk(contract, now),
   };
 }
 
@@ -362,4 +266,4 @@ export function groupByMonth(trades: ActiveTrade[]): { label: string; rows: Acti
 
 /* ───────────────────────── re-exports for the screens ───────────────── */
 
-export { firstName, grouped, shortDate, swapLine, offerSwapLine, promiseIsNear };
+export { firstName, grouped, shortDate, swapLine, offerSwapLine, offerFeeLine, tradeFeeLine };

@@ -21,7 +21,7 @@ import {
   isIdGateError,
   type IdVerificationPayload,
 } from "../src/api/id-verification";
-import { useCreateItem, type Category, type Condition } from "../src/api/post";
+import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import {
   PostFooter,
@@ -387,7 +387,7 @@ function Wizard() {
     if (!state.category || photos.length === 0 || value === null) return;
 
     dispatch({ type: "post/start" });
-    let created: { id: string };
+    let created: CreatedItem;
     try {
       created = await createItem.mutateAsync({
         title: state.title.trim(),
@@ -459,7 +459,7 @@ function Wizard() {
     // purpose — the item exists, and a navigation hiccup must not be reported
     // as "we could not post this".
     router.back();
-    announcePosted(created.id);
+    announcePosted(created.id, created.valueReview?.pending ? created.valueReview.notice : null);
   }, [createItem, dispatch, router, state]);
 
   /* ── the footer ── */

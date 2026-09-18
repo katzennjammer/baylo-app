@@ -85,6 +85,15 @@ export function useNotifications() {
  *                                               you lives on your own profile,
  *                                               so that is where this lands.
  *   report         → null                       moderation is web-admin only.
+ *   listing_review → /listing-review?id=<itemId> a value review decided, a
+ *                                               takedown, or an appeal outcome
+ *                                               on your OWN listing. Its own
+ *                                               token rather than "item": the
+ *                                               screen that explains what
+ *                                               happened is not the item page,
+ *                                               and before it existed these rows
+ *                                               were written as ("item", id),
+ *                                               which nothing here could open.
  *
  * A pre-v1 TRADE_ACCEPTED row carries ('user', <userId>) rather than
  * ('trade', <tradeId>) — the backfill could only recover what the old `link`
@@ -121,6 +130,8 @@ export function notificationTarget(n: NotificationItem): string | null {
      */
     case "id_verification":
       return "/verify-id";
+    case "listing_review":
+      return id ? `/listing-review?id=${encodeURIComponent(id)}` : null;
     default:
       return null;
   }

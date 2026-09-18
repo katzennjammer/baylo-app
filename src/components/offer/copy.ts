@@ -1,24 +1,11 @@
 /**
- * §10 — the copy, verbatim.
+ * §10 — the copy, verbatim, as rewritten for bracket trading on 17 Sep 2026.
  *
  * ── WHY THE STRINGS ARE A MODULE AND NOT INLINE JSX ─────────────────────────
  *
  * The spec's own framing: "Copy, verbatim … the strings are part of the spec,
  * not placeholders." Putting them in one file means a wording change is a diff
- * against §10 rather than a search across fifteen components, and it makes the
- * two places where a string CANNOT be verbatim visible instead of buried.
- *
- * ── WHAT "VERBATIM" MEANS WHERE THE SPEC WRITES AN EXAMPLE ──────────────────
- *
- * §10 is written against one worked example — Marco's Air Max at 480, a 310
- * balance, a 40 gap. The names and figures are the example's, the sentences are
- * the spec's. So every function below reproduces the SENTENCE exactly and
- * substitutes the example's numbers for the real ones. Where the spec writes
- *
- *     You hold 310 Leaves, so this one is covered.
- *
- * this file writes `You hold ${balance} Leaves, so this one is covered.` and
- * nothing else moves — not a comma, not "so", not the full stop.
+ * against §10 rather than a search across fifteen components.
  *
  * ── THE RULES §10 SETS FOR ITSELF, WHICH ANYTHING ADDED HERE MUST KEEP ──────
  *
@@ -30,31 +17,20 @@
  *   `too expensive`, `upgrade`, `unlock`, or any figure describing the user's
  *   total worth.
  *
- * ── THE TWO PLACES A STRING IS NOT §10's ────────────────────────────────────
+ * ── WHAT CHANGED WITH BRACKET TRADING ───────────────────────────────────────
  *
- * Both are marked NOT VERBATIM where they appear, and both exist because §10
- * writes a sentence that would be FALSE against this server:
- *
- *   `tierCeilingHeading`  §10.5 says "A New Trader can promise up to 200". The
- *                         server's New Trader ceiling is 0 and `mayProposeDpa`
- *                         is false — a New Trader cannot promise at all, at any
- *                         item cap, because a DPA is enforced only
- *                         reputationally and somebody with no completed trades
- *                         has no reputation to forfeit. A sentence promising 200
- *                         would be a promise the server refuses, which is
- *                         precisely what §5.2's "show the gate" premise exists
- *                         to prevent.
- *   `promiseUnavailable`  §10.5's "Not verified" block covers one refusal. The
- *                         server has five more (min trades, tier, one open
- *                         contract, no headroom, standing default) and §10 does
- *                         not contemplate them. Each gets one sentence written
- *                         to §10's own rules above.
+ * The five gap copies, the settlement rows, the DPA proposal, the creditor's
+ * record and the tier ceiling table are gone: there is no gap to settle. An
+ * offer is the same bracket, one below or one above, and a bridge in either
+ * direction is a flat fee the lower side pays. Every sentence about an item in
+ * this flow — either side's — names its BRACKET, never its value. Exact
+ * figures are shown on the owner's own listing page and in the post wizard,
+ * and nowhere in the offer or trade flow.
  */
 
 import { bracketLabel, bracketsWord, PREMIUM_MIN_BRACKET } from "../../lib/brackets";
 import { grouped } from "../../lib/gap";
-import type { PromiseBlock } from "../../lib/gap";
-import type { TrustTier } from "../../lib/trust";
+import type { OfferLegality } from "../../lib/trade-rules";
 
 /** `Marco A.` → `Marco`. The spec addresses people by first name throughout. */
 export function firstName(full: string): string {
@@ -66,7 +42,9 @@ export function firstName(full: string): string {
 export const chrome = {
   navTitle: "Offer trade",
   sheetHeading: "Which item are you offering",
-  sheetFootnote: "Items already promised to another trade don't appear here.",
+  sheetFootnote:
+    "You can offer an item in the same bracket, one below, or one above. " +
+    "Items already promised to another trade don't appear here.",
   sheetButton: "Use this item",
   itemRowAction: "Change",
   messagePlaceholder: "Add a message (optional)",
@@ -74,36 +52,20 @@ export const chrome = {
   hubSubtitle: "Safe-Zone Hub",
 } as const;
 
-/** §10.1's section labels. The three that carry a figure are functions. */
+/** §10.1's section labels. */
 export const label = {
   offering: "You're offering",
-  gap: "The gap",
-  difference: "The difference",
-  whatWorks: "What works instead",
+  brackets: "The brackets",
   message: "Your message",
   meet: "Where you'll meet",
-  willSee: (owner: string) => `What ${owner} will see`,
-  record: (owner: string) => `${owner}'s record`,
-  /**
-   * §10.3's record block on the DPA proposal, which is the proposer's OWN.
-   *
-   * Not `record("Your")` — that renders "Your's record". §10.1 lists the label
-   * only in its possessive form (`Dana's record`) because every place it names
-   * is the other party's; the proposer's own copy of it needs its own string.
-   */
-  yourRecord: "Your record",
-  openAgreements: "Open agreements",
-  fromHere: "From here",
-  ceilings: "Promise ceilings by tier",
   whatYouSent: "What you sent",
-  settle: (amount: number) => `Settle the ${grouped(amount)}`,
   /** §7.3 / §10.8. */
   whereYouStand: "Where you stand",
 } as const;
 
-/** §10.1's sheet subtitle: `For Marco's Nike Air Max 90, worth 480 Leaves.` */
-export function sheetSubtitle(owner: string, title: string, value: number): string {
-  return `For ${owner}'s ${title}, worth ${grouped(value)} Leaves.`;
+/** The sheet subtitle: `For Marco's Nike Air Max 90, in Bracket 3.` */
+export function sheetSubtitle(owner: string, title: string, bracket: number): string {
+  return `For ${owner}'s ${title}, in ${bracketLabel(bracket)}.`;
 }
 
 /** §10.1's counter: `124 / 400`. */
@@ -115,183 +77,123 @@ export function messageCounter(used: number, max: number): string {
 
 export const button = {
   send: "Send offer",
-  sendWithLeaves: (n: number) => `Send offer with ${grouped(n)} Leaves`,
-  setUpAgreement: "Set up the agreement",
-  sendWithAgreement: "Send offer with agreement",
-  sendAsIsAnyway: "Send as-is anyway",
-  /**
-   * §10.1's `Send with 310 and a 200 promise`, and §9's tight-board shortening
-   * to `Send 310 + 200 promise`. Which one is used is a function of the board.
-   */
-  sendWithBoth: (now: number, promised: number, tight: boolean) =>
-    tight
-      ? `Send ${grouped(now)} + ${grouped(promised)} promise`
-      : `Send with ${grouped(now)} and a ${grouped(promised)} promise`,
+  /** The proposer-pays bridge: the fee is named on the button, once. */
+  sendWithFee: (fee: number) => `Send offer · ${grouped(fee)}-Leaf fee`,
+  /** Inside the consent sheet. Disabled until the box is ticked. */
+  propose: "Propose",
+  accept: "Accept",
 } as const;
 
 export const footnote = {
   /** `Marco has three days to reply.` */
   threeDays: (owner: string) => `${owner} has three days to reply.`,
-  /** `Leaves are held, not spent, until Marco replies.` */
-  heldNotSpent: (owner: string) => `Leaves are held, not spent, until ${owner} replies.`,
-  amountNext: "You'll name the amount and the deadline next.",
-  /** `40 Leaves held from 310 until Marco replies.` */
+  /** `20 Leaves held from 310 until Marco replies.` The proposer-pays bridge. */
   heldFrom: (held: number, balance: number, owner: string) =>
     `${grouped(held)} Leaves held from ${grouped(balance)} until ${owner} replies.`,
+  /** The up-bridge note the spec names: `Marco will pay a 30-Leaf bridging fee to accept.` */
+  theyPay: (owner: string, fee: number) =>
+    `${owner} will pay a ${grouped(fee)}-Leaf bridging fee to accept.`,
 } as const;
 
-/* ─────────────────────── §10.2 the five gap copies ──────────────────── */
-
-/** §10.2 Even. The figure reads `Even` and the mono suffix `40 apart`. */
-export const even = {
-  body: "Close enough that there's nothing to settle. You can send this as a straight swap.",
-  figure: "Even",
-  suffix: (apart: number) => `${grouped(apart)} apart`,
-} as const;
+/* ─────────────────────── the bracket section, per case ──────────────── */
 
 /**
- * §10.2 Offering more.
+ * The one paragraph under `The brackets`, for each of the three legal cases.
  *
- * `Your chair is worth 280 Leaves more than Marco's shoes.` — the two nouns are
- * the item titles, which is why both are parameters rather than one being the
- * word "item".
+ * Both items are named by BRACKET; the paragraph is about the relationship
+ * between the two, which is a sentence about brackets.
  */
-export const over = {
-  body: (yourItem: string, amount: number, owner: string, theirItem: string) =>
-    `Your ${yourItem} is worth ${grouped(amount)} Leaves more than ${owner}'s ${theirItem}. ` +
-    `You can still send it, and ${owner} can add Leaves to even it out — ` +
-    `or you can offer something smaller.`,
-  askLeaves: (owner: string, amount: number) => `Ask ${owner} to add ${grouped(amount)} Leaves`,
-  asIs: "Send as-is, no settlement",
+export const bracket = {
+  /** The figure column: `Same bracket` / `One below` / `One above`. */
+  figure: (legality: OfferLegality): string => {
+    switch (legality) {
+      case "same":
+        return "Same bracket";
+      case "bridgeUp":
+        return "One below";
+      case "bridgeDown":
+        return "One above";
+      case "tooLow":
+        return "Two or more below";
+      case "tooHigh":
+        return "Two or more above";
+    }
+  },
+  /** The mono suffix beside it: `Bracket 3 for Bracket 3`. */
+  suffix: (offered: number, target: number) =>
+    `${bracketLabel(offered)} for ${bracketLabel(target)}`,
+  same: (owner: string) =>
+    `Both items sit in the same bracket, so this is a straight swap. Nothing is held and ` +
+    `nothing changes hands but the items. ${owner} decides.`,
+  /** The proposer pays. `fee` is 10 × the proposer's own bracket. */
+  bridgeUp: (fee: number, balance: number, owner: string) =>
+    `Your item is one bracket below ${owner}'s, so a ${grouped(fee)}-Leaf bridging fee makes ` +
+    `up the difference. It is held from your ${grouped(balance)} when you send and goes to ` +
+    `${owner} when the swap completes. If ${owner} declines or the offer expires, it comes back.`,
+  /** The receiver pays. `fee` is 10 × the receiver's own bracket. */
+  bridgeDown: (fee: number, owner: string) =>
+    `Your item is one bracket above ${owner}'s. ${owner} will pay a ${grouped(fee)}-Leaf ` +
+    `bridging fee to accept, which comes to you when the swap completes. Nothing is held ` +
+    `from you.`,
+  /** The proposer cannot cover the fee. `need` vs `have`, and no send. */
+  short: (fee: number, balance: number) =>
+    `This bridge needs ${grouped(fee)} Leaves and you hold ${grouped(balance)}. Complete a ` +
+    `trade or a task to earn more, or offer an item in the same bracket instead.`,
 } as const;
 
-/** §10.2 Small gap. */
-export const small = {
-  body: (balance: number) => `You hold ${grouped(balance)} Leaves, so this one is covered.`,
-  addLeaves: (amount: number) => `Add ${grouped(amount)} Leaves from your balance`,
-  /** `310 now · 270 after` */
-  balanceAfter: (now: number, after: number) => `${grouped(now)} now · ${grouped(after)} after`,
-  asIs: "Send as-is",
-  asIsSub: (owner: string, amount: number) =>
-    `${owner} decides whether the ${grouped(amount)} matters.`,
-  promise: "Promise to settle later",
-  promiseSub: "Deferred Points Agreement.",
-} as const;
-
-/** §10.2 Large gap. */
-export const large = {
-  body: (balance: number, after: number) =>
-    `You hold ${grouped(balance)} Leaves. Covering all of it leaves you ${grouped(after)}.`,
-  addAll: (amount: number) => `Add all ${grouped(amount)} from your balance`,
-  split: (now: number, promised: number) =>
-    `Add ${grouped(now)} now, promise ${grouped(promised)}`,
-  splitSub: "Deferred Points Agreement for the rest.",
-  promiseWhole: (amount: number) => `Promise the whole ${grouped(amount)}`,
-  promiseWholeSub: "Nothing leaves your balance now.",
-  asIs: "Send as-is",
-  asIsSub: "Some traders accept a gap this size.",
-} as const;
+/* ───────────────── the picker: why a row is greyed ──────────────────── */
 
 /**
- * §10.2 Very large gap.
- *
- * The body names the tier, so a Rising Trader is told what a Rising Trader can
- * commit to rather than what a New Trader can — the sentence is about the
- * reader, and §10's closing rule forbids a comparison to other traders.
+ * The one short reason under a greyed picker row. Short because there are
+ * usually several of them on one sheet and a sentence each is a wall.
  */
-export const veryLarge = {
-  body: (balanceCovers: number, leftToPromise: number, tier: TrustTier) =>
-    `This is a long way apart. Your balance covers ${grouped(balanceCovers)} of it, ` +
-    `which still leaves ${grouped(leftToPromise)} to promise — ` +
-    `more than a ${tier} can commit to. Two things do work from here.`,
-  multiItem: "Offer more than one item",
-  /** `Your four items together come to 1,620.` — the count is spelled out. */
-  multiItemSub: (count: number, total: number) =>
-    `Your ${spellCount(count)} items together come to ${grouped(total)}.`,
-  watch: "Watch this listing",
-  /**
-   * `Two more trades makes you Rising, which raises what you can promise to 900.`
-   *
-   * `moreTrades` is how many are still NEEDED, not the rung's threshold. The
-   * sentence is about the reader's distance from the next tier, and printing the
-   * threshold would tell somebody with two completed trades that they need three
-   * more.
-   */
-  watchSub: (moreTrades: number, nextTier: string, nextCeiling: number) =>
-    `${capitalise(spellCount(moreTrades))} more ${moreTrades === 1 ? "trade" : "trades"} ` +
-    `makes you ${nextTier}, which raises what you can promise to ${grouped(nextCeiling)}.`,
-  footnote: (yourItem: string, owner: string) =>
-    `You can still send the ${yourItem} on its own. ${owner} will see the gap the same way you do.`,
+export const picker = {
+  tooLow: "Two or more brackets below",
+  tooHigh: "Two or more brackets above",
+  unvalued: "Value not loaded",
+  notAvailable: "Promised to another trade",
+  /** The row's own line: `Bracket 3`. No value — see §2: none in the offer flow, either side. */
+  rowMeta: (bracket: number) => bracketLabel(bracket),
 } as const;
 
-/* ────────────────────────── §10.3 DPA proposal ──────────────────────── */
+/* ─────────────────── the bridge consent sheet ───────────────────────── */
 
-export const dpa = {
-  nav: "Deferred Points Agreement",
-  intro: (owner: string) =>
-    `A recorded promise to ${owner}. The trade goes ahead now; ` +
-    `you settle the difference by the date you set.`,
-  amountLabel: "Amount you'll settle",
-  /**
-   * §6g's button when the amount is empty. It names the missing thing rather
-   * than greying out `Send with the agreement` and leaving the reader to work
-   * out why — the control is the only place the gap can be stated at the moment
-   * it matters.
-   */
-  amountMissing: "Set an amount to promise",
-  deadlineLabel: "Settle by",
-  /** `80 added now, 100 promised` · `max 400` */
-  constraint: (now: number, promised: number) =>
-    `${grouped(now)} added now, ${grouped(promised)} promised`,
-  constraintMax: (max: number) => `max ${grouped(max)}`,
-  datePickAnother: "Pick another date",
-  recordTrades: "Trades completed",
-  recordOnTime: "Settled on time",
-  recordOwed: "Owed right now",
-  consequence: (date: string, amount: number) =>
-    `If you miss ${date} the agreement is marked defaulted, your tier drops, ` +
-    `and the ${grouped(amount)} stays owed until you settle it.`,
-  /** §8.1's keyboard summary: `Settle by 6 Oct · 7 trades · no defaults`. */
-  keyboardSummary: (date: string, trades: number, defaults: number) =>
-    `Settle by ${date} · ${trades} ${trades === 1 ? "trade" : "trades"} · ` +
-    (defaults === 0 ? "no defaults" : `${defaults} ${defaults === 1 ? "default" : "defaults"}`),
+/**
+ * The sheet that stands between a paying party and their tap. It appears on
+ * SEND for a proposer paying a bridge and on ACCEPT for a receiver paying one,
+ * and it appears for nobody else — a same-bracket offer never sees it.
+ *
+ * Everything the spec asks it to state is a function of two numbers: the fee
+ * and the balance. The checkbox label is the sentence the server records the
+ * user as having agreed to, under `TRADING_POLICY_VERSION`.
+ */
+export const consent = {
+  headingSend: "Before you send",
+  headingAccept: "Before you accept",
+  /** `Bracket 2 for Bracket 3 · 20-Leaf bridging fee` */
+  terms: (yours: number, theirs: number, fee: number) =>
+    `${bracketLabel(yours)} for ${bracketLabel(theirs)} · ${grouped(fee)}-Leaf bridging fee`,
+  bodySend: (owner: string) =>
+    `The fee is held now and goes to ${owner} when the swap completes. If ${owner} declines, ` +
+    `or the offer expires after three days, it comes back to you in full.`,
+  bodyAccept: (sender: string) =>
+    `The fee is held now and goes to ${sender} when the swap completes. If the trade is ` +
+    `cancelled before then, it comes back to you in full.`,
+  balanceNow: "Your balance now",
+  balanceAfter: "After the fee",
+  checkbox: "I agree to the bridging fee and the trading policy",
+  policyLink: "Read the trading policy",
+  /** The insufficient-balance variant. No button; these two lines instead. */
+  shortHeading: "Not enough Leaves for this bridge",
+  shortBody: (need: number, have: number) =>
+    `You need ${grouped(need)} and you hold ${grouped(have)}. Complete a trade or a task to ` +
+    `earn more, or choose an item in the same bracket.`,
+  need: "You need",
+  have: "You hold",
+  cancel: "Not now",
 } as const;
 
-/* ─────────────────── §10.4 the owner accepting (creditor) ───────────── */
-
-export const creditor = {
-  nav: (debtor: string) => `Offer from ${debtor}`,
-  /** `Her jacket 300 for your Air Max 480` — the possessive is the debtor's name. */
-  summary: (debtor: string, theirItem: string, theirValue: number, yourItem: string, yourValue: number) =>
-    `${debtor}'s ${theirItem} ${grouped(theirValue)} for your ${yourItem} ${grouped(yourValue)}`,
-  summarySplit: (now: number, promised: number) =>
-    `${grouped(now)} added now · ${grouped(promised)} promised`,
-  notice: (amount: number, date: string) =>
-    `This offer includes a promise to settle ${grouped(amount)} Leaves by ${date}.`,
-  recordTrades: "Trades completed",
-  recordOnTime: "Settled on time",
-  recordDefaults: "Past defaults",
-  recordOwed: "Owed right now",
-  /** `5 of 6` */
-  onTimeOf: (onTime: number, finished: number) => `${onTime} of ${finished}`,
-  /** NULL onTimeRate means no history — never "0%". The server insists on this. */
-  onTimeNone: "no history",
-  /** `1, settled late` — a default that has since been paid. */
-  defaultsSettled: (n: number) => `${n}, settled late`,
-  defaultsStanding: (n: number) => `${n}, still owed`,
-  defaultsNone: "none",
-  /** `220 across 2` */
-  owedAcross: (amount: number, count: number) => `${grouped(amount)} across ${count}`,
-  owedNone: "nothing",
-  footnote: (amount: number, debtor: string, total: number) =>
-    `Accepting adds ${grouped(amount)} to what ${debtor} owes, making ${grouped(total)} in total. ` +
-    `You can also accept the trade and waive the difference.`,
-  decline: "Decline",
-  accept: "Accept",
-  acceptWaiving: (amount: number) => `Accept without the ${grouped(amount)}`,
-} as const;
-
-/* ───────────────────────── §10.5 offer flow states ──────────────────── */
+/* ───────────────────────── §10.5 the seven states ───────────────────── */
 
 /** §10.5 "No items". */
 export const noItems = {
@@ -305,108 +207,32 @@ export const noItems = {
   primary: "Post your first item",
 } as const;
 
-/** §10.5 "Not verified". */
-export const notVerified = {
-  rowTitle: "Promise to settle later",
-  rowSub: "Needs ID verification. Takes about five minutes.",
-  button: "Verify your ID",
-  footnote: "Verification is only for promises. Everything else in Baylo works without it.",
+/**
+ * A shelf with items, none of which may be offered on THIS listing — every
+ * one of them two or more brackets away. Distinct from "no items": the fix is
+ * not to post, it is to post or trade closer to this bracket.
+ */
+export const noneInRange = {
+  heading: (bracket: number) => `Nothing on your shelf is within a bracket of ${bracketLabel(bracket)}`,
+  body:
+    "An offer can be the same bracket as the listing, one below, or one above. " +
+    "Your items are all further off than that.",
+  above: "This listing is above everything you have posted. Trade closer to what you own first.",
+  below: "This listing is below everything you have posted. Post something smaller, or find a listing nearer your own.",
 } as const;
 
 /**
- * The same row while an ID is UNDER REVIEW. §10.5 does not have this state —
- * it assumes "not verified" means "has not tried" — and treating the two the
- * same shows "Verify your ID" to somebody who did exactly that an hour ago,
- * with a button that walks them back toward a form. So: the time it was sent,
- * how long it usually takes, and no button.
+ * The tier's item cap — the server's `enforceItemValueCeiling()`, in brackets.
+ * The server enforces it on POST /api/offers; this is the sentence that saves
+ * somebody from composing an offer it will refuse.
  */
-export const idPending = {
-  rowSub: "Your ID is under review. Usually within a day.",
-  footnote: (sentAt: string | null) =>
-    `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. ` +
-    "Nothing else waits for it — only promises do.",
+export const tierCap = {
+  heading: (tier: string, capBracket: number) =>
+    `A ${tier} can trade for items up to ${bracketLabel(capBracket)}`,
+  body: (listingBracket: number) =>
+    `This listing is in ${bracketLabel(listingBracket)}. The limit rises with completed ` +
+    `trades — it isn't about this item.`,
 } as const;
-
-/**
- * §10.5 "Tier too low" — the ceiling screen.
- *
- * NOT VERBATIM, and this is the first of the two places §10 has to be departed
- * from. The spec writes:
- *
- *     A New Trader can promise up to 200
- *
- * The server's `TIER_LIMITS["New Trader"]` is `maxOutstandingDebtLeaves: 0` with
- * `mayProposeDpa: false`. Printing "up to 200" would promise something POST
- * /api/v1/contracts refuses outright, which is the exact failure §5.2 exists to
- * prevent — "show the gate, don't let someone fill in a proposal and then get
- * 403'd". So the sentence is generated from the real ceiling, and the zero case
- * gets its own wording rather than "up to 0".
- *
- * The second and third sentences ARE §10.5's, unchanged.
- */
-export const tierTooLow = {
-  heading: (tier: TrustTier, ceiling: number) =>
-    ceiling > 0
-      ? `A ${tier} can promise up to ${grouped(ceiling)}`
-      : `A ${tier} cannot promise yet`,
-  body: (needed: number, ceiling: number) =>
-    ceiling > 0
-      ? `This gap needs ${grouped(needed)}, which is above that ceiling. ` +
-        `The limit rises with completed trades — it isn't about this item.`
-      : `This gap needs ${grouped(needed)}, and promises open up with completed trades — ` +
-        `it isn't about this item.`,
-  /** `you are here`, in `#1B4D2B` mono. The one coloured tier marker in the app. */
-  youAreHere: "you are here",
-  /** `3 trades` in the ceiling table's middle column. */
-  tradesToReach: (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`,
-  noLimit: "no limit",
-  /** `You have one completed trade. Two more moves you to Rising.` */
-  progress: (completed: number, more: number, nextTier: string) =>
-    `You have ${spellCount(completed)} completed ` +
-    `${completed === 1 ? "trade" : "trades"}. ` +
-    `${capitalise(spellCount(more))} more moves you to ${nextTier}.`,
-  fromHereAdd: (leaves: number, promise: number) =>
-    `Add ${grouped(leaves)} and promise ${grouped(promise)}`,
-  fromHereAddSub: (remainder: number, owner: string) =>
-    `Leaves ${grouped(remainder)} of the gap for ${owner} to accept or refuse.`,
-  fromHereOther: "Offer a different item",
-  fromHereOtherSub: (title: string, value: number) =>
-    `Your ${title} at ${grouped(value)} closes most of this.`,
-} as const;
-
-/**
- * The five refusals §10 does not write copy for.
- *
- * NOT VERBATIM — the second departure, and the reason is the same as
- * `tierTooLow`: the server refuses for these reasons and the spec's only
- * drawn refusal is the ID gate. Each sentence follows §10.2's own stated rule —
- * name the number, name what the user already has, hand over a route — and
- * avoids every word §10 forbids.
- */
-export function promiseUnavailable(block: PromiseBlock, s: {
-  completedTrades: number;
-  openContracts: number;
-  outstandingDebt: number;
-}): string | null {
-  switch (block) {
-    case "none":
-      return null;
-    case "idUnverified":
-      return notVerified.rowSub;
-    case "idPending":
-      return idPending.rowSub;
-    case "minTrades":
-      return `Promises open after three completed trades. You have ${s.completedTrades}.`;
-    case "tierMayNotPropose":
-      return "Promises open at the next tier, which is three completed trades away.";
-    case "openContract":
-      return "You have one agreement open already. Settle it and this opens again.";
-    case "noHeadroom":
-      return `You are already promising ${grouped(s.outstandingDebt)}, which is your whole ceiling.`;
-    case "unsettledDefault":
-      return "An agreement of yours went past its date. Settling it opens this back up.";
-  }
-}
 
 /** §10.5 "Pending offer". */
 export const pending = {
@@ -417,18 +243,22 @@ export const pending = {
    */
   body: (sentAgo: string, owner: string, weekday: string) =>
     `Sent ${sentAgo}. ${owner} has until ${weekday} to reply, then it expires on its own.`,
+  /** `Bracket 2 for Bracket 3 · 20 Leaves held` / `· no fee` / `· Marco pays 30 on accepting` */
+  termsHeld: (fee: number) => `${grouped(fee)} Leaves held`,
+  termsFree: "no fee",
+  termsTheyPay: (owner: string, fee: number) => `${owner} pays ${grouped(fee)} on accepting`,
   leaveIt: "Leave it as it is",
 } as const;
 
 /** §10.5 "Sending" and "Send failed". */
 export const sending = {
   label: "Sending",
-  footnote: (held: number) => `Holding ${grouped(held)} Leaves`,
+  footnote: (held: number) => (held > 0 ? `Holding ${grouped(held)} Leaves` : "Sending your offer"),
 } as const;
 
 export const sendFailed = {
   heading: "The offer didn't send",
-  /** `…your 40 Leaves were released back to your balance…` */
+  /** `…your 20 Leaves were released back to your balance…` */
   body: (owner: string, held: number) =>
     `The connection dropped partway. Nothing reached ${owner}, ` +
     (held > 0 ? `your ${grouped(held)} Leaves were released back to your balance, ` : "") +
@@ -443,68 +273,40 @@ export const reach = {
   /**
    * `Bracket 6 · 2 brackets above your reach`. The tile's out-of-reach line.
    *
-   * A BRACKET, NOT A FIGURE. §10.8 wrote `2,000 Leaves · 860 above your reach`
-   * when the grid showed exact values; it shows brackets now (see
+   * A BRACKET, NOT A FIGURE. The grid shows brackets (see
    * `src/lib/brackets.ts`), and the distance is in the same unit as the value
    * beside it, or the two would contradict.
    */
   tileValue: (bracket: number, above: number) =>
     `${bracketLabel(bracket)} · ${bracketsWord(above)} above your reach`,
   label: label.whereYouStand,
-  /**
-   * The viewer's OWN highest item is named with its exact value — it is theirs
-   * to know — and the listing is named by bracket only.
-   */
-  body: (highestTitle: string, highestValue: number, reachTo: number, listingBracket: number) =>
+  /** Both items by bracket. Nothing in the trade flow prints an exact value. */
+  body: (highestTitle: string, highestBracket: number, reachTo: number, listingBracket: number) =>
     `This one is further than your items reach on their own. Your highest is the ` +
-    `${highestTitle} at ${grouped(highestValue)}, which reaches into ${bracketLabel(reachTo)}. ` +
-    `This listing is in ${bracketLabel(listingBracket)}, ` +
-    `${bracketsWord(listingBracket - reachTo)} above that. Two routes do work.`,
+    `${highestTitle}, in ${bracketLabel(highestBracket)}, which can be offered up to ` +
+    `${bracketLabel(reachTo)}. This listing is in ${bracketLabel(listingBracket)}, ` +
+    `${bracketsWord(listingBracket - reachTo)} above that.`,
   /**
    * The empty-shelf variant. §10.8's paragraph names "your highest item", which
-   * cannot be written for a viewer who has posted nothing — and that viewer is
-   * exactly who the reach floor exists for: an empty shelf still reaches
-   * bracket 2, so the grid still greys and the insert still owes an
-   * explanation. The heading is the fact the paragraph would otherwise have to
-   * dance around.
+   * cannot be written for a viewer who has posted nothing.
    */
   emptyHeading: "You haven't posted anything yet",
   emptyBody: (reachTo: number, listingBracket: number) =>
     `Your reach starts at ${bracketLabel(reachTo)} until you post something. ` +
     `This item is in ${bracketLabel(listingBracket)}, ` +
-    `${bracketsWord(listingBracket - reachTo)} above that. Two routes work from here.`,
+    `${bracketsWord(listingBracket - reachTo)} above that.`,
   /** The two legend labels either end of the bracket ticks. */
-  legendYours: (title: string, value: number) => `Your ${title} ${grouped(value)}`,
+  legendYours: (title: string, bracket: number) => `Your ${title} · ${bracketLabel(bracket)}`,
   /** Left legend label when there is no item to name — the ticks start at the floor. */
   legendStarting: "Starting reach",
   legendTheirs: (bracket: number) => bracketLabel(bracket),
-  /**
-   * The empty-shelf variant's first route, in place of "Trade up to it" — two
-   * trades near your own value is advice about a shelf, and this viewer has
-   * none. Posting is the real fix: the reach is one bracket above the highest
-   * posted item.
-   */
+  /** The empty-shelf route. Posting is the real fix: the reach is one bracket above the highest posted item. */
   routePost: "Post an item",
   routePostSub:
     "Your reach is one bracket above your highest posted item, so a single listing moves the line.",
-  routePromise: "Offer with a promise",
-  routePromiseSub: (tier: TrustTier, ceiling: number, owner: string) =>
-    ceiling > 0
-      ? `A Deferred Points Agreement covers up to ${grouped(ceiling)} as a ${tier}, ` +
-        `so a promise alone will not close this one. ` +
-        `${owner} decides whether to take a part-promise.`
-      : `A Deferred Points Agreement opens up with completed trades, ` +
-        `so a promise alone will not close this one. ` +
-        `${owner} decides whether to take a part-promise.`,
   routeTradeUp: "Trade up to it",
   routeTradeUpSub:
-    "Two trades near your own value usually move the line further than one big offer does.",
-  /**
-   * Used to end "…{owner} sees the same numbers you do." That clause is gone:
-   * the owner sees their own exact value and the viewer sees a bracket, so it
-   * stopped being true. The half that survives is the half that makes this
-   * insert an explanation rather than a refusal.
-   */
+    "An offer can go one bracket up at a time. A trade or two near your own value moves the line.",
   footnote: "This listing is outside your current reach. Trade closer to what you own first.",
   button: "Offer a trade",
 } as const;
@@ -544,8 +346,8 @@ export const prompt = {
   exampleFar: "further off",
   step1: "Faded ones open like any other listing, but you cannot offer on them yet.",
   step2:
-    "Inside, you'll see the distance and the two ways across it — " +
-    "a promise to settle later, or trading up first.",
+    "An offer can be the same bracket as the listing, one below, or one above. " +
+    "A bridge one way or the other is a small fee the lower side pays.",
   step3: "The line moves as you post and trade. Nothing is fixed.",
   button: "Got it",
 } as const;
@@ -555,11 +357,9 @@ export const prompt = {
 /**
  * `4` → `"four"`, up to twelve, then digits.
  *
- * §10.2 writes "Your four items together come to 1,620" and §10.5 writes "You
- * have one completed trade. Two more moves you to Rising" — the spec spells
- * small counts and leaves Leaf figures as bare numerals, which is the same
- * distinction ordinary prose makes. Twelve is where it stops because that is
- * where spelling stops helping.
+ * The spec spells small counts and leaves Leaf figures as bare numerals,
+ * which is the same distinction ordinary prose makes. Twelve is where it
+ * stops because that is where spelling stops helping.
  */
 const WORDS = [
   "zero", "one", "two", "three", "four", "five", "six",
@@ -570,17 +370,12 @@ export function spellCount(n: number): string {
   return n >= 0 && n < WORDS.length ? WORDS[n] : grouped(n);
 }
 
-function capitalise(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 /**
  * §10.5's `Sent two days ago`.
  *
  * Spelled and lower-cased to sit inside a sentence, which is why
  * `relativeShort()` ("2d ago") and `relativeLong()` ("2 days ago") in
- * `src/lib/format.ts` are both wrong here — the first is a card timestamp being
- * skimmed and the second capitalises nothing but does not spell.
+ * `src/lib/format.ts` are both wrong here.
  */
 export function sentAgo(iso: string, now: number = Date.now()): string {
   const then = Date.parse(iso);
@@ -599,23 +394,10 @@ const WEEKDAYS = [
 ] as const;
 
 /**
- * §10.5's `Marco has until Tuesday to reply`.
- *
- * Three days from when the offer was sent — §10.1's footnote states the window
- * ("Marco has three days to reply") and this is the same window named as a day.
- * Past six days out a weekday stops being a date and starts being ambiguous, so
- * it falls back to the short date; three days can never reach that, and the
- * guard is there because the expiry window is a product decision that may move.
- */
-/**
- * §10.1's "three days to reply", and the server now agrees.
- *
- * It used to be this client's own assumption — nothing expired an offer, so the
- * sentence "then it expires on its own" was false. `OFFER_EXPIRY_DAYS` in the
- * server's @/lib/offers is 3 and a lazy sweep enforces it on every read that
- * measures a balance, so this constant and that one describe the same deadline.
- * A HAND-KEPT MIRROR, like `TIER_LADDER`: if the window moves there it must move
- * here, or the weekday this renders is not the day the offer dies.
+ * §10.1's "three days to reply", and the server agrees: `OFFER_EXPIRY_DAYS` in
+ * the server's @/lib/offers is 3 and a lazy sweep enforces it. A HAND-KEPT
+ * MIRROR: if the window moves there it must move here, or the weekday this
+ * renders is not the day the offer dies.
  */
 export const OFFER_REPLY_DAYS = 3;
 

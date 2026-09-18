@@ -10,7 +10,6 @@ import {
   meetupState,
   useActiveTrades,
   useCancelTrade,
-  useContracts,
   useOfferDecision,
   useTradeDecision,
   useWithdrawFromTrades,
@@ -26,13 +25,13 @@ import * as copy from "../src/components/trades/copy";
 import * as present from "../src/components/trades/present";
 import {
   PromiseStrip,
-  PromiseWell,
   RowAction,
   SplitActions,
   Thumb,
   WaitingRow,
 } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
+import { useTradeLiveness } from "../src/lib/trade-liveness";
 import {
   offerColor,
   offerSize,
@@ -64,28 +63,24 @@ import {
  * chosen thing, not a promoted one. Neither is the green fill, which on this
  * screen belongs to nothing.
  *
- * ══ AN OFFER CARRYING A PROMISE HAS NO ACCEPT BUTTON HERE ═══════════════════
+ * ══ AN OFFER THE RECEIVER WOULD PAY FOR HAS NO ACCEPT BUTTON HERE ═══════════
  *
- * THIS IS THE WHOLE DEFENCE OF THE FEATURE AND IT IS ENFORCED BY A MISSING
- * CONTROL. Accepting an offer accepts the deferred agreement riding on it, in
- * the same tap — PATCH /api/offers/[id] runs every check the contract's own
- * accept route would have run and flips both, and /contracts/[id]/accept answers
- * 409 for one of these because there is no second step to perform.
- *
- * Once that tap lands nothing downstream can compel payment. There is no
- * repossession and no reversal; the debtor's incentive is reputational, and
- * against somebody who does not intend to keep trading the platform has nothing.
- * So the moment of protection is BEFORE the yes, and it consists entirely of
- * showing the creditor the debtor's record.
- *
- * Which is why an offer with a `contract` gets `Read the agreement first` and no
- * accept control at all. `app/offer-review.tsx` is the only route to `accept`
- * for one of these, and it draws the record above the buttons.
+ * When the offered item is one bracket ABOVE the listing, accepting costs the
+ * receiver a bridging fee, held from their balance in the same tap. The server
+ * refuses that tap without their recorded consent — but a refusal is not the
+ * protection, the consent sheet is, and the sheet lives on the review screen
+ * where the fee, the balance now and the balance after are all on screen
+ * before the box is ticked. So a receiver-pays offer gets one quiet control
+ * that opens the review screen, and no accept control at all. An offer with
+ * no fee, or one the proposer already paid, keeps the equal-weight pair.
  */
 export default function TradesWaitingScreen() {
   const router = useRouter();
   const active = useActiveTrades();
-  const contracts = useContracts();
+
+  // Every row here draws a plan or an offer the OTHER person can move. The
+  // push channel invalidates the list on their move; this is the net under it.
+  useTradeLiveness(active.refetch);
 
   const decide = useOfferDecision();
   const decideTrade = useTradeDecision();
@@ -102,9 +97,6 @@ export default function TradesWaitingScreen() {
   );
   const sentRequests = (active.data?.trades ?? []).filter(
     (t) => t.status === "PENDING" && t.direction === "sent",
-  );
-  const openPromises = (contracts.data?.contracts ?? []).filter(
-    (c) => c.status === "PENDING_ACCEPT",
   );
 
   const busy =
@@ -229,33 +221,6 @@ export default function TradesWaitingScreen() {
           </>
         ) : null}
 
-        {/* ── Promises still waiting on the other side's yes ─────────────
-              Frame 9c does not draw these and frame 9j does, under `You
-              promised`. They are here as well because a proposal nobody has
-              answered is a thing the viewer is WAITING on — the same category as
-              a sent offer — and burying it one screen further in is how somebody
-              forgets they have their one contract slot spent. ── */}
-        {openPromises.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.youPromised} top={18} />
-            <Hairline />
-            {openPromises.map((contract) => {
-              const words = present.promiseWords(contract);
-              return (
-                <View key={contract.id}>
-                  <WaitingRow
-                    thumb={<PromiseWell size={offerSize.tradeRow.thumb} />}
-                    title={words.title}
-                    subtitle={words.subtitle}
-                    onPress={() => router.push("/promises")}
-                  />
-                  <Hairline />
-                </View>
-              );
-            })}
-          </>
-        ) : null}
-
         {/* ── Accepted, meeting to set ──────────────────────────────────── */}
         {toMeet.length > 0 ? (
           <>
@@ -274,7 +239,6 @@ export default function TradesWaitingScreen() {
         sent.length === 0 &&
         incomingRequests.length === 0 &&
         sentRequests.length === 0 &&
-        openPromises.length === 0 &&
         toMeet.length === 0 &&
         !active.isError ? (
           <Gutter style={{ paddingTop: 18 }}>
@@ -293,9 +257,9 @@ export default function TradesWaitingScreen() {
 /**
  * One incoming offer. 14/16 of padding, 12 between the row and its controls.
  *
- * The branch on `offer.contract` is the rule this screen exists to enforce — see
- * the header. An offer with a promise gets one quiet control that opens the
- * record; an ordinary offer gets the equal-weight pair.
+ * The branch on `bridgeFeePayer` is the rule this screen exists to enforce —
+ * see the header. An offer the receiver would pay for gets one quiet control
+ * that opens the review screen; any other offer gets the equal-weight pair.
  */
 function IncomingOfferBlock({
   offer,
@@ -309,6 +273,9 @@ function IncomingOfferBlock({
   onDecline: () => void;
 }) {
   const words = present.incomingOfferWords(offer);
+  const fee = offer.bridgeFeeLeaves ?? 0;
+  const receiverPays = fee > 0 && offer.bridgeFeePayer === "receiver";
+  const proposerPaid = fee > 0 && offer.bridgeFeePayer === "proposer";
 
   return (
     <Gutter style={{ paddingVertical: 14, gap: 12 }}>
@@ -348,19 +315,20 @@ function IncomingOfferBlock({
         ) : null}
       </View>
 
-      {offer.contract ? (
-        <>
-          <PromiseStrip minHeight={44}>
-            {copy.waiting.includesPromise(
-              offer.contract.amountLeaves,
-              new Date(offer.contract.deadline),
-            )}
-          </PromiseStrip>
+      {proposerPaid ? (
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
+          {copy.waiting.theyPaid(present.firstName(offer.counterparty.name), fee)}
+        </Text>
+      ) : null}
 
-          {/* The only way in to `accept` for an offer carrying a promise. A
+      {receiverPays ? (
+        <>
+          <PromiseStrip minHeight={44}>{copy.waiting.youWouldPay(fee)}</PromiseStrip>
+
+          {/* The only way in to `accept` for an offer the receiver pays for. A
               1px `#E2E0D6` rule and `#1B4D2B` text — quieter than either half of
-              the decision pair, because it is not a decision. */}
-          <ReadFirstRow onPress={onRead} />
+              the decision pair, because it is not yet a decision. */}
+          <ReadFirstRow label={copy.waiting.reviewFee(fee)} onPress={onRead} />
         </>
       ) : (
         <SplitActions
@@ -375,17 +343,17 @@ function IncomingOfferBlock({
 }
 
 /**
- * Frame 9c's `Read the agreement first`: 44, radius 8, 1px `#E2E0D6`, deep ink.
+ * Frame 9c's quiet row: 44, radius 8, 1px `#E2E0D6`, deep ink.
  *
  * `RowAction`'s `quiet` tone IS that object, so the control draws its own rule
  * rather than sitting inside a second one — a wrapper with a border round a
  * button with a border is two hairlines pretending to be one.
  */
-function ReadFirstRow({ onPress }: { onPress: () => void }) {
+function ReadFirstRow({ label, onPress }: { label: string; onPress: () => void }) {
   // The one-child row `fill` requires. See the prop's note in `rows.tsx`.
   return (
     <View style={{ flexDirection: "row" }}>
-      <RowAction label={copy.waiting.readFirst} onPress={onPress} tone="quiet" fill />
+      <RowAction label={label} onPress={onPress} tone="quiet" fill />
     </View>
   );
 }
@@ -400,14 +368,15 @@ function ReadFirstRow({ onPress }: { onPress: () => void }) {
  * other person already agreed to, so it answers 409.
  *
  * The line beside the control names what the Leaves do, because that is the
- * question somebody withdrawing actually has. An offer with `offeredLeaves` had
- * them HELD, not spent; withdrawing releases them. An offer with none held
- * nothing, and saying so stops the control looking like it costs something.
+ * question somebody withdrawing actually has. A proposer-paid bridging fee was
+ * HELD, not spent; withdrawing releases it. A same-bracket offer, or an
+ * up-bridge the receiver would have paid for, held nothing — and saying so
+ * stops the control looking like it costs something.
  */
 function SentOfferBlock({ offer, onWithdraw }: { offer: LiveOffer; onWithdraw: () => void }) {
   const words = present.sentOfferWords(offer);
   const partner = present.firstName(offer.counterparty.name);
-  const held = offer.offeredLeaves ?? 0;
+  const held = offer.bridgeFeePayer === "proposer" ? (offer.bridgeFeeLeaves ?? 0) : 0;
 
   return (
     <Gutter style={{ paddingVertical: 14, gap: 12 }}>

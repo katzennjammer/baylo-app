@@ -535,15 +535,28 @@ export interface CreatedItem {
   id: string;
   title: string;
   valueLeaves: number | null;
+  /** AVAILABLE, or PENDING_REVIEW when the owner's value went past the cap. */
+  status?: string;
+  /**
+   * What happened to the value. `pending` is true exactly when the listing is
+   * parked for review; `notice` is the server's own sentence for the dialog.
+   * Absent on an older server, which never parks anything.
+   */
+  valueReview?: {
+    decision: "suggested" | "lowered" | "raisedWithinCap" | "needsReview";
+    pending: boolean;
+    notice: string | null;
+  };
 }
 
 /**
  * Creates the listing.
  *
- * `valueLeaves` is re-derived and re-bounded server-side against a suggestion
- * this client is not trusted to have reported honestly — which is why the
- * slider's job is to make the band obvious rather than to be believed. A value
- * outside it comes back 400 with `suggestedLeaves` and `allowed` in the body.
+ * `valueLeaves` is judged server-side against a suggestion this client is not
+ * trusted to have reported honestly. Nothing is refused for being too high
+ * any more: up to one bracket above the suggestion's goes live, and anything
+ * above that is saved as asked and PARKED in `PENDING_REVIEW` — the response's
+ * `valueReview` says which, and the posted dialog repeats it.
  *
  * `description` falls back to the title server-side when it is empty, so the
  * wizard sends the title for it: the flow has no description field, and a

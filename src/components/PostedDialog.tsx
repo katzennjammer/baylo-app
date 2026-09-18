@@ -1,6 +1,7 @@
 import { dismissPostedNotice, usePostedNotice } from "../post/posted-notice";
 import { color } from "../theme/tokens";
 import { CheckIcon } from "./icons";
+import { ClockIcon } from "./post/post-icons";
 import { NoticeDialog } from "./NoticeDialog";
 
 /**
@@ -24,16 +25,32 @@ import { NoticeDialog } from "./NoticeDialog";
  * for no decision. `SheetShell` is for a column of rows with a Cancel; this is
  * a statement with an acknowledgement, and a sheet would make it look like it
  * wanted something.
+ *
+ * ── THE REVIEW VARIANT SAYS "WAITING", NOT "UP" ─────────────────────────────
+ *
+ * An owner who set a value more than one bracket above the suggestion was
+ * told on the value step that a person checks it first. This is where that
+ * promise is kept: the listing exists, it is theirs to see, and nobody else
+ * sees it until an admin approves — so the dialog says exactly that, in the
+ * server's own sentence, and does not claim a listing is live when it is not.
  */
 export function PostedDialog() {
   const notice = usePostedNotice();
 
+  const review = notice?.reviewNotice ?? null;
+
   return (
     <NoticeDialog
       visible={notice !== null}
-      title="Your listing is up."
-      body="It's live in the marketplace and feed now."
-      icon={<CheckIcon size={24} stroke={2} color={color.forest} />}
+      title={review ? "Your listing is waiting for a check." : "Your listing is up."}
+      body={review ?? "It's live in the marketplace and feed now."}
+      icon={
+        review ? (
+          <ClockIcon size={24} stroke={2} color={color.forest} />
+        ) : (
+          <CheckIcon size={24} stroke={2} color={color.forest} />
+        )
+      }
       onDismiss={dismissPostedNotice}
     />
   );

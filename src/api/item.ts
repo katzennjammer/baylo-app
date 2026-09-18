@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
+import { PROFILE_ME_KEY } from "./profile";
 import type { ItemDetailPayload } from "./types";
 
 /**
@@ -187,6 +188,14 @@ export interface EditListingInput {
    * alone is not refused over it).
    */
   hubIds?: string[];
+  /**
+   * The Leaf value. NOT offered by EditListingSheet (see its note: anything
+   * that re-prices the listing is kept out of it); sent by the review screen
+   * only, where the price is the whole subject. The server re-judges it
+   * against a fresh suggestion and answers with `valueReview` — `pending`
+   * true means it went above the cap again and is parked for review.
+   */
+  valueLeaves?: number | null;
 }
 
 /** Server-side caps, mirrored so the composer can stop rather than be refused. */
@@ -203,7 +212,11 @@ export function useUpdateItem(itemId: string | null) {
         body: JSON.stringify(input),
       });
       if (!res.ok) return legacyFailure(res, "We could not save that just now.");
-      return (await res.json()) as { id: string };
+      return (await res.json()) as {
+        id: string;
+        status?: string;
+        valueReview?: { decision: string; pending: boolean; notice: string | null } | null;
+      };
     },
 
     // Invalidated, not patched. Unlike a like, an edit changes fields that are
@@ -215,6 +228,10 @@ export function useUpdateItem(itemId: string | null) {
       void qc.invalidateQueries({ queryKey: ["home"] });
       void qc.invalidateQueries({ queryKey: ["browse"] });
       if (itemId) void qc.invalidateQueries({ queryKey: ["item", itemId] });
+      // A value edit can move a listing between the shelf's states (a
+      // rejected one relisted at the suggestion goes AVAILABLE), and the shelf
+      // labels tiles from that.
+      void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
       // A hub change moves the meetup picker's shared set on every open trade
       // this listing is in. The picker's key is ["trade", <id>, "meetup"] and
       // this client does not know which trades those are, so the prefix goes.
@@ -246,6 +263,45 @@ export function useDeleteItem() {
       void qc.invalidateQueries({ queryKey: ["home"] });
       void qc.invalidateQueries({ queryKey: ["browse"] });
       void qc.invalidateQueries({ queryKey: ["item", itemId] });
+      void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+    },
+  });
+}
+
+/* ────────────────────────────── appeal ──────────────────────────────── */
+
+/** The server's cap on an appeal, mirrored so the box can stop at it. */
+export const APPEAL_MESSAGE_MAX = 300;
+
+/**
+ * POST /api/v1/items/[id]/appeal — the owner's appeal against a value
+ * rejection or a takedown, in their own words.
+ *
+ * ONE PER DECISION. The server refuses a second with 409 APPEAL_OPEN (one is
+ * waiting) or APPEAL_UPHELD (decided, and final); the review screen reads
+ * `review.appeal.canAppeal` before drawing the control, so those are what a
+ * stale screen sees, not what a fresh one offers.
+ *
+ * Filing changes nothing on the listing — it stays rejected or hidden until
+ * an admin decides — but it LOCKS the value: an edit to value, category or
+ * condition is refused with 409 APPEAL_OPEN until then. Deleting withdraws.
+ */
+export function useAppealListing(itemId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (message: string) => {
+      const r = await apiV1<{ appeal: { id: string; status: string; kind: string; createdAt: string } }>(
+        `/api/v1/items/${encodeURIComponent(itemId!)}/appeal`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        },
+      );
+      return r.data.appeal;
+    },
+    onSuccess: () => {
+      if (itemId) void qc.invalidateQueries({ queryKey: ["item", itemId] });
     },
   });
 }

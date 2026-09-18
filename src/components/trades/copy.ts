@@ -15,7 +15,11 @@ import { spellCount } from "../offer/copy";
  *   Never `unfortunately`, never `you can't afford`, never `only`, and never a
  *   comparison to other traders.
  *
- * ── THE FOUR PLACES A STRING IS NOT §10's, AND WHY EACH IS NOT ──────────────
+ * ── THE THREE PLACES A STRING IS NOT §10's, AND WHY EACH IS NOT ─────────────
+ *
+ * (The promise strings — settle, extend, defaulted — went with deferred
+ * agreements on 17 Sep 2026. A bridging fee settles itself when the trade
+ * completes and has no deadline to chase.)
  *
  *   1. `askForDigits` / `yourCodeIs` / `emptyStep2` — §10.7 and §10.5 write
  *      "four digits" and "the four-digit codes". The server issues SIX
@@ -30,12 +34,7 @@ import { spellCount } from "../offer/copy";
  *      stored is a bcrypt hash. Rather than draw invented digits, this says where
  *      the code actually is. Gap 1.
  *
- *   3. `promise.extend` — a SECOND control beside `Settle`, which §6 does not
- *      contemplate because §6 assumes settling is the only thing a debtor does.
- *      Asking for more time is a real act with a real endpoint, and it needs a
- *      label §10 never wrote.
- *
- *   4. `historyOffersNote` — frame 9d shows three terminal offer states in
+ *   3. `historyOffersNote` — frame 9d shows three terminal offer states in
  *      History. No endpoint lists a DECLINED, WITHDRAWN or EXPIRED offer, so
  *      History draws the finished trades it can see and this line says, without
  *      apologising, what is not in the list.
@@ -52,8 +51,6 @@ export const nav = {
   waiting: "Waiting",
   /** Frame 9d. Matches the History row's own label, so the push reads as a zoom. */
   history: "Finished trades",
-  /** Frame 9j. */
-  promises: "Promises",
   /** Frame 9e/9f/9g — `Meeting Marco A.`, and 9h's past tense. */
   meeting: (partner: string) => `Meeting ${partner}`,
   traded: (partner: string) => `Traded with ${partner}`,
@@ -74,7 +71,6 @@ export const label = {
   requestsYouSent: "Swap requests you sent",
   meetingToSet: "Accepted, meeting to set",
   /* Frame 9j's two halves. */
-  youPromised: "You promised",
   owedToYou: "Owed to you",
   /* Frame 9h. */
   stillOpen: "Still open",
@@ -138,15 +134,20 @@ export const card = {
 
 /** §10.6's Waiting rows, verbatim, plus the frames' right-hand mono. */
 export const waiting = {
-  /** §10.6 `Waiting for Marco · promise of 100` */
-  forPartner: (partner: string, promise: number | null) =>
-    promise !== null
-      ? `Waiting for ${partner} · promise of ${grouped(promise)}`
-      : `Waiting for ${partner}`,
+  /** §10.6 `Waiting for Marco` */
+  forPartner: (partner: string) => `Waiting for ${partner}`,
   /** §10.6 `Sent 2 days ago · expires Tuesday` */
   sentExpires: (ago: string, weekday: string) => `Sent ${ago} · expires ${weekday}`,
-  /** §10.6 `Accepted · meeting not set` */
+  /**
+   * The title of an accepted row, one per `meetupState`. §10.6 wrote only the
+   * first, and the row said it in every state — "meeting not set" over a plan
+   * the other person had just suggested, which read as the plan not existing.
+   */
   acceptedNoMeeting: "Accepted · meeting not set",
+  acceptedYoursToAnswer: "Accepted · meeting suggested, waiting for you",
+  acceptedWaitingOnThem: "Accepted · meeting suggested, waiting for them",
+  /** `date` is `meetupWhen()`'s string: `Today, 14:00` / `Sat 20 Sep, 14:00`. */
+  acceptedMeetingSet: (date: string) => `Accepted · meeting set for ${date}`,
   /** Frame 9c's second line on that row. */
   pickAHub: (partner: string) => `With ${partner} · pick a hub`,
   /**
@@ -177,10 +178,17 @@ export const waiting = {
   cancel: "Call it off",
   accept: "Accept",
   decline: "Decline",
-  /** Frame 9c's promise strip on an incoming offer. */
-  includesPromise: (amount: number, date: Date) =>
-    `Includes a promise to settle ${grouped(amount)} by ${shortDate(date)}`,
-  readFirst: "Read the agreement first",
+  /**
+   * The strip on an incoming offer the RECEIVER would pay to accept: the
+   * offered item is one bracket above theirs, and the fee is theirs.
+   */
+  youWouldPay: (fee: number) =>
+    `Accepting costs a ${grouped(fee)}-Leaf bridging fee — their item is one bracket above yours`,
+  /** The one control on such a row. It opens the review screen, where the consent sheet is. */
+  reviewFee: (fee: number) => `Review the ${grouped(fee)}-Leaf fee and accept`,
+  /** The strip on an incoming offer the PROPOSER already paid for. */
+  theyPaid: (partner: string, fee: number) =>
+    `${partner} has put up a ${grouped(fee)}-Leaf bridging fee — it comes to you when the swap completes`,
 } as const;
 
 /**
@@ -341,88 +349,29 @@ export const code = {
   /** The label over the block that would have held the viewer's own digits. */
   yourCodeLabel: "Your own code",
   /** Frame 9h's promise section footnote. */
-  promiseOutlives: "The trade is done. The promise runs until you settle it.",
+  /**
+   * The completion reward, stated once, as a fact. `+6 Leaves` is the whole
+   * event; §1.10 forbids anything that congratulates, and a number is not a
+   * congratulation. The zero case gets the server's own reason.
+   */
+  rewardLabel: "Earned for this trade",
+  rewardLine: (leaves: number) => `+${grouped(leaves)} Leaves`,
+  rewardNone: "No Leaves for this one",
+  /** The bridging fee, settled with the trade. From the viewer's side. */
+  feePaidOut: (fee: number, partner: string) =>
+    `Your ${grouped(fee)}-Leaf bridging fee went to ${partner}`,
+  feeReceived: (fee: number, partner: string) =>
+    `${partner}'s ${grouped(fee)}-Leaf bridging fee came to you`,
 } as const;
 
 /* ─────────────────── §10.4 / frame 9i — the incoming offer ──────────── */
 
-/**
- * §10.4's strings live in `src/components/offer/copy.ts` under `creditor` and
- * are reused rather than retyped — the contract screen already renders them, and
- * two copies of `Accepting adds 100 to what Dana owes` is one copy too many.
- * What is here is only what frame 9i adds on top.
- */
+/** Frame 9i's strings — the incoming-offer review screen. */
 export const review = {
   /** Frame 9i's nav-right mono. */
   expiresIn: (days: number) => (days === 1 ? "1 day left" : `${days} days left`),
-  /** Frame 9i's second line under the swap. `80 added now · 100 promised` */
-  splitLine: (now: number, promised: number) =>
-    `${grouped(now)} added now · ${grouped(promised)} promised`,
-  addedNow: (now: number) => `${grouped(now)} added now`,
+  /** The second line under the swap when an offer predates brackets. */
   noLeaves: "No Leaves either way",
-  /** The line that makes the same-tap rule explicit before the tap. */
-  sameTap:
-    "Accepting the offer accepts the promise in the same tap. There is no second step.",
-} as const;
-
-/* ───────────────────────── frame 9j — promises ──────────────────────── */
-
-export const promise = {
-  /** Debtor. Frame 9j `100 to Marco A.` */
-  toCreditor: (amount: number, creditor: string) => `${grouped(amount)} to ${creditor}`,
-  /** Creditor. Frame 9j `100 owed by Dana L.` */
-  owedBy: (amount: number, debtor: string) => `${grouped(amount)} owed by ${debtor}`,
-  /** PENDING_ACCEPT, debtor side. */
-  waitingToAccept: (creditor: string) => `waiting for ${creditor} to accept`,
-  /** PENDING_ACCEPT, creditor side — it is the viewer who has to answer. */
-  waitingOnYou: "waiting for you to accept",
-  /** §5.3 `40 of 100 settled` */
-  partSettled: (paid: number, total: number) => `${grouped(paid)} of ${grouped(total)} settled`,
-  nothingSettled: "nothing settled yet",
-  /** §1.7 `Settled 4 Oct` — a hairline row, no accent. Nothing congratulates. */
-  settled: (d: Date) => `settled ${shortDate(d)}`,
-  /** §5.3 `Defaulted 7 Oct · 100 still owed` */
-  defaulted: (d: Date, stillOwed: number) =>
-    `defaulted ${shortDate(d)} · ${grouped(stillOwed)} still owed`,
-  /** Frame 9j's creditor-side default line. */
-  defaultedTheirs: (d: Date, name: string) => `defaulted ${shortDate(d)} · ${name}'s tier dropped`,
-  /** §6 and the frames. The control that pays it down, now that one exists. */
-  settle: "Settle",
-  /** NOT VERBATIM — reason 3 in the header. The second, quieter control. */
-  extend: "Ask for more time",
-  extensionPending: "more time asked for",
-  extensionUsed: "extension already used",
-  /** Frame 9j's closing footnote. */
-  footnote:
-    "Baylo records what is owed and reminds both sides. There is nothing to chase here.",
-  /**
-   * How settling works, said once under the debtor's own rows.
-   *
-   * BOTH HALVES ARE TRUE AND THE ORDER MATTERS. Earned Leaves still go to the
-   * oldest agreement first without being asked — that rule did not change when
-   * the Settle control arrived — and on top of it a debtor can now pay
-   * deliberately. Saying only the second half would suggest a debt sits still
-   * until pressed, which it does not.
-   */
-  howSettling:
-    "Leaves you earn go to your oldest agreement first, on their own. " +
-    "You can also settle one now from your balance.",
-  /** The sheet that asks how much. */
-  settleHeading: (creditor: string) => `Settle with ${creditor}`,
-  settleBody: (owed: number, balance: number) =>
-    `${grouped(owed)} is still owed on this agreement. You hold ${grouped(balance)}.`,
-  settleAll: (amount: number) => `Settle all ${grouped(amount)}`,
-  settlePart: (amount: number) => `Settle ${grouped(amount)}`,
-  settleHalf: "Settle half",
-  settleCancel: "Not now",
-  /** §1.10: no colour event, no congratulation. A mono line, and the numbers. */
-  settledLine: (amount: number, remaining: number) =>
-    remaining > 0
-      ? `${grouped(amount)} settled · ${grouped(remaining)} to go`
-      : `${grouped(amount)} settled · nothing left owing`,
-  /** The one refusal a debtor can act on. The server sends both figures. */
-  notEnough: (balance: number, requested: number) =>
-    `You hold ${grouped(balance)} and this payment needs ${grouped(requested)}.`,
 } as const;
 
 /* ───────────────────────────── small helpers ────────────────────────── */

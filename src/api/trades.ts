@@ -3,16 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
 import { LIVE_OFFERS_KEY, withdrawOffer } from "./offer";
-import { daysUntil, grouped } from "../lib/gap";
+import { grouped } from "../lib/gap";
+import { bracketLabel, bracketOf } from "../lib/brackets";
+import type { Consent } from "./offer";
 import type {
   ActiveTrade,
   ConfirmStatus,
-  ContractsPayload,
   LiveOffer,
   MeetupPlan,
   SafeZoneHub,
   TradesPayload,
-  V1Contract,
 } from "./types";
 
 /**
@@ -24,15 +24,16 @@ import type {
  *   GET  /api/v1/trades?tab=active     offers in both directions, live trades,
  *                                      and `viewer.availableLeaves`.
  *   GET  /api/v1/trades?tab=history    finished trades, for the History count.
- *   GET  /api/v1/contracts             the promise ledger, both roles.
  *   GET  /api/trades/[id]/confirm/status   whose turn it is, one trade at a time.
  *
- * The first three are the list. The fourth belongs to the code screen and is
- * polled there and nowhere else.
+ * The first two are the list. The third belongs to the code screen and is
+ * polled there and nowhere else. GET /api/v1/contracts, the promise ledger,
+ * went with deferred agreements on 17 Sep 2026 — see `src/lib/trade-rules.ts`
+ * for what replaced the promise.
  *
- * ══ THREE THINGS THE SERVER GAINED FOR THIS SCREEN ══════════════════════════
+ * ══ TWO THINGS THE SERVER GAINED FOR THIS SCREEN ══════════════════════════
  *
- * All three were gaps that made the design undrawable, and all three are closed
+ * Both were gaps that made the design undrawable, and both are closed
  * on the server rather than worked around here:
  *
  *   THE VIEWER'S OWN CONFIRMATION CODE.  `confirm/start` now stores an
@@ -44,13 +45,6 @@ import type {
  *      below reads it, and still copes with null: no key, a rotated key, an
  *      expired code and a burned one all answer null, and §6.1's block falls
  *      back to naming the email.
- *
- *   A DELIBERATE SETTLEMENT.  POST /api/v1/contracts/[id]/settle, debtor only,
- *      partial or full. The passive rule is unchanged — earned Leaves still go
- *      to the oldest debt first without being asked — but a debtor with a
- *      balance and an intention can now act on it, which is what the frames'
- *      `Settle` button always meant. Both paths go through one `payContract()`
- *      on the server, so there is still exactly one place Leaves move for a debt.
  *
  *   ITEM VALUES.  `ITEM_BRIEF` carries `valueLeaves`, so §10.6's "Vans 440 for
  *      Air Max 480" is drawable. On an OFFER the values are looked up from the
@@ -103,7 +97,6 @@ import type {
  */
 export const TRADES_ACTIVE_KEY = ["trades", "active", "list"] as const;
 export const TRADES_HISTORY_KEY = ["trades", "history"] as const;
-export const CONTRACTS_KEY = ["contracts", "mine"] as const;
 
 /**
  * Thirty seconds, matching `useLiveOffers()`.
@@ -138,16 +131,6 @@ export function useTradeHistory(enabled = true) {
     select: (r) => r.data,
     enabled,
     staleTime: 5 * 60_000,
-  });
-}
-
-/** The promise ledger, both roles. `role=any` is the route's own default. */
-export function useContracts() {
-  return useQuery({
-    queryKey: CONTRACTS_KEY,
-    queryFn: () => apiV1<ContractsPayload>("/api/v1/contracts?limit=50"),
-    select: (r) => r.data,
-    staleTime: LIST_STALE_MS,
   });
 }
 
@@ -310,6 +293,15 @@ export interface CodeRejection {
 export interface ConfirmSubmitResult {
   correct: true;
   completed: boolean;
+  /**
+   * THIS caller's completion reward, in Leaves, issued in the same transaction
+   * that completed the trade. 0 when the server's anti-farming gates zeroed it
+   * — a repeat partner inside a week, the same item inside a month, the daily
+   * cap — and `rewardNote` then says which, in the server's words. Absent on
+   * the `completed: false` half-way response and on an older server.
+   */
+  reward?: number;
+  rewardNote?: string | null;
 }
 
 /**
@@ -373,7 +365,6 @@ export function useConfirmSubmit(tradeId: string | undefined) {
       if (tradeId) void qc.invalidateQueries({ queryKey: confirmStatusKey(tradeId) });
       void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
       void qc.invalidateQueries({ queryKey: TRADES_HISTORY_KEY });
-      void qc.invalidateQueries({ queryKey: CONTRACTS_KEY });
       void qc.invalidateQueries({ queryKey: LIVE_OFFERS_KEY });
       void qc.invalidateQueries({ queryKey: ["profile", "me"] });
       void qc.invalidateQueries({ queryKey: ["home"] });
@@ -401,28 +392,47 @@ export function isCodeRejection(e: unknown): e is CodeRejection {
  * v1 equivalent. It answers a bare object, so it goes through `request()` +
  * `legacyFailure()`, the path `useSendOffer()` already takes.
  *
- * ── ACCEPTING THE OFFER ACCEPTS THE PROMISE, IN THE SAME TAP ────────────────
+ * ── ACCEPTING AN UP-BRIDGE IS THE RECEIVER'S PAYMENT ────────────────────────
  *
- * A DPA proposed alongside an offer is a real PENDING_ACCEPT row from the moment
- * it is proposed, and this route runs every check /contracts/[id]/accept would
- * have run before flipping both. That is why /contracts/[id]/accept answers 409
- * with `meta.rule: "DPA_ACCEPTED_WITH_OFFER"` for one of these — there is no
- * second step to perform and no way to accept the swap while the promise waits.
+ * When the offered item is one bracket ABOVE the listing, the receiver is the
+ * one ending up with the more valuable item, and the bridging fee is theirs.
+ * It is held from their balance IN THE ACCEPT, with their consent in the same
+ * request: `consent` must be present and its `policyVersion` current, or the
+ * server answers 400 CONSENT_REQUIRED / 409 POLICY_VERSION_STALE and flips
+ * nothing. A balance short of the fee is 400 INSUFFICIENT_LEAVES with `need`
+ * and `have`, and the offer stays PENDING. The consent sheet on the review
+ * screen exists so none of those are the first the receiver hears of it.
  *
- * WHICH IS THE WHOLE REASON THE RECORD SCREEN EXISTS BEFORE THIS CALL. Once the
- * tap lands, nothing downstream can compel payment. `app/offer-review.tsx` is
- * the only route into `accept` for an offer carrying a promise, and it draws the
- * debtor's record above the buttons rather than behind a disclosure.
+ * A same-bracket offer and a proposer-pays bridge send no consent: the server
+ * asks for none and ignores one.
  */
+export interface OfferDecided {
+  status: "ACCEPTED" | "DECLINED";
+  bridgeFeeLeaves: number | null;
+  bridgeFeePaidBySender: boolean | null;
+  /** What the ACCEPTER was just charged. 0 unless they were the payer. */
+  chargedLeaves: number;
+  /** What came back to the proposer on a decline. 0 unless they had paid. */
+  releasedLeaves: number;
+  tradeId?: string;
+}
+
 export function useOfferDecision() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { offerId: string; action: "accept" | "decline" }) => {
+    mutationFn: async (input: {
+      offerId: string;
+      action: "accept" | "decline";
+      consent?: Consent | null;
+    }): Promise<OfferDecided> => {
       const res = await request(`/api/offers/${encodeURIComponent(input.offerId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: input.action }),
+        body: JSON.stringify({
+          action: input.action,
+          ...(input.consent ? { consent: input.consent } : {}),
+        }),
       });
       if (!res.ok) {
         return legacyFailure(
@@ -432,7 +442,7 @@ export function useOfferDecision() {
             : "We could not decline that offer just now.",
         );
       }
-      return (await res.json()) as unknown;
+      return (await res.json()) as OfferDecided;
     },
     onSuccess: () => invalidateTrades(qc),
   });
@@ -521,105 +531,6 @@ export function useWithdrawFromTrades() {
 
   return useMutation({
     mutationFn: (offerId: string) => withdrawOffer(offerId),
-    onSuccess: () => invalidateTrades(qc),
-  });
-}
-
-/**
- * POST /api/v1/contracts/[id]/settle — the debtor pays, on purpose.
- *
- * ── WHAT THE FRAMES' `Settle` BUTTON NOW DOES ──────────────────────────────
- *
- * Omitting `amountLeaves` pays the whole remaining balance, and the SERVER
- * computes that remainder rather than this client sending one. That is not
- * laziness: the remainder can move between the read that drew the screen and the
- * write — a task award landing, a concurrent settlement — and a client-computed
- * figure would then be either short or refused. "Pay it off" is a well-defined
- * instruction; "pay exactly 180" is a bet on a number.
- *
- * ── WHAT IT DOES NOT REPLACE ───────────────────────────────────────────────
- *
- * The passive rule stands: Leaves the debtor EARNS still go to the oldest debt
- * first, without being asked, and there is no opting out of it. This is an
- * additional way to act, not a change to the arrangement.
- *
- * ── THE TWO REFUSALS A SCREEN HAS TO RENDER ────────────────────────────────
- *
- *   400 INSUFFICIENT_LEAVES  meta carries `balance` and `requested`, so the row
- *                            can say "you have 130 and this needs 180" without
- *                            parsing the sentence.
- *   409 CONTRACT_CHANGED     a concurrent payment won the conditional write.
- *                            Nothing was taken. Refetch and try again.
- *
- * A defaulted agreement CAN be settled, and that is the way out of the trading
- * restriction — paying it off reaches FULFILLED and lifts the block. The default
- * itself stays on the record permanently, which is what §10.4's `1, settled
- * late` describes.
- */
-export interface SettleResult {
-  contract: V1Contract | null;
-  payment: { amountLeaves: number; fulfilled: boolean; remainingLeaves: number };
-  viewer: { leaves: number };
-}
-
-export function useSettleContract() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: { contractId: string; amountLeaves?: number }) =>
-      apiV1<SettleResult>(
-        `/api/v1/contracts/${encodeURIComponent(input.contractId)}/settle`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // The key is omitted rather than sent as undefined: the body schema is
-          // `strictObject`, and an explicit `undefined` survives JSON.stringify
-          // as an absent key anyway — but being deliberate here is what keeps
-          // "pay it all" and "pay this much" two visibly different requests.
-          body: JSON.stringify(
-            input.amountLeaves === undefined ? {} : { amountLeaves: input.amountLeaves },
-          ),
-        },
-      ),
-    onSuccess: () => invalidateTrades(qc),
-  });
-}
-
-/**
- * The window an extension request has to land in, relative to the CURRENT
- * deadline. A HAND-KEPT MIRROR of `DPA.minExtensionDays` / `maxExtensionDays`,
- * like `TIER_LADDER` in `src/lib/gap.ts` and the thresholds in
- * `src/lib/trust.ts`. It goes stale silently if the server's table is tuned; the
- * server re-checks the bound either way, so the cost of drift is a 400 rather
- * than a wrong deadline.
- */
-export const EXTENSION_DAYS = { min: 1, max: 14, suggested: 7 } as const;
-
-/**
- * POST /api/v1/contracts/[id]/extension/request — the debtor asks for more time.
- *
- * THE ONLY ACTION A DEBTOR ROW CAN ACTUALLY CARRY. See gap 5: settling by hand
- * has no route, because settlement happens out of earnings, oldest contract
- * first. One extension per contract; the server refuses a second.
- *
- * ASKING DOES NOT MOVE THE DEADLINE, and the row must not imply that it does.
- * It records that the debtor asked and what they asked for; only the creditor's
- * grant moves anything, and `extensionUsed` is set by the grant rather than by
- * the request — so a debtor cannot burn their own extension by asking.
- */
-export function useRequestExtension() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: { contractId: string; deadline: Date }) =>
-      apiV1<{ contract: unknown }>(
-        `/api/v1/contracts/${encodeURIComponent(input.contractId)}/extension/request`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deadline: input.deadline.toISOString() }),
-        },
-      ),
     onSuccess: () => invalidateTrades(qc),
   });
 }
@@ -760,20 +671,26 @@ export function useAcceptMeetup(tradeId: string | undefined) {
 export type MeetupState = "none" | "yours-to-answer" | "waiting-on-them" | "agreed";
 
 export function meetupState(trade: ActiveTrade): MeetupState {
-  const plan = trade.meetup;
+  // `direction` says which side the viewer is; the plan says which side spoke.
+  return meetupStateOf(trade.meetup, trade.direction === "sent" ? "sender" : "receiver");
+}
+
+/**
+ * The same four states from a plan and a side, for the one screen that reads
+ * the plan from GET …/meetup (which answers `you`) rather than from a list
+ * row. One derivation, two callers, so the comparison that is easy to get
+ * backwards is written exactly once.
+ */
+export function meetupStateOf(plan: MeetupPlan | null, you: "sender" | "receiver"): MeetupState {
   if (!plan) return "none";
   if (plan.agreedAt) return "agreed";
-  // `proposedBy` is a side and `direction` says which side the viewer is, so
-  // "sender proposed it" is the viewer's own proposal exactly when they sent.
-  const mine = plan.proposedBy === (trade.direction === "sent" ? "sender" : "receiver");
-  return mine ? "waiting-on-them" : "yours-to-answer";
+  return plan.proposedBy === you ? "waiting-on-them" : "yours-to-answer";
 }
 
 /** Everything this screen shows, after anything on it changes. */
 function invalidateTrades(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
   void qc.invalidateQueries({ queryKey: TRADES_HISTORY_KEY });
-  void qc.invalidateQueries({ queryKey: CONTRACTS_KEY });
   void qc.invalidateQueries({ queryKey: LIVE_OFFERS_KEY });
   void qc.invalidateQueries({ queryKey: ["profile", "me"] });
   void qc.invalidateQueries({ queryKey: ["home"] });
@@ -800,10 +717,11 @@ function invalidateTrades(qc: ReturnType<typeof useQueryClient>) {
  * offer, because that is the order of how immediately the person in front of you
  * is affected. Within each kind, the most urgent first.
  *
- * A CREDITOR'S PROMISE IS NEVER ADMITTED. §6's block is "needs you", and there
- * is nothing a creditor can do about a debt: you cannot make someone pay. Frame
- * 9j says it plainly — creditor rows carry no action — so a creditor's row waits
- * in `Waiting` however close the deadline is, and only the debtor is called up.
+ * PROMISES ARE GONE FROM BOTH LISTS. A deferred agreement used to be a row in
+ * "needs you" inside seven days of its deadline and a row in "waiting"
+ * otherwise; deferred agreements were retired on 17 Sep 2026 and the bridging
+ * fee, which is settled the moment the trade completes, has no deadline to
+ * wait on.
  *
  * PURE, AND EXPORTED, so the ordering is testable without a screen.
  */
@@ -818,36 +736,20 @@ export interface TradesModel {
 
 export type NeedsItem =
   | { kind: "code"; key: string; trade: ActiveTrade }
-  | { kind: "promise"; key: string; contract: V1Contract }
   | { kind: "offer"; key: string; offer: LiveOffer }
   /** A PENDING TradeRequest addressed to the viewer. See `useTradeDecision()`. */
   | { kind: "trade-request"; key: string; trade: ActiveTrade };
 
 export type WaitingItem =
   | { kind: "sent-offer"; key: string; offer: LiveOffer }
-  | { kind: "trade"; key: string; trade: ActiveTrade }
-  | { kind: "promise"; key: string; contract: V1Contract };
-
-/** §5.3 / §6: a promise is "near" inside seven days, and stays near past zero. */
-export function promiseIsNear(contract: V1Contract, now: Date = new Date()): boolean {
-  return daysUntil(new Date(contract.deadline), now) <= 7;
-}
-
-/** Live and owing. PENDING_ACCEPT is not yet a debt; DECLINED never was one. */
-function isOwing(c: V1Contract): boolean {
-  return c.status === "ACTIVE" || c.status === "DEFAULTED";
-}
+  | { kind: "trade"; key: string; trade: ActiveTrade };
 
 export function buildTradesModel(input: {
   active: TradesPayload | undefined;
-  contracts: ContractsPayload | undefined;
   history: TradesPayload | undefined;
-  now?: Date;
 }): TradesModel {
-  const now = input.now ?? new Date();
   const trades = input.active?.trades ?? [];
   const offers = input.active?.offers ?? [];
-  const contracts = input.contracts?.contracts ?? [];
 
   /* ── 1 ── a live code. The server already answered "is there one" per trade:
      `canConfirm` is computed from the code rows themselves, not from `status`,
@@ -857,13 +759,6 @@ export function buildTradesModel(input: {
   const codeTrades = trades
     .filter((t) => t.status === "CONFIRMING" && t.canConfirm)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-
-  /* ── 2 ── a promise inside seven days, or overdue. Debtor only. Most urgent
-     first, which past the deadline means most overdue first — `daysUntil` goes
-     negative and the ascending sort puts it at the top on its own. */
-  const nearPromises = contracts
-    .filter((c) => c.role === "debtor" && isOwing(c) && promiseIsNear(c, now))
-    .sort((a, b) => daysUntil(new Date(a.deadline), now) - daysUntil(new Date(b.deadline), now));
 
   /* ── 3 ── an incoming offer. Oldest first: it is the one closest to expiring,
      and an offer that expires unanswered is the outcome §10.6 calls "nobody did
@@ -882,11 +777,6 @@ export function buildTradesModel(input: {
 
   const needsToday: NeedsItem[] = [
     ...codeTrades.map((trade) => ({ kind: "code" as const, key: `code:${trade.id}`, trade })),
-    ...nearPromises.map((contract) => ({
-      kind: "promise" as const,
-      key: `promise:${contract.id}`,
-      contract,
-    })),
     ...incoming.map((offer) => ({ kind: "offer" as const, key: `offer:${offer.id}`, offer })),
     ...incomingTrades.map((trade) => ({
       kind: "trade-request" as const,
@@ -897,7 +787,7 @@ export function buildTradesModel(input: {
 
   /* ── Waiting ── everything with a clock on it that is not yours to move.
      Ordered by how soon it changes: sent offers (a three-day fuse), then trades
-     mid-flight, then promises further out than seven days. */
+     mid-flight. */
   const sentOffers = offers
     .filter((o) => o.direction === "sent")
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
@@ -914,23 +804,9 @@ export function buildTradesModel(input: {
     )
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
-  const nearKeys = new Set(nearPromises.map((c) => c.id));
-  const restingPromises = contracts
-    .filter(
-      (c) =>
-        !nearKeys.has(c.id) &&
-        (c.status === "PENDING_ACCEPT" || isOwing(c)),
-    )
-    .sort((a, b) => daysUntil(new Date(a.deadline), now) - daysUntil(new Date(b.deadline), now));
-
   const waiting: WaitingItem[] = [
     ...sentOffers.map((offer) => ({ kind: "sent-offer" as const, key: `sent:${offer.id}`, offer })),
     ...waitingTrades.map((trade) => ({ kind: "trade" as const, key: `trade:${trade.id}`, trade })),
-    ...restingPromises.map((contract) => ({
-      kind: "promise" as const,
-      key: `open:${contract.id}`,
-      contract,
-    })),
   ];
 
   const historyRows = input.history?.trades;
@@ -949,8 +825,8 @@ export function buildTradesModel(input: {
  * ══ THE SAME SET THE SCREEN DRAWS, NOT A SECOND DEFINITION ═════════════════
  *
  * `buildTradesModel()` already decides what "needs you" means: a live
- * confirmation code, a debtor's promise inside seven days, an incoming offer, a
- * PENDING trade request addressed to you. The badge is `needsToday.length` and
+ * confirmation code, an incoming offer, a PENDING trade request addressed to
+ * you. The badge is `needsToday.length` and
  * nothing else. A separate count — "unanswered offers", say — would be a second
  * definition of urgency that drifts from the first, and the failure mode is the
  * one a badge must never have: a number that does not match what is behind it.
@@ -959,10 +835,10 @@ export function buildTradesModel(input: {
  *
  * It rides the query cache, and therefore costs nothing extra.
  *
- * `TRADES_ACTIVE_KEY` and `CONTRACTS_KEY` are the keys the Trades screen itself
- * uses, so when that screen is open TanStack dedupes to ONE pair of requests and
- * the badge is reading the same bytes the list is. When it is not open, this is
- * the only reader and it is two cached calls.
+ * `TRADES_ACTIVE_KEY` is the key the Trades screen itself uses, so when that
+ * screen is open TanStack dedupes to ONE request and the badge is reading the
+ * same bytes the list is. When it is not open, this is the only reader and it
+ * is one cached call.
  *
  * It goes stale-and-refetches on the events that already exist:
  *
@@ -983,115 +859,109 @@ export function buildTradesModel(input: {
  */
 export function useNeedsTodayCount(): number {
   const active = useActiveTrades();
-  const contracts = useContracts();
 
   return useMemo(
-    () =>
-      buildTradesModel({
-        active: active.data,
-        contracts: contracts.data,
-        history: undefined,
-      }).needsToday.length,
-    [active.data, contracts.data],
+    () => buildTradesModel({ active: active.data, history: undefined }).needsToday.length,
+    [active.data],
   );
 }
 
 /* ────────────────────────── row-level helpers ───────────────────────── */
 
 /**
- * `Your Vans 440 for his Air Max 480` — §10.6's line, values and all.
+ * `Your Vans · Bracket 3 for their Air Max · Bracket 4` — the one line every
+ * trade row carries.
+ *
+ * ── BOTH ITEMS BY BRACKET, NEITHER BY VALUE ────────────────────────────────
+ *
+ * Since bracket trading, an exact figure appears on NO offer or trade surface
+ * — not the other person's item and not the viewer's own. The bracket is what
+ * the trade was judged on, and putting a number beside one side of a swap
+ * invites the reader to work out the other. Exact values live on the owner's
+ * own listing page and in the post wizard, and nowhere else.
  *
  * ── A NULL VALUE DROPS THE FIGURE, NEVER RENDERS AS ZERO ───────────────────
  *
- * `valueLeaves` is nullable and null means "never valued" — a listing older than
- * the valuation model, or an item deleted out from under a trade. `0` is a
- * different claim and a false one. So `titled()` below appends a number when
- * there is one and says the title alone when there is not, which is the same
- * call `src/api/offer.ts` makes for an unvalued item in the picker.
+ * `valueLeaves` is nullable and null means "never valued" — a listing older
+ * than the valuation model, or an item deleted out from under a trade. `0` is
+ * a different claim and a false one. So an unvalued item is named by title
+ * alone, on either side.
  *
  * ── §10's OWN RULE ABOUT THE WORD `Leaves` ─────────────────────────────────
  *
  * "Numbers are bare (`480`), the word `Leaves` appears once per context and not
- * on every figure." This line carries two figures and no unit; the context is
- * the Trades screen, where the unit is established by the section around it.
+ * on every figure." The context is the Trades screen, where the unit is
+ * established by the section around it.
  */
 export function swapLine(trade: ActiveTrade): string {
-  const theirs = titled(trade.requestedItem);
-  const mine = trade.offeredItem ? titled(trade.offeredItem) : null;
+  const sent = trade.direction === "sent";
+  // On a `sent` trade the viewer offered `offeredItem` and receives
+  // `requestedItem`; on a `received` one it is the reverse.
+  const mineItem = sent ? trade.offeredItem : trade.requestedItem;
+  const theirsItem = sent ? trade.requestedItem : trade.offeredItem;
 
   if (trade.kind === "leaves") {
-    // The listing sits in BOTH item columns on a Leaves-only trade, as a
-    // placeholder, so there is no second item to name — the route sends
-    // `offeredItem: null` for exactly this reason.
+    // A legacy Leaves-only trade: the listing sits in BOTH item columns as a
+    // placeholder, so there is one item to name, and it is the receiver's.
     const leaves = trade.offeredLeaves ?? 0;
     const side = leaves > 0 ? `${grouped(leaves)} Leaves` : "Leaves";
-    return trade.direction === "sent" ? `Your ${side} for ${theirs}` : `Their ${side} for ${theirs}`;
+    return sent
+      ? `Your ${side} for ${bracketed(trade.requestedItem)}`
+      : `Their ${side} for your ${bracketed(trade.requestedItem)}`;
   }
 
-  if (!mine) return theirs;
-  return trade.direction === "sent" ? `Your ${mine} for ${theirs}` : `Their ${mine} for ${theirs}`;
+  const mine = mineItem ? bracketed(mineItem) : null;
+  const theirs = theirsItem ? bracketed(theirsItem) : null;
+  if (mine && theirs) return sent ? `Your ${mine} for ${theirs}` : `Their ${theirs} for your ${mine}`;
+  return mine ? `Your ${mine}` : theirs ? `Their ${theirs}` : "";
 }
 
 /**
- * The same line for an offer, which names a listing and a set of items.
- *
- * With more than one item offered, the FIGURE IS THE SUM and the title is the
- * first plus a count: `Your chair 760 +2 for his guitar 1,450`. Summing is the
- * honest reduction — §10.2's very-large-gap copy does the same thing with "Your
- * four items together come to 1,620" — and it is only shown when EVERY item has
- * a value, because a sum with a null in it is a smaller number presented as a
- * total.
+ * The same line for an offer. Sent: `Your Vans · Bracket 2 for their Air
+ * Max · Bracket 3`. Received: the reverse. One item each way, both by bracket.
  */
 export function offerSwapLine(offer: LiveOffer): string {
-  const listing = titled(offer.post);
-  const items = offer.offeredItems;
-  const first = items[0];
-  const extra = items.length - 1;
-
-  let mine: string | null = null;
-  if (first) {
-    const allValued = items.every((i) => i.valueLeaves !== null);
-    const sum = allValued ? items.reduce((t, i) => t + (i.valueLeaves ?? 0), 0) : null;
-    const name = extra > 0 ? `${first.title} +${extra}` : first.title;
-    mine = sum !== null ? `${name} ${grouped(sum)}` : name;
-  }
-
+  const offered = offer.offeredItems[0] ?? null;
   if (offer.direction === "sent") {
-    return mine ? `Your ${mine} for ${listing}` : `Your Leaves for ${listing}`;
+    const mine = offered ? bracketed(offered) : "your item";
+    return `Your ${mine} for ${bracketed(offer.post)}`;
   }
-  return mine ? `Their ${mine} for your ${listing}` : `Their Leaves for your ${listing}`;
-}
-
-/** `Air Max 480`, or `Air Max` when the item was never valued. */
-function titled(item: { title: string; valueLeaves: number | null }): string {
-  return item.valueLeaves === null ? item.title : `${item.title} ${grouped(item.valueLeaves)}`;
+  const theirs = offered ? bracketed(offered) : "their item";
+  return `Their ${theirs} for your ${bracketed(offer.post)}`;
 }
 
 /**
- * What a debtor row's controls are.
- *
- * `settle` IS THE PRIMARY ONE and it is what the frames always drew. Available
- * on anything still owing — including a DEFAULTED agreement, because paying that
- * off is the way out of the trading restriction.
- *
- * `extend` is secondary and is not a substitute: asking for more time does not
- * move the deadline, only the creditor's grant does, and one is allowed per
- * contract. A row offers it only while there is still time to extend — an
- * agreement that has already lapsed cannot be un-defaulted by an extension, and
- * the server says so in those words.
- *
- * NEITHER, FOR EVERY CREDITOR ROW, per frame 9j — you cannot make someone pay,
- * and a control that only expresses impatience is one this app does not draw.
+ * The bridge on an offer, as one short line for a row: `20-Leaf fee held` /
+ * `You pay 30 on accepting` / `They pay 30 on accepting` / null when the pair
+ * is the same bracket. Written from the VIEWER's side.
  */
-export function promiseActions(c: V1Contract): { settle: boolean; extend: boolean } {
-  if (c.role !== "debtor") return { settle: false, extend: false };
+export function offerFeeLine(offer: LiveOffer): string | null {
+  const fee = offer.bridgeFeeLeaves ?? 0;
+  if (fee <= 0 || !offer.bridgeFeePayer) return null;
+  const proposerPays = offer.bridgeFeePayer === "proposer";
+  if (offer.direction === "sent") {
+    return proposerPays ? `${grouped(fee)}-Leaf fee held` : `They pay ${grouped(fee)} on accepting`;
+  }
+  return proposerPays ? `They paid a ${grouped(fee)}-Leaf fee` : `You pay ${grouped(fee)} on accepting`;
+}
 
-  const owing =
-    (c.status === "ACTIVE" || c.status === "DEFAULTED") && c.remainingLeaves > 0;
+/**
+ * The bridge on a live TRADE, from the viewer's side, or null on a
+ * same-bracket swap: `Your 20-Leaf fee comes back if this is cancelled` /
+ * `Their 20-Leaf fee comes to you when this completes`.
+ */
+export function tradeFeeLine(trade: ActiveTrade): string | null {
+  const fee = trade.bridgeFeeLeaves ?? 0;
+  if (fee <= 0 || trade.bridgeFeePaidBySender == null) return null;
+  const viewerPaid = trade.bridgeFeePaidBySender === (trade.direction === "sent");
+  return viewerPaid
+    ? `Your ${grouped(fee)}-Leaf bridging fee goes to them when this completes, or comes back if it is cancelled`
+    : `Their ${grouped(fee)}-Leaf bridging fee comes to you when this completes`;
+}
 
-  return {
-    settle: owing,
-    extend:
-      c.status === "ACTIVE" && !c.extension.used && !c.extension.pending && c.remainingLeaves > 0,
-  };
+/** `Air Max · Bracket 4`, or `Air Max` when never valued. Either side. */
+function bracketed(item: { title: string; valueLeaves: number | null }): string {
+  return item.valueLeaves === null
+    ? item.title
+    : `${item.title} · ${bracketLabel(bracketOf(item.valueLeaves))}`;
 }

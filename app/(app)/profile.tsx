@@ -81,7 +81,7 @@ export default function ProfileScreen() {
       numColumns={3}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={<ProfileHeader name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} />}
-      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />}
+      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />}
       ListEmptyComponent={<Text className="text-muted text-center py-12">Your listings will appear here.</Text>}
       ListFooterComponent={<View className="px-4 pt-8 pb-10"><SignOutButton onPress={confirmSignOut} busy={busy} /></View>}
       contentContainerStyle={{ paddingTop: 12 }}
@@ -95,9 +95,25 @@ function ProfileHeader({ name, avatar, bio, posts, followers, following }: { nam
 
 function Stat({ label, value }: { label: string; value: number }) { return <View className="items-center"><Text className="text-text text-base font-bold">{value}</Text><Text className="text-muted text-xs mt-1">{label}</Text></View>; }
 
+/**
+ * A tile the owner has a decision on says so. Until 18 Sep 2026 a listing
+ * hidden by a moderator looked like every other tile here and answered
+ * "Item not found" when tapped; one parked for a value review was not on the
+ * shelf at all. The label is the whole difference, and tapping a labelled tile
+ * opens the review screen (what happened, what to do) rather than the item.
+ */
+export function shelfLabel(item: Item): string | null {
+  if (item.hiddenByModerator) return "Hidden by a moderator";
+  if (item.status === "PENDING_REVIEW") return "Waiting for review";
+  if (item.status === "VALUE_REJECTED") return "Value not approved";
+  return null;
+}
+
 function ProfileTile({ item, onPress }: { item: Item; onPress: () => void }) {
-  return <Pressable onPress={onPress} className="w-1/3 aspect-square border-r border-b border-bg bg-card" accessibilityRole="button" accessibilityLabel={`Open ${item.title}`}>
-    {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : <View className="flex-1 items-center justify-center bg-card"><Ionicons name="image-outline" size={24} color={colors.muted} /></View>}
+  const label = shelfLabel(item);
+  return <Pressable onPress={onPress} className="w-1/3 aspect-square border-r border-b border-bg bg-card" accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
+    {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={{ width: "100%", height: "100%", opacity: label ? 0.55 : 1 }} /> : <View className="flex-1 items-center justify-center bg-card"><Ionicons name="image-outline" size={24} color={colors.muted} /></View>}
+    {label ? <View className="absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1"><Text className="text-white text-[10px] font-semibold" numberOfLines={1}>{label}</Text></View> : null}
   </Pressable>;
 }
 

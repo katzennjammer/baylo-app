@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
@@ -404,6 +405,7 @@ export function Field({
   maxLength,
   trailing,
   inputRef,
+  keyboardType,
 }: {
   label: string;
   value: string;
@@ -417,6 +419,8 @@ export function Field({
   /** The chevron on a picker field. */
   trailing?: React.ReactNode;
   inputRef?: React.RefObject<TextInput | null>;
+  /** `number-pad` for a Leaves figure. Default is the platform's text keyboard. */
+  keyboardType?: TextInputProps["keyboardType"];
 }) {
   const [focused, setFocused] = useState(false);
   const state: FieldState = disabled
@@ -466,6 +470,7 @@ export function Field({
             editable={!disabled}
             autoFocus={autoFocus}
             maxLength={maxLength}
+            keyboardType={keyboardType}
             placeholder={placeholder}
             placeholderTextColor={postColor.inkDisabled}
             selectionColor={postColor.forest}

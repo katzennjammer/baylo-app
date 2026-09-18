@@ -1,12 +1,11 @@
 import { router, useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
 import {
   buildTradesModel,
   useActiveTrades,
-  useContracts,
   useTradeHistory,
   type NeedsItem,
   type WaitingItem,
@@ -18,7 +17,6 @@ import * as copy from "../../src/components/trades/copy";
 import {
   HistoryCollapsedRow,
   NeedsCard,
-  PromiseWell,
   RowAction,
   RowChevron,
   Thumb,
@@ -33,6 +31,8 @@ import {
 } from "../../src/components/trades/states";
 import * as present from "../../src/components/trades/present";
 import { clockTime } from "../../src/lib/format";
+import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
+import { useTradeLiveness } from "../../src/lib/trade-liveness";
 import { offerColor, offerSize } from "../../src/theme/offer-tokens";
 
 /**
@@ -48,9 +48,9 @@ import { offerColor, offerSize } from "../../src/theme/offer-tokens";
  *
  * §6's order, and what each block admits:
  *
- *   Needs you today   a live confirmation code, then a promise inside seven days
- *                     of its deadline or past it, then an incoming offer. In
- *                     that order — see `buildTradesModel()`, which owns it.
+ *   Needs you today   a live confirmation code, then an incoming offer, then a
+ *                     trade request. In that order — see `buildTradesModel()`,
+ *                     which owns it.
  *   Waiting           everything with a clock on it that is not yours to move.
  *   History           one row. Nothing about a finished trade is urgent.
  *
@@ -79,38 +79,33 @@ export default function TradesScreen() {
   const router = useRouter();
 
   const active = useActiveTrades();
-  const contracts = useContracts();
   const history = useTradeHistory();
 
   const model = useMemo(
-    () =>
-      buildTradesModel({
-        active: active.data,
-        contracts: contracts.data,
-        history: history.data,
-      }),
-    [active.data, contracts.data, history.data],
+    () => buildTradesModel({ active: active.data, history: history.data }),
+    [active.data, history.data],
   );
+
+  // The spinner follows the GESTURE, not `isRefetching`: the liveness hook
+  // below and the push channel both refetch this list silently, and each of
+  // those used to flick the pull indicator at the top of a list nobody pulled.
+  const refetchAll = useCallback(
+    () => Promise.all([active.refetch(), history.refetch()]),
+    [active.refetch, history.refetch],
+  );
+  const { refreshing, onRefresh } = usePullToRefresh(refetchAll);
+
+  // Regained-focus refetch, and a 20s poll while the socket is down. Only the
+  // active list: history moves on status changes, which the push covers.
+  useTradeLiveness(active.refetch);
 
   // A 401 anywhere means the refresh interceptor gave up and the session is
   // being torn down by the (app) layout. An error panel over that would blame
   // the network for a sign-out.
-  const apiError =
-    active.error instanceof ApiError
-      ? active.error
-      : contracts.error instanceof ApiError
-        ? contracts.error
-        : null;
+  const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") {
     return <Splash waitingOn="Signing you back in" />;
   }
-
-  const refreshing = active.isRefetching || contracts.isRefetching;
-  const refetchAll = () => {
-    void active.refetch();
-    void contracts.refetch();
-    void history.refetch();
-  };
 
   /* ── §6's loading row. Labels render immediately; only bodies are blocks. ── */
   if (active.isPending && !active.data) {
@@ -159,7 +154,7 @@ export default function TradesScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={refetchAll}
+            onRefresh={onRefresh}
             tintColor={offerColor.inkTertiary}
             colors={[offerColor.deep]}
           />
@@ -167,7 +162,7 @@ export default function TradesScreen() {
       >
         {failed ? (
           <>
-            <TradesErrorPanel onRetry={refetchAll} />
+            <TradesErrorPanel onRetry={() => void refetchAll()} />
             {hasCache && lastLoaded ? (
               <>
                 <Hairline />
@@ -268,35 +263,6 @@ function NeedsRow({ item, stale }: { item: NeedsItem; stale: boolean }) {
     );
   }
 
-  if (item.kind === "promise") {
-    const lines = present.promiseCardLines(item.contract);
-    return (
-      <NeedsCard
-        thumb={<PromiseWell size={offerSize.tradeCard.thumb} />}
-        title={lines.title}
-        monoLines={[{ text: lines.deadline, ink: lines.ink }, { text: lines.settled }]}
-        action={
-          // Frame 9a's `Settle`, and it now leads somewhere that settles. The
-          // amount question lives on the Promises screen with the rest of the
-          // agreement, so the control opens that screen WITH THIS CONTRACT
-          // PRESELECTED — the sheet is up by the time the push lands. A button
-          // labelled Settle that only navigated would be a small lie.
-          //
-          // Outlined, not filled: §6 reserves the one filled control on this
-          // screen for the live code, which is the only card with somebody
-          // standing in front of you.
-          <RowAction
-            label={copy.promise.settle}
-            onPress={() =>
-              router.push(`/promises?settle=${encodeURIComponent(item.contract.id)}`)
-            }
-            accessibilityLabel={`Settle the ${lines.title}`}
-          />
-        }
-      />
-    );
-  }
-
   if (item.kind === "trade-request") {
     // A PENDING TradeRequest addressed to the viewer — a swap proposed directly
     // rather than through an offer. It cannot open `/offer-review`, which reads
@@ -364,17 +330,5 @@ function WaitingItemRow({ item, stale }: { item: WaitingItem; stale: boolean }) 
       />
     );
   }
-
-  const words = present.promiseWords(item.contract);
-  return (
-    <WaitingRow
-      thumb={<PromiseWell size={offerSize.tradeRow.thumb} />}
-      title={words.title}
-      subtitle={stale ? copy.card.mayBeStale : words.subtitle}
-      trailing={words.trailing}
-      trailingInk={words.trailingInk}
-      dim={stale}
-      onPress={() => router.push("/promises")}
-    />
-  );
+  return null;
 }
