@@ -157,7 +157,17 @@ cd baylo-mobile && npm run start:go     # Expo Go
 cd baylo-mobile && npm start            # development build (expo-dev-client)
 ```
 
-Then press **a** in terminal 3, or scan the QR with Expo Go.
+Then press **a** in terminal 3 to install and open the development build.
+
+> **Do not scan the QR with Expo Go.** This project uses native modules —
+> `expo-location` among them — and Expo Go is a prebuilt app from the Play Store
+> that cannot contain them. Location, and every other config in `app.json` that
+> is not pure JavaScript, silently does nothing there. The symptom is specific:
+> the Safe-Zone map shows every hub, correctly, with no "You are here" marker
+> and no nearby sorting — because the permission was never granted to *this*
+> app and the screen is drawing its honest fallback. `npm start` runs with
+> `--dev-client` for this reason. Use `npm run start:go` only if you are
+> deliberately testing something that has no native dependency.
 
 > **`npm start` targets the development build, not Expo Go.** Since the
 > realtime-messaging change it runs `expo start --dev-client`, whose QR code is
@@ -623,25 +633,33 @@ Verify the path before blaming the app — from the phone's browser, open
 `http://<the address npm run phone printed>:3000`. If the Baylo landing page
 does not load there, no amount of app debugging will help.
 
-### Not installed: `expo-dev-client`
+### `expo-dev-client` IS installed, and it is now load-bearing
+This section used to say it was not, and argued it was unnecessary. That was
+true of an earlier version of this project and is no longer true of this one:
+it is a dependency in `package.json`, and `npm start` launches Metro with
+`--dev-client`.
 
-Worth knowing what it would and would not buy, because it looks like the fix and
-is only half of one.
+The reason it became necessary is `app.json`. The moment a project declares a
+native plugin — `expo-location`'s `locationWhenInUsePermission` string, the
+camera permission text, the bundled fonts — the app can no longer run inside
+Expo Go, because Expo Go is a prebuilt binary whose native module set was fixed
+by Expo at publication time. It cannot read this project's plugin config, so
+those plugins are inert there.
 
-It **would** solve the reset: it adds a launcher that keeps recently-used dev
-server URLs in its own persistent storage, so a force-close returns you to a
-screen listing them rather than to a silent fallback to `localhost`.
+That failure is quiet and easy to misread. Location is the clearest example:
+the marketplace map draws every Safe-Zone hub correctly, and shows no "You are
+here" marker and no nearby-first sorting. Nothing errors. The screen simply
+takes its documented fallback path, because `requestForegroundPermissionsAsync`
+returned a denial against an app that was never granted the permission in the
+first place. If you are looking at that, the fix is not in the map code — it is
+to stop running it in Expo Go.
 
-It **would not** solve either thing that actually breaks this setup. The URL it
-remembers is still a URL: point it at a LAN IP and the next DHCP lease still
-kills it; point it at `localhost` and it still needs `adb reverse` and a cable
-that stays plugged in. It also adds a build step and a native dependency.
-
-Writing `debug_http_host` gets the same persistence with no new dependency — and
-under wireless mode, re-running `npm run phone` re-writes it without a cable, so
-a lease change costs one command instead of a plugged-in phone. Install
-`expo-dev-client` if you want its launcher UI and its other tooling — not as a
-fix for this.
+It still **does not** solve host persistence: the URL the launcher remembers is
+still a URL, so a LAN address still dies at the next DHCP lease and `localhost`
+still needs `adb reverse` and a cable that stays plugged in. Writing
+`debug_http_host` is still what keeps the app pointed at the right host, and
+re-running `npm run phone` still rewrites it without a cable. The two solve
+different problems and this project needs both.
 
 ## Cloud builds — EAS
 
@@ -984,8 +1002,8 @@ Setting up for the first time? [Setup](#setup) is the ordered version of this,
 including the API server that has to be up before any of it means anything.
 
 ```bash
-npm run start:go          # Metro for Expo Go; press a for Android, i for iOS
-npm start                 # Metro for the development build (--dev-client)
+npm start                 # Metro for Expo Go; press a for Android, i for iOS
+npm run start:dev-client  # Metro for the DEV BUILD — needed for native modules
 npm run typecheck         # tsc --noEmit
 npm run verify:api        # the API client acceptance harness (see below)
 

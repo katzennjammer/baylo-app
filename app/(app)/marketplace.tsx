@@ -132,6 +132,8 @@ export default function MarketplaceScreen() {
   const [view, setView] = useState<BrowseView>("grid");
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
+  /** Null shows every Safe Zone; otherwise the map is narrowed to one type. */
+  const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObjectCoords | null>(null);
   const [locationState, setLocationState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const [locationDenied, setLocationDenied] = useState(false);
@@ -341,9 +343,19 @@ export default function MarketplaceScreen() {
     return orderedHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT);
   }, [orderedHubs, userLocation]);
 
+  const visibleHubs = useMemo(
+    () => hubTypeFilter ? orderedHubs.filter((hub) => hub.type === hubTypeFilter) : orderedHubs,
+    [hubTypeFilter, orderedHubs],
+  );
+
+  const visibleNearbyHubs = useMemo(
+    () => visibleHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT),
+    [visibleHubs],
+  );
+
   const mapHubs: MapHub[] = useMemo(() => {
-    const nearbyIds = new Set(nearbyHubs.map((hub) => hub.id));
-    return orderedHubs.map((hub) => ({
+    const nearbyIds = new Set(visibleNearbyHubs.map((hub) => hub.id));
+    return visibleHubs.map((hub) => ({
       id: hub.id,
       name: hub.name,
       type: hub.type,
@@ -352,7 +364,7 @@ export default function MarketplaceScreen() {
       isActive: hub.isActive,
       nearby: nearbyIds.has(hub.id),
     }));
-  }, [orderedHubs, nearbyHubs]);
+  }, [visibleHubs, visibleNearbyHubs]);
 
   /** §7.1's reach bracket, from the viewer's own shelf. Null until it has loaded. */
   const { reach } = useReach();
@@ -517,7 +529,7 @@ export default function MarketplaceScreen() {
      FlatList's header would keep the item query's states (skeleton, no
      matches, end-of-list spinner) mounted around a list that is not there. */
   if (view === "map") {
-    const selected = orderedHubs.find((h) => h.id === selectedHubId) ?? null;
+    const selected = visibleHubs.find((h) => h.id === selectedHubId) ?? null;
     const hubsError = hubsQuery.error instanceof ApiError ? hubsQuery.error : null;
 
     return (
@@ -527,7 +539,13 @@ export default function MarketplaceScreen() {
         </View>
 
         <View style={s.legend}>
-          <MapLegend />
+          <MapLegend
+            selectedType={hubTypeFilter}
+            onSelectType={(next) => {
+              setHubTypeFilter(next);
+              setSelectedHubId(null);
+            }}
+          />
         </View>
 
         <View style={s.locationRow}>
@@ -597,7 +615,7 @@ export default function MarketplaceScreen() {
               {/* Degrades to the hub list rather than a blank map view.
                   See MapErrorBoundary. */}
               <MapErrorBoundary
-                hubs={orderedHubs}
+                hubs={visibleHubs}
                 onOpenHub={(hubId) => router.push({ pathname: "/hub", params: { id: hubId } })}
               >
                 <HubMap
@@ -606,15 +624,19 @@ export default function MarketplaceScreen() {
                   interactive
                   selectedHubId={selectedHubId}
                   onSelectHub={setSelectedHubId}
-                  emptyMessage="No Safe Zones have been set up yet. They are added city by city."
+                  emptyMessage={
+                    hubTypeFilter
+                      ? "No Safe Zones of this type are available yet."
+                      : "No Safe Zones have been set up yet. They are added city by city."
+                  }
                   style={s.map}
                 />
               </MapErrorBoundary>
 
-              {locationState === "ready" && userLocation && nearbyHubs.length > 0 && !selected ? (
+              {locationState === "ready" && userLocation && visibleNearbyHubs.length > 0 && !selected ? (
                 <View style={s.nearbyOverlay} pointerEvents="box-none">
                   <NearestHubsStrip
-                    hubs={nearbyHubs}
+                    hubs={visibleNearbyHubs}
                     origin={userLocation}
                     selectedHubId={selectedHubId}
                     onSelect={setSelectedHubId}

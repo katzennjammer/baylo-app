@@ -1,5 +1,4 @@
-import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -8,6 +7,7 @@ import { colors } from "../../src/theme/palette";
 import { useProfileMe } from "../../src/api/profile";
 import { useSession } from "../../src/auth/session";
 import type { Item } from "../../src/api/types";
+import type { ProfileMePayload } from "../../src/api/types";
 
 /**
  * Profile — the account block, and the way out.
@@ -28,50 +28,10 @@ import type { Item } from "../../src/api/types";
  */
 export default function ProfileScreen() {
   const router = useRouter();
-  const { session, signOut } = useSession();
+  const { session } = useSession();
   const { data: profile } = useProfileMe();
-  const [busy, setBusy] = useState(false);
-  // A ref as well as the state flag: Alert's onPress can fire twice on a fast
-  // double-tap, before the re-render that disables the button has landed. A
-  // second signOut() would post a second revoke with a token already spent.
-  const inFlight = useRef(false);
 
   const user = session?.user;
-
-  const performSignOut = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true);
-
-    try {
-      await signOut();
-    } catch {
-      // Nothing to show, and nowhere to show it. signOut() drops the in-memory
-      // session and publishes that before anything which can fail is awaited,
-      // so by the time an error reaches here the guard in (app)/_layout.tsx has
-      // already replaced this entire tree with the login screen.
-      //
-      // Note there is no router.replace() on the success path either, for the
-      // same reason: the redirect is declarative and belongs to the guard.
-      // Navigating imperatively from here would race it, and the guard is the
-      // path a mid-session logout already takes when the refresh interceptor
-      // gives up — one mechanism, not two.
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-  }, [signOut]);
-
-  const confirmSignOut = useCallback(() => {
-    Alert.alert(
-      "Sign out?",
-      "This device will forget your tokens, and the session is revoked on the server so it cannot be resumed.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Sign out", style: "destructive", onPress: () => void performSignOut() },
-      ],
-    );
-  }, [performSignOut]);
 
   const items = profile?.items ?? [];
   return (
@@ -80,17 +40,99 @@ export default function ProfileScreen() {
       data={items}
       numColumns={3}
       keyExtractor={(item) => item.id}
+<<<<<<< Updated upstream
       ListHeaderComponent={<ProfileHeader name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} />}
       renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />}
+=======
+      ListHeaderComponent={
+        <ProfileHeader
+          name={profile?.user.name ?? user?.name ?? "Signed in"}
+          avatar={profile?.user.avatar ?? user?.image ?? null}
+          bio={profile?.user.bio}
+          followers={profile?.counts.followers ?? 0}
+          following={profile?.counts.following ?? 0}
+          posts={profile?.counts.listed ?? items.length}
+          displayedAchievements={profile?.displayedAchievements ?? []}
+          achievementCount={profile?.achievementCount ?? 0}
+          onMoreAchievements={() => router.push("/achievements")}
+        />
+      }
+      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />}
+>>>>>>> Stashed changes
       ListEmptyComponent={<Text className="text-muted text-center py-12">Your listings will appear here.</Text>}
-      ListFooterComponent={<View className="px-4 pt-8 pb-10"><SignOutButton onPress={confirmSignOut} busy={busy} /></View>}
       contentContainerStyle={{ paddingTop: 12 }}
     />
   );
 }
 
-function ProfileHeader({ name, avatar, bio, posts, followers, following }: { name: string; avatar: string | null; bio: string | null | undefined; posts: number; followers: number; following: number }) {
-  return <View className="px-4 pb-5"><View className="flex-row items-center"><Avatar uri={avatar} name={name} /><View className="flex-1 flex-row justify-around ml-5"><Stat label="Posts" value={posts} /><Stat label="Followers" value={followers} /><Stat label="Following" value={following} /></View></View><Text className="text-text text-lg font-bold mt-4">{name}</Text>{bio ? <Text className="text-muted text-sm mt-1 leading-5">{bio}</Text> : null}<View className="border-b border-line mt-5" /></View>;
+function ProfileHeader({
+  name,
+  avatar,
+  bio,
+  posts,
+  followers,
+  following,
+  displayedAchievements,
+  achievementCount,
+  onMoreAchievements,
+}: {
+  name: string;
+  avatar: string | null;
+  bio: string | null | undefined;
+  posts: number;
+  followers: number;
+  following: number;
+  displayedAchievements: ProfileMePayload["displayedAchievements"];
+  achievementCount: number;
+  onMoreAchievements: () => void;
+}) {
+  return (
+    <View className="px-4 pb-5">
+      <View className="flex-row items-center">
+        <Avatar uri={avatar} name={name} />
+        <View className="flex-1 flex-row justify-around ml-5">
+          <Stat label="Posts" value={posts} />
+          <Stat label="Followers" value={followers} />
+          <Stat label="Following" value={following} />
+        </View>
+      </View>
+      <Text className="text-text text-lg font-bold mt-4">{name}</Text>
+      {bio ? <Text className="text-muted text-sm mt-1 leading-5">{bio}</Text> : null}
+      {displayedAchievements.length > 0 ? <BadgeShelf badges={displayedAchievements} onMore={onMoreAchievements} /> : null}
+      <View className="border-b border-line mt-5" />
+    </View>
+  );
+}
+
+const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  check: "shield-checkmark-outline",
+  id: "id-card-outline",
+  list: "list-outline",
+  swap: "swap-horizontal-outline",
+};
+
+function BadgeShelf({ badges, onMore }: { badges: ProfileMePayload["displayedAchievements"]; onMore: () => void }) {
+  return (
+    <View className="mt-5">
+      <Text className="text-blue text-xs font-bold tracking-widest">BADGES - SECTION</Text>
+      <View className="flex-row items-start mt-3 gap-3">
+        {badges.slice(0, 3).map((badge) => (
+          <View key={badge.id} className="items-center w-14">
+            <View className="h-14 w-14 items-center justify-center rounded-full bg-accent/15">
+              <Ionicons name={badgeIcons[badge.icon] ?? "trophy-outline"} size={25} color={colors.accent} />
+            </View>
+            <Text className="text-muted text-[11px] text-center mt-1" numberOfLines={2}>{badge.name}</Text>
+          </View>
+        ))}
+        <Pressable className="items-center w-14" onPress={onMore} accessibilityLabel="More achievements">
+          <View className="h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-muted/60">
+            <Ionicons name="add" size={24} color={colors.muted} />
+          </View>
+          <Text className="text-muted text-[11px] text-center mt-1">More</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: number }) { return <View className="items-center"><Text className="text-text text-base font-bold">{value}</Text><Text className="text-muted text-xs mt-1">{label}</Text></View>; }
@@ -117,44 +159,6 @@ function ProfileTile({ item, onPress }: { item: Item; onPress: () => void }) {
   </Pressable>;
 }
 
-/**
- * The destructive action, on the app's dark canvas.
- *
- * Not one of the buttons in `src/components/auth-ui.tsx`: those are built for
- * the white card the auth screens use and hardcode `bg-white` with ink type,
- * which here would be a bright slab in the middle of a very dark screen.
- *
- * Outlined rather than filled. A filled red button is the loudest thing on any
- * screen it is on, and this is not the screen's primary action — it is only its
- * ONLY action, which is an accident of the tab being unbuilt rather than a
- * claim about its importance. h-[52px] matches the auth buttons and clears the
- * 44px tap floor with room for the border.
- */
-function SignOutButton({ onPress, busy }: { onPress: () => void; busy: boolean }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={busy}
-      accessibilityRole="button"
-      accessibilityLabel="Sign out"
-      accessibilityState={{ disabled: busy, busy }}
-      className={`h-[52px] flex-row items-center justify-center gap-2.5 rounded-full border border-danger/50 ${
-        busy ? "opacity-50" : "bg-danger/10 active:bg-danger/20"
-      }`}
-    >
-      {busy ? (
-        <ActivityIndicator color={colors.danger} />
-      ) : (
-        <>
-          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-          <Text className="text-danger text-[15px] font-bold uppercase tracking-wider">
-            Sign out
-          </Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
 
 /** The same fallback-to-initial avatar FeedCard uses, at the size this screen wants. */
 function Avatar({ uri, name }: { uri: string | null; name: string }) {

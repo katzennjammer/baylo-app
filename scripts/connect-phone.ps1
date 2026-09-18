@@ -456,9 +456,29 @@ if ($Mode -eq 'wireless' -or $Pair -or $Unpair) {
   Step "wireless adb"
 
   $state = Read-WirelessState
-
-  if (-not $PhoneIp) { $PhoneIp = if ($state) { $state.phoneIp } else { $null } }
-  if (-not $PhoneIp) { $PhoneIp = Get-PhoneIpGuess }
+  $live  = Get-PhoneIpGuess
+  # ── THE LIVE NETWORK OUTRANKS THE REMEMBERED ADDRESS ──
+  #
+  # This used to read the saved state FIRST, and the failure it caused is worth
+  # stating because the symptom blamed the wrong thing: a `wireless-adb.json`
+  # holding a phone address from a session months earlier won over the actual
+  # current gateway, so the script pinged an address that had not existed since,
+  # failed, and told the user their laptop "is not on the same network as the
+  # phone" -- while the laptop was sitting on perfectly good Wi-Fi. The stale
+  # record was invisible from the outside; only the file named an address the
+  # routing table had never heard of.
+  #
+  # A remembered address is a cache, and a cache is only useful when there is
+  # nothing better. There is something better whenever the machine HAS a default
+  # gateway: in this mode's own topology that gateway IS the phone, and asking
+  # the routing table is a fact about now rather than a note about September.
+  # So the live guess wins, and state is consulted only when there is no gateway
+  # to ask -- and even then it is VERIFIED below rather than trusted.
+  if (-not $PhoneIp) { $PhoneIp = $live }
+  if (-not $PhoneIp -and $state) {
+    $PhoneIp = $state.phoneIp
+    Note "no default gateway; falling back to the address remembered from $($state.written)"
+  }
   if (-not $PhoneIp) {
     Fail @"
 could not work out the phone's address.
@@ -472,8 +492,13 @@ could not work out the phone's address.
 "@
   }
 
+  # Say so when the two disagree, because the remembered one is about to be
+  # discarded and a silent overwrite is how somebody keeps believing the app is
+  # pointed at an address it is not.
   if ($state -and $state.phoneIp -and $state.phoneIp -ne $PhoneIp) {
-    Note "phone was at $($state.phoneIp) last time, is at $PhoneIp now"
+    Note "a previous session recorded the phone at $($state.phoneIp); using $PhoneIp"
+    Note "(that record is from $($state.written) and is not consulted when this"
+    Note " machine has a default gateway -- see the note in this script)"
   }
   Ok "phone address: $PhoneIp"
 
@@ -484,8 +509,24 @@ $PhoneIp does not answer a ping.
     The laptop is not on the same network as the phone. Turn the phone's
     hotspot on, join this laptop to it, and re-run.
 
-    If it IS joined and this still fails, the phone may be blocking ICMP; pass
-    the address explicitly to skip this check being the thing that stops you:
+    THIS MODE EXPECTS THE LAPTOP TO BE ON THE PHONE'S HOTSPOT, which makes the
+    phone this machine's default gateway. This laptop's gateway is currently
+    $live -- if that is your ROUTER rather than your phone, then you are on
+    ordinary Wi-Fi and -Mode wireless cannot work by design: there is no adb
+    port to reach, because the phone is not on this network.
+
+    Two ways forward, and they are different situations:
+
+      1  You want wireless debugging. Turn the phone's hotspot on, join this
+         laptop to it, confirm the gateway becomes the phone's address, and
+         re-run. Nothing else needs changing.
+
+      2  You just want the app running. Plug the phone in with a USB cable and
+         use the default wireless mode anyway, or use -Mode tunnel -- both work
+         over a cable, and the cable is what tunnel mode needs to stay up.
+
+    If it IS the phone's hotspot and this still fails, the phone may be blocking
+    ICMP. Pass an explicit port to skip this check being what stops you:
       powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode wireless -PhoneIp $PhoneIp -ConnectPort <port>
 "@
   }
@@ -844,6 +885,10 @@ Step "servers"
 
 if (Test-Listening $MetroPort) {
   Ok "Metro already listening on $MetroPort"
+  Note "this script did NOT start it, so it may be in the wrong mode. The Metro"
+  Note "window should say 'Using development build' -- NOT 'Using Expo Go', which"
+  Note "cannot grant this app's location permission (see the note in app.json);"
+  Note "an Expo Go Metro is the usual reason location appears not to work at all."
   Note "if that Metro was started WITHOUT REACT_NATIVE_PACKAGER_HOSTNAME=$metroHost"
   Note "it is advertising a different host. Close its window and re-run this"
   Note "script if the app reaches for an address you do not expect."
@@ -857,9 +902,20 @@ else {
   # prints all agree with the host about to be persisted -- that disagreement
   # is what made tunnel and lan mode interfere with each other.
   $hostFlag = if ($Mode -eq 'tunnel') { 'localhost' } else { 'lan' }
-  Note "starting Metro with REACT_NATIVE_PACKAGER_HOSTNAME=$metroHost --host $hostFlag"
+  Note "starting Metro with REACT_NATIVE_PACKAGER_HOSTNAME=$metroHost --host $hostFlag --dev-client"
+  # --dev-client, NOT --go, and the difference is the whole reason location
+  # looked broken. `--go` serves the bundle to Expo Go: a prebuilt app from the
+  # Play Store carrying a fixed set of native modules compiled by Expo. This
+  # project's expo-location config (the locationWhenInUsePermission string in
+  # app.json) is NATIVE code, and Expo Go cannot see it -- so the permission is
+  # never granted against this app, `requestForegroundPermissionsAsync` reports
+  # a denial that was never shown to the user, and the map draws its honest
+  # "Location unavailable, showing all Safe Zones" state. Nothing to debug in
+  # the JS: the marker and the nearby sort were correct all along and had no
+  # position to work from. --dev-client makes the phone load THIS build, whose
+  # manifest already declares ACCESS_COARSE_LOCATION and ACCESS_FINE_LOCATION.
   Start-Process -FilePath 'cmd.exe' `
-                -ArgumentList '/c', "set REACT_NATIVE_PACKAGER_HOSTNAME=$metroHost && npx expo start --host $hostFlag" `
+                -ArgumentList '/c', "set REACT_NATIVE_PACKAGER_HOSTNAME=$metroHost && npx expo start --host $hostFlag --dev-client" `
                 -WorkingDirectory $projectRoot | Out-Null
 
   if (Wait-ForPort $MetroPort $StartTimeoutSec) {

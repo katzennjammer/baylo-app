@@ -58,6 +58,7 @@ export default function HubsMapScreen() {
 
   /** Selection is owned here: both the map and the sheet read it. */
   const [selectedId, setSelectedId] = useState<string | null>(focus ?? null);
+  const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
 
   const scoped = !!itemId;
 
@@ -66,12 +67,17 @@ export default function HubsMapScreen() {
     return all.data?.hubs ?? [];
   }, [scoped, item.data, all.data]);
 
+  const visibleHubs = useMemo(
+    () => hubTypeFilter ? hubs.filter((hub) => hub.type === hubTypeFilter) : hubs,
+    [hubTypeFilter, hubs],
+  );
+
   const isPending = scoped ? item.isPending : all.isPending;
   const isError = scoped ? item.isError : all.isError;
   const error = scoped ? item.error : all.error;
   const refetch = scoped ? item.refetch : all.refetch;
 
-  const selected = hubs.find((h) => h.id === selectedId) ?? null;
+  const selected = visibleHubs.find((h) => h.id === selectedId) ?? null;
 
   const apiError = error instanceof ApiError ? error : null;
   // Same rule as every other screen: a 401 means the interceptor has already
@@ -106,7 +112,13 @@ export default function HubsMapScreen() {
       </View>
 
       <View style={s.legend}>
-        <MapLegend />
+        <MapLegend
+          selectedType={hubTypeFilter}
+          onSelectType={(next) => {
+            setHubTypeFilter(next);
+            setSelectedId(null);
+          }}
+        />
       </View>
 
       <View style={s.mapWrap}>
@@ -129,17 +141,19 @@ export default function HubsMapScreen() {
                 WebView fails, this degrades to the same data as a list rather
                 than taking the screen down — see MapErrorBoundary. */}
             <MapErrorBoundary
-              hubs={hubs}
+              hubs={visibleHubs}
               onOpenHub={(hubId) => router.push({ pathname: "/hub", params: { id: hubId } })}
             >
               <HubMap
-                hubs={hubs}
+                hubs={visibleHubs}
                 interactive
                 focusHubId={focus}
                 selectedHubId={selectedId}
                 onSelectHub={setSelectedId}
                 emptyMessage={
-                  scoped
+                  hubTypeFilter
+                    ? "No Safe Zones of this type are available yet."
+                    : scoped
                     ? "This listing has no Safe Zone set. Agree on a public place in your messages."
                     : "No Safe Zones have been set up yet. They are added city by city."
                 }

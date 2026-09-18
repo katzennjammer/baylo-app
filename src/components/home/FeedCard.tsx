@@ -166,6 +166,11 @@ export const FeedCard = memo(function FeedCard({
             >
               {item.owner.name}
             </Text>
+            {item.owner.featuredAchievement ? (
+              <View style={s.featureBadge} accessibilityLabel={`Featured achievement: ${item.owner.featuredAchievement.name}`}>
+                <Text style={s.featureBadgeText}>{item.owner.featuredAchievement.icon}</Text>
+              </View>
+            ) : null}
             <TierBadge tier={resolveTier(item.owner)} />
           </View>
 
@@ -715,6 +720,17 @@ const s = StyleSheet.create({
   },
   ownerText: { flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
+  featureBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.greenWash,
+    borderWidth: border.chip,
+    borderColor: color.greenLine,
+  },
+  featureBadgeText: { fontSize: 10, lineHeight: 12 },
   name: { flexShrink: 1, color: color.ink },
   meta: { marginTop: space.card.nameToMeta, color: color.inkMuted },
 

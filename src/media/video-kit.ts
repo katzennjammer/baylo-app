@@ -1,4 +1,5 @@
 import type * as ExpoVideo from "expo-video";
+import { Platform } from "react-native";
 
 /**
  * `expo-video`, behind a load that cannot take the app down with it.
@@ -36,6 +37,9 @@ let kit: typeof ExpoVideo | null = null;
 let failure: string | null = null;
 
 try {
+  if (Platform.OS === "android") {
+    failure = "expo-video disabled on Android because the device renderer crashes on its surface";
+  } else {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const loaded = require("expo-video") as typeof ExpoVideo;
 
@@ -48,6 +52,7 @@ try {
     failure = "expo-video resolved without useVideoPlayer/VideoView — native module missing";
   } else {
     kit = loaded;
+  }
   }
 } catch (err) {
   failure = err instanceof Error ? err.message : String(err);
