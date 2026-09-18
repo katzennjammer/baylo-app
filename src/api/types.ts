@@ -128,6 +128,18 @@ export interface Item {
   suggestedLeaves: number | null;
   valuationSource: string | null;
   status: string;
+  /**
+   * TRUE when a moderator has taken the listing down. Only ever true on your
+   * OWN shelf and detail — every other read path filters it out — and it is
+   * what lets the shelf label the tile instead of 404ing when it is opened.
+   */
+  hiddenByModerator: boolean;
+  /**
+   * The code a value review was refused with, while `status` is
+   * VALUE_REJECTED. Null otherwise. `src/lib/value-rejection.ts` turns it into
+   * the sentence the owner reads.
+   */
+  valueRejectionReason: string | null;
   wanted: string | null;
   pickup: Pickup | null;
   owner: ItemOwner;
@@ -148,9 +160,43 @@ export interface BrowsePayload {
   facets: { categories: { category: string; label: string; count: number }[] };
 }
 
+/**
+ * What happened to a listing, for its owner. Null for anybody else and for a
+ * listing nothing has happened to. The review screen is drawn from this alone.
+ *
+ *   state "waiting"    PENDING_REVIEW — an admin has not answered yet
+ *   state "rejected"   VALUE_REJECTED — answered no; the owner chooses
+ *   state "hidden"     a moderator takedown; wins over the value states
+ */
+export interface ListingReview {
+  state: "waiting" | "rejected" | "hidden";
+  hiddenAt: string | null;
+  requestedLeaves: number | null;
+  suggestedLeaves: number | null;
+  requestedBracket: number | null;
+  suggestedBracket: number | null;
+  /** The highest bracket that goes live without a review. */
+  capBracket: number | null;
+  reasonCode: string | null;
+  /** The server's sentence for `reasonCode`; the local mirror is the fallback. */
+  reason: string | null;
+  appeal: {
+    id: string | null;
+    status: "OPEN" | "UPHELD" | "OVERTURNED" | "WITHDRAWN" | null;
+    kind: "VALUE_REJECTION" | "MODERATION_HIDE" | null;
+    message: string | null;
+    createdAt: string | null;
+    decidedAt: string | null;
+    /** The one field that draws or hides the Appeal control; `status` says why. */
+    canAppeal: boolean;
+  };
+}
+
 /** GET /api/v1/items/[id] — the detail screen in one request. */
 export interface ItemDetailPayload {
   item: Item & { imageHash: string | null; updatedAt: string };
+  /** Owner only. See ListingReview. */
+  review: ListingReview | null;
   viewer: {
     isOwner: boolean;
     /** False for your own listing and for anything that has left AVAILABLE. */
@@ -303,6 +349,9 @@ export interface ProfileMePayload {
   counts: {
     listed: number;
     owned: number;
+    /** Listings parked for a value review, and ones a review refused. */
+    waitingReview: number;
+    valueRejected: number;
     completedTrades: number;
     reviews: number;
     followers: number;

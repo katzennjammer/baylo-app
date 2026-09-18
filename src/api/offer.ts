@@ -248,7 +248,7 @@ export function useReach() {
   // Only AVAILABLE rows. `me.items` carries OWNED ones too — things already
   // acquired — and an item you cannot trade away does not extend your reach.
   const highest = (me.data?.items ?? []).reduce(
-    (max, row) => (row.status === "AVAILABLE" ? Math.max(max, row.valueLeaves ?? 0) : max),
+    (max, row) => (row.status === "AVAILABLE" && !row.hiddenByModerator ? Math.max(max, row.valueLeaves ?? 0) : max),
     0,
   );
 

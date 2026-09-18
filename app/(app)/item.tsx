@@ -114,6 +114,7 @@ export default function ItemDetailScreen() {
   const highestItem = (me?.items ?? []).reduce<Item | null>(
     (best, row) =>
       row.status === "AVAILABLE" &&
+      !row.hiddenByModerator &&
       row.valueLeaves !== null &&
       (best === null || row.valueLeaves > (best.valueLeaves ?? 0))
         ? row
@@ -187,7 +188,7 @@ export default function ItemDetailScreen() {
     );
   }
 
-  const { item, viewer } = data;
+  const { item, viewer, review } = data;
   const hubs = item.safeZones ?? [];
 
   /*
@@ -220,7 +221,7 @@ export default function ItemDetailScreen() {
    */
   const listingBracket = item.valueLeaves !== null ? bracketOf(item.valueLeaves) : null;
   const shelfValues = (me?.items ?? [])
-    .filter((row) => row.status === "AVAILABLE")
+    .filter((row) => row.status === "AVAILABLE" && !row.hiddenByModerator)
     .map((row) => row.valueLeaves);
   const misses = listingBracket !== null && me ? shelfMisses(shelfValues, listingBracket) : null;
   const cannotOffer = !locked && listingBracket !== null && (outOfReach || misses !== null);
@@ -309,6 +310,28 @@ export default function ItemDetailScreen() {
         <PhotoCarousel images={item.images} title={item.title} />
 
         <View style={s.body}>
+          {/* The owner's own listing, when something has happened to it:
+              parked for review, refused, or taken down. One line and a way to
+              the screen that explains it — the detail page itself stays the
+              listing, not the case file. */}
+          {viewer.isOwner && review ? (
+            <Tappable
+              onPress={() => router.push({ pathname: "/listing-review", params: { id: item.id } })}
+              accessibilityRole="button"
+              style={s.reviewBanner}
+              pressedStyle={{ opacity: 0.85 }}
+            >
+              <Text style={[textStyle(type.detailBody), { color: color.ink, flex: 1 }]}>
+                {review.state === "hidden"
+                  ? "Hidden by a moderator — only you can see this."
+                  : review.state === "waiting"
+                    ? "Waiting for a value review — only you can see this."
+                    : "Value not approved — only you can see this."}
+              </Text>
+              <Text style={[textStyle(type.detailBody), { color: color.forest }]}>What now?</Text>
+            </Tappable>
+          ) : null}
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
           {/* Omitted, never "0", for a listing that predates the valuation
@@ -833,6 +856,16 @@ const s = StyleSheet.create({
   backPressed: { opacity: 0.6 },
 
   body: { paddingHorizontal: space.detail.x, paddingTop: space.detail.photoToBody },
+  reviewBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderRadius: 10,
+    backgroundColor: color.greenWash,
+  },
   title: { color: color.ink },
   leavesRow: {
     marginTop: space.detail.titleToLeaves,
