@@ -1,5 +1,7 @@
-import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { usePathname, useRouter } from "expo-router";
+import { useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../api/client";
@@ -19,6 +21,7 @@ import {
   type,
 } from "../theme/tokens";
 import { useHome } from "../api/home";
+import { useSession } from "../auth/session";
 
 /**
  * The header on every tab: wordmark, Leaves balance, notifications, messages.
@@ -52,9 +55,11 @@ import { useHome } from "../api/home";
  */
 export function AppHeader() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { viewer, unread, isPending, isError, error, dataUpdatedAt } = useHome();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // A 401 is not a connection problem, and saying so would be the last thing
   // someone reads before being bounced to the login screen. By the time the
@@ -141,6 +146,23 @@ export function AppHeader() {
                 color={color.ink}
               />
             </HeaderIconButton>
+            {pathname.endsWith("/profile") ? (
+              <View style={s.menuAnchor}>
+                <HeaderIconButton
+                  label={menuOpen ? "Close account menu" : "Open account menu"}
+                  count={0}
+                  tight={tight}
+                  onPress={() => setMenuOpen((open) => !open)}
+                >
+                  <Ionicons name="menu" size={24} color={color.ink} />
+                </HeaderIconButton>
+                {menuOpen ? (
+                  <AccountMenu
+                    onClose={() => setMenuOpen(false)}
+                  />
+                ) : null}
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -153,6 +175,71 @@ export function AppHeader() {
       */}
       {offline ? <OfflineBar lastSyncedAt={dataUpdatedAt || null} /> : null}
       <Divider />
+    </View>
+  );
+}
+
+function AccountMenu({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { signOut } = useSession();
+
+  const confirmSignOut = () => {
+    Alert.alert(
+      "Sign out?",
+      "This device will forget your tokens, and the session is revoked on the server so it cannot be resumed.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign out", style: "destructive", onPress: () => void signOut() },
+      ],
+    );
+  };
+
+  return (
+    <View style={s.accountMenu} accessibilityRole="menu">
+      <Pressable
+        onPress={() => {
+          onClose();
+          router.push("/settings");
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="settings-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Settings</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
+          Alert.alert("Premium/VIP", "Premium and VIP features are coming soon.");
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="star-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Premium/VIP</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
+          router.push("/achievements");
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="trophy-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Achievements</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
+          confirmSignOut();
+        }}
+        accessibilityRole="menuitem"
+        style={[s.accountMenuItem, s.accountMenuItemLast]}
+      >
+        <Ionicons name="log-out-outline" size={19} color={color.urgent} />
+        <Text style={[s.accountMenuText, { color: color.urgent }]}>Sign out</Text>
+      </Pressable>
     </View>
   );
 }
@@ -290,6 +377,32 @@ function UnreadBadge({ count }: { count: number }) {
 const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   actions: { flexShrink: 0, flexDirection: "row", alignItems: "center" },
+  menuAnchor: { position: "relative" },
+  accountMenu: {
+    position: "absolute",
+    top: size.control.headerIcon + 4,
+    right: 0,
+    minWidth: 166,
+    backgroundColor: color.surface,
+    borderColor: color.divider,
+    borderWidth: 1,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 8,
+    zIndex: 20,
+  },
+  accountMenuItem: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  accountMenuItemLast: { borderTopWidth: 1, borderTopColor: color.divider },
+  accountMenuText: { color: color.ink, fontSize: 14, fontWeight: "600" },
   pill: {
     flexShrink: 0,
     flexDirection: "row",

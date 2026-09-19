@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { Tappable } from "../Tappable";
 
 import {
   border,
@@ -72,24 +73,55 @@ export function HubTypeGlyph({
   );
 }
 
-export function MapLegend() {
+export function MapLegend({
+  selectedType = null,
+  onSelectType,
+}: {
+  selectedType?: string | null;
+  onSelectType?: (type: string | null) => void;
+}) {
+  const interactive = !!onSelectType;
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={s.row}
-      // The legend is reference material, not a control. Letting it take focus
-      // puts five unactionable stops between the map and the first real button.
-      accessibilityRole="summary"
-      accessibilityLabel="Map key: pin shapes by Safe Zone type"
+      accessibilityRole={interactive ? "tablist" : "summary"}
+      accessibilityLabel={interactive ? "Filter Safe Zones by type" : "Map key: pin shapes by Safe Zone type"}
     >
+      {interactive ? (
+        <Tappable
+          onPress={() => onSelectType?.(null)}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: selectedType === null }}
+          accessibilityLabel="All Safe Zones"
+          style={[s.entry, selectedType === null && s.entryOn]}
+          pressedStyle={s.entryPressed}
+        >
+          <Text style={[textStyle(type.gridMeta), s.label, selectedType === null && s.labelOn]}>
+            All
+          </Text>
+        </Tappable>
+      ) : null}
       {TYPE_LABELS.map(({ type: hubType, label }) => (
-        <View key={hubType} style={s.entry}>
+        <Tappable
+          key={hubType}
+          onPress={interactive ? () => onSelectType?.(hubType) : undefined}
+          disabled={!interactive}
+          accessibilityRole={interactive ? "tab" : undefined}
+          accessibilityState={interactive ? { selected: selectedType === hubType } : undefined}
+          accessibilityLabel={interactive ? `Show ${label} Safe Zones` : label}
+          style={[s.entry, selectedType === hubType && s.entryOn]}
+          pressedStyle={interactive ? s.entryPressed : undefined}
+        >
           <View style={s.well}>
             <HubTypeGlyph hubType={hubType} size={13} />
           </View>
-          <Text style={[textStyle(type.gridMeta), s.label]}>{label}</Text>
-        </View>
+          <Text style={[textStyle(type.gridMeta), s.label, selectedType === hubType && s.labelOn]}>
+            {label}
+          </Text>
+        </Tappable>
       ))}
     </ScrollView>
   );
@@ -113,6 +145,11 @@ const s = StyleSheet.create({
     borderColor: color.greenLine,
     backgroundColor: color.greenWash,
   },
+  entryOn: {
+    borderColor: color.forest,
+    backgroundColor: color.forest,
+  },
+  entryPressed: { opacity: 0.72 },
   well: {
     width: 20,
     height: 20,
@@ -122,4 +159,5 @@ const s = StyleSheet.create({
     backgroundColor: color.surface,
   },
   label: { color: color.inkSecondary },
+  labelOn: { color: color.onGreen },
 });

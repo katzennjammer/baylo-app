@@ -31,6 +31,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Baylo uses your location to show nearby Safe-Zone hubs."
+        }
+      ],
       "expo-secure-store",
       "expo-build-properties",
       "expo-image",

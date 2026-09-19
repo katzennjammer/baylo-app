@@ -57,6 +57,7 @@ export interface ItemOwner {
    * than a guess if it ever comes back null again.
    */
   trustTier: TrustTier | null;
+  featuredAchievement: { id: string; name: string; icon: string } | null;
 }
 
 /** A curated public meetup point. Coordinates here are public and precise. */
@@ -128,6 +129,18 @@ export interface Item {
   suggestedLeaves: number | null;
   valuationSource: string | null;
   status: string;
+  /**
+   * TRUE when a moderator has taken the listing down. Only ever true on your
+   * OWN shelf and detail — every other read path filters it out — and it is
+   * what lets the shelf label the tile instead of 404ing when it is opened.
+   */
+  hiddenByModerator: boolean;
+  /**
+   * The code a value review was refused with, while `status` is
+   * VALUE_REJECTED. Null otherwise. `src/lib/value-rejection.ts` turns it into
+   * the sentence the owner reads.
+   */
+  valueRejectionReason: string | null;
   wanted: string | null;
   pickup: Pickup | null;
   owner: ItemOwner;
@@ -148,9 +161,43 @@ export interface BrowsePayload {
   facets: { categories: { category: string; label: string; count: number }[] };
 }
 
+/**
+ * What happened to a listing, for its owner. Null for anybody else and for a
+ * listing nothing has happened to. The review screen is drawn from this alone.
+ *
+ *   state "waiting"    PENDING_REVIEW — an admin has not answered yet
+ *   state "rejected"   VALUE_REJECTED — answered no; the owner chooses
+ *   state "hidden"     a moderator takedown; wins over the value states
+ */
+export interface ListingReview {
+  state: "waiting" | "rejected" | "hidden";
+  hiddenAt: string | null;
+  requestedLeaves: number | null;
+  suggestedLeaves: number | null;
+  requestedBracket: number | null;
+  suggestedBracket: number | null;
+  /** The highest bracket that goes live without a review. */
+  capBracket: number | null;
+  reasonCode: string | null;
+  /** The server's sentence for `reasonCode`; the local mirror is the fallback. */
+  reason: string | null;
+  appeal: {
+    id: string | null;
+    status: "OPEN" | "UPHELD" | "OVERTURNED" | "WITHDRAWN" | null;
+    kind: "VALUE_REJECTION" | "MODERATION_HIDE" | null;
+    message: string | null;
+    createdAt: string | null;
+    decidedAt: string | null;
+    /** The one field that draws or hides the Appeal control; `status` says why. */
+    canAppeal: boolean;
+  };
+}
+
 /** GET /api/v1/items/[id] — the detail screen in one request. */
 export interface ItemDetailPayload {
   item: Item & { imageHash: string | null; updatedAt: string };
+  /** Owner only. See ListingReview. */
+  review: ListingReview | null;
   viewer: {
     isOwner: boolean;
     /** False for your own listing and for anything that has left AVAILABLE. */
@@ -220,10 +267,8 @@ export interface HomePayload {
  * a proposal and then meet a 403.
  */
 export interface ViewerReputation {
-  /** The EFFECTIVE tier — base tier with DPA defaults charged against it. */
+  /** The trust tier, from COMPLETED TradeRequest rows and the rating. */
   tier: TrustTier;
-  /** What the trade history alone says. Shown for explanation, never gated on. */
-  baseTier: TrustTier;
   /** COMPLETED TradeRequest rows. Never `user.totalTrades`, which drifts high. */
   completedTrades: number;
   rating: number;
@@ -234,27 +279,14 @@ export interface ViewerReputation {
    */
   premium?: boolean;
   limits: {
-    /** The most valuable item this tier may ACQUIRE. `null` is unlimited. */
-    maxItemValueLeaves: number | null;
-    mayProposeDpa: boolean;
-    maxOutstandingDebtLeaves: number;
-  };
-  contracts: {
-    /** Unpaid principal across ACTIVE and DEFAULTED. */
-    outstandingDebt: number;
-    /** `outstandingDebt` plus principal on PENDING_ACCEPT proposals. */
-    committedDebt: number;
-    /** maxOutstandingDebtLeaves − committedDebt, floored at 0. */
-    remainingDebtHeadroom: number;
-    openContracts: number;
-    lifetimeDefaults: number;
-    hasUnsettledDefault: boolean;
-    /** Null when this debtor has never FINISHED a contract — not 0. See below. */
-    onTimeRate: number | null;
+    /**
+     * The highest BRACKET this tier may ACQUIRE. `null` is unlimited. The
+     * server's `enforceItemValueCeiling()` compares brackets since 17 Sep
+     * 2026, and this is the figure it names in its refusal.
+     */
+    maxItemBracket: number | null;
   };
   restrictions: {
-    /** False while an unsettled default stands. Blocks offers as well as trades. */
-    canInitiateTrades: boolean;
     /** Always true. Spelled out by the server so the asymmetry is legible. */
     canAcceptTrades: boolean;
     canListItems: boolean;
@@ -318,12 +350,22 @@ export interface ProfileMePayload {
   counts: {
     listed: number;
     owned: number;
+    /** Listings parked for a value review, and ones a review refused. */
+    waitingReview: number;
+    valueRejected: number;
     completedTrades: number;
     reviews: number;
     followers: number;
     following: number;
   };
   items: Item[];
+  displayedAchievements: {
+    id: string;
+    name: string;
+    icon: string;
+    displayOrder: number | null;
+  }[];
+  achievementCount: number;
   reputation: ViewerReputation;
   idVerification: ViewerIdVerification;
 }
@@ -339,77 +381,6 @@ export interface PublicProfilePayload {
   };
   items: Item[];
   reviews: unknown[];
-}
-
-/* ──────────── GET /api/v1/contracts/[id]/preview — the creditor ────────── */
-
-/** One party on a contract, as `v1Contract()` shapes them. */
-export interface ContractParty {
-  id: string;
-  name: string;
-  avatar: string | null;
-}
-
-export interface Contract {
-  id: string;
-  tradeId: string;
-  status: "PENDING_ACCEPT" | "ACTIVE" | "FULFILLED" | "DEFAULTED" | "DECLINED";
-  amountLeaves: number;
-  amountPaid: number;
-  deadline: string;
-  extensionUsed: boolean;
-  debtor: ContractParty | null;
-  creditor: ContractParty | null;
-  createdAt: string;
-}
-
-/**
- * The creditor's decision screen, in one request.
- *
- * The server's own header calls this "the feature's only real defence": nothing
- * downstream of acceptance can compel payment, so the moment of protection is
- * BEFORE the yes and consists entirely of showing the creditor the debtor's
- * record. `debtorStats` is that record and `terms.noItemReturn` is the true
- * statement of what the platform will do if it goes wrong. Both are rendered
- * verbatim rather than summarised.
- */
-export interface ContractPreviewPayload {
-  contract: Contract;
-  debtorStats: {
-    completedTrades: number;
-    outstandingDebt: number;
-    /** NULL means "no history", never 0%. A first-time debtor is unproven. */
-    onTimeFulfillmentRate: number | null;
-    pastDefaults: number;
-  };
-  debtor: {
-    id: string;
-    name: string | null;
-    avatar: string | null;
-    tier: TrustTier;
-    baseTier: TrustTier;
-    rating: number;
-    finishedContracts: number;
-    hasUnsettledDefault: boolean;
-    debtCeiling: number;
-  };
-  trade: {
-    id: string;
-    status: string;
-    offeredLeaves: number | null;
-    debtorReceives: { id: string; title: string; valueLeaves: number | null } | null;
-    debtorGives: { id: string; title: string; valueLeaves: number | null } | null;
-    valueDifferenceLeaves: number | null;
-  };
-  terms: {
-    youReceiveNow: { id: string; title: string; valueLeaves: number | null } | null;
-    youGiveNow: { id: string; title: string; valueLeaves: number | null } | null;
-    theyOweYou: number;
-    byDeadline: string;
-    extensionsPossible: number;
-    onDefault: string[];
-    noItemReturn: string;
-  };
 }
 
 /* ───────── GET /api/v1/trades — read for TWO fields, not for the tab ────── */
@@ -443,22 +414,19 @@ export interface LiveOffer {
   message: string | null;
   counterparty: { id: string; name: string; avatar: string | null };
   /**
-   * A Deferred Points Agreement proposed WITH this offer, or null.
+   * THE BRIDGE, as this screen needs it. Both brackets as they stood when the
+   * offer was made; `bridgeFeeLeaves` is the QUOTE either way and
+   * `bridgeFeePayer` says whose it is. A receiver looking at an incoming
+   * offer whose payer is "receiver" is the one who will be charged on
+   * accepting, and their consent sheet needs both numbers before they tap.
    *
-   * Non-null means the promise is a real PENDING_ACCEPT row, not an intention —
-   * a contract can now be attached to an Offer as well as to a TradeRequest, so
-   * it exists from the moment it is proposed. ACCEPTING THE OFFER ACCEPTS IT;
-   * there is no second call, and /contracts/[id]/accept answers 409 with
-   * `meta.rule: "DPA_ACCEPTED_WITH_OFFER"` for one of these.
+   * Null brackets on an offer that predates bracket trading; the server
+   * refuses to accept one of those (`OFFER_LEGACY_SHAPE`).
    */
-  contract: {
-    id: string;
-    amountLeaves: number;
-    deadline: string;
-    status: "PENDING_ACCEPT" | "ACTIVE" | "FULFILLED" | "DEFAULTED" | "DECLINED";
-    /** Where the creditor must go before accepting. Named by the server. */
-    previewPath: string;
-  } | null;
+  offeredBracket: number | null;
+  targetBracket: number | null;
+  bridgeFeeLeaves: number | null;
+  bridgeFeePayer: "proposer" | "receiver" | null;
   createdAt: string;
 }
 
@@ -505,6 +473,13 @@ export interface ActiveTrade {
   direction: "sent" | "received";
   kind: "leaves" | "items";
   offeredLeaves: number | null;
+  /**
+   * The bridging fee this trade carries, and which side paid it. NULL on a
+   * same-bracket swap. The Leaves are already out of the payer's balance;
+   * completion pays them to the other side, cancellation returns them.
+   */
+  bridgeFeeLeaves?: number | null;
+  bridgeFeePaidBySender?: boolean | null;
   counterparty: { id: string; name: string; avatar: string | null };
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;
@@ -590,77 +565,6 @@ export interface TradesPayload {
   pendingIncoming: number;
   trades: ActiveTrade[];
   offers: LiveOffer[];
-}
-
-/* ─────────────── GET /api/v1/contracts — the promise ledger ────────────── */
-
-/**
- * One DeferredContract, as `v1Contract()` shapes it for a given viewer.
- *
- * NOT the same shape as `Contract` above, which is what this app already typed
- * for the preview endpoint's `contract` block — that one is hand-written and
- * older, and it names the paid figure `amountPaid`. THIS is the route's real
- * mapper: `amountPaidLeaves`, plus `remainingLeaves`, `role`, `overdue` and
- * `defaulted`, none of which the older shape has. The two are left side by side
- * rather than merged because merging them means editing the contract preview
- * screen, and the preview block genuinely is a subset.
- *
- * `role` IS RESOLVED BY THE SERVER. The client never works out which side of a
- * promise it is on by comparing ids — the same rule `direction` follows on a
- * trade and `kind` follows on its value.
- *
- * `defaulted` IS REPORTED SEPARATELY FROM `status`, and the difference carries
- * §1.7's whole distinction: a contract that lapsed and was later paid in full
- * reads `status: "FULFILLED"` — the debt really is settled, the trading
- * restriction really is lifted — while `defaulted: true` stays, permanently,
- * because a creditor deciding on this debtor's next proposal has to see it.
- * §10.4's `1, settled late` is exactly that pair of facts.
- */
-export interface V1Contract {
-  id: string;
-  tradeId: string;
-  /** Null would mean the viewer is on neither side, which cannot happen on this route. */
-  role: "debtor" | "creditor" | null;
-  status: ContractStatus;
-  amountLeaves: number;
-  amountPaidLeaves: number;
-  remainingLeaves: number;
-  deadline: string;
-  /** Unpaid AND past the deadline. Not the same as `status: "DEFAULTED"`. */
-  overdue: boolean;
-  /** Permanent. Survives a later FULFILLED. See the note above. */
-  defaulted: boolean;
-  extension: {
-    used: boolean;
-    requestedAt: string | null;
-    requestedDeadline: string | null;
-    pending: boolean;
-  };
-  debtor: ContractParty | null;
-  creditor: ContractParty | null;
-  createdAt: string;
-  acceptedAt: string | null;
-  fulfilledAt: string | null;
-  defaultedAt: string | null;
-}
-
-export type ContractStatus =
-  | "PENDING_ACCEPT"
-  | "ACTIVE"
-  | "FULFILLED"
-  | "DEFAULTED"
-  | "DECLINED";
-
-export interface ContractsPayload {
-  contracts: V1Contract[];
-  asDebtor: {
-    outstandingDebt: number;
-    committedDebt: number;
-    maxOutstandingDebtLeaves: number;
-    openContracts: number;
-    hasUnsettledDefault: boolean;
-    canInitiateTrades: boolean;
-  };
 }
 
 /* ──────── GET /api/trades/[id]/confirm/status — whose turn it is ───────── */
