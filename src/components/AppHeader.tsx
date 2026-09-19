@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../api/client";
 import { BellIcon, LeafIcon, MessageIcon } from "./icons";
+import { NoticeDialog } from "./NoticeDialog";
 import { Divider } from "./Divider";
 import { OfflineBar } from "./home/OfflineBar";
 import { formatBadge, formatLeaves } from "../lib/format";
@@ -182,6 +183,11 @@ export function AppHeader() {
 function AccountMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { signOut } = useSession();
+  // Quests has no screen yet, so the menu item opens a notice rather than a
+  // route. The dialog is mounted here (not in the header) so it lives and dies
+  // with the menu that opened it, the same way the Premium/VIP item states
+  // its "coming soon" without leaving the screen.
+  const [questOpen, setQuestOpen] = useState(false);
 
   const confirmSignOut = () => {
     Alert.alert(
@@ -232,6 +238,17 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       <Pressable
         onPress={() => {
           onClose();
+          setQuestOpen(true);
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="flag-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Quests</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
           confirmSignOut();
         }}
         accessibilityRole="menuitem"
@@ -240,6 +257,14 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
         <Ionicons name="log-out-outline" size={19} color={color.urgent} />
         <Text style={[s.accountMenuText, { color: color.urgent }]}>Sign out</Text>
       </Pressable>
+
+      <NoticeDialog
+        visible={questOpen}
+        title="Quests are on the way"
+        body="Ongoing quests will land here soon — little challenges you complete for Leaves. Check back shortly."
+        icon={<Ionicons name="flag-outline" size={24} color={color.forest} />}
+        onDismiss={() => setQuestOpen(false)}
+      />
     </View>
   );
 }

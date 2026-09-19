@@ -6,6 +6,8 @@ export type Achievement = {
   name: string;
   description: string;
   icon: string;
+  /** Uploaded badge art. Null means render `icon` (the emoji fallback). */
+  imageUrl: string | null;
   criterion: string;
   threshold: number;
   progress: number;
@@ -15,9 +17,24 @@ export type Achievement = {
   homeDisplayOrder: number | null;
 };
 
-export async function fetchAchievements(): Promise<{ achievements: Achievement[] }> {
-  const { data } = await apiV1<{ achievements: Achievement[] }>("/api/v1/achievements");
-  return data;
+/**
+ * The server is the source of truth for the shelf size. It is returned with the
+ * list rather than hard-coded here, so raising it in the backend does not need
+ * a client release.
+ */
+export const DEFAULT_MAX_PROFILE_BADGES = 4;
+
+export async function fetchAchievements(): Promise<{
+  achievements: Achievement[];
+  maxProfileBadges: number;
+}> {
+  const { data } = await apiV1<{ achievements: Achievement[]; maxProfileBadges?: number }>(
+    "/api/v1/achievements",
+  );
+  return {
+    achievements: data.achievements,
+    maxProfileBadges: data.maxProfileBadges ?? DEFAULT_MAX_PROFILE_BADGES,
+  };
 }
 
 export async function updateDisplayedAchievements({

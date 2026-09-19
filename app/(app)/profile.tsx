@@ -3,8 +3,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
+
 import { colors } from "../../src/theme/palette";
 import { useProfileMe } from "../../src/api/profile";
+import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item } from "../../src/api/types";
 import type { ProfileMePayload } from "../../src/api/types";
@@ -29,7 +31,14 @@ import type { ProfileMePayload } from "../../src/api/types";
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { data: profile } = useProfileMe();
+  const { data: profile, refetch } = useProfileMe();
+
+  // Badge art, the shelf and the counts are written by other screens and by the
+  // admin panel, and this tab stays mounted behind them. Without this the shelf
+  // serves its cached payload for the whole `staleTime` after a badge image is
+  // added — the achievements screen would show the new art while this one still
+  // showed the icon fallback. Same ask the Home and Marketplace grids make.
+  useRefetchOnFocus(refetch);
 
   const user = session?.user;
 
@@ -40,10 +49,6 @@ export default function ProfileScreen() {
       data={items}
       numColumns={3}
       keyExtractor={(item) => item.id}
-<<<<<<< Updated upstream
-      ListHeaderComponent={<ProfileHeader name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} />}
-      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />}
-=======
       ListHeaderComponent={
         <ProfileHeader
           name={profile?.user.name ?? user?.name ?? "Signed in"}
@@ -57,8 +62,17 @@ export default function ProfileScreen() {
           onMoreAchievements={() => router.push("/achievements")}
         />
       }
-      renderItem={({ item }) => <ProfileTile item={item} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />}
->>>>>>> Stashed changes
+      renderItem={({ item }) => (
+        <ProfileTile
+          item={item}
+          onPress={() =>
+            router.push({
+              pathname: shelfLabel(item) ? "/listing-review" : "/item",
+              params: { id: item.id },
+            })
+          }
+        />
+      )}
       ListEmptyComponent={<Text className="text-muted text-center py-12">Your listings will appear here.</Text>}
       contentContainerStyle={{ paddingTop: 12 }}
     />
@@ -111,25 +125,49 @@ const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
   swap: "swap-horizontal-outline",
 };
 
+/**
+ * The profile badge shelf.
+ *
+ * ── ONLY THE PICKED BADGES APPEAR ────────────────────────────────
+ *
+ * The user picks up to four badges on the achievements screen, and the shelf
+ * renders exactly those -- one pick shows one badge, four show four. There are
+ * no empty placeholder slots: an unselected position is simply absent, not a
+ * dashed circle. `displayedAchievements` is already only the selected rows, in
+ * order (see profile/me), so there is nothing to filter here; the slice(0, 4)
+ * is a belt-and-braces cap matching the server's.
+ *
+ * The "More" affordance is a NAVIGATION button, not a slot -- it opens the
+ * achievements screen. It is shown only while the user still has shelf room, so
+ * a full shelf is not cluttered with an invitation to add more.
+ */
 function BadgeShelf({ badges, onMore }: { badges: ProfileMePayload["displayedAchievements"]; onMore: () => void }) {
+  const shown = badges.slice(0, 4);
+  const hasRoom = shown.length < 4;
   return (
     <View className="mt-5">
       <Text className="text-blue text-xs font-bold tracking-widest">BADGES - SECTION</Text>
-      <View className="flex-row items-start mt-3 gap-3">
-        {badges.slice(0, 3).map((badge) => (
+      <View className="flex-row items-start mt-3 gap-3 flex-wrap">
+        {shown.map((badge) => (
           <View key={badge.id} className="items-center w-14">
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-accent/15">
-              <Ionicons name={badgeIcons[badge.icon] ?? "trophy-outline"} size={25} color={colors.accent} />
+            <View className="h-14 w-14 items-center justify-center rounded-full bg-accent/15 overflow-hidden">
+              {badge.imageUrl ? (
+                <Image source={{ uri: badge.imageUrl }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              ) : (
+                <Ionicons name={badgeIcons[badge.icon] ?? "trophy-outline"} size={25} color={colors.accent} />
+              )}
             </View>
             <Text className="text-muted text-[11px] text-center mt-1" numberOfLines={2}>{badge.name}</Text>
           </View>
         ))}
-        <Pressable className="items-center w-14" onPress={onMore} accessibilityLabel="More achievements">
-          <View className="h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-muted/60">
-            <Ionicons name="add" size={24} color={colors.muted} />
-          </View>
-          <Text className="text-muted text-[11px] text-center mt-1">More</Text>
-        </Pressable>
+        {hasRoom ? (
+          <Pressable className="items-center w-14" onPress={onMore} accessibilityLabel="More achievements">
+            <View className="h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-muted/60">
+              <Ionicons name="add" size={24} color={colors.muted} />
+            </View>
+            <Text className="text-muted text-[11px] text-center mt-1">More</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

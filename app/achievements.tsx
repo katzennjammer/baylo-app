@@ -1,13 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { ApiError } from "../src/api/client";
-import { fetchAchievements, updateDisplayedAchievements } from "../src/api/achievements";
+import { DEFAULT_MAX_PROFILE_BADGES, fetchAchievements, updateDisplayedAchievements } from "../src/api/achievements";
 import { color, radius, textStyle, type } from "../src/theme/tokens";
+
+/**
+ * A badge's art, or its emoji fallback.
+ *
+ * Every badge defined before uploaded art existed has only an `icon`, so the
+ * fallback is not a nicety -- it is what keeps those badges rendering. A badge
+ * WITH an imageUrl shows the image; one without shows the emoji.
+ */
+function BadgeIcon({
+  icon,
+  imageUrl,
+  size,
+  dimmed,
+}: {
+  icon: string;
+  imageUrl: string | null;
+  size: number;
+  dimmed?: boolean;
+}) {
+  if (imageUrl) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={{ width: size, height: size, borderRadius: size / 4, opacity: dimmed ? 0.4 : 1 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return <Text style={[{ fontSize: size }, dimmed && styles.lockedText]}>{icon}</Text>;
+}
 
 export default function AchievementsScreen() {
   const router = useRouter();
@@ -17,12 +47,19 @@ export default function AchievementsScreen() {
   const save = useMutation({
     mutationFn: updateDisplayedAchievements,
     onSuccess: () => {
+      setSaveMessage("Saved to your profile.");
       void queryClient.invalidateQueries({ queryKey: ["achievements"] });
       void queryClient.invalidateQueries({ queryKey: ["profile", "me"] });
+    },
+    onError: () => {
+      setSaveMessage("Could not save your changes.");
     },
   });
   const [selected, setSelected] = useState<string[]>([]);
   const [featured, setFeatured] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  // The server decides the shelf size; the app just honours it.
+  const maxSlots = query.data?.maxProfileBadges ?? DEFAULT_MAX_PROFILE_BADGES;
 
   useEffect(() => {
     if (query.data) {
@@ -39,7 +76,13 @@ export default function AchievementsScreen() {
   }, [query.data]);
 
   function toggleSelected(id: string) {
-    setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : current.length < 3 ? [...current, id] : current);
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : current.length < maxSlots
+          ? [...current, id]
+          : current,
+    );
   }
 
   return (
@@ -66,7 +109,7 @@ export default function AchievementsScreen() {
           <View style={styles.selectionHeader}>
             <View>
               <Text style={[textStyle(type.itemTitle), { color: color.ink }]}>Your profile badges</Text>
-              <Text style={[textStyle(type.detailBody), styles.description]}>Choose up to 3 earned badges to display.</Text>
+              <Text style={[textStyle(type.detailBody), styles.description]}>Choose up to {maxSlots} earned badges to display.</Text>
             </View>
             <Pressable
               disabled={save.isPending}
@@ -79,8 +122,17 @@ export default function AchievementsScreen() {
 
           <View style={styles.sectionCard}>
             <Text style={[textStyle(type.itemTitle), { color: color.ink }]}>Profile badges</Text>
-            <Text style={[textStyle(type.detailBody), styles.description]}>Choose up to 3 badges to show on your profile.</Text>
+            <Text style={[textStyle(type.detailBody), styles.description]}>
+              Choose up to {maxSlots} badges to show on your profile. Only the badges you pick appear — an
+              empty slot is not shown.
+            </Text>
           </View>
+
+          {saveMessage ? (
+            <View style={styles.saveNotice}>
+              <Text style={styles.saveNoticeText}>{saveMessage}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.sectionCard}>
             <Text style={[textStyle(type.itemTitle), { color: color.ink }]}>Featured home badge</Text>
@@ -94,7 +146,7 @@ export default function AchievementsScreen() {
                     onPress={() => setFeatured((current) => (current === achievement.id ? null : achievement.id))}
                     style={[styles.featureBadge, isFeatured && styles.selectedCard]}
                   >
-                    <Text style={styles.icon}>{achievement.icon}</Text>
+                    <BadgeIcon icon={achievement.icon} imageUrl={achievement.imageUrl} size={22} />
                     <Text style={styles.featureBadgeName}>{achievement.name}</Text>
                   </Pressable>
                 );
@@ -109,7 +161,7 @@ export default function AchievementsScreen() {
             return (
               <Pressable key={achievement.id} disabled={!achievement.unlocked} onPress={() => toggleSelected(achievement.id)} style={[styles.card, !achievement.unlocked && styles.lockedCard, isSelected && styles.selectedCard, isFeatured && styles.featuredCard]}>
                 <View style={[styles.badge, !achievement.unlocked && styles.lockedBadge]}>
-                  <Text style={[styles.icon, !achievement.unlocked && styles.lockedText]}>{achievement.icon}</Text>
+                  <BadgeIcon icon={achievement.icon} imageUrl={achievement.imageUrl} size={30} dimmed={!achievement.unlocked} />
                 </View>
                 <View style={styles.cardBody}>
                   <View style={styles.cardHeading}>
@@ -171,5 +223,7 @@ const styles = StyleSheet.create({
   retryText: { color: "#fff", fontWeight: "700" },
   saveButton: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, backgroundColor: color.green },
   saveText: { color: "#fff", fontWeight: "700" },
+  saveNotice: { backgroundColor: "#EAF9EE", borderColor: "#B9E7C9", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  saveNoticeText: { color: color.green, fontWeight: "700" },
   empty: { color: color.inkSecondary, textAlign: "center", paddingVertical: 40 },
 });

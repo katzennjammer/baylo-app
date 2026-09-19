@@ -168,7 +168,15 @@ export const FeedCard = memo(function FeedCard({
             </Text>
             {item.owner.featuredAchievement ? (
               <View style={s.featureBadge} accessibilityLabel={`Featured achievement: ${item.owner.featuredAchievement.name}`}>
-                <Text style={s.featureBadgeText}>{item.owner.featuredAchievement.icon}</Text>
+                {item.owner.featuredAchievement.imageUrl ? (
+                  <Image
+                    source={{ uri: item.owner.featuredAchievement.imageUrl }}
+                    style={s.featureBadgeImage}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Text style={s.featureBadgeText}>{item.owner.featuredAchievement.icon}</Text>
+                )}
               </View>
             ) : null}
             <TierBadge tier={resolveTier(item.owner)} />
@@ -729,8 +737,12 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
     borderWidth: border.chip,
     borderColor: color.greenLine,
+    // Clip an uploaded badge image to the circle; without this a square image
+    // would spill past the rounded border.
+    overflow: "hidden",
   },
   featureBadgeText: { fontSize: 10, lineHeight: 12 },
+  featureBadgeImage: { width: "100%", height: "100%", borderRadius: 4 },
   name: { flexShrink: 1, color: color.ink },
   meta: { marginTop: space.card.nameToMeta, color: color.inkMuted },
 

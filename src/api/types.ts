@@ -57,7 +57,7 @@ export interface ItemOwner {
    * than a guess if it ever comes back null again.
    */
   trustTier: TrustTier | null;
-  featuredAchievement: { id: string; name: string; icon: string } | null;
+  featuredAchievement: { id: string; name: string; icon: string; imageUrl: string | null } | null;
 }
 
 /** A curated public meetup point. Coordinates here are public and precise. */
@@ -363,6 +363,7 @@ export interface ProfileMePayload {
     id: string;
     name: string;
     icon: string;
+    imageUrl: string | null;
     displayOrder: number | null;
   }[];
   achievementCount: number;
