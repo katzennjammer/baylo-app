@@ -252,12 +252,24 @@ export function useReach() {
     0,
   );
 
+  // The tier's own ceiling, as a bracket. `null` is unlimited (Top Trader).
+  const cap = me.data?.reputation?.limits?.maxItemBracket ?? null;
+  const reach = me.data ? reachBracket(highest) : null;
+
   return {
     /**
-     * The reach BRACKET, or null until the shelf has loaded. A grid must not
-     * grey tiles on a guess.
+     * The shelf's reach BRACKET — one above the best item — or null until the
+     * shelf has loaded. A grid must not grey tiles on a guess. Item detail's
+     * `Where you stand` card is written against THIS line, which is why the
+     * cap is not folded in here.
      */
-    reach: me.data ? reachBracket(highest) : null,
+    reach,
+    /**
+     * The grid's line: the LOWER of the shelf's reach and the tier cap. A tile
+     * above either one cannot be offered on, and the `How trading works`
+     * sheet states exactly that rule, so the grid greys by both.
+     */
+    gridReach: reach !== null && cap !== null ? Math.min(reach, cap) : reach,
     isPending: me.isPending,
   };
 }

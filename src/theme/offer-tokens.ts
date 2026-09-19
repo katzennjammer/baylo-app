@@ -304,19 +304,24 @@ export const offerSpace = {
     routesToFootnote: 14,
   },
 
-  /** §3.6 — the one-time prompt sheet. */
+  /** The `How trading works` sheet. */
   prompt: {
     x: 20,
     top: 20,
     bottom: 26,
     handleToHeading: 16,
-    headingToBody: 9,
-    bodyToExamples: 16,
-    examplesToList: 16,
-    listItemGap: 11,
+    headingToBody: 14,
+    /** Between one numbered rule and the next. */
+    sectionGap: 16,
+    /** A rule's title to its paragraph. */
+    titleToBody: 3,
+    bodyToExamples: 12,
     listToButton: 16,
-    /** §3.6 fixes the sheet's height at 390 rather than letting it hug. */
-    height: 512,
+    /**
+     * The sheet's height, and the slide's travel. The body scrolls inside it,
+     * and `ReachPromptSheet` clamps it to the window on a short phone.
+     */
+    height: 640,
   },
 } as const;
 

@@ -336,19 +336,55 @@ export const premium = {
     `subscription, which is coming soon. This listing is in ${bracketLabel(bracket)}.`,
 } as const;
 
-/** §10.8 — the one-time prompt. */
+/**
+ * `How trading works` — the explainer.
+ *
+ * Shown once on the first marketplace visit that has a faded tile, and again
+ * whenever it is opened from Settings. One scrollable sheet, four rules, and
+ * the faded-tile explanation folded into the rules it follows from rather than
+ * given its own heading. The numbers are the live ones: `REACH_BRACKETS_ABOVE_BEST`
+ * in `src/lib/gap.ts`, the server's `TIER_MAX_ITEM_BRACKET` ladder (New Trader
+ * → bracket 3) and `T.risingMinTrades` (3) in `src/lib/trust.ts`. If any of
+ * those move, the sentence that quotes them moves too.
+ */
 export const prompt = {
-  heading: "Why some listings look faded",
-  body:
-    "Those ones are further than your items reach on their own right now. " +
-    "We keep them in view on purpose, so you can see what things are worth around here.",
-  exampleNear: "within reach",
-  exampleFar: "further off",
-  step1: "Faded ones open like any other listing, but you cannot offer on them yet.",
-  step2:
-    "An offer can be the same bracket as the listing, one below, or one above. " +
-    "A bridge one way or the other is a small fee the lower side pays.",
-  step3: "The line moves as you post and trade. Nothing is fixed.",
+  heading: "How trading works",
+  sections: [
+    {
+      title: "Every item has a bracket",
+      body:
+        "Baylo puts each listing in a bracket from 1 to 10 based on its value. " +
+        "You see other people's brackets, never their exact value, and they see yours the same way.",
+    },
+    {
+      title: "Offer within one bracket",
+      body:
+        "You can offer an item in the same bracket as the listing, one below, or one above. " +
+        "Two or more brackets apart is not allowed.",
+    },
+    {
+      title: "Trading up costs a bridging fee",
+      body:
+        "When the two items are one bracket apart, the trade includes a bridging fee in Leaves. " +
+        "Whoever ends up with the higher-bracket item pays it.",
+    },
+    {
+      title: "Your trust tier sets a ceiling",
+      body:
+        "Each tier caps how high a bracket you can trade for. A new account trades up to " +
+        "Bracket 3 and moves up after three completed trades.",
+    },
+  ],
+  /** The faded-tile rule sits under the four; it is a consequence of rules 2 and 4. */
+  faded: {
+    title: "Why some listings look faded",
+    body:
+      "A listing is faded when it is more than one bracket above your best item, or above your " +
+      "tier's ceiling. Faded ones still open like any other listing, but you cannot offer on them " +
+      "yet. The line moves as you post, trade and move up a tier.",
+    exampleNear: "within reach",
+    exampleFar: "faded",
+  },
   button: "Got it",
 } as const;
 

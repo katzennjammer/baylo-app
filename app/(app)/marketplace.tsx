@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -46,14 +46,12 @@ import {
 import { GridTile } from "../../src/components/marketplace/GridTile";
 import { useReach, tileOutOfReach } from "../../src/api/offer";
 import { useSession } from "../../src/auth/session";
-import { ReachPromptSheet } from "../../src/components/offer/OfferSheet";
-import { prompt as promptCopy } from "../../src/components/offer/copy";
+import { HowTradingWorksSheet } from "../../src/components/offer/OfferSheet";
 import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/reach-flag";
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { withTimeout } from "../../src/lib/with-timeout";
 import { border, color, radius, space, textStyle, type } from "../../src/theme/tokens";
-import { outOfReach } from "../../src/theme/offer-tokens";
 import type { Item, SafeZoneHub } from "../../src/api/types";
 import type { MapHub } from "../../src/components/map/map-html";
 
@@ -366,8 +364,11 @@ export default function MarketplaceScreen() {
     }));
   }, [visibleHubs, visibleNearbyHubs]);
 
-  /** §7.1's reach bracket, from the viewer's own shelf. Null until it has loaded. */
-  const { reach } = useReach();
+  /**
+   * The grid's reach bracket: one above the viewer's best item, capped by
+   * their tier. Null until the shelf has loaded.
+   */
+  const { gridReach: reach } = useReach();
   /**
    * Whose grid this is. The browse route includes the viewer's own listings,
    * and those tiles show the exact value where everyone else's show a bracket
@@ -455,21 +456,27 @@ export default function MarketplaceScreen() {
   );
 
   /*
-   * §7.4 — the one-time prompt.
+   * The one-time `How trading works` sheet.
    *
-   * Two conditions, both from §7.4: the grid must actually contain an
-   * out-of-reach tile, and this account must not have dismissed it before.
+   * Two conditions: the grid must actually contain an out-of-reach tile, and
+   * this account must not have dismissed it before.
    *
-   * The flag file is read ONCE, in `useState`'s initialiser, because the answer
-   * cannot change while this screen is mounted — the only thing that writes it
-   * is `Got it`, which is on this screen. Reading it on every render would put a
-   * synchronous file read in the render path of a scrolling grid.
+   * The flag file is read on mount and again each time the tab regains focus —
+   * not on every render, which would put a synchronous file read in the render
+   * path of a scrolling grid. The focus re-read exists for one reason: the
+   * dev-only reset in Settings clears the flag while this tab stays mounted
+   * behind it, and the demo has to show the sheet on the way back.
    *
-   * §7.4's "Never shown again, INCLUDING AFTER THE THRESHOLD MOVES" is what
+   * "Never shown again, including after the threshold moves" is what
    * `dismissed` protects: once it is true nothing re-opens the sheet, even if
    * the shelf changes and a different set of tiles goes grey.
    */
   const [dismissed, setDismissed] = useState(() => hasSeenReachExplainer());
+  useFocusEffect(
+    useCallback(() => {
+      setDismissed(hasSeenReachExplainer());
+    }, []),
+  );
   // The tile's own predicate, so the prompt and the grey cannot disagree.
   const anyOutOfReach =
     reach !== null && items.some((i) => i.owner.id !== viewerId && tileOutOfReach(i, reach));
@@ -728,20 +735,13 @@ export default function MarketplaceScreen() {
       />
 
       {/* Mounted last so it sits over the grid and the filter button. It renders
-          nothing until both of §7.4's conditions hold; the Modal inside it is
+          nothing until both conditions above hold; the Modal inside it is
           created and destroyed with the prompt rather than kept alive behind the
           screen — the same arrangement `ReportSheet` uses on item detail. */}
       {showPrompt ? (
-        <ReachPromptSheet
-          heading={promptCopy.heading}
-          body={promptCopy.body}
-          exampleNear={promptCopy.exampleNear}
-          exampleFar={promptCopy.exampleFar}
-          steps={[promptCopy.step1, promptCopy.step2, promptCopy.step3]}
-          button={promptCopy.button}
-          photoFilter={outOfReach.photoFilter}
+        <HowTradingWorksSheet
           onGotIt={() => {
-            // The write happens here and nowhere else — §7.4 allows exactly one
+            // The write happens here and nowhere else — `Got it` is the one
             // way out, and a prompt torn down by a process death was not read.
             markReachExplainerSeen();
             setDismissed(true);
