@@ -144,16 +144,32 @@ export function subscribeToUserChannel(
     createdAt: string;
   }) => void,
   onTyping?: (event: { senderId: string; senderName: string; isTyping: boolean }) => void,
+  onOfferUpdated?: (event: {
+    offerId: string;
+    status: string;
+    systemMessage?: {
+      id: string;
+      senderId: string;
+      receiverId: string;
+      content: string;
+      createdAt: string;
+    };
+  }) => void,
+  onNotificationCreated?: () => void,
 ): (() => void) | null {
   const held = acquire(userChannel(userId));
   if (!held) return null;
 
   held.channel.bind("new-message", onNewMessage);
   if (onTyping) held.channel.bind("typing", onTyping);
+  if (onOfferUpdated) held.channel.bind("offer-updated", onOfferUpdated);
+  if (onNotificationCreated) held.channel.bind("notification-created", onNotificationCreated);
 
   return () => {
     held.channel.unbind("new-message", onNewMessage);
     if (onTyping) held.channel.unbind("typing", onTyping);
+    if (onOfferUpdated) held.channel.unbind("offer-updated", onOfferUpdated);
+    if (onNotificationCreated) held.channel.unbind("notification-created", onNotificationCreated);
     held.release();
   };
 }

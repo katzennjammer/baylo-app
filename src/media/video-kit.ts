@@ -36,9 +36,22 @@ import { Platform } from "react-native";
 let kit: typeof ExpoVideo | null = null;
 let failure: string | null = null;
 
+/**
+ * A per-machine kill switch, off by default.
+ *
+ * One tester's Android device crashes in the renderer on expo-video's surface
+ * (18 Sep 2026). The switch that kept it off that phone used to be a bare
+ * `Platform.OS === "android"` here, which turned the intro and the band off
+ * for every Android build. It is now `EXPO_PUBLIC_DISABLE_VIDEO=1` in that
+ * machine's gitignored `.env`: inlined by Metro at bundle time like every
+ * other EXPO_PUBLIC_ value, so flipping it is a Metro restart with `--clear`,
+ * not a native rebuild. Anything other than `1` / `true` leaves video on.
+ */
+const DISABLED_BY_ENV = /^(1|true)$/i.test(process.env.EXPO_PUBLIC_DISABLE_VIDEO ?? "");
+
 try {
-  if (Platform.OS === "android") {
-    failure = "expo-video disabled on Android because the device renderer crashes on its surface";
+  if (DISABLED_BY_ENV) {
+    failure = `expo-video disabled by EXPO_PUBLIC_DISABLE_VIDEO on ${Platform.OS}`;
   } else {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const loaded = require("expo-video") as typeof ExpoVideo;

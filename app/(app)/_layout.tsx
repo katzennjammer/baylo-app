@@ -104,8 +104,9 @@ export default function AppLayout() {
           URL parameters including the query string — so it is the version that
           cannot break on a patch release. */}
       <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
-      <Tabs.Screen name="item" options={{ href: null, title: "Item" }} />
-      <Tabs.Screen name="user" options={{ href: null, title: "Profile" }} />
+      <Tabs.Screen name="item" options={{ href: null, title: "Item", headerShown: false }} />
+      <Tabs.Screen name="user" options={{ href: null, title: "Profile", headerShown: false }} />
+      <Tabs.Screen name="connections" options={{ href: null, title: "Connections", headerShown: false }} />
 
       {/* The Safe-Zone map and one hub's listings. Same flat-file, query-param
           arrangement as `item` above, and for the same reason. */}

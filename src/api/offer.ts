@@ -108,6 +108,7 @@ export interface OfferContext {
   maxItemBracket: Bracket | null;
   /** True when this listing is above the viewer's tier cap and the offer would 403. */
   tierItemCapExceeded: boolean;
+  pendingOfferedItemIds: Set<string>;
 }
 
 /**
@@ -166,6 +167,12 @@ export function useOfferContext(itemId: string | undefined) {
           ? null
           : bracketOf(limits.maxItemValueLeaves);
 
+    const pendingOfferedItemIds = new Set(
+      (live?.offers ?? [])
+        .filter((offer) => offer.direction === "sent" && offer.status === "PENDING")
+        .flatMap((offer) => offer.offeredItems.map((item) => item.id)),
+    );
+
     context = {
       item: detail.item,
       viewer: detail.viewer,
@@ -189,6 +196,7 @@ export function useOfferContext(itemId: string | undefined) {
       premiumLocked: detail.viewer.offerLock === "premium",
       maxItemBracket: cap,
       tierItemCapExceeded: cap !== null && targetBracket !== null && targetBracket > cap,
+      pendingOfferedItemIds,
     };
   }
 

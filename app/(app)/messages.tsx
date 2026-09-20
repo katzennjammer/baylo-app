@@ -88,37 +88,39 @@ export default function MessagesScreen() {
           const label = item.fromMe ? `You: ${preview}` : preview;
 
           return (
-            <Tappable
-              onPress={() => router.push({
-                pathname: "/messages/thread",
-                params: {
-                  partner: item.partnerId,
-                  partnerName: item.partnerName,
-                  partnerAvatar: item.partnerAvatar ?? "",
-                },
-              })}
-              style={styles.row}
-              pressedStyle={styles.rowPressed}
-            >
-              {item.partnerAvatar ? (
-                <Image source={{ uri: item.partnerAvatar }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text>
-                </View>
-              )}
+            <View style={styles.row}>
+              <Tappable onPress={() => router.push({ pathname: "/user", params: { id: item.partnerId } })} style={styles.partnerIdentity} pressedStyle={styles.rowPressed} accessibilityRole="button" accessibilityLabel={`View ${item.partnerName}'s profile`}>
+                {item.partnerAvatar ? <Image source={{ uri: item.partnerAvatar }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text></View>}
+              </Tappable>
 
-              <View style={styles.bodyWrap}>
+              <Tappable
+                onPress={() => router.push({
+                  pathname: "/messages/thread",
+                  params: {
+                    partner: item.partnerId,
+                    partnerName: item.partnerName,
+                    partnerAvatar: item.partnerAvatar ?? "",
+                  },
+                })}
+                style={styles.bodyWrap}
+                pressedStyle={styles.rowPressed}
+                accessibilityRole="button"
+                accessibilityLabel={`Open conversation with ${item.partnerName}`}
+              >
                 <View style={styles.metaRow}>
-                  <Text style={styles.name}>{item.partnerName}</Text>
+                  <Text style={[styles.name, item.unreadCount > 0 && styles.unreadText]}>{item.partnerName}</Text>
                   <Text style={styles.time}>{relativeTime(item.lastMessageAt)}</Text>
                 </View>
                 <View style={styles.previewRow}>
-                  <Text style={styles.preview} numberOfLines={1}>{label}</Text>
-                  {item.unreadCount > 0 ? <View style={styles.unreadDot} /> : null}
+                  <Text style={[styles.preview, item.unreadCount > 0 && styles.unreadText]} numberOfLines={1}>{label}</Text>
+                  {item.unreadCount > 0 ? (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadCount}>{item.unreadCount > 99 ? "99+" : item.unreadCount}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              </View>
-            </Tappable>
+              </Tappable>
+            </View>
           );
         }}
       />
@@ -185,6 +187,10 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: color.control,
   },
+  partnerIdentity: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
   avatar: {
     width: 44,
     height: 44,
@@ -219,6 +225,10 @@ const styles = StyleSheet.create({
     color: color.ink,
     flexShrink: 1,
   },
+  unreadText: {
+    fontFamily: font.sansBold,
+    color: color.ink,
+  },
   time: {
     marginLeft: 8,
     fontFamily: font.mono,
@@ -236,10 +246,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: color.inkSecondary,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  unreadBadge: {
+    minWidth: 8,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: color.green,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  unreadCount: {
+    fontFamily: font.sansBold,
+    fontSize: 10,
+    color: color.onGreen,
   },
 });

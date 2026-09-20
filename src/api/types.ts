@@ -200,6 +200,8 @@ export interface ItemDetailPayload {
   review: ListingReview | null;
   viewer: {
     isOwner: boolean;
+    state: string;
+    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
     /**
@@ -249,7 +251,12 @@ export interface MatchCandidate {
 /** GET /api/v1/home — the whole home tab in one request. */
 export interface HomePayload {
   viewer: HomeViewer;
-  unread: { messages: number; notifications: number; followRequests: number };
+  unread: {
+    messages: number;
+    messageConversations: number;
+    notifications: number;
+    followRequests: number;
+  };
   feed: Item[];
   trending: TrendingCategory[];
   matches: MatchCandidate[];
@@ -374,6 +381,7 @@ export interface ProfileMePayload {
 export interface PublicProfilePayload {
   user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
     rank: { label: string };
+    trustTier: string | null;
   };
   counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following">;
   follow: {
@@ -382,6 +390,18 @@ export interface PublicProfilePayload {
   };
   items: Item[];
   reviews: unknown[];
+  displayedAchievements: ProfileMePayload["displayedAchievements"];
+}
+
+export type FollowStatus = "NONE" | "PENDING" | "ACCEPTED";
+
+export interface ProfileConnectionUser {
+  id: string;
+  name: string;
+  avatar: string | null;
+  trustTier: string | null;
+  follow: { status: FollowStatus };
+  followsYou: boolean;
 }
 
 /* ───────── GET /api/v1/trades — read for TWO fields, not for the tab ────── */
@@ -482,6 +502,7 @@ export interface ActiveTrade {
   bridgeFeeLeaves?: number | null;
   bridgeFeePaidBySender?: boolean | null;
   counterparty: { id: string; name: string; avatar: string | null };
+  myReview: { rating: number } | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;
   requestedItem: TradeItemBrief;

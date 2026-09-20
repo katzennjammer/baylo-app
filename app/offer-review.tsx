@@ -125,6 +125,7 @@ export default function OfferReviewScreen() {
   }
 
   const sender = present.firstName(offer.counterparty.name);
+  const incoming = offer.direction === "received";
   const days = present.offerDaysLeft(offer.createdAt);
   const decided = decide.isSuccess;
 
@@ -301,7 +302,16 @@ export default function OfferReviewScreen() {
               : null
         }
       >
-        {decided ? (
+        {!incoming ? (
+          <Text
+            style={[
+              textStyle(offerType.footnoteMono),
+              { color: offerColor.inkSecondary, textAlign: "center" },
+            ]}
+          >
+            Waiting for {sender} to respond
+          </Text>
+        ) : decided ? (
           <Text
             style={[
               textStyle(offerType.footnoteMono),

@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, request } from "./client";
-import type { ProfileMePayload, PublicProfilePayload } from "./types";
+import type { FollowStatus, ProfileConnectionUser, ProfileMePayload, PublicProfilePayload } from "./types";
 
 /**
  * GET /api/v1/profile/me — the viewer's own shelf, standing and ID gate.
@@ -72,10 +72,97 @@ export function useFollow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ followeeId: userId }),
       });
-      if (!response.ok) throw new Error("Could not send follow request");
+      if (!response.ok) throw new Error("Could not follow this user");
     },
-    onSuccess: (_data, { userId }) => {
+    onMutate: async ({ userId }) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", userId] });
+      await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
+      queryClient.setQueryData<PublicProfilePayload>(["profile", userId], (profile) => profile ? {
+        ...profile,
+        counts: { ...profile.counts, followers: profile.counts.followers + 1 },
+        follow: { ...profile.follow, status: "ACCEPTED" },
+      } : profile);
+      updateConnectionCaches(queryClient, userId, "ACCEPTED");
+    },
+    onError: (_error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
     },
   });
+}
+
+export function useUnfollow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const response = await request(`/api/follows/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not unfollow this user");
+    },
+    onMutate: async ({ userId }) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", userId] });
+      await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
+      queryClient.setQueryData<PublicProfilePayload>(["profile", userId], (profile) => profile ? {
+        ...profile,
+        counts: { ...profile.counts, followers: Math.max(0, profile.counts.followers - 1) },
+        follow: { ...profile.follow, status: "NONE" },
+      } : profile);
+      updateConnectionCaches(queryClient, userId, "NONE");
+    },
+    onError: (_error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+    },
+  });
+}
+
+function updateConnectionCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueriesData<{ pages: Array<{ users: ProfileConnectionUser[] }> }>(
+    { queryKey: ["profile-connections"] },
+    (data) => data ? {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        users: page.users.map((user) => user.id === userId ? { ...user, follow: { status } } : user),
+      })),
+    } : data,
+  );
+}
+
+type ConnectionKind = "followers" | "following";
+type ConnectionPage = { users: ProfileConnectionUser[]; nextCursor: string | null };
+
+async function fetchConnections(userId: string, kind: ConnectionKind, cursor: string | null): Promise<ConnectionPage> {
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor) params.set("cursor", cursor);
+  const response = await apiV1<{ users: ProfileConnectionUser[] }>(
+    `/api/v1/profile/${encodeURIComponent(userId)}/${kind}?${params.toString()}`,
+  );
+  return {
+    users: response.data.users,
+    nextCursor: typeof response.meta.nextCursor === "string" ? response.meta.nextCursor : null,
+  };
+}
+
+export function useProfileConnections(userId: string | undefined, kind: ConnectionKind, enabled = true) {
+  const query = useInfiniteQuery({
+    queryKey: ["profile-connections", userId, kind],
+    queryFn: ({ pageParam }) => fetchConnections(userId!, kind, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: !!userId && enabled,
+  });
+  return {
+    ...query,
+    users: query.data?.pages.flatMap((page) => page.users) ?? [],
+  };
+}
+
+export function followButtonStatus(status: FollowStatus): "Follow" | "Following" | "Requested" {
+  if (status === "ACCEPTED") return "Following";
+  if (status === "PENDING") return "Requested";
+  return "Follow";
 }

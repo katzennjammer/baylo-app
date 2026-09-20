@@ -1,7 +1,8 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
 import { useProfileMe } from "../../src/api/profile";
@@ -16,6 +17,7 @@ import { bracketLabel, bracketOf } from "../../src/lib/brackets";
 import { shelfMisses } from "../../src/lib/gap";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
+import { useLike } from "../../src/api/social";
 import {
   BlockIcon,
   ChevronLeftIcon,
@@ -27,10 +29,13 @@ import {
 } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportSheet } from "../../src/components/ReportSheet";
+import { EditListingSheet } from "../../src/components/home/EditListingSheet";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
+import { CommentsSheet } from "../../src/components/home/CommentsSheet";
+import { SocialRow } from "../../src/components/home/FeedCard";
 import { Tappable } from "../../src/components/Tappable";
 import { TIER_LABEL, type TrustTier } from "../../src/lib/trust";
 import {
@@ -91,6 +96,7 @@ import type { Item, SafeZoneHub } from "../../src/api/types";
  */
 export default function ItemDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data, isPending, isError, error, refetch } = useItem(id);
 
@@ -136,6 +142,9 @@ export default function ItemDetailScreen() {
    * indication that the list was truncated. See ReportSheet for the full note.
    */
   const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const { mutate: like } = useLike();
 
   const apiError = error instanceof ApiError ? error : null;
 
@@ -208,6 +217,9 @@ export default function ItemDetailScreen() {
    * `enforceInitiateTrade()`.
    */
   const locked = viewer.offerLock === "premium";
+  const actionBarHeight = locked && item.valueLeaves !== null
+    ? size.detail.actionButton + space.detail.actionBarY * 2 + 8 + 16
+    : size.detail.actionButton + space.detail.actionBarY * 2;
   const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
   const outOfReach =
     !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
@@ -306,7 +318,7 @@ export default function ItemDetailScreen() {
     <View style={s.screen}>
       <BackRow onPress={() => router.back()} />
 
-      <ScrollView contentContainerStyle={s.scroll}>
+      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: actionBarHeight }]}>
         <PhotoCarousel images={item.images} title={item.title} />
 
         <View style={s.body}>
@@ -332,7 +344,22 @@ export default function ItemDetailScreen() {
             </Tappable>
           ) : null}
 
+          <OwnerRow
+            name={item.owner.name}
+            avatar={item.owner.avatar}
+            location={item.owner.location}
+            tier={item.owner.trustTier}
+            rank={item.owner.rank}
+            onPress={() =>
+              router.push({ pathname: "/user", params: { id: item.owner.id } })
+            }
+          />
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
+
+          {item.description.trim() ? (
+            <Text style={[textStyle(type.detailBody), s.postCaption]}>{item.description}</Text>
+          ) : null}
 
           {/* Omitted, never "0", for a listing that predates the valuation
               model — an unvalued item is not an item worth nothing.
@@ -345,11 +372,7 @@ export default function ItemDetailScreen() {
             <View
               style={s.leavesRow}
               accessibilityRole="text"
-              accessibilityLabel={
-                viewer.isOwner
-                  ? `Your listing, valued at ${item.valueLeaves} Leaves`
-                  : bracketLabel(bracketOf(item.valueLeaves))
-              }
+              accessibilityLabel={bracketLabel(bracketOf(item.valueLeaves))}
             >
               <LeafIcon
                 size={icon.detailLeaf.size}
@@ -357,28 +380,18 @@ export default function ItemDetailScreen() {
                 color={color.forest}
               />
               <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {viewer.isOwner ? item.valueLeaves : bracketLabel(bracketOf(item.valueLeaves))}
+                {bracketLabel(bracketOf(item.valueLeaves))}
               </Text>
-              {viewer.isOwner ? (
-                <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>Leaves</Text>
-              ) : null}
             </View>
           ) : null}
 
-          <View style={s.chips}>
-            <Chip label={item.conditionLabel} />
-            <Chip label={item.categoryLabel} />
-          </View>
-
-          <OwnerRow
-            name={item.owner.name}
-            avatar={item.owner.avatar}
-            location={item.owner.location}
-            tier={item.owner.trustTier}
-            rank={item.owner.rank}
-            onPress={() =>
-              router.push({ pathname: "/user", params: { id: item.owner.id } })
-            }
+          <SocialRow
+            likes={item.stats.likes}
+            liked={item.stats.liked}
+            comments={item.stats.comments}
+            onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
+            onComment={() => setCommentsOpen(true)}
+            onShare={() => void Share.share({ message: item.title, title: item.title })}
           />
 
           {/*
@@ -394,24 +407,18 @@ export default function ItemDetailScreen() {
             belongs to the grid, not the item), while the bottom bar explains
             the reach block when the listing is outside the viewer's bracket.
           */}
-          {reachInsert}
-
-          {item.description.trim() ? (
-            <Section heading="About this item">
-              <Text style={[textStyle(type.detailBody), s.bodyText]}>{item.description}</Text>
-            </Section>
-          ) : null}
+          {!viewer.isOwner ? reachInsert : null}
 
           {/* `wanted` is the owner's own words about what they will take back.
               Rendered plainly rather than in the urgency treatment — it is a
               wish list, not a deadline. */}
-          {item.wanted?.trim() ? (
+          {!viewer.isOwner && item.wanted?.trim() ? (
             <Section heading="Wanted in return">
               <Text style={[textStyle(type.detailBody), s.bodyText]}>{item.wanted}</Text>
             </Section>
           ) : null}
 
-          {hubs.length > 0 ? (
+          {!viewer.isOwner && hubs.length > 0 ? (
             <Section heading="Meet at a Safe Zone">
               {/* The whole preview is one target. `HubMap` with
                   `interactive={false}` takes no touches, so this Tappable
@@ -476,10 +483,9 @@ export default function ItemDetailScreen() {
         <PremiumLockedBar bracket={bracketOf(item.valueLeaves)} owner={firstName(item.owner.name)} />
       ) : (
         <ActionBar
-          canOffer={viewer.canOffer}
-          isOwner={viewer.isOwner}
-          status={item.status}
+          action={viewer.action}
           existingOfferId={viewer.existingOfferId}
+          onEdit={() => setEditing(true)}
           onOffer={() => {
             if (cannotOffer) {
               setReachDialogOpen(true);
@@ -538,6 +544,8 @@ export default function ItemDetailScreen() {
           onClose={() => setReporting(false)}
         />
       ) : null}
+      <EditListingSheet item={editing ? item : null} onClose={() => setEditing(false)} />
+      <CommentsSheet item={commentsOpen ? item : null} onClose={() => setCommentsOpen(false)} />
     </View>
   );
 }
@@ -545,8 +553,9 @@ export default function ItemDetailScreen() {
 /* ─────────────────────────────── pieces ─────────────────────────────── */
 
 function BackRow({ onPress }: { onPress: () => void }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={s.backRow}>
+    <View style={[s.backRow, { paddingTop: insets.top + 4 }]}>
       <Tappable
         onPress={onPress}
         accessibilityRole="button"
@@ -738,30 +747,30 @@ function DangerRow({
  * support; "You cannot offer on your own listing" ends the question.
  */
 function ActionBar({
-  canOffer,
-  isOwner,
-  status,
+  action,
   existingOfferId,
+  onEdit,
   onOffer,
 }: {
-  canOffer: boolean;
-  isOwner: boolean;
-  status: string;
+  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
   existingOfferId: string | null;
+  onEdit: () => void;
   onOffer: () => void;
 }) {
-  const reason = isOwner
-    ? "This is your listing"
-    : status !== "AVAILABLE"
-      ? "This listing is no longer available"
-      : null;
-
-  if (reason) {
+  if (action === "EDIT" || action === "IN_TRADE" || action === "TRADED") {
+    const label = action === "EDIT" ? "Edit listing" : action === "IN_TRADE" ? "In trade" : "Traded";
     return (
       <View style={s.actionBar}>
-        <View style={[s.action, s.actionInert]}>
-          <Text style={[textStyle(type.primaryButton), { color: color.inkMuted }]}>{reason}</Text>
-        </View>
+        <Tappable
+          onPress={action === "EDIT" ? onEdit : undefined}
+          disabled={action !== "EDIT"}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: action !== "EDIT" }}
+          style={[s.action, action !== "EDIT" && s.actionInert]}
+          pressedStyle={s.actionPressed}
+        >
+          <Text style={[textStyle(type.primaryButton), { color: action === "EDIT" ? color.forest : color.inkMuted }]}>{label}</Text>
+        </Tappable>
       </View>
     );
   }
@@ -770,10 +779,10 @@ function ActionBar({
     <View style={s.actionBar}>
       <Tappable
         onPress={onOffer}
-        disabled={!canOffer}
+        disabled={action !== "SEND_OFFER"}
         accessibilityRole="button"
-        accessibilityState={{ disabled: !canOffer }}
-        style={[s.action, !canOffer && s.actionInert]}
+        accessibilityState={{ disabled: action !== "SEND_OFFER" }}
+        style={s.action}
         pressedStyle={s.actionPressed}
       >
         <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
@@ -785,7 +794,7 @@ function ActionBar({
             which shows what was sent and says it expires on its own; a label
             promising an edit would be promising a screen that cannot exist yet.
           */}
-          {existingOfferId ? "See your offer" : "Offer Trade"}
+          {existingOfferId ? "See your offer" : "Send offer"}
         </Text>
       </Tappable>
     </View>
@@ -844,7 +853,7 @@ function DetailSkeleton() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  scroll: { paddingBottom: space.detail.actionBarClearance },
+  scroll: { paddingBottom: size.detail.actionButton + space.detail.actionBarY * 2 },
 
   backRow: { paddingHorizontal: space.screenXTight, paddingTop: 4 },
   back: {
@@ -920,6 +929,7 @@ const s = StyleSheet.create({
   section: { marginTop: space.detail.sectionY },
   sectionHeading: { color: color.ink, marginBottom: space.detail.headingToBody },
   bodyText: { color: color.inkSecondary },
+  postCaption: { color: color.inkSecondary, lineHeight: 22, marginTop: 10 },
 
   /* The preview map above the hub list. 16:10 — wide enough to hold two hubs
      on opposite sides of the channel without the pins meeting in the middle,
@@ -979,6 +989,7 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 2,
     paddingHorizontal: space.detail.x,
     paddingVertical: space.detail.actionBarY,
     backgroundColor: color.surface,

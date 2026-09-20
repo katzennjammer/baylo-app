@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useTradeHistory } from "../src/api/trades";
 import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
@@ -93,7 +93,25 @@ export default function TradesHistoryScreen() {
               const words = present.historyWords(trade, clockTime);
               return (
                 <View key={trade.id}>
-                  <HistoryRow title={words.title} meta={words.meta} tone={words.tone} />
+                  <HistoryRow
+                    title={words.title}
+                    meta={words.meta}
+                    tone={words.tone}
+                    trailing={trade.status === "COMPLETED" ? (
+                      trade.myReview ? (
+                        <Text style={[textStyle(offerType.helper), { color: offerColor.warm }]}>Rated {trade.myReview.rating}/5</Text>
+                      ) : (
+                        <Pressable
+                          onPress={() => router.push(`/rate-trade?id=${encodeURIComponent(trade.id)}`)}
+                          style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Rate ${trade.counterparty.name}`}
+                        >
+                          <Text style={[textStyle(offerType.buttonTertiary), { color: offerColor.warm }]}>Rate {trade.counterparty.name.split(" ")[0]}</Text>
+                        </Pressable>
+                      )
+                    ) : undefined}
+                  />
                   <Hairline />
                 </View>
               );

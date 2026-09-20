@@ -3,24 +3,31 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Keyboard,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useColorScheme,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { useActiveTrades } from "../../src/api/trades";
+import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { ImageIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon, TrashIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
+import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 
@@ -46,24 +53,44 @@ export default function MessagesThreadScreen() {
   }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
   const { session } = useSession();
+  const dark = useColorScheme() === "dark";
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [typingName, setTypingName] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const listRef = useRef<ScrollView | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for typing indication
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const activeTrades = useActiveTrades();
   const sendMessage = useSendMessage();
+  const block = useBlockUser();
+  const deleteConversation = useDeleteConversation();
   const sortedMessages = useMemo(
     () => [...(thread.data?.messages ?? [])].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     ),
     [thread.data],
   );
+  const offerStatuses = useMemo(() => {
+    const statuses = new Map<string, string>();
+    for (const message of sortedMessages) {
+      try {
+        const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown; status?: unknown };
+        if (payload.type === "offer_update" && typeof payload.offerId === "string" && typeof payload.status === "string") {
+          statuses.set(payload.offerId, payload.status);
+        }
+      } catch {
+        // Plain-text messages are not offer payloads.
+      }
+    }
+    return statuses;
+  }, [sortedMessages]);
 
   const onNewMessage = useCallback((message: Omit<ThreadMessage, "read">) => {
     if (!partner || message.senderId !== partner) return;
@@ -73,6 +100,12 @@ export default function MessagesThreadScreen() {
     });
     listRef.current?.scrollToEnd({ animated: true });
   }, [partner, queryClient]);
+
+  const onOfferUpdated = useCallback((event: {
+    systemMessage?: Omit<ThreadMessage, "read">;
+  }) => {
+    if (event.systemMessage) onNewMessage(event.systemMessage);
+  }, [onNewMessage]);
 
   const onTyping = useCallback((event: { senderId: string; senderName: string; isTyping: boolean }) => {
     if (event.senderId !== partner) return;
@@ -85,8 +118,14 @@ export default function MessagesThreadScreen() {
 
   useEffect(() => {
     if (!session?.user.id) return;
-    return subscribeToUserChannel(session.user.id, onNewMessage, onTyping) ?? undefined;
-  }, [onNewMessage, onTyping, session?.user.id]);
+    return subscribeToUserChannel(session.user.id, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
+  }, [onNewMessage, onOfferUpdated, onTyping, session?.user.id]);
+
+  useEffect(() => {
+    if (thread.data) {
+      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    }
+  }, [queryClient, thread.data]);
 
   useEffect(() => () => {
     if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -170,22 +209,69 @@ export default function MessagesThreadScreen() {
   const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
   const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
 
+  const palette = dark ? darkColors : lightColors;
+
+  const confirmBlock = () => {
+    if (!partner) return;
+    setMenuOpen(false);
+    Alert.alert(
+      `Block ${otherName}?`,
+      "You will not see each other's listings and neither of you can message the other. Trades already in progress are not cancelled.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => block.mutate(partner, { onSuccess: () => router.back() }),
+        },
+      ],
+    );
+  };
+
+  const confirmDelete = () => {
+    if (!partner) return;
+    setMenuOpen(false);
+    Alert.alert(
+      "Hide conversation?",
+      "This removes the conversation from your view only. Messages are kept for both people and for reports.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteConversation.mutate(partner, { onSuccess: () => router.back() }),
+        },
+      ],
+    );
+  };
+
   return (
-    <View style={[styles.screen, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      <View style={[styles.header, { height: insets.top + 52 }]}> 
+    <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.header, { height: insets.top + 52, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
         <Tappable onPress={() => router.back()} style={styles.backButton} pressedStyle={styles.backButtonPressed}>
-          <Text style={styles.backText}>←</Text>
+          <ChevronLeftIcon size={22} stroke={1.8} color={palette.ink} />
         </Tappable>
-        <Text style={styles.title}>{otherName}</Text>
+        <Tappable
+          onPress={() => partner && router.push(`/user?id=${encodeURIComponent(partner)}`)}
+          style={styles.titleButton}
+          pressedStyle={styles.backButtonPressed}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${otherName}'s profile`}
+        >
+          <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+        </Tappable>
+        <Tappable onPress={() => setMenuOpen(true)} style={styles.menuButton} pressedStyle={styles.backButtonPressed} accessibilityLabel="Conversation options">
+          <KebabIcon size={20} color={palette.ink} />
+        </Tappable>
       </View>
 
       {thread.isPending ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="small" color={color.forest} />
+            <ActivityIndicator size="small" color={palette.forest} />
         </View>
       ) : thread.isError ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>This conversation failed to load.</Text>
+            <Text style={[styles.emptyTitle, { color: palette.ink }]}>This conversation failed to load.</Text>
         </View>
       ) : (
         <>
@@ -197,9 +283,26 @@ export default function MessagesThreadScreen() {
           >
             {sortedMessages.map((message) => {
               const mine = message.senderId === currentUserId;
+              let displayContent = message.content;
+              try {
+                const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown };
+                if (payload.type === "offer" && typeof payload.offerId === "string") {
+                  const status = offerStatuses.get(payload.offerId);
+                  if (status) displayContent = JSON.stringify({ ...payload, status });
+                }
+              } catch {
+                // Plain-text messages are rendered unchanged.
+              }
+                  const isOfferUpdate = (() => {
+                try {
+                  return (JSON.parse(displayContent) as { type?: string }).type === "offer_update";
+                } catch {
+                  return false;
+                }
+              })();
               return (
-                <View key={message.id} style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheir]}>
-                  {!mine ? (
+                <View key={message.id} style={[styles.bubbleRow, isOfferUpdate ? styles.bubbleRowStatus : mine ? styles.bubbleRowMine : styles.bubbleRowTheir]}>
+                  {!mine && !isOfferUpdate ? (
                     <View style={styles.avatarColumn}>
                       {otherAvatar ? (
                         <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
@@ -211,8 +314,43 @@ export default function MessagesThreadScreen() {
                     </View>
                   ) : null}
                   <View style={styles.messageContent}>
-                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheir]}>
-                      {renderMessageBody({ content: message.content, mine })}
+                    <View style={[styles.bubble, isOfferUpdate ? styles.statusBubble : mine ? styles.bubbleMine : styles.bubbleTheir]}>
+                      {renderMessageBody({
+                        content: displayContent,
+                        mine,
+                        onImagePress: setLightboxUrl,
+                        onOfferPress: (id) => {
+                          try {
+                            const payload = JSON.parse(message.content) as { type?: string; tradeId?: unknown };
+                            if (__DEV__) console.log("[messages/offer_update_lookup]", { payload, trade: activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId) ?? null });
+                            router.push(payload.type === "offer_update" && typeof payload.tradeId === "string"
+                              ? `/trade-code?id=${encodeURIComponent(payload.tradeId)}`
+                              : `/offer-review?id=${encodeURIComponent(id)}`);
+                          } catch {
+                            router.push(`/offer-review?id=${encodeURIComponent(id)}`);
+                          }
+                        },
+                        offerDetails: (() => {
+                          try {
+                            const payload = JSON.parse(message.content) as { offerId?: unknown };
+                            return typeof payload.offerId === "string"
+                              ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
+                              : undefined;
+                          } catch {
+                            return undefined;
+                          }
+                        })(),
+                        tradeDetails: (() => {
+                          try {
+                            const payload = JSON.parse(message.content) as { tradeId?: unknown };
+                            return typeof payload.tradeId === "string"
+                              ? activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId)
+                              : undefined;
+                          } catch {
+                            return undefined;
+                          }
+                        })(),
+                      })}
                     </View>
                     <Text style={styles.time}>{relativeTime(message.createdAt)}</Text>
                   </View>
@@ -221,7 +359,7 @@ export default function MessagesThreadScreen() {
             })}
           </ScrollView>
 
-          {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
+          {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
 
           <View
             style={[
@@ -238,7 +376,7 @@ export default function MessagesThreadScreen() {
               pressedStyle={styles.attachButtonPressed}
               accessibilityLabel="Attach a photo"
             >
-              <ImageIcon size={20} stroke={1.8} color={color.forest} />
+              <ImageIcon size={20} stroke={1.8} color={palette.forest} />
             </Tappable>
             <TextInput
               value={draft}
@@ -246,7 +384,7 @@ export default function MessagesThreadScreen() {
               placeholder="Type a message…"
               multiline
               style={styles.input}
-              placeholderTextColor={color.inkSecondary}
+              placeholderTextColor={palette.inkSecondary}
             />
             <Tappable
               onPress={() => void onSend()}
@@ -260,9 +398,59 @@ export default function MessagesThreadScreen() {
           {typingName ? <Text style={styles.typing}>{typingName} is typing…</Text> : null}
         </>
       )}
+      <ConversationMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        colors={palette}
+        onBlock={confirmBlock}
+        onDelete={confirmDelete}
+      />
+      <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+        <Pressable style={styles.lightbox} onPress={() => setLightboxUrl(null)} accessibilityLabel="Close full-screen image">
+          {lightboxUrl ? <Image source={{ uri: lightboxUrl }} style={styles.fullImage} resizeMode="contain" /> : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
+
+function ConversationMenu({
+  visible,
+  onClose,
+  onBlock,
+  onDelete,
+  colors,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onBlock: () => void;
+  onDelete: () => void;
+  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
+}) {
+  if (!visible) return null;
+  return (
+    <SheetShell title="Conversation" onClose={onClose} colors={colors}>
+      <SheetRows>
+        <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} />
+        <SheetRow glyph={<TrashIcon size={20} stroke={1.6} color={colors.urgent} />} label="Delete conversation" destructive colors={colors} onPress={onDelete} />
+      </SheetRows>
+    </SheetShell>
+  );
+}
+
+const lightColors = { ...color, surface: color.surface, forest: color.forest };
+const darkColors = {
+  ...color,
+  surface: "#14140F",
+  control: "#2C2A22",
+  ink: "#FAFAF7",
+  inkSecondary: "#C5C1B5",
+  inkMuted: "#999487",
+  divider: "#4A473C",
+  controlLine: "#4A473C",
+  forest: "#3DBE5A",
+  urgent: "#F08A69",
+};
 
 const styles = StyleSheet.create({
   screen: {
@@ -281,20 +469,29 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
+    marginRight: 0,
     transform: [{ translateY: 16 }],
   },
   backButtonPressed: {
     backgroundColor: color.control,
   },
-  backText: {
-    fontSize: 22,
-    color: color.ink,
+  titleButton: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    transform: [{ translateY: 16 }],
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ translateY: 16 }],
   },
   title: {
     ...textStyle({ fontFamily: font.displaySemi, fontSize: 18 }),
@@ -333,6 +530,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     flexDirection: "row",
     gap: 8,
+  },
+  bubbleRowStatus: {
+    alignItems: "center",
   },
   avatarColumn: {
     width: 28,
@@ -374,6 +574,12 @@ const styles = StyleSheet.create({
   bubbleTheir: {
     backgroundColor: color.control,
     borderColor: color.divider,
+  },
+  statusBubble: {
+    maxWidth: "100%",
+    padding: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
   },
   time: {
     fontFamily: font.mono,
@@ -450,5 +656,16 @@ const styles = StyleSheet.create({
     color: color.inkSecondary,
     fontFamily: font.sans,
     fontSize: 12,
+  },
+  lightbox: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  fullImage: {
+    width: "100%",
+    height: "100%",
   },
 });

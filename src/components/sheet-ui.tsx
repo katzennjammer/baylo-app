@@ -50,6 +50,7 @@ export function SheetShell({
   onClose,
   busy = false,
   closeLabel = "Cancel",
+  colors,
   children,
 }: {
   title: string;
@@ -59,6 +60,7 @@ export function SheetShell({
   /** Replaces the footer control with a spinner while a request is in flight. */
   busy?: boolean;
   closeLabel?: string;
+  colors?: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string };
   children: React.ReactNode;
 }) {
   return (
@@ -73,7 +75,7 @@ export function SheetShell({
           ceremony. Tapping it is the same as Cancel. */}
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
 
-      <View style={s.sheet}>
+      <View style={[s.sheet, colors ? { backgroundColor: colors.surface } : null]}>
         <View style={s.handle} />
 
         <View style={s.titleRow}>
@@ -85,7 +87,7 @@ export function SheetShell({
               style={s.back}
               pressedStyle={s.rowPressed}
             >
-              <ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={color.ink} />
+              <ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={colors?.ink ?? color.ink} />
             </Tappable>
           ) : null}
 
@@ -106,7 +108,7 @@ export function SheetShell({
               style={s.cancel}
               pressedStyle={s.cancelPressed}
             >
-              <Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>
+              <Text style={[textStyle(type.secondaryButton), { color: colors?.inkSecondary ?? color.inkSecondary }]}>
                 {closeLabel}
               </Text>
             </Tappable>
@@ -135,12 +137,14 @@ export function SheetRow({
   label,
   destructive = false,
   disabled = false,
+  colors,
   onPress,
 }: {
   glyph?: React.ReactNode;
   label: string;
   destructive?: boolean;
   disabled?: boolean;
+  colors?: { ink: string; urgent: string };
   onPress: () => void;
 }) {
   return (
@@ -156,7 +160,7 @@ export function SheetRow({
       <Text
         style={[
           textStyle(type.dangerAction),
-          { color: destructive ? color.urgent : color.ink },
+            { color: destructive ? colors?.urgent ?? color.urgent : colors?.ink ?? color.ink },
         ]}
         numberOfLines={1}
       >

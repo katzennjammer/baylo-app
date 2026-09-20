@@ -1,100 +1,93 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useColorScheme } from "react-native";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { useFollow, usePublicProfile } from "../../src/api/profile";
-import { ChevronLeftIcon, PersonIcon } from "../../src/components/icons";
+import { useFollow, usePublicProfile, useUnfollow } from "../../src/api/profile";
+import { useSession } from "../../src/auth/session";
+import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
+import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
+import { ChevronLeftIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
-import {
-  border,
-  color,
-  icon,
-  radius,
-  size,
-  space,
-  textStyle,
-  type,
-} from "../../src/theme/tokens";
+import { bracketLabel } from "../../src/lib/brackets";
+import { TIER_LABEL } from "../../src/lib/trust";
+import type { Item } from "../../src/api/types";
+import { color, font, icon, space, textStyle, type } from "../../src/theme/tokens";
 
-/**
- * Another trader's profile — a placeholder, and labelled as one.
- *
- * Item detail's owner row has to go somewhere: a name that looks tappable and
- * is not is a worse control than a plain label. This is where it goes until the
- * real screen exists.
- *
- * Same rule as app/(app)/offer.tsx — it says it is unbuilt rather than
- * pretending. During testing, a screen that silently does nothing and a screen
- * that crashed look identical.
- *
- * WHAT IT WOULD BE BUILT FROM: /api/v1/profile/[id] already exists and returns
- * the user with their listings. Note it sends `trustTier: null` — the same gap
- * item detail had until /items/[id] was changed to resolve it — so whoever
- * builds this decides then whether a profile is a screen where the badge is
- * worth three aggregates. It is the same judgement, and the answer is probably
- * yes for the same reason: a profile is read before deciding to trade.
- */
+type ProfileRow = { kind: "posts"; items: Item[] } | { kind: "review"; review: ProfileReview };
+
 export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { data, isPending, isError } = usePublicProfile(id);
+  const { session } = useSession();
+  const isOwnProfile = !!id && id === session?.user.id;
+  const { data, isPending, isError, refetch, isRefetching } = usePublicProfile(isOwnProfile ? undefined : id);
   const follow = useFollow();
+  const unfollow = useUnfollow();
   const dark = useColorScheme() === "dark";
   const palette = dark ? darkColors : lightColors;
+  const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const reviewQuery = useProfileReviews(id, tab === "reviews");
 
-  if (isPending) return <View style={s.screen}><BackRow onPress={() => router.back()} /><ActivityIndicator color={color.green} style={{ marginTop: 40 }} /></View>;
-  if (isError || !data) return <View style={s.screen}><BackRow onPress={() => router.back()} /><Text style={[textStyle(type.emptyBody), s.body]}>This trader profile is unavailable.</Text></View>;
-  const isFollowing = data.follow.status === "ACCEPTED";
-  const canFollow = data.follow.status === "NONE";
+  useEffect(() => {
+    if (isOwnProfile) router.replace("/(app)/profile");
+  }, [isOwnProfile, router]);
 
-  return (
-    <FlatList
-      style={[s.screen, { backgroundColor: palette.surface }]}
-      data={data.items}
-      numColumns={3}
-      keyExtractor={(item) => item.id}
-      ListHeaderComponent={<><BackRow onPress={() => router.back()} /><View style={s.header}><Avatar uri={data.user.avatar} name={data.user.name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={data.counts.listed} /><Stat dark={dark} label="Followers" value={data.counts.followers} /><Stat dark={dark} label="Following" value={data.counts.following} /></View></View><Text style={[s.name, { color: palette.ink }]}>{data.user.name}</Text>{data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]}>{data.user.bio}</Text> : null}{data.follow.followsYou ? <Text style={[s.followsYou, { color: palette.muted }]}>Follows you</Text> : null}<View style={s.actions}>{canFollow ? <Pressable style={s.follow} onPress={() => follow.mutate({ userId: data.user.id })}><Text style={s.followText}>{follow.isPending ? "Following..." : "Follow"}</Text></Pressable> : <Pressable style={s.following}><Text style={s.followingText}>{isFollowing ? "Following" : "Requested"}</Text></Pressable>}<Pressable style={[s.message, { backgroundColor: palette.control }]} onPress={() => router.push("/messages")}><Text style={[s.messageText, { color: palette.ink }]}>Message</Text></Pressable></View><View style={[s.rule, { backgroundColor: palette.divider }]} /></>}
-      renderItem={({ item }) => <Pressable style={[s.tile, { backgroundColor: palette.control }]} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })}><Image source={item.images[0] ? { uri: item.images[0] } : undefined} contentFit="cover" style={StyleSheet.absoluteFill} /></Pressable>}
-      ListEmptyComponent={<Text style={s.body}>No active listings yet.</Text>}
-    />
-  );
+  const onRefresh = useCallback(() => {
+    if (tab === "reviews") void reviewQuery.refetch();
+    else void refetch();
+  }, [refetch, reviewQuery, tab]);
+
+  if (isOwnProfile) return null;
+
+  if (isPending) return <View style={[s.screen, { backgroundColor: palette.surface }]}><BackRow title="Profile" insetsTop={insets.top} dark={dark} onPress={() => router.back()} /><ActivityIndicator color={palette.green} style={s.spinner} /></View>;
+  if (isError || !data) return <View style={[s.screen, { backgroundColor: palette.surface }]}><BackRow title="Profile" insetsTop={insets.top} dark={dark} onPress={() => router.back()} /><Text style={[textStyle(type.emptyBody), s.empty, { color: palette.secondary }]}>This trader profile is unavailable.</Text></View>;
+
+  const status = data.follow.status;
+  const busy = follow.isPending || unfollow.isPending;
+  const rows: ProfileRow[] = tab === "posts"
+    ? chunkItems(data.items).map((items) => ({ kind: "posts", items }))
+    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+
+  function toggleFollow() {
+    if (!data || busy || status === "PENDING") return;
+    if (status === "ACCEPTED") unfollow.mutate({ userId: data.user.id });
+    else follow.mutate({ userId: data.user.id });
+  }
+
+  return <FlatList<ProfileRow>
+    style={[s.screen, { backgroundColor: palette.surface }]}
+    data={rows}
+    keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
+    ListHeaderComponent={<>
+      <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} />
+      <View style={s.header}>
+        <View style={s.identityRow}><Avatar uri={data.user.avatar} name={data.user.name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={data.counts.listed} /><Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} /><Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} /></View></View>
+        {data.user.trustTier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[data.user.trustTier as keyof typeof TIER_LABEL] ?? data.user.trustTier}</Text></View> : null}
+        {data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{data.user.bio}</Text> : null}
+        <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : status === "PENDING" ? "Requested" : status === "ACCEPTED" ? "Following" : "Follow"}</Text></Pressable><Pressable onPress={() => router.push({ pathname: "/messages/thread", params: { partner: data.user.id, partnerName: data.user.name, partnerAvatar: data.user.avatar ?? "" } })} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable></View>
+        {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} onMore={() => undefined} /> : null}
+      </View>
+      <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+      {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} /> : null}
+    </>}
+    renderItem={({ item: row }) => row.kind === "posts" ? <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View> : <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { if (row.review.item) router.push({ pathname: "/item", params: { id: row.review.item.id } }); }} />}
+    onEndReached={() => { if (tab === "reviews" && reviewQuery.hasNextPage && !reviewQuery.isFetchingNextPage) void reviewQuery.fetchNextPage(); }}
+    onEndReachedThreshold={0.6}
+    refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={onRefresh} tintColor={palette.green} />}
+    ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
+    ListEmptyComponent={<Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "No posts yet."}</Text>}
+  />;
 }
 
-function BackRow({ onPress }: { onPress: () => void }) { return <View style={s.backRow}><Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel="Go back" style={s.back} pressedStyle={s.backPressed}><ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={color.ink} /></Tappable></View>; }
-function Avatar({ uri, name }: { uri: string | null; name: string }) { return uri ? <Image source={{ uri }} contentFit="cover" style={s.avatar} /> : <View style={s.avatarFallback}><Text style={s.initial}>{name.charAt(0).toUpperCase()}</Text></View>; }
-function Stat({ dark, label, value }: { dark: boolean; label: string; value: number }) { const palette = dark ? darkColors : lightColors; return <View style={s.stat}><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></View>; }
+function chunkItems(items: Item[]): Item[][] { const rows: Item[][] = []; for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3)); return rows; }
+function BackRow({ title, insetsTop, dark, onPress }: { title: string; insetsTop: number; dark: boolean; onPress: () => void }) { const palette = dark ? darkColors : lightColors; return <View style={[s.top, { borderBottomColor: palette.divider, paddingTop: insetsTop, height: insetsTop + 64 }]}><Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel="Go back" style={s.back} pressedStyle={s.backPressed}><ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={palette.ink} /></Tappable><Text style={[s.headerTitle, { color: palette.ink }]} numberOfLines={1}>{title}</Text><View style={s.headerSpacer} /></View>; }
+function Stat({ dark, label, value, onPress }: { dark: boolean; label: string; value: number; onPress?: () => void }) { const palette = dark ? darkColors : lightColors; const content = <><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></>; return onPress ? <Pressable onPress={onPress} style={s.stat} accessibilityRole="button">{content}</Pressable> : <View style={s.stat}>{content}</View>; }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.surface },
-  backRow: { paddingHorizontal: space.screenXTight, paddingTop: 4 },
-  back: {
-    width: size.detail.backButton,
-    height: size.detail.backButton,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backPressed: { opacity: 0.6 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12 },
-  avatar: { width: 86, height: 86, borderRadius: 43 },
-  avatarFallback: { width: 86, height: 86, borderRadius: 43, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
-  initial: { color: color.onGreen, fontSize: 30, fontWeight: "700" },
-  stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 },
-  stat: { alignItems: "center" }, statValue: { fontSize: 18, fontFamily: "PublicSans-SemiBold" }, statLabel: { fontSize: 12, marginTop: 4 },
-  name: { fontSize: 15, fontFamily: "PublicSans-SemiBold", marginHorizontal: 16, marginTop: 12 },
-  bio: { fontSize: 14, lineHeight: 20, marginHorizontal: 16, marginTop: 12 },
-  followsYou: { fontSize: 12, marginHorizontal: 16, marginTop: 8 },
-  actions: { flexDirection: "row", gap: 8, marginHorizontal: 16, marginTop: 12 },
-  follow: { minHeight: 44, flex: 1, borderRadius: 8, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
-  followText: { color: color.onGreen, fontWeight: "700" },
-  following: { minHeight: 44, flex: 1, borderRadius: 8, borderWidth: 1, borderColor: color.controlLine, alignItems: "center", justifyContent: "center" },
-  followingText: { color: color.ink, fontWeight: "600" },
-  message: { minHeight: 44, flex: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  messageText: { fontFamily: "PublicSans-SemiBold", fontSize: 14 },
-  rule: { height: 1, marginTop: 12 },
-  tile: { width: "33.333%", aspectRatio: 1, marginRight: 2, marginBottom: 2, overflow: "hidden" },
-  body: { color: color.inkSecondary, textAlign: "center", marginTop: 36 },
+  screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 }, footer: { paddingVertical: 18 },
 });
-
-const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider };
-const darkColors = { surface: "#171A17", control: "#252A25", ink: "#F4F5F0", secondary: "#B6BDB3", muted: "#929B91", divider: "#343A34" };
+const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider, border: color.controlLine, green: color.green };
+const darkColors = { surface: "#171A17", control: "#252A25", ink: "#F4F5F0", secondary: "#B6BDB3", muted: "#929B91", divider: "#343A34", border: "#596159", green: "#72D681" };

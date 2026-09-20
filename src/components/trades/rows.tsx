@@ -490,10 +490,12 @@ export function HistoryRow({
   title,
   meta,
   tone = "neutral",
+  trailing,
 }: {
   title: string;
   meta: string;
   tone?: "neutral" | "quiet" | "default";
+  trailing?: React.ReactNode;
 }) {
   const defaulted = tone === "default";
 
@@ -543,6 +545,7 @@ export function HistoryRow({
       >
         {meta}
       </Text>
+      {trailing}
     </View>
   );
 }

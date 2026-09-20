@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
@@ -178,6 +178,13 @@ export default function TradeCodeScreen() {
   const sides = confirmSides(status.data, row?.direction ?? "sent");
   const state = codeState(sides);
   const trade = live ?? (state === "matched" ? held : null);
+
+  const promptedForRating = useRef(false);
+  useEffect(() => {
+    if (state !== "matched" || !trade || promptedForRating.current) return;
+    promptedForRating.current = true;
+    router.replace(`/rate-trade?id=${encodeURIComponent(trade.id)}`);
+  }, [router, state, trade]);
 
   /**
    * Issue the codes on the way in, once.

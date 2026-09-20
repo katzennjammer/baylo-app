@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
 import { resetReachExplainerSeen } from "../src/lib/reach-flag";
@@ -9,11 +10,17 @@ import { color, radius, textStyle, type } from "../src/theme/tokens";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  // The app is edge-to-edge and this screen has no AppHeader to inset it, so
+  // the top padding is the status bar's, same as `AppHeader` does.
+  const insets = useSafeAreaInsets();
   const [explainerOpen, setExplainerOpen] = useState(false);
   const [resetDone, setResetDone] = useState(false);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
+    >
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} accessibilityLabel="Go back" style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={color.ink} />

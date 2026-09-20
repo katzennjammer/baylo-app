@@ -109,12 +109,16 @@ export default function OfferScreen() {
   /* ── which item is being offered ────────────────────────────────────── */
   const chosen: OfferableItem | null = useMemo(() => {
     if (!context) return null;
-    if (chosenId) return context.myItems.find((i) => i.id === chosenId) ?? null;
+    if (chosenId) {
+      const selected = context.myItems.find((i) => i.id === chosenId) ?? null;
+      return selected && !context.pendingOfferedItemIds.has(selected.id) ? selected : null;
+    }
     // Default: the closest LEGAL item — same bracket first, then one apart.
     // A person is overwhelmingly likely to make that choice, and it saves a
     // sheet on the way in. If nothing on the shelf is legal, nothing is
     // preselected and the screen says so instead of composing a refusal.
     const legal = context.myItems.filter((i) => {
+      if (context.pendingOfferedItemIds.has(i.id)) return false;
       const t = termsFor(context, i);
       return t !== null && t.allowed;
     });
@@ -610,7 +614,7 @@ function Picker({
         canUse={chosen !== null}
         onUse={onClose}
       >
-        {context.myItems.map((item) => {
+        {context.myItems.filter((item) => !context.pendingOfferedItemIds.has(item.id)).map((item) => {
           const t = termsFor(context, item);
           const reason =
             item.bracket === null || item.valueLeaves === null

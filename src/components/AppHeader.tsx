@@ -1,8 +1,9 @@
 import { usePathname, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
 import { BellIcon, LeafIcon, MessageIcon } from "./icons";
@@ -22,6 +23,7 @@ import {
   type,
 } from "../theme/tokens";
 import { useHome } from "../api/home";
+import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
 
 /**
@@ -60,7 +62,23 @@ export function AppHeader() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { viewer, unread, isPending, isError, error, dataUpdatedAt } = useHome();
+  const queryClient = useQueryClient();
+  const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    return subscribeToUserChannel(
+      session.user.id,
+      () => undefined,
+      undefined,
+      undefined,
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["home"] });
+        void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      },
+    ) ?? undefined;
+  }, [queryClient, session?.user.id]);
 
   // A 401 is not a connection problem, and saying so would be the last thing
   // someone reads before being bounced to the login screen. By the time the
@@ -137,7 +155,7 @@ export function AppHeader() {
 
             <HeaderIconButton
               label="Messages"
-              count={unread?.messages ?? 0}
+              count={unread?.messageConversations ?? 0}
               tight={tight}
               onPress={() => router.push("/messages")}
             >

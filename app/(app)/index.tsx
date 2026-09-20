@@ -231,6 +231,7 @@ export default function HomeScreen() {
             onComment={openComments}
             onShare={onShare}
             onMenu={openMenu}
+            onOwnerPress={(item) => router.push({ pathname: "/user", params: { id: item.owner.id } })}
           />
           <Divider />
         </View>

@@ -1,5 +1,10 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { StyleSheet, Text, View } from "react-native";
+import { Tappable } from "../Tappable";
+import type { ActiveTrade, LiveOffer } from "../../api/types";
+import { ArrowsIcon } from "../offer/icons";
+import { bracketLabel } from "../../lib/brackets";
 
 import { color, font, radius, textStyle } from "../../theme/tokens";
 
@@ -41,9 +46,17 @@ export function previewFromContent(content: string, fromMe: boolean): string {
 export function renderMessageBody({
   content,
   mine,
+  onImagePress,
+  onOfferPress,
+  offerDetails,
+  tradeDetails,
 }: {
   content: string;
   mine: boolean;
+  onImagePress?: (url: string) => void;
+  onOfferPress?: (offerId: string) => void;
+  offerDetails?: LiveOffer;
+  tradeDetails?: ActiveTrade;
 }) {
   const parsed = asJsonObject(content);
 
@@ -67,26 +80,60 @@ export function renderMessageBody({
       const userMessage = typeof parsed.userMessage === "string" ? parsed.userMessage : null;
       const senderName = typeof parsed.senderName === "string" ? parsed.senderName : "They";
       const status = typeof parsed.status === "string" ? parsed.status : "PENDING";
+      const offerId = typeof parsed.offerId === "string" ? parsed.offerId : null;
+      const offeredImage = offerDetails?.offeredItems[0]?.image
+        ?? (typeof offeredItems[0] === "object" && offeredItems[0] && "imageUrl" in offeredItems[0] && typeof offeredItems[0].imageUrl === "string" ? offeredItems[0].imageUrl : null);
+      const targetImage = offerDetails?.post.image
+        ?? (typeof parsed.postItem === "object" && parsed.postItem && "imageUrl" in parsed.postItem && typeof parsed.postItem.imageUrl === "string" ? parsed.postItem.imageUrl : null);
+      const offeredBracket = offerDetails?.offeredBracket
+        ?? (typeof parsed.offeredBracket === "number" ? parsed.offeredBracket : null);
+      const targetBracket = offerDetails?.targetBracket
+        ?? (typeof parsed.targetBracket === "number" ? parsed.targetBracket : null);
 
-      return (
+      const card = (
         <View style={[styles.offerCard, mine ? styles.mineCard : styles.theirCard]}>
-          <Text style={styles.offerLabel}>Trade offer</Text>
-          <Text style={styles.offerLine}>{mine ? "You offer" : `${senderName} offers`} {offered}{offeredLeaves}</Text>
-          <Text style={styles.offerFor}>For {itemTitle}</Text>
-          {userMessage ? <Text style={styles.offerMessage}>“{userMessage}”</Text> : null}
-          <Text style={styles.offerStatus}>{status}</Text>
+          <View style={styles.offerImages}>
+            {offeredImage ? <Image source={{ uri: offeredImage }} style={styles.offerThumb} contentFit="cover" /> : <View style={styles.offerThumbFallback} />}
+            <ArrowsIcon size={16} stroke={1.6} color={mine ? color.surface : color.inkSecondary} />
+            {targetImage ? <Image source={{ uri: targetImage }} style={styles.offerThumb} contentFit="cover" /> : <View style={styles.offerThumbFallback} />}
+          </View>
+          <Text style={[styles.offerLabel, !mine && styles.theirOfferText]}>Trade offer</Text>
+          <Text style={[styles.offerLine, !mine && styles.theirOfferText]}>{mine ? "You offer" : `${senderName} offers`} {offered} for {itemTitle}</Text>
+          {offeredBracket !== null && targetBracket !== null ? (
+            <Text style={[styles.offerBrackets, !mine && styles.theirOfferMuted]}>{bracketLabel(offeredBracket)} for {bracketLabel(targetBracket)}</Text>
+          ) : null}
+          {userMessage ? <Text style={[styles.offerMessage, !mine && styles.theirOfferText]}>{userMessage}</Text> : null}
+          <Text style={[styles.offerStatus, !mine && styles.theirOfferMuted]}>{status}</Text>
         </View>
       );
+
+      return offerId && onOfferPress ? (
+        <Tappable onPress={() => onOfferPress(offerId)} accessibilityRole="button" accessibilityLabel="Open trade offer">
+          {card}
+        </Tappable>
+      ) : card;
     }
     case "offer_update": {
       const status = typeof parsed.status === "string" ? parsed.status : "updated";
-      return (
-        <View style={[styles.statusPill, mine ? styles.mineStatus : styles.theirStatus]}>
-          <Text style={[styles.statusText, mine ? styles.mineStatusText : styles.theirStatusText]}>
-            {status === "ACCEPTED" ? "Offer accepted" : status === "DECLINED" ? "Offer declined" : `Offer ${status.toLowerCase()}`}
-          </Text>
+      const tradeId = typeof parsed.tradeId === "string" ? parsed.tradeId : null;
+      const actorName = typeof parsed.actorName === "string" && parsed.actorName.trim()
+        ? parsed.actorName.trim()
+        : tradeDetails?.counterparty.name ?? "They";
+      const label = status === "ACCEPTED"
+        ? `${actorName} accepted your offer${tradeId ? " - open trade >" : ""}`
+        : status === "DECLINED"
+          ? `${actorName} declined your offer`
+          : `${actorName} updated your offer`;
+      const pill = (
+        <View style={styles.statusPill}>
+          <Text style={styles.statusText}>{label}</Text>
         </View>
       );
+      return tradeId && onOfferPress ? (
+        <Tappable onPress={() => onOfferPress(tradeId)} accessibilityRole="button" accessibilityLabel={label}>
+          {pill}
+        </Tappable>
+      ) : pill;
     }
     case "shared_post": {
       const imageUrl = typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
@@ -108,12 +155,31 @@ export function renderMessageBody({
       );
     }
     case "image": {
-      const imageUrl = typeof parsed.url === "string" ? parsed.url : undefined;
+      const imageUrl = typeof parsed.url === "string"
+        ? parsed.url
+        : typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
       const caption = typeof parsed.caption === "string" ? parsed.caption : null;
 
       return (
         <View style={[styles.imageWrap, mine ? styles.mineCard : styles.theirCard]}>
-          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.messageImage} resizeMode="cover" /> : null}
+          {imageUrl ? (
+            <Tappable
+              onPress={() => onImagePress?.(imageUrl)}
+              disabled={!onImagePress}
+              accessibilityRole="button"
+              accessibilityLabel="View image full screen"
+            >
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.messageImage}
+                contentFit="cover"
+                onLoad={() => console.log("[messages/thread] image loaded", { url: imageUrl })}
+                onError={(event) => console.log("[messages/thread] image load failed", { url: imageUrl, error: event.error })}
+              />
+            </Tappable>
+          ) : (
+            <Text style={[styles.caption, mine ? styles.mineText : styles.theirText]}>Image unavailable</Text>
+          )}
           {caption ? <Text style={styles.caption}>{caption}</Text> : null}
         </View>
       );
@@ -163,12 +229,31 @@ const styles = StyleSheet.create({
     borderColor: color.greenLine,
     backgroundColor: color.greenWash,
   },
+  offerImages: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  offerThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: "#E6E4DA",
+  },
+  offerThumbFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: "#E6E4DA",
+  },
   mineCard: {
     backgroundColor: color.forest,
     borderColor: color.forest,
   },
   theirCard: {
-    backgroundColor: color.surface,
+    backgroundColor: color.control,
     borderColor: color.divider,
   },
   offerLabel: {
@@ -191,6 +276,12 @@ const styles = StyleSheet.create({
     color: color.surface, // Changed offer for color for better contrast
     marginBottom: 6,
   },
+  offerBrackets: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: color.inkSecondary,
+    marginTop: 4,
+  },
   offerMessage: {
     fontFamily: font.sans,
     fontSize: 13,
@@ -203,29 +294,23 @@ const styles = StyleSheet.create({
     color: color.surface, // Changed offer status color for better contrast
     textTransform: "uppercase",
   },
+  theirOfferText: {
+    color: color.ink,
+  },
+  theirOfferMuted: {
+    color: color.inkSecondary,
+  },
   statusPill: {
+    alignSelf: "center",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    borderWidth: 1,
-  },
-  mineStatus: {
     backgroundColor: color.greenWash,
-    borderColor: color.greenLine,
-  },
-  theirStatus: {
-    backgroundColor: color.control,
-    borderColor: color.divider,
-  },
-  mineStatusText: {
-    color: color.onGreen,
-  },
-  theirStatusText: {
-    color: color.inkSecondary,
   },
   statusText: {
     fontFamily: font.sansSemi,
     fontSize: 12,
+    color: color.ink,
   },
   sharedCard: {
     maxWidth: 260,

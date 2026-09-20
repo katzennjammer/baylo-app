@@ -108,6 +108,9 @@ export function notificationTarget(n: NotificationItem): string | null {
     case "conversation":
       return id ? `/messages?partner=${encodeURIComponent(id)}` : "/messages";
     case "trade":
+      if (n.type === "TRADE_COMPLETED") {
+        return id ? `/rate-trade?id=${encodeURIComponent(id)}` : "/trades-history";
+      }
       return id ? `/trade-code?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "meetup":
       return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";

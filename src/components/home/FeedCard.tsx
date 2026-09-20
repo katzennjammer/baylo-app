@@ -119,6 +119,7 @@ export const FeedCard = memo(function FeedCard({
   onComment,
   onShare,
   onMenu,
+  onOwnerPress,
   offerLayout = OFFER_LAYOUT,
   viewerId = null,
 }: {
@@ -132,6 +133,7 @@ export const FeedCard = memo(function FeedCard({
   onShare?: (item: Item) => void;
   /** The three dots. The sheet itself belongs to the screen, not to the card. */
   onMenu?: (item: Item) => void;
+  onOwnerPress?: (item: Item) => void;
   /** Per-card override of the constant above. The feed does not pass one. */
   offerLayout?: OfferLayout;
   /** Own listings suppress the offer action even when the item is still listed. */
@@ -150,9 +152,9 @@ export const FeedCard = memo(function FeedCard({
     <View style={s.card}>
       {/* ── owner row ── */}
       <View style={s.ownerRow}>
-        <Avatar uri={item.owner.avatar} name={item.owner.name} />
-
-        <View style={s.ownerText}>
+        <Tappable onPress={onOwnerPress ? () => onOwnerPress(item) : undefined} disabled={!onOwnerPress} style={s.ownerIdentity} pressedStyle={s.ownerPressed} accessibilityRole={onOwnerPress ? "button" : undefined} accessibilityLabel={onOwnerPress ? `View ${item.owner.name}'s profile` : undefined}>
+          <Avatar uri={item.owner.avatar} name={item.owner.name} />
+          <View style={s.ownerText}>
           <View style={s.nameRow}>
             {/*
               The name yields and the tier badge does not. A long handle beside
@@ -190,7 +192,8 @@ export const FeedCard = memo(function FeedCard({
               {meta}
             </Text>
           ) : null}
-        </View>
+          </View>
+        </Tappable>
 
         <KebabButton owner={item.owner.name} onPress={onMenu && (() => onMenu(item))} />
       </View>
@@ -515,7 +518,7 @@ function CardActions({
  * If the write fails the cache is rolled back and the heart returns — see
  * useLike().
  */
-function SocialRow({
+export function SocialRow({
   likes,
   liked,
   comments,
@@ -726,6 +729,8 @@ const s = StyleSheet.create({
     paddingHorizontal: space.screenX,
     marginBottom: space.card.ownerToPhoto,
   },
+  ownerIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.card.ownerGap },
+  ownerPressed: { opacity: 0.7 },
   ownerText: { flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
   featureBadge: {

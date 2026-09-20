@@ -62,6 +62,16 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
 
   const body = (await res.json()) as LegacyThreadEnvelope | ThreadMessage[];
   const messages = Array.isArray(body) ? body : body.messages ?? [];
+  if (__DEV__) {
+    console.log(
+      "[messages/thread] server image payloads",
+      messages
+        .filter((message) => {
+          try { return (JSON.parse(message.content) as { type?: unknown }).type === "image"; } catch { return false; }
+        })
+        .map((message) => ({ id: message.id, content: message.content })),
+    );
+  }
   let partnerName = Array.isArray(body) ? "Conversation" : body.partnerName ?? "Conversation";
   let partnerAvatar = Array.isArray(body) ? null : body.partnerAvatar ?? null;
   if (Array.isArray(body)) {
@@ -86,10 +96,22 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
     partnerName,
     partnerAvatar,
     currentUserId,
-    messages: messages.map((msg) => ({
-      ...msg,
-      createdAt: typeof msg.createdAt === "string" ? msg.createdAt : new Date().toISOString(),
-    })),
+    messages: messages.map((msg) => {
+      let content = msg.content;
+      try {
+        const payload = JSON.parse(content) as { type?: unknown; url?: unknown; imageUrl?: unknown };
+        if (payload?.type === "image" && typeof payload.url !== "string" && typeof payload.imageUrl === "string") {
+          content = JSON.stringify({ ...payload, url: payload.imageUrl });
+        }
+      } catch {
+        // Plain text messages stay untouched.
+      }
+      return {
+        ...msg,
+        content,
+        createdAt: typeof msg.createdAt === "string" ? msg.createdAt : new Date().toISOString(),
+      };
+    }),
   };
 }
 
@@ -205,6 +227,23 @@ export function useSendMessage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
       void qc.invalidateQueries({ queryKey: ["messages", "thread"] });
+    },
+  });
+}
+
+export function useDeleteConversation() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (partnerId: string) => {
+      const res = await request(`/api/messages?partnerId=${encodeURIComponent(partnerId)}`, { method: "DELETE" });
+      if (!res.ok) throw new ApiError(res.status, "CONVERSATION_DELETE_FAILED", "Could not delete this conversation.");
+      return (await res.json()) as { ok: true; hiddenAt: string };
+    },
+    onSuccess: (_result, partnerId) => {
+      qc.removeQueries({ queryKey: ["messages", "thread", partnerId] });
+      void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
+      void qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

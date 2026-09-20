@@ -134,6 +134,31 @@ export function useTradeHistory(enabled = true) {
   });
 }
 
+export function useSubmitTradeReview() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { tradeId: string; stars: number; comment?: string }) => {
+      const res = await request("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tradeId: input.tradeId,
+          stars: input.stars,
+          ...(input.comment?.trim() ? { comment: input.comment.trim() } : {}),
+        }),
+      });
+      if (!res.ok) return legacyFailure(res, "Could not submit your review.");
+      return (await res.json()) as { ok: true; reviewId: string };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: TRADES_HISTORY_KEY });
+      void qc.invalidateQueries({ queryKey: ["profile", "me"] });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
 /* ─────────────────────────── the confirmation ───────────────────────── */
 
 /**
