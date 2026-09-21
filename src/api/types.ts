@@ -114,6 +114,7 @@ export interface ItemComment {
   user: { id: string; name: string; avatar: string | null };
   replyCount: number;
   replies?: ItemComment[];
+  parentId?: string | null;
 }
 
 export interface Item {
@@ -504,6 +505,9 @@ export interface ActiveTrade {
   bridgeFeePaidBySender?: boolean | null;
   counterparty: { id: string; name: string; avatar: string | null };
   myReview: { rating: number } | null;
+  receivedReview: { rating: number } | null;
+  rewardLeaves: number | null;
+  codesMatchedAt: string | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;
   requestedItem: TradeItemBrief;
@@ -663,6 +667,8 @@ export interface NotificationItem {
   createdAt: string;
   entityType: string | null;
   entityId: string | null;
+  /** The lead photo for an item notification, when the event has no actor. */
+  itemImage: string | null;
   /** Who did it. Null for anything the system itself raised. */
   actor: { id: string; name: string | null; avatar: string | null } | null;
 }

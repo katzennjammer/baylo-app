@@ -491,15 +491,17 @@ export function HistoryRow({
   meta,
   tone = "neutral",
   trailing,
+  onPress,
 }: {
   title: string;
   meta: string;
   tone?: "neutral" | "quiet" | "default";
   trailing?: React.ReactNode;
+  onPress?: () => void;
 }) {
   const defaulted = tone === "default";
 
-  return (
+  const body = (
     <View
       style={{
         minHeight: offerSize.historyRow.height,
@@ -548,6 +550,11 @@ export function HistoryRow({
       {trailing}
     </View>
   );
+  return onPress ? (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={[title, meta].join(". ")} pressedStyle={{ backgroundColor: offerColor.quiet }}>
+      {body}
+    </Tappable>
+  ) : body;
 }
 
 /* ──────────────────────── the promise notice strip ──────────────────── */

@@ -171,7 +171,7 @@ function NotificationRow({
       }}
     >
       <Thumb
-        image={item.actor?.avatar ?? null}
+        image={item.actor?.avatar ?? item.itemImage}
         size={offerSize.tradeRow.thumb}
         icon={
           item.actor ? undefined : (

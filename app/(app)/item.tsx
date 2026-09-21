@@ -97,7 +97,7 @@ import type { Item, SafeZoneHub } from "../../src/api/types";
 export default function ItemDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, comments } = useLocalSearchParams<{ id?: string; comments?: string }>();
   const { data, isPending, isError, error, refetch } = useItem(id);
 
   /*
@@ -143,7 +143,7 @@ export default function ItemDetailScreen() {
    */
   const [reporting, setReporting] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(comments === "1");
   const { mutate: like } = useLike();
 
   const apiError = error instanceof ApiError ? error : null;

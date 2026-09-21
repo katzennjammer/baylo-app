@@ -97,6 +97,7 @@ export default function TradesHistoryScreen() {
                     title={words.title}
                     meta={words.meta}
                     tone={words.tone}
+                    onPress={() => router.push(`/trade-summary?id=${encodeURIComponent(trade.id)}`)}
                     trailing={trade.status === "COMPLETED" ? (
                       trade.myReview ? (
                         <Text style={[textStyle(offerType.helper), { color: offerColor.warm }]}>Rated {trade.myReview.rating}/5</Text>

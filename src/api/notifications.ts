@@ -104,6 +104,16 @@ export function useNotifications() {
 export function notificationTarget(n: NotificationItem): string | null {
   const id = n.entityId;
 
+  if (!n.entityType) {
+    if ((n.type === "NEW_MESSAGE" || n.type === "FOLLOW_REQUEST" || n.type === "FOLLOW_ACCEPTED") && n.actor) {
+      return n.type === "NEW_MESSAGE"
+        ? `/messages?partner=${encodeURIComponent(n.actor.id)}`
+        : `/user?id=${encodeURIComponent(n.actor.id)}`;
+    }
+    if (n.type === "NEW_REVIEW") return "/(app)/profile";
+    if (n.type === "TRADE_REQUEST") return "/trades";
+  }
+
   switch (n.entityType) {
     case "conversation":
       return id ? `/messages?partner=${encodeURIComponent(id)}` : "/messages";
@@ -116,6 +126,8 @@ export function notificationTarget(n: NotificationItem): string | null {
       return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "user":
       return id ? `/user?id=${encodeURIComponent(id)}` : null;
+    case "item":
+      return id ? `/item?id=${encodeURIComponent(id)}&comments=1` : null;
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
     case "review":
