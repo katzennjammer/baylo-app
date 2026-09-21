@@ -112,7 +112,8 @@ import {
  */
 export default function TradeCodeScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, returnTo } = useLocalSearchParams<{ id?: string; returnTo?: string }>();
+  const handleBack = returnTo === "trades" ? () => router.replace("/trades") : () => router.back();
 
   const active = useActiveTrades();
   const { keyboardUp, imeHeight } = useKeyboardState();
@@ -218,7 +219,7 @@ export default function TradeCodeScreen() {
   if (!trade) {
     return (
       <OfferScreenHost imeInset={0}>
-        <TradesBackTitle title={copy.nav.trades} onBack={() => router.back()} />
+        <TradesBackTitle title={copy.nav.trades} onBack={handleBack} />
         {active.isError ? (
           <TradesErrorPanel onRetry={() => void active.refetch()} />
         ) : active.isPending ? null : (
@@ -273,7 +274,7 @@ export default function TradeCodeScreen() {
         partner={partner}
         matchedAt={clockTime(Date.parse(trade.updatedAt) || Date.now())}
         completion={completion}
-        onBack={() => router.back()}
+        onBack={handleBack}
       />
     );
   }
@@ -389,10 +390,10 @@ export default function TradeCodeScreen() {
   );
 
   return (
-    <OfferScreenHost imeInset={keyboardUp ? imeHeight : 0} dimmed={submit.isPending}>
+    <OfferScreenHost imeInset={keyboardUp ? imeHeight : 0}>
       <TradesBackTitle
         title={copy.nav.meeting(trade.counterparty.name)}
-        onBack={() => router.back()}
+        onBack={handleBack}
         trailing={
           keyboardUp ? <NavDone onPress={() => entry.inputRef.current?.blur()} /> : undefined
         }
@@ -457,16 +458,16 @@ export default function TradeCodeScreen() {
               }}
             />
           ) : sides.iSubmitted ? (
-            <SecondaryButton label={copy.code.matchedPrimary} onPress={() => router.back()} />
+            <SecondaryButton label={copy.code.matchedPrimary} onPress={handleBack} />
           ) : entry.complete ? (
             <PrimaryButton
-              label={copy.code.typeTheirs(partner)}
+              label={copy.code.typeTheirs}
               onPress={send}
               accessibilityLabel={`Submit ${partner}'s code`}
             />
           ) : (
             <SecondaryButton
-              label={copy.code.typeTheirs(partner)}
+              label={copy.code.typeTheirs}
               onPress={() => entry.focus()}
             />
           )}

@@ -19,7 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
-import { useActiveTrades } from "../../src/api/trades";
+import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
 import { subscribeToUserChannel } from "../../src/api/pusher";
@@ -68,13 +68,14 @@ export default function MessagesThreadScreen() {
 
   const thread = useThread(partner ?? null);
   const activeTrades = useActiveTrades();
+  const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
   const block = useBlockUser();
   const deleteConversation = useDeleteConversation();
   const sortedMessages = useMemo(
-    () => [...(thread.data?.messages ?? [])].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    ),
+    () => Array.from(
+      new Map((thread.data?.messages ?? []).map((message) => [message.id, message])).values(),
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [thread.data],
   );
   const offerStatuses = useMemo(() => {
@@ -208,6 +209,10 @@ export default function MessagesThreadScreen() {
   const currentUserId = thread.data?.currentUserId ?? "";
   const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
   const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
+  const tradesById = new Map([
+    ...(activeTrades.data?.trades ?? []),
+    ...(tradeHistory.data?.trades ?? []),
+  ].map((trade) => [trade.id, trade]));
 
   const palette = dark ? darkColors : lightColors;
 
@@ -324,12 +329,13 @@ export default function MessagesThreadScreen() {
                             const payload = JSON.parse(message.content) as { type?: string; tradeId?: unknown };
                             if (__DEV__) console.log("[messages/offer_update_lookup]", { payload, trade: activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId) ?? null });
                             router.push(payload.type === "offer_update" && typeof payload.tradeId === "string"
-                              ? `/trade-code?id=${encodeURIComponent(payload.tradeId)}`
+                              ? `/trade-code?id=${encodeURIComponent(payload.tradeId)}&returnTo=trades`
                               : `/offer-review?id=${encodeURIComponent(id)}`);
                           } catch {
                             router.push(`/offer-review?id=${encodeURIComponent(id)}`);
                           }
                         },
+                        onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
                         offerDetails: (() => {
                           try {
                             const payload = JSON.parse(message.content) as { offerId?: unknown };
@@ -344,7 +350,7 @@ export default function MessagesThreadScreen() {
                           try {
                             const payload = JSON.parse(message.content) as { tradeId?: unknown };
                             return typeof payload.tradeId === "string"
-                              ? activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId)
+                              ? tradesById.get(payload.tradeId)
                               : undefined;
                           } catch {
                             return undefined;

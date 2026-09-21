@@ -113,6 +113,7 @@ export interface ItemComment {
   createdAt: string;
   user: { id: string; name: string; avatar: string | null };
   replyCount: number;
+  replies?: ItemComment[];
 }
 
 export interface Item {

@@ -31,7 +31,10 @@ export function previewFromContent(content: string, fromMe: boolean): string {
     case "offer":
       return fromMe ? "You sent a trade offer" : "Sent a trade offer";
     case "offer_update":
-      return fromMe ? `Offer ${String(parsed.status ?? "updated").toLowerCase()}` : `Offer ${String(parsed.status ?? "updated").toLowerCase()}`;
+      return String(parsed.status ?? "updated").toUpperCase() === "ACCEPTED" ? "Offer accepted"
+        : String(parsed.status ?? "updated").toUpperCase() === "DECLINED" ? "Offer declined" : "Offer updated";
+    case "trade_completed":
+      return "Trade completed";
     case "shared_post":
       return `Shared: ${parsed.postItem ?? "a post"}`;
     case "image":
@@ -48,6 +51,7 @@ export function renderMessageBody({
   mine,
   onImagePress,
   onOfferPress,
+  onRatePress,
   offerDetails,
   tradeDetails,
 }: {
@@ -55,6 +59,7 @@ export function renderMessageBody({
   mine: boolean;
   onImagePress?: (url: string) => void;
   onOfferPress?: (offerId: string) => void;
+  onRatePress?: (tradeId: string) => void;
   offerDetails?: LiveOffer;
   tradeDetails?: ActiveTrade;
 }) {
@@ -116,24 +121,49 @@ export function renderMessageBody({
     case "offer_update": {
       const status = typeof parsed.status === "string" ? parsed.status : "updated";
       const tradeId = typeof parsed.tradeId === "string" ? parsed.tradeId : null;
-      const actorName = typeof parsed.actorName === "string" && parsed.actorName.trim()
-        ? parsed.actorName.trim()
-        : tradeDetails?.counterparty.name ?? "They";
-      const label = status === "ACCEPTED"
-        ? `${actorName} accepted your offer${tradeId ? " - open trade >" : ""}`
-        : status === "DECLINED"
-          ? `${actorName} declined your offer`
-          : `${actorName} updated your offer`;
+      const actorId = typeof parsed.accepterId === "string" ? parsed.accepterId : null;
+      const actorName = typeof parsed.accepterName === "string" && parsed.accepterName.trim()
+        ? parsed.accepterName.trim()
+        : typeof parsed.actorName === "string" && parsed.actorName.trim()
+          ? parsed.actorName.trim()
+          : tradeDetails?.counterparty.name ?? "They";
+      const proposerName = typeof parsed.proposerName === "string" ? parsed.proposerName : "your partner";
+      const completed = status === "ACCEPTED" && tradeDetails?.status === "COMPLETED";
+      const label = completed
+        ? "Trade completed"
+        : status === "ACCEPTED"
+          ? actorId === tradeDetails?.counterparty.id ? `${actorName} accepted your offer` : `You accepted ${proposerName}'s offer`
+          : status === "DECLINED"
+            ? actorId === tradeDetails?.counterparty.id ? `${actorName} declined your offer` : "You declined the offer"
+            : `${actorName} updated your offer`;
       const pill = (
         <View style={styles.statusPill}>
           <Text style={styles.statusText}>{label}</Text>
+          {status === "ACCEPTED" && tradeId && !completed && onOfferPress ? (
+            <Tappable onPress={() => onOfferPress(tradeId)} accessibilityRole="link" accessibilityLabel="Open trade">
+              <Text style={styles.statusLink}>Open trade</Text>
+            </Tappable>
+          ) : null}
         </View>
       );
-      return tradeId && onOfferPress ? (
-        <Tappable onPress={() => onOfferPress(tradeId)} accessibilityRole="button" accessibilityLabel={label}>
-          {pill}
-        </Tappable>
-      ) : pill;
+      return pill;
+    }
+    case "trade_completed": {
+      const tradeId = typeof parsed.tradeId === "string" ? parsed.tradeId : null;
+      const partnerName = typeof parsed.partnerName === "string" && parsed.partnerName.trim()
+        ? parsed.partnerName.trim()
+        : "your partner";
+      const rated = !!tradeId && tradeDetails?.myReview != null;
+      return (
+        <View style={styles.statusPill}>
+          <Text style={styles.statusText}>{rated ? `You rated ${partnerName}` : "Trade completed"}</Text>
+          {!rated && tradeId && onRatePress ? (
+            <Tappable onPress={() => onRatePress(tradeId)} accessibilityRole="link" accessibilityLabel={`Rate ${partnerName}`}>
+              <Text style={styles.statusLink}>Rate {partnerName}</Text>
+            </Tappable>
+          ) : null}
+        </View>
+      );
     }
     case "shared_post": {
       const imageUrl = typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
@@ -311,6 +341,11 @@ const styles = StyleSheet.create({
     fontFamily: font.sansSemi,
     fontSize: 12,
     color: color.ink,
+  },
+  statusLink: {
+    fontFamily: font.sansSemi,
+    fontSize: 12,
+    color: color.forest,
   },
   sharedCard: {
     maxWidth: 260,

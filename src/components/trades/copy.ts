@@ -305,9 +305,9 @@ export const code = {
   showThis: (partner: string) => `Show this to ${partner}`,
   /** §10.7 `Ask Marco for his four digits` — six, here. */
   askFor: (partner: string) => `Ask ${partner} for their ${spellCount(CODE_LENGTH)} digits`,
-  typeBelow: "Type them in below",
+  typeBelow: "Type it in the boxes above",
   /** Frame 9e's fuller version of the same line. */
-  typeBelowLong: "Type them in below. The code changes if either of you leaves the hub.",
+  typeBelowLong: "The code changes if either of you leaves the hub. Type it above.",
   /** §10.7's waiting line. */
   notYetTyped: (partner: string) =>
     `${partner} hasn't typed yours in yet. You can both do this at the same time.`,
@@ -333,7 +333,7 @@ export const code = {
     `The code changes if either of you leaves the hub. Ask ${partner} to read it again.`,
   readItAgainButton: (partner: string) => `Ask ${partner} to read it again`,
   /** Frame 9e's bottom bar. */
-  typeTheirs: (partner: string) => `Type ${partner}'s code`,
+  typeTheirs: "Complete trade",
   somethingWrong: "Something went wrong at the meetup",
   /**
    * NOT VERBATIM — reason 2 in the header, and the only place this screen tells

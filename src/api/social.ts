@@ -269,13 +269,13 @@ export function useAddComment(itemId: string | null) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (content: string) =>
+    mutationFn: ({ content, parentId }: { content: string; parentId?: string }) =>
       apiV1<{ comment: ItemComment; stats: ItemStats }>(
         `/api/v1/items/${encodeURIComponent(itemId!)}/comments`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, parentId }),
         },
       ),
 
