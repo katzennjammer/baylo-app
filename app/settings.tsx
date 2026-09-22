@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
 import { resetReachExplainerSeen } from "../src/lib/reach-flag";
+import { OrgSwitcher } from "../src/components/OrgSwitcher";
 import { color, radius, textStyle, type } from "../src/theme/tokens";
 
 export default function SettingsScreen() {
@@ -39,6 +40,13 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={[textStyle(type.itemTitle), styles.cardTitle]}>Account</Text>
+        {/*
+          Renders nothing at all unless this person belongs to, or has been
+          invited to, an organisation -- which is almost everybody. See the note
+          on OrgSwitcher: a card explaining a feature you are not using, on a
+          screen you opened to do something else, is worse than no card.
+        */}
+        <OrgSwitcher />
         <Text style={[textStyle(type.detailBody), styles.emptyText]}>More account settings are coming soon.</Text>
       </View>
 

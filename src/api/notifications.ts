@@ -126,8 +126,33 @@ export function notificationTarget(n: NotificationItem): string | null {
       return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "user":
       return id ? `/user?id=${encodeURIComponent(id)}` : null;
+    /*
+     * TWO NOTIFICATION TYPES SHARE THIS TOKEN, AND THEY WANT DIFFERENT SCREENS.
+     *
+     * A comment notification is about a conversation on a listing, so it opens
+     * the listing WITH the comments sheet up -- that is what `&comments=1` is
+     * for. A CATEGORY_MATCH is about the listing itself: somebody posted
+     * something in a category the recipient said they wanted, and there is no
+     * conversation to open. Sending them to a comments sheet on a stranger's
+     * new listing would be the wrong screen every single time.
+     *
+     * Branching on `type` rather than minting a second entityType, because the
+     * destination IS the same object -- the token says what to open, `type`
+     * says what happened, and the schema's own note draws exactly that line.
+     */
     case "item":
-      return id ? `/item?id=${encodeURIComponent(id)}&comments=1` : null;
+      if (!id) return null;
+      return n.type === "CATEGORY_MATCH"
+        ? `/item?id=${encodeURIComponent(id)}`
+        : `/item?id=${encodeURIComponent(id)}&comments=1`;
+    /*
+     * A business-document decision. The id is the Organization's, and there is
+     * no org screen in the app yet -- so this lands on the person's own profile
+     * and settings, where the organisation they now own or were refused is
+     * reachable. Better than null, which renders an untappable row.
+     */
+    case "organization":
+      return "/settings";
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
     case "review":

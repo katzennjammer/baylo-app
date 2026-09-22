@@ -1,5 +1,5 @@
 import { getApiBase } from "./config";
-import { ORG_CONTEXT_HEADER, getActingOrgId } from "./org-context";
+import { ORG_CONTEXT_HEADER, clearActingOrg, getActingOrgId } from "./org-context";
 import {
   clearSession,
   loadSession,
@@ -1021,6 +1021,36 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
 
   const attempted = memory?.accessToken ?? null;
   const res = await send(attempted);
+
+  /*
+   * A DEAD ORG CONTEXT CLEARS ITSELF. NOT RETRIED.
+   *
+   * 403 ORG_CONTEXT_REFUSED means the server re-read the membership row and
+   * this client may no longer act as that organisation — an owner removed
+   * them, or the invitation was withdrawn. The header is the only thing wrong,
+   * and it will be wrong on every subsequent request until something drops it,
+   * so this drops it.
+   *
+   * IT DOES NOT RE-SEND. The request was "post this as the shop", and quietly
+   * re-issuing it as the person would post somebody's listing to the wrong
+   * account on the strength of an error. The caller gets the 403 and decides;
+   * what this guarantees is that the NEXT request is not refused for the same
+   * stale reason.
+   *
+   * `clone()` because reading a body consumes it, and the caller still needs
+   * this response.
+   */
+  if (res.status === 403 && getActingOrgId()) {
+    const peeked = await res
+      .clone()
+      .json()
+      .catch(() => null as unknown);
+    const code = (peeked as { code?: string; error?: { code?: string } } | null);
+    if (code?.code === "ORG_CONTEXT_REFUSED" || code?.error?.code === "ORG_CONTEXT_REFUSED") {
+      clearActingOrg();
+    }
+    return res;
+  }
 
   if (res.status !== 401 || !attempted) return res;
 

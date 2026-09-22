@@ -10,6 +10,7 @@ import {
   signOut as apiSignOut,
   type GoogleExchange,
 } from "../api/client";
+import { clearActingOrg, restoreActingOrg } from "../api/org-context";
 import { hydrateApiBase } from "../api/config";
 import { TimeoutError, withTimeout } from "../api/timeout";
 import { registerClearSessionDevItem } from "../dev/dev-menu";
@@ -119,7 +120,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // screen on its own. Timing out only decides what the user looks at while
     // they wait.
     withTimeout(
-      hydrateApiBase().then(() => hydrateSession()),
+      // restoreActingOrg() rides along with the session read rather than
+      // running on its own, because the two are one fact: a client that has
+      // rehydrated a session but not its acting organisation will send the
+      // first few requests of the launch as the wrong identity. Ordered before
+      // hydrateSession() so it is in place by the time anything can fire.
+      hydrateApiBase()
+        .then(() => restoreActingOrg())
+        .then(() => hydrateSession()),
       HYDRATION_TIMEOUT_MS,
       "Reading the saved session",
     )
@@ -205,6 +213,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiSignOut();
     } finally {
+      // The acting organisation goes with the session it qualified. Leaving it
+      // behind means the next person to sign in on this device starts out
+      // posting as an organisation they may not even belong to -- the server
+      // would refuse it, but the app would be asking, and the first thing they
+      // would see is a 403 they cannot explain.
+      clearActingOrg();
       // In the finally rather than after the await. apiSignOut() drops the
       // session before anything that can throw, so a failure past that point
       // would otherwise leave a signed-out app still holding the previous
