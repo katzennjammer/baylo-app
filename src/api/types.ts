@@ -429,8 +429,26 @@ export interface PublicProfilePayload {
   user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
     rank: { label: string };
     trustTier: string | null;
+    /**
+     * Set when this profile is an organisation. Null for a person, which is
+     * almost every profile.
+     *
+     * THE SCREEN BRANCHES ON THIS AND NOTHING ELSE: square logo instead of a
+     * round avatar, the shop-front placeholder instead of initials, the
+     * verified badge instead of the trust tier, and the staff count instead of
+     * Followers/Following. The rest of the profile -- posts grid, Follow,
+     * Message, tabs -- is identical, which is why this is one extra field and
+     * not a second payload shape.
+     *
+     * `trustTier` is ALWAYS null alongside it; the server guarantees that, so
+     * no screen has to choose between two badges.
+     */
+    org: (OrgBadge & { createdAt: string; staffCount: number }) | null;
   };
-  counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following">;
+  counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following"> & {
+    /** ACTIVE staff, or null for a person. Sent beside followers, not instead. */
+    staff: number | null;
+  };
   follow: {
     status: "NONE" | "PENDING" | "ACCEPTED";
     followsYou: boolean;

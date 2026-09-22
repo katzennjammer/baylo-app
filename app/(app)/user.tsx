@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFollow, usePublicProfile, useUnfollow } from "../../src/api/profile";
 import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
-import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
+import { Avatar, Badges, OrgLogo, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, VerifiedOrgBadge, shelfLabel } from "./profile";
 import { ChevronLeftIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { bracketLabel } from "../../src/lib/brackets";
@@ -46,6 +46,8 @@ export default function UserProfileScreen() {
   if (isError || !data) return <View style={[s.screen, { backgroundColor: palette.surface }]}><BackRow title="Profile" insetsTop={insets.top} dark={dark} onPress={() => router.back()} /><Text style={[textStyle(type.emptyBody), s.empty, { color: palette.secondary }]}>This trader profile is unavailable.</Text></View>;
 
   const status = data.follow.status;
+  /** Non-null exactly when this profile is an organisation. See the header block. */
+  const org = data.user.org;
   const busy = follow.isPending || unfollow.isPending;
   const rows: ProfileRow[] = tab === "posts"
     ? chunkItems(data.items).map((items) => ({ kind: "posts", items }))
@@ -64,8 +66,42 @@ export default function UserProfileScreen() {
     ListHeaderComponent={<>
       <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} />
       <View style={s.header}>
-        <View style={s.identityRow}><Avatar uri={data.user.avatar} name={data.user.name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={data.counts.listed} /><Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} /><Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} /></View></View>
-        {data.user.trustTier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[data.user.trustTier as keyof typeof TIER_LABEL] ?? data.user.trustTier}</Text></View> : null}
+        {/*
+          THE IDENTITY BLOCK IS THE ONLY THING THAT CHANGES FOR AN ORGANISATION.
+          Square logo instead of a round avatar, and ONE "Staff" stat where a
+          person gets Followers and Following -- which the spec asks for, and
+          which also means an org header has no tappable stat, because there is
+          no staff-list screen a stranger is entitled to open. The org's own
+          members reach the roster from settings, not from here.
+          Everything below -- bio, Follow, Message, tabs, the posts grid --
+          is identical for both, deliberately.
+        */}
+        <View style={s.identityRow}>
+          {org ? <OrgLogo uri={org.logoUrl} name={data.user.name} /> : <Avatar uri={data.user.avatar} name={data.user.name} />}
+          <View style={s.stats}>
+            <Stat dark={dark} label="Posts" value={data.counts.listed} />
+            {org ? (
+              <Stat dark={dark} label="Staff" value={data.counts.staff ?? org.staffCount} />
+            ) : (
+              <>
+                <Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} />
+                <Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} />
+              </>
+            )}
+          </View>
+        </View>
+        {/*
+          One badge, never two. An organisation gets the checkmark and never a
+          trust tier -- the server sends trustTier: null for one, so this is an
+          either/or in the data as well as in the layout. An UNVERIFIED org
+          gets neither, which is the honest rendering of a real account that
+          has not been reviewed yet.
+        */}
+        {org?.verified ? (
+          <VerifiedOrgBadge dark={dark} />
+        ) : data.user.trustTier ? (
+          <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[data.user.trustTier as keyof typeof TIER_LABEL] ?? data.user.trustTier}</Text></View>
+        ) : null}
         {data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{data.user.bio}</Text> : null}
         <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : status === "PENDING" ? "Requested" : status === "ACCEPTED" ? "Following" : "Follow"}</Text></Pressable><Pressable onPress={() => router.push({ pathname: "/messages/thread", params: { partner: data.user.id, partnerName: data.user.name, partnerAvatar: data.user.avatar ?? "" } })} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable></View>
         {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} onMore={() => undefined} /> : null}

@@ -37,6 +37,8 @@ import {
   useKeyboardState,
 } from "../../src/components/auth-sheet";
 import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
+import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
+import { OrgDetailsStep } from "../../src/components/auth-org-details";
 
 /**
  * Create an account, and the two screens that hang off it.
@@ -103,10 +105,46 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { name: "", email: "", password: "", confirm: "", dob: null };
 
+/**
+ * Where the account-type step sits, and the one thing it must not break.
+ *
+ * ── AFTER THE FORM, BEFORE "CHECK YOUR EMAIL" ───────────────────────────────
+ *
+ * The brief asked for this "right after email/password, before the existing
+ * ID-verification step". There is no ID-verification step in this flow — see
+ * the note on AccountTypeStep — so it goes at the equivalent moment: the
+ * account exists, and nobody has been handed to the app yet.
+ *
+ * ── AND NOT AS A BRANCH INSIDE RegisterForm ─────────────────────────────────
+ *
+ * The long note further down on "ONE TREE, NOT TWO" is the reason. The form's
+ * five fields are reconciled BY POSITION, and any conditional that changes the
+ * children array unmounts all five TextInputs, drops focus, closes the IME and
+ * flips the layout back — forever. These are separate screens at the top of the
+ * component, each returning its own tree, which is the same shape the
+ * under-18 refusal and "check your email" already use and the only shape that
+ * does not reintroduce that loop.
+ *
+ * ── EVERY EXIT FROM THIS STEP IS A VALID ACCOUNT ────────────────────────────
+ *
+ * Choosing Individual, choosing Organization and then abandoning the details,
+ * or tapping "Decide later" all land on the same "check your email" screen with
+ * the same working account. The only difference an organisation makes is that
+ * an Organization row exists and this client is now acting as it. Nothing here
+ * can strand somebody with a half-made account, because the account was made
+ * before this screen rendered.
+ */
+type SignupStage =
+  | { kind: "account-type" }
+  | { kind: "org-details" }
+  | { kind: "check-email" };
+
 export default function RegisterScreen() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [pending, setPending] = useState<PendingSignup | null>(null);
   const [refused, setRefused] = useState<DateParts | null>(null);
+  const [stage, setStage] = useState<SignupStage>({ kind: "account-type" });
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
 
   if (refused) {
     return (
@@ -119,7 +157,42 @@ export default function RegisterScreen() {
     );
   }
 
-  if (pending) return <CheckYourEmail state={pending} />;
+  if (pending) {
+    if (stage.kind === "account-type") {
+      return (
+        <AccountTypeStep
+          value={accountType}
+          onChange={setAccountType}
+          onContinue={() =>
+            setStage(
+              accountType === "organization" ? { kind: "org-details" } : { kind: "check-email" },
+            )
+          }
+          // "Decide later" is the individual path without the person having to
+          // claim to be one. It creates nothing; the account is already exactly
+          // what it would be.
+          onSkip={() => setStage({ kind: "check-email" })}
+        />
+      );
+    }
+
+    if (stage.kind === "org-details") {
+      return (
+        <OrgDetailsStep
+          // The session is held here and NOT installed -- see the note on the
+          // pending pair. Without passing it, every call this screen makes is
+          // unauthenticated.
+          accessToken={pending.session?.accessToken ?? null}
+          onDone={() => setStage({ kind: "check-email" })}
+          // Abandoning the details leaves an ordinary account and no
+          // Organization row. Nothing to undo, because nothing was created.
+          onSkip={() => setStage({ kind: "check-email" })}
+        />
+      );
+    }
+
+    return <CheckYourEmail state={pending} />;
+  }
 
   return (
     <RegisterForm

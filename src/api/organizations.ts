@@ -63,10 +63,19 @@ export interface OrganizationsPayload {
  * form has already made a request by the time it renders, so there is nothing
  * to gain from a second copy that can go stale against the enum.
  */
-export function useOrganizations(enabled = true) {
+export function useOrganizations(enabled = true, accessToken?: string | null) {
   return useQuery({
-    queryKey: ORGANIZATIONS_KEY,
-    queryFn: () => apiV1<OrganizationsPayload>("/api/v1/organizations"),
+    // The token is part of the key. During signup this hook runs with the
+    // held-but-uninstalled token and from inside the app it runs with none, and
+    // those are two different requests -- sharing a cache entry would serve one
+    // context's answer to the other.
+    queryKey: accessToken ? [...ORGANIZATIONS_KEY, "signup"] : ORGANIZATIONS_KEY,
+    queryFn: () =>
+      apiV1<OrganizationsPayload>("/api/v1/organizations", {
+        // Only during signup, where `memory` is empty and the interceptor has
+        // nothing to attach. See CreateOrganizationInput.accessToken.
+        ...(accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
+      }),
     enabled,
     // Memberships change when somebody else acts — an owner removing you, an
     // invitation arriving. Short, because the context switcher reading a stale
@@ -80,6 +89,22 @@ export interface CreateOrganizationInput {
   businessCategory: string;
   /** The local URI of the photographed DTI/SEC registration or permit. */
   documentUri: string;
+  /**
+   * The access token to present, when there is no INSTALLED session to read.
+   *
+   * ── THE SIGNUP FLOW IS THE REASON THIS EXISTS ───────────────────────────
+   *
+   * During registration the app holds a real, valid session and deliberately
+   * does NOT install it: the (auth) guard redirects the instant a session
+   * exists, which would throw somebody into the app mid-signup. The register
+   * screen's own note explains it, and `resendVerification()` already takes a
+   * token for exactly the same reason.
+   *
+   * So this endpoint has to be callable with a token that `currentSession()`
+   * cannot see. Omitted from inside the app, where a session IS installed and
+   * the ordinary Bearer attachment applies.
+   */
+  accessToken?: string;
 }
 
 export interface CreatedOrganization {
@@ -103,8 +128,10 @@ export interface CreatedOrganization {
 export async function createOrganization(
   input: CreateOrganizationInput,
 ): Promise<CreatedOrganization> {
-  const session = currentSession();
-  if (!session) throw new ApiError(401, "UNAUTHENTICATED", "Sign in to continue");
+  // Either an installed session, or the one the signup flow is holding.
+  if (!input.accessToken && !currentSession()) {
+    throw new ApiError(401, "UNAUTHENTICATED", "Sign in to continue");
+  }
 
   const form = new FormData();
   form.append("name", input.name);
@@ -115,7 +142,20 @@ export async function createOrganization(
     type: "image/jpeg",
   } as unknown as Blob);
 
-  const res = await request("/api/v1/organizations", { method: "POST", body: form });
+  // This header is what authenticates the SIGNUP call, and it works because
+  // during signup there is nothing to conflict with it. toHeaderRecord()
+  // spreads the caller's headers first and then attaches `memory`'s token, so
+  // an installed session would overwrite this one -- but during signup
+  // `memory` is deliberately empty, so this is the only Authorization header
+  // there is. From inside the app `accessToken` is omitted and the ordinary
+  // attachment applies. The two paths never overlap.
+  const res = await request("/api/v1/organizations", {
+    method: "POST",
+    body: form,
+    ...(input.accessToken
+      ? { headers: { Authorization: `Bearer ${input.accessToken}` } }
+      : {}),
+  });
   const payload = (await res.json()) as {
     data: CreatedOrganization | null;
     error: { code: string; message: string } | null;

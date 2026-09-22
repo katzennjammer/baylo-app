@@ -10,8 +10,9 @@ import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
-import { color, font } from "../../src/theme/tokens";
-import { GridIcon } from "../../src/components/icons";
+import { color, font, icon } from "../../src/theme/tokens";
+import { GridIcon, StoreIcon, VerifiedOrgIcon } from "../../src/components/icons";
+import { ORG_BADGE_LABEL } from "../../src/lib/org";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
@@ -261,8 +262,75 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
   );
 }
 
+/**
+ * An organisation's logo: SQUARE, with a shop front where a person gets
+ * initials.
+ *
+ * ── THE SHAPE IS THE POINT, NOT A PREFERENCE ────────────────────────────────
+ *
+ * A round mask is a portrait convention — it crops to a face. Business logos
+ * are laid out to the edges of a square, so the same mask takes the corners
+ * off a wordmark and turns most of them into an unreadable blob. The spec asks
+ * for a square and this is why. The radius is 12 rather than 0 so it still
+ * belongs to the same surface as everything else on the screen.
+ *
+ * Exactly the same 76 as the avatar, so an org profile and a person's profile
+ * have identical header geometry — which is the rest of the spec's ask: change
+ * the identity block and nothing else.
+ *
+ * The placeholder is StoreIcon and not the initial letter. An initial in a
+ * square reads as a person whose avatar failed to load; a shop front says what
+ * kind of account this is even before the name is read.
+ */
+export function OrgLogo({ uri, name }: { uri: string | null; name: string }) {
+  if (uri) {
+    return <Image source={{ uri }} contentFit="cover" style={s.orgLogo} accessibilityLabel={`${name} logo`} />;
+  }
+  return (
+    <View style={s.orgLogoFallback} accessibilityLabel={`${name}, no logo`}>
+      <StoreIcon size={icon.orgLogo.size} stroke={icon.orgLogo.stroke} color={color.forest} />
+    </View>
+  );
+}
+
+/**
+ * "Verified organization", with a checkmark, where the trust tier sits.
+ *
+ * REPLACES the tier badge rather than joining it — organisations do not climb
+ * the trade-count ladder, so there is never a tier to sit beside. The full
+ * label rather than the card's "Verified org": a profile header has the width,
+ * and both strings live in ORG_BADGE_LABEL so they cannot drift apart.
+ *
+ * Rendered ONLY when `verified`. A PENDING organisation shows no badge at all
+ * — see the note on ownerBadge().
+ */
+export function VerifiedOrgBadge({ dark }: { dark: boolean }) {
+  return (
+    <View
+      style={[s.orgBadge, { backgroundColor: dark ? "#244A31" : color.greenWash }]}
+      accessibilityRole="text"
+      accessibilityLabel={ORG_BADGE_LABEL.full}
+    >
+      <VerifiedOrgIcon
+        size={icon.orgBadge.size}
+        stroke={icon.orgBadge.stroke}
+        color={dark ? "#BFE8C7" : color.forest}
+      />
+      <Text style={[s.orgBadgeText, { color: dark ? "#BFE8C7" : color.forest }]}>
+        {ORG_BADGE_LABEL.full}
+      </Text>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
+  // Same 76 as the avatar: an org header and a person's header must have
+  // identical geometry. Only the mask differs.
+  orgLogo: { width: 76, height: 76, borderRadius: 12 },
+  orgLogoFallback: { width: 76, height: 76, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
+  orgBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 4, paddingVertical: 3, paddingHorizontal: 7, marginTop: 6 },
+  orgBadgeText: { fontFamily: font.sansSemi, fontSize: 11 },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   identityRow: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 76, height: 76, borderRadius: 38 },
