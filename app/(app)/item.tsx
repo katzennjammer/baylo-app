@@ -26,6 +26,8 @@ import {
   LeafIcon,
   PinIcon,
   WarningIcon,
+  StoreIcon,
+  VerifiedOrgIcon,
 } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportSheet } from "../../src/components/ReportSheet";
@@ -38,6 +40,9 @@ import { CommentsSheet } from "../../src/components/home/CommentsSheet";
 import { SocialRow } from "../../src/components/home/FeedCard";
 import { Tappable } from "../../src/components/Tappable";
 import { TIER_LABEL, type TrustTier } from "../../src/lib/trust";
+import { ORG_BADGE_LABEL } from "../../src/lib/org";
+import { businessCategoryLabel } from "../../src/lib/business-category";
+import type { OrgBadge } from "../../src/api/types";
 import {
   border,
   color,
@@ -350,6 +355,7 @@ export default function ItemDetailScreen() {
             location={item.owner.location}
             tier={item.owner.trustTier}
             rank={item.owner.rank}
+            org={item.owner.org}
             onPress={() =>
               router.push({ pathname: "/user", params: { id: item.owner.id } })
             }
@@ -409,12 +415,37 @@ export default function ItemDetailScreen() {
           */}
           {!viewer.isOwner ? reachInsert : null}
 
+          {/* ── Perishable ──────────────────────────────────────────────
+              Shown to the OWNER TOO, unlike most of this screen's sections.
+              The window is the one fact about their own listing they cannot
+              see anywhere else, and "4 hours left" is more use to the person
+              who has to move the stock than to anybody else. */}
+          {item.perishable ? (
+            <Section heading="Perishable">
+              <Text style={[textStyle(type.detailBody), s.bodyText]}>
+                {perishableLine(item.perishable)}
+              </Text>
+            </Section>
+          ) : null}
+
           {/* `wanted` is the owner's own words about what they will take back.
               Rendered plainly rather than in the urgency treatment — it is a
               wish list, not a deadline. */}
           {!viewer.isOwner && item.wanted?.trim() ? (
             <Section heading="Wanted in return">
               <Text style={[textStyle(type.detailBody), s.bodyText]}>{item.wanted}</Text>
+            </Section>
+          ) : null}
+
+          {/* The categories the owner named, which is a different statement
+              from `wanted`: that is prose, this is the list the matcher uses
+              to decide who hears about this listing. Both are shown when both
+              exist -- they are two answers to the same question, one exact. */}
+          {item.lookingForLabels.length > 0 ? (
+            <Section heading="Looking for">
+              <Text style={[textStyle(type.detailBody), s.bodyText]}>
+                {item.lookingForLabels.join(" · ")}
+              </Text>
             </Section>
           ) : null}
 
@@ -598,6 +629,7 @@ function OwnerRow({
   location,
   tier,
   rank,
+  org,
   onPress,
 }: {
   name: string;
@@ -605,6 +637,8 @@ function OwnerRow({
   location: string | null;
   tier: TrustTier | null;
   rank: string;
+  /** Set when the owner is an organisation. Replaces the avatar and the tier. */
+  org: OrgBadge | null;
   onPress: () => void;
 }) {
   return (
@@ -615,7 +649,19 @@ function OwnerRow({
       style={s.owner}
       pressedStyle={s.ownerPressed}
     >
-      {avatar ? (
+      {/* Square for an organisation, round for a person -- the same rule the
+          profile header follows, and for the same reason: a round mask crops
+          the corners off a wordmark. The shop front replaces the initial,
+          which in a square would read as a broken avatar. */}
+      {org ? (
+        org.logoUrl ? (
+          <Image source={{ uri: org.logoUrl }} contentFit="cover" style={[s.avatar, s.orgAvatar]} />
+        ) : (
+          <View style={[s.avatar, s.orgAvatar, s.avatarFallback]}>
+            <StoreIcon size={22} stroke={1.6} color={color.forest} />
+          </View>
+        )
+      ) : avatar ? (
         <Image source={{ uri: avatar }} contentFit="cover" style={s.avatar} />
       ) : (
         <View style={[s.avatar, s.avatarFallback]}>
@@ -630,12 +676,34 @@ function OwnerRow({
           <Text style={[textStyle(type.username), s.ownerName]} numberOfLines={1}>
             {name}
           </Text>
-          {tier ? <TierBadge tier={tier} /> : null}
+          {/* One badge, never two. An unverified organisation gets neither --
+              see ownerBadge(). */}
+          {org?.verified ? (
+            <View style={[s.tierBadge, s.orgTierBadge]} accessibilityRole="text" accessibilityLabel={ORG_BADGE_LABEL.full}>
+              <VerifiedOrgIcon size={icon.orgBadge.size} stroke={icon.orgBadge.stroke} color={color.forest} />
+              <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>
+                {ORG_BADGE_LABEL.compact}
+              </Text>
+            </View>
+          ) : tier ? (
+            <TierBadge tier={tier} />
+          ) : null}
         </View>
         {/* The Leaf rank is a different ladder from trust and is labelled as
-            what it is, so the two are never read as one claim. */}
+            what it is, so the two are never read as one claim.
+
+            AN ORGANISATION GETS ITS BUSINESS CATEGORY INSTEAD. The leaf rank
+            is earned by a person building a reputation, and printing
+            "Guardian" under a shop is the same category error the trust tier
+            would be -- quieter, and just as wrong. */}
         <Text style={[textStyle(type.metadata), s.ownerMeta]} numberOfLines={1}>
-          {location?.trim() ? `${location} · ${rank}` : rank}
+          {org
+            ? location?.trim()
+              ? `${location} · ${businessCategoryLabel(org.businessCategory)}`
+              : businessCategoryLabel(org.businessCategory)
+            : location?.trim()
+              ? `${location} · ${rank}`
+              : rank}
         </Text>
       </View>
 
@@ -918,6 +986,16 @@ const s = StyleSheet.create({
   ownerNameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
   ownerName: { flexShrink: 1, color: color.ink },
   ownerMeta: { marginTop: space.card.nameToMeta, color: color.inkMuted },
+  // Square logo in the same 40 slot as the avatar, so an org row and a
+  // person's row have identical geometry. Only the mask differs.
+  orgAvatar: { borderRadius: 8 },
+  orgTierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: color.greenWash,
+    borderColor: color.greenLine,
+  },
   tierBadge: {
     flexShrink: 0,
     borderRadius: radius.tierBadge,
@@ -1015,3 +1093,44 @@ const s = StyleSheet.create({
   },
   skeletonLine: { borderRadius: 4, backgroundColor: color.skeletonSoft },
 });
+
+
+/**
+ * The perishable line: how much, and how long is left.
+ *
+ * ── THE COUNTDOWN IS COMPUTED, NOT LIVE ─────────────────────────────────────
+ *
+ * It reads `expiresAt` once per render rather than ticking. A listing whose
+ * window is measured in hours does not need a second hand, and a timer on a
+ * detail screen is a re-render every second for a number that changes every
+ * sixty minutes. Re-opening the screen, or pulling to refresh, is what updates
+ * it -- which is also when the server's lazy sweep runs.
+ *
+ * `expired` comes from the server and means the window has passed but the
+ * sweep has not caught up. Said plainly rather than shown as "0 hours left",
+ * because those are different facts and only one of them means "do not travel
+ * for this".
+ */
+function perishableLine(p: NonNullable<Item["perishable"]>): string {
+  const amount =
+    p.quantity != null && p.quantityUnit
+      ? `${p.quantity} ${p.quantityUnit === "LITERS" ? "L" : p.quantityUnit}`
+      : null;
+
+  if (p.expired) {
+    return amount ? `${amount} · this listing's trade window has closed` : "This listing's trade window has closed";
+  }
+
+  const hoursLeft = Math.max(
+    0,
+    (new Date(p.expiresAt).getTime() - Date.now()) / (60 * 60 * 1000),
+  );
+  const left =
+    hoursLeft < 1
+      ? `under an hour left`
+      : hoursLeft < 2
+        ? `about an hour left`
+        : `about ${Math.floor(hoursLeft)} hours left`;
+
+  return amount ? `${amount} · ${left}` : left;
+}
