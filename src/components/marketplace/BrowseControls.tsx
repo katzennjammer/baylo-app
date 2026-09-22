@@ -114,13 +114,23 @@ export function CategoryRail({
   selected,
   onToggle,
   max,
+  orgsOnly,
+  onToggleOrgs,
 }: {
   facets: { category: string; label: string; count: number }[];
   selected: readonly string[];
   onToggle: (category: string) => void;
   max: number;
+  /** The Organizations pill's state. See the note on its chip below. */
+  orgsOnly: boolean;
+  onToggleOrgs: () => void;
 }) {
-  if (facets.length === 0) return null;
+  // The org pill survives an empty facet list, which the categories do not.
+  // Facets are "categories with something visible in them", so an empty rail
+  // means an empty marketplace -- but "show me organisations" is still a
+  // question worth being able to ask, and hiding the only control that answers
+  // it is how a filter becomes undiscoverable.
+  if (facets.length === 0 && !orgsOnly) return null;
 
   const atCap = selected.length >= max;
 
@@ -132,6 +142,37 @@ export function CategoryRail({
       // Chips are 36 tall inside a 44 row; the extra is the touch target.
       style={s.railOuter}
     >
+      {/*
+        FIRST IN THE RAIL, AND NOT SORTED IN AMONG THE CATEGORIES. It is a
+        different KIND of filter -- a fact about the poster rather than about
+        the item -- and putting it at the head is what keeps it from reading as
+        a twenty-first category. It carries no count, for the same reason: the
+        facet counts come from the category groupBy, and inventing a number
+        here would mean a second aggregate on every browse request to answer a
+        question the pill does not need answered.
+
+        It also does NOT respect `atCap`: the cap is five CATEGORIES, and this
+        is not one of them. A user with five categories chosen must still be
+        able to narrow those five to organisations.
+      */}
+      <Tappable
+        onPress={onToggleOrgs}
+        accessibilityRole="button"
+        accessibilityState={{ selected: orgsOnly }}
+        accessibilityLabel="Organizations only"
+        style={[s.chip, orgsOnly && s.chipOn]}
+        pressedStyle={s.chipPressed}
+      >
+        <Text
+          style={[
+            textStyle(type.trendingChip),
+            { color: orgsOnly ? color.onGreen : color.inkSecondary },
+          ]}
+        >
+          Organizations
+        </Text>
+      </Tappable>
+
       {facets.map((f) => {
         const on = selected.includes(f.category);
         // A chip that cannot be selected because the cap is reached is dimmed

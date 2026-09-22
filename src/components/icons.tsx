@@ -369,3 +369,48 @@ export function BlockIcon(props: IconProps) {
     </Glyph>
   );
 }
+
+/* ──────────────────────────── organisations ─────────────────────────── */
+
+/**
+ * The verified-organisation mark: a check inside a rosette.
+ *
+ * DELIBERATELY NOT THE PLAIN CheckIcon. That glyph means "selected" everywhere
+ * else in this app — it is the filter sheet's tick and the post wizard's
+ * confirm — and reusing it for a claim about an account would make the same
+ * mark mean two unrelated things on screens that show both. The rosette is
+ * what says this is a badge rather than a state.
+ *
+ * Drawn as an outline like everything else here, so it inherits the stroke
+ * table rather than arriving as a filled shape that ignores it.
+ */
+export function VerifiedOrgIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 2.6l2.3 1.7 2.8-.2.9 2.7 2.4 1.5-1 2.7 1 2.7-2.4 1.5-.9 2.7-2.8-.2L12 21.4l-2.3-1.7-2.8.2-.9-2.7-2.4-1.5 1-2.7-1-2.7 2.4-1.5.9-2.7 2.8.2z" />
+      <Path d="M8.6 12.2 11 14.6l4.4-4.6" />
+    </Glyph>
+  );
+}
+
+/**
+ * The placeholder where an organisation has no logo: a shop front.
+ *
+ * An awning over a counter, not a generic building. The distinction matters at
+ * 40 px, which is the size this renders at on a feed card: a plain rectangle
+ * with windows reads as an office block or, worse, as a broken image, while an
+ * awning reads as a shop even when it is barely legible.
+ *
+ * It fills a SQUARE, because an organisation's logo slot is square — see the
+ * profile header. A round mask over this would crop the awning's corners off,
+ * which is most of what makes it recognisable.
+ */
+export function StoreIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 9.5h16V20H4z" />
+      <Path d="M3.2 9.5 5 4.2h14l1.8 5.3z" />
+      <Path d="M9.6 20v-5.4h4.8V20" />
+    </Glyph>
+  );
+}

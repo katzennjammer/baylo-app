@@ -40,6 +40,21 @@ export interface BrowseFilters {
   condition?: string | null;
   minLeaves?: number | null;
   maxLeaves?: number | null;
+  /**
+   * The Organizations pill: only listings posted by an organisation.
+   *
+   * NOT A CATEGORY, although it sits in the category rail and looks like one.
+   * `categories` is the ITEM taxonomy; this is a fact about the POSTER, and as
+   * a category value a shop's rice would have to be either FOOD or
+   * Organizations. As a separate filter the two compose, which is what
+   * somebody tapping both pills means.
+   *
+   * It is also why this does NOT count toward `activeFilterCount()`: that
+   * badge counts the FILTER SHEET's controls, and this one lives on the rail
+   * where its own pill already shows it is on. Counting it would put a "1" on
+   * a sheet containing nothing.
+   */
+  orgsOnly?: boolean;
 }
 
 /** Mirrors MAX_CATEGORIES in the server's browse route. */
@@ -68,6 +83,7 @@ export function isFiltered(f: BrowseFilters): boolean {
   return (
     !!f.q?.trim() ||
     (f.categories?.length ?? 0) > 0 ||
+    f.orgsOnly === true ||
     !!f.condition ||
     f.minLeaves != null ||
     f.maxLeaves != null
@@ -94,6 +110,11 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
     p.set("category", filters.categories.join(","));
   }
   if (filters.condition) p.set("condition", filters.condition);
+
+  // Only ever sent as "true". The server reads the absent parameter as false,
+  // so sending "false" would be a no-op that changes the cache key -- two keys
+  // for one query, and a refetch every time the pill is turned off.
+  if (filters.orgsOnly) p.set("orgsOnly", "true");
 
   // `!= null` rather than truthiness: 0 is a legitimate lower bound and `if
   // (min)` would silently drop it, which reads as "the filter did nothing".
@@ -135,6 +156,10 @@ function browseKey(f: BrowseFilters) {
     {
       q: f.q?.trim() || undefined,
       categories: f.categories?.length ? [...f.categories].sort() : undefined,
+      // Folded to undefined when off, for the same reason the blank strings
+      // are: `false` and `undefined` are the same query and must be the same
+      // cache key.
+      orgsOnly: f.orgsOnly ? true : undefined,
       condition: f.condition || undefined,
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,

@@ -424,6 +424,18 @@ export default function MarketplaceScreen() {
     });
   }, []);
 
+  /**
+   * The Organizations pill.
+   *
+   * Cleared to `undefined` rather than set to `false`, so the filter object
+   * and its query key are identical to what they were before the pill was ever
+   * tapped. Leaving a `false` behind would give the same query two cache keys
+   * and refetch the whole first page every time the pill was turned off.
+   */
+  const toggleOrgsOnly = useCallback(() => {
+    setFilters((f) => (f.orgsOnly ? { ...f, orgsOnly: undefined } : { ...f, orgsOnly: true }));
+  }, []);
+
   const clearEverything = useCallback(() => {
     setDraftQuery("");
     setFilters({});
@@ -503,6 +515,8 @@ export default function MarketplaceScreen() {
           selected={filters.categories ?? []}
           onToggle={toggleCategory}
           max={MAX_CATEGORIES}
+          orgsOnly={filters.orgsOnly ?? false}
+          onToggleOrgs={toggleOrgsOnly}
         />
       </View>
 
@@ -692,6 +706,7 @@ export default function MarketplaceScreen() {
             <BrowseNoMatches
               query={filters.q ?? ""}
               filterCount={filterCount}
+              orgsOnly={filters.orgsOnly ?? false}
               onClear={clearEverything}
             />
           ) : (

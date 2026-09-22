@@ -6,6 +6,8 @@ import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, Sh
 import { Tappable } from "../Tappable";
 import { clampAspect, relativeShort, wasCropped } from "../../lib/format";
 import { resolveTier, TIER_LABEL, type TrustTier } from "../../lib/trust";
+import { ORG_BADGE_LABEL, ownerBadge } from "../../lib/org";
+import { VerifiedOrgIcon } from "../icons";
 import {
   border,
   color,
@@ -181,7 +183,7 @@ export const FeedCard = memo(function FeedCard({
                 )}
               </View>
             ) : null}
-            <TierBadge tier={resolveTier(item.owner)} />
+            <OwnerBadgeMark owner={item.owner} />
           </View>
 
           {meta ? (
@@ -373,6 +375,39 @@ const TIER_TREATMENT: Record<TrustTier, { backgroundColor: string; borderColor: 
  * "TRADER" that adds nothing at a glance. A screen reader gets the full name,
  * where there is no width to run out of and "TOP" on its own is meaningless.
  */
+/**
+ * The ONE badge beside the poster's name: a verified-org mark, or a trust tier.
+ *
+ * SAME SLOT, SAME SIZE, NEVER BOTH. The spec asks for the org badge to sit
+ * where RISING/NEW already sits, and `ownerBadge()` is what decides which of
+ * them this owner gets. It reads `owner.org` BEFORE falling back to
+ * resolveTier(), which matters: the server sends `trustTier: null` for an
+ * organisation, and resolveTier() reads null as "this endpoint did not resolve
+ * it" and computes a rung from the shop's trade count. Calling it directly
+ * here would put "Trusted Trader" on a sari-sari store.
+ *
+ * An UNVERIFIED organisation gets nothing rather than a greyed badge. See the
+ * note on ownerBadge().
+ */
+function OwnerBadgeMark({ owner }: { owner: Item["owner"] }) {
+  const badge = ownerBadge(owner);
+  if (badge.kind === "none") return null;
+  if (badge.kind === "tier") return <TierBadge tier={badge.tier} />;
+
+  return (
+    <View
+      style={[s.tierBadge, s.orgBadge]}
+      accessibilityRole="text"
+      accessibilityLabel={ORG_BADGE_LABEL.full}
+    >
+      <VerifiedOrgIcon size={icon.orgBadge.size} stroke={icon.orgBadge.stroke} color={color.forest} />
+      <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>
+        {ORG_BADGE_LABEL.compact}
+      </Text>
+    </View>
+  );
+}
+
 function TierBadge({ tier }: { tier: TrustTier }) {
   const treatment = TIER_TREATMENT[tier];
 
@@ -765,6 +800,17 @@ const s = StyleSheet.create({
     borderWidth: border.chip,
     paddingHorizontal: space.tierBadge.x,
     paddingVertical: space.tierBadge.y,
+  },
+  // The org variant adds a mark, so it needs a row and a gap. Everything else
+  // -- radius, border width, padding -- is inherited from tierBadge above, so
+  // the two badges are the same object in the same slot and a card with one
+  // does not sit a pixel differently from a card with the other.
+  orgBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.tierBadge.y,
+    backgroundColor: color.greenWash,
+    borderColor: color.forest,
   },
 
   kebab: {

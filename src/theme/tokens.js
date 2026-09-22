@@ -580,6 +580,8 @@ const icon = {
   headerLeaf: { size: 15, stroke: 1.7 },
   headerLeafTight: { size: 14, stroke: 1.7 },
   cardLeaf: { size: 13, stroke: 1.8 },
+  orgBadge: { size: 12, stroke: 1.8 },
+  orgLogo: { size: 30, stroke: 1.6 },
   matchesLeaf: { size: 12, stroke: 1.8 },
   social: { size: 21, stroke: 1.6 },
   kebab: { size: 18, dotRadius: 1.6 },

@@ -58,6 +58,29 @@ export interface ItemOwner {
    */
   trustTier: TrustTier | null;
   featuredAchievement: { id: string; name: string; icon: string; imageUrl: string | null } | null;
+  /**
+   * The organisation this owner IS, or null for a person.
+   *
+   * WHEN THIS IS SET, `trustTier` IS ALWAYS NULL — the server enforces it, so
+   * a card never has to choose between two badges. Organisations do not climb
+   * the trade-count ladder; their badge is this one. Render `org` where the
+   * RISING/NEW badge would have gone and nothing else changes.
+   *
+   * `verified` IS NOT "this object exists". A PENDING organisation is a real
+   * account that posts and trades and has no checkmark yet, so the badge is
+   * drawn on `org.verified` and never on `org != null`.
+   */
+  org: OrgBadge | null;
+}
+
+/** An organisation's public badge, as it appears on a card or a profile. */
+export interface OrgBadge {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  businessCategory: string;
+  /** Only a reviewed, VERIFIED organisation earns the checkmark. */
+  verified: boolean;
 }
 
 /** A curated public meetup point. Coordinates here are public and precise. */
@@ -144,6 +167,28 @@ export interface Item {
    */
   valueRejectionReason: string | null;
   wanted: string | null;
+  /**
+   * The perishable block, or null for a standard listing.
+   *
+   * ONE NULLABLE OBJECT, not four loose fields: the four only mean anything
+   * together, and a shape that can express "a quantity with no window" invites
+   * a screen to render one. `expiresAt` is derived server-side from createdAt
+   * plus the window; count down against it rather than recomputing.
+   *
+   * `expired` true means the window has passed but the server's lazy sweep has
+   * not run yet. Treat it as gone — the status will catch up on the next feed
+   * read.
+   */
+  perishable: {
+    quantity: number | null;
+    quantityUnit: string | null;
+    tradeWithinHours: number;
+    expiresAt: string;
+    expired: boolean;
+  } | null;
+  /** Categories the owner will take back. `[]` means none were stated. */
+  lookingFor: string[];
+  lookingForLabels: string[];
   pickup: Pickup | null;
   owner: ItemOwner;
   stats: ItemStats;

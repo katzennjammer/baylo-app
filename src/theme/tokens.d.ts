@@ -393,7 +393,14 @@ export type IconName =
   | "check"
   | "emptyGrid"
   | "offer"
-  | "menuRow";
+  | "menuRow"
+  // The verified-organisation mark, beside a poster name. Sized to the tier
+  // badge it replaces rather than to the card leaf: the two occupy the same
+  // slot, so a card with one must not be a pixel taller than a card with the
+  // other.
+  | "orgBadge"
+  // The shop-front placeholder in an organisation's square logo slot.
+  | "orgLogo";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 
