@@ -25,10 +25,12 @@ import {
 import { CheckIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
+  Chip,
   ConfirmButton,
   Divider,
   Field,
   HelperCounterRow,
+  HelperRow,
   OutlineButton,
   PickerField,
   RateLimitPanel,
@@ -292,6 +294,8 @@ export function StepWhatIsIt({
             helper="Say the brand and size if you know them. That is what people search for."
             counter={`${state.title.length}/${rules.titleMax}`}
           />
+
+          <ItemTypeBlock keyboardUp={keyboardUp} />
         </>
       )}
 
@@ -313,6 +317,149 @@ export function StepWhatIsIt({
         onSelect={chooseCategory}
         onClose={() => setPickerOpen(false)}
       />
+    </View>
+  );
+}
+
+/* ──────────────────────── standard or perishable ────────────────────── */
+
+/**
+ * The item-type toggle, and the three fields that only a perishable has.
+ *
+ * ── WHY IT IS ON THIS STEP AND NOT A STEP OF ITS OWN ────────────────────────
+ *
+ * The wizard is seven steps and a tick rail that counts them. An eighth for one
+ * binary would lengthen every listing anybody posts — and the overwhelming
+ * majority are standard — to ask a question most people answer by walking past
+ * it. It sits under the title because that is where the listing stops being a
+ * photo and starts being a description of a thing, and because a perishable's
+ * quantity reads as part of what the thing IS.
+ *
+ * ── THE COPY HAS TO SELL THE TRADE HONESTLY ────────────────────────────────
+ *
+ * Perishable is not the better option and the step must not imply it is. What
+ * it buys is going live immediately instead of possibly waiting for a value
+ * review; what it costs is a ceiling — a value more than one bracket above the
+ * suggestion is lowered to the cap rather than parked. Saying only the first
+ * half would make this the obvious choice for everyone, and the listings that
+ * followed would be wrong about their own shelf life.
+ *
+ * ── AND THE WINDOW IS NOT A DEADLINE FOR THE POSTER ─────────────────────────
+ *
+ * "Trade within" reads as a promise the poster is making, which it is not: it
+ * is when the listing stops being shown. Nobody is penalised for a perishable
+ * that expires unsold. The helper says that, because the alternative is people
+ * choosing 24 out of caution on a thing that is genuinely good for six hours.
+ */
+function ItemTypeBlock({ keyboardUp }: { keyboardUp: boolean }) {
+  const { state, dispatch } = usePost();
+
+  return (
+    <View style={{ marginTop: postSpace.what.confirmToDivider }}>
+      <Divider />
+
+      <Text
+        style={[
+          textStyle(postType.fieldLabel),
+          {
+            color: postColor.inkMuted,
+            marginTop: postSpace.what.dividerToLabel,
+            marginBottom: postSpace.what.labelToField,
+          },
+        ]}
+      >
+        WHAT KIND OF ITEM
+      </Text>
+
+      <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
+        <ConfirmButton
+          label="Standard item"
+          tone={state.isPerishable ? "outline" : "confirm"}
+          style={{ flex: 1 }}
+          onPress={() => dispatch({ type: "item-type/set", perishable: false })}
+        />
+        <ConfirmButton
+          label="Perishable"
+          tone={state.isPerishable ? "confirm" : "outline"}
+          style={{ flex: 1 }}
+          onPress={() => dispatch({ type: "item-type/set", perishable: true })}
+        />
+      </View>
+
+      <View style={{ height: postSpace.what.fieldToHelper }} />
+      <HelperRow>
+        {state.isPerishable
+          ? "Food, flowers, produce — anything with a shelf life. It goes live straight away instead of waiting for a value check, but its value is capped a little lower in exchange."
+          : "Most things. If it keeps, leave it here."}
+      </HelperRow>
+
+      {state.isPerishable ? (
+        <View style={{ marginTop: postSpace.what.dividerToLabel }}>
+          <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="How much"
+                value={state.quantity}
+                placeholder="2"
+                keyboardType="decimal-pad"
+                onChangeText={(v) => dispatch({ type: "field/quantity", value: v })}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  textStyle(postType.fieldLabel),
+                  { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
+                ]}
+              >
+                UNIT
+              </Text>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {(["KG", "PCS", "LITERS"] as const).map((u) => (
+                  <Chip
+                    key={u}
+                    label={u === "LITERS" ? "L" : u}
+                    selected={state.quantityUnit === u}
+                    onPress={() => dispatch({ type: "field/quantity-unit", value: u })}
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <View style={{ height: postSpace.what.fieldToHelper }} />
+          <HelperRow>Leave the number blank if it does not have one — a basket, a bundle, a tray.</HelperRow>
+
+          <Text
+            style={[
+              textStyle(postType.fieldLabel),
+              {
+                color: postColor.inkMuted,
+                marginTop: postSpace.what.dividerToLabel,
+                marginBottom: postSpace.what.labelToField,
+              },
+            ]}
+          >
+            TRADE WITHIN
+          </Text>
+          <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
+            {([6, 24] as const).map((h) => (
+              <ConfirmButton
+                key={h}
+                label={h === 6 ? "6 hours" : "24 hours"}
+                tone={state.tradeWithinHours === h ? "confirm" : "outline"}
+                style={{ flex: 1 }}
+                onPress={() => dispatch({ type: "field/trade-within", value: h })}
+              />
+            ))}
+          </View>
+
+          <View style={{ height: postSpace.what.fieldToHelper }} />
+          <HelperRow>When the listing stops being shown. It is not a promise — nothing happens to you if it expires unsold.</HelperRow>
+        </View>
+      ) : null}
+
+      {keyboardUp ? <View style={{ height: 12 }} /> : null}
     </View>
   );
 }

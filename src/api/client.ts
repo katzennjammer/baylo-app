@@ -1,4 +1,5 @@
 import { getApiBase } from "./config";
+import { ORG_CONTEXT_HEADER, getActingOrgId } from "./org-context";
 import {
   clearSession,
   loadSession,
@@ -875,6 +876,24 @@ function toHeaderRecord(
     out[name] = value;
   });
   if (accessToken) out.Authorization = `Bearer ${accessToken}`;
+
+  // The acting organisation, on every authenticated request.
+  //
+  // HERE AND NOT AT THE CALL SITES, because this function is the one funnel
+  // every request and every multipart upload passes through. An org context
+  // added per-endpoint is one the next endpoint somebody writes will not have,
+  // and the failure that produces is a listing quietly attributed to a staff
+  // member's own account instead of to the shop.
+  //
+  // Only sent when set, so a person acting as themselves -- the overwhelming
+  // majority of requests -- sends nothing extra. Read synchronously from a
+  // module variable; see ./org-context for why it cannot be an async read.
+  //
+  // The header is a REQUEST. The server re-reads the membership row before
+  // honouring it and answers 403 ORG_CONTEXT_REFUSED if the grant is gone.
+  const actingOrgId = getActingOrgId();
+  if (accessToken && actingOrgId) out[ORG_CONTEXT_HEADER] = actingOrgId;
+
   return out;
 }
 

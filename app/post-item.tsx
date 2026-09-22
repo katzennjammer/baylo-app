@@ -406,6 +406,28 @@ function Wizard() {
         imageHash: photos[0]?.hash ?? null,
         imageHashes: photos.slice(0, rules.maxPhotos).map((p) => p.hash),
         hubIds: state.hubIds.slice(0, rules.maxHubs),
+        // Step 5's chip group, which until now was collected and thrown away.
+        // Server-side this is the matcher's input: it decides who is told
+        // about this listing. Not perishable-only.
+        lookingForCategories: state.returnCategories,
+        // The perishable block, or nothing at all. Spread conditionally so a
+        // standard listing sends no perishable keys rather than four nulls --
+        // the server refuses a window on a non-perishable, and sending the
+        // shape only when it means something keeps that unreachable from here.
+        ...(state.isPerishable
+          ? {
+              isPerishable: true as const,
+              // Parsed once, here, from the raw string the field holds. An
+              // empty box is a legitimate answer: "a basket of calamansi" has
+              // a unit and no number, and the server allows both to be null
+              // together. NaN is coerced to null rather than sent.
+              quantity: parsePositive(state.quantity),
+              // The unit rides along only when there is a number for it to
+              // qualify -- the server refuses a unit with no quantity.
+              quantityUnit: parsePositive(state.quantity) === null ? null : state.quantityUnit,
+              tradeWithinHours: state.tradeWithinHours,
+            }
+          : {}),
       });
       // The draft has become a listing. Deleting it here rather than on the way
       // out means a crash between posting and leaving cannot resurrect a draft
@@ -750,4 +772,19 @@ function useAndroidBack(handler: () => void) {
     });
     return () => subscription.remove();
   }, []);
+}
+
+
+/**
+ * The quantity field's raw string as a number, or null.
+ *
+ * NULL FOR AN EMPTY BOX, and that is a real answer rather than a missing one:
+ * a perishable may have a unit and no number ("a basket of calamansi"), and
+ * the server accepts both being null together. NaN, zero and negatives all
+ * come back null too -- the field is numeric-only, so those are states a
+ * half-typed value passes through rather than things anybody meant.
+ */
+function parsePositive(raw: string): number | null {
+  const n = Number.parseFloat(raw.trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
 }

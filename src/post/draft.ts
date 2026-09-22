@@ -220,7 +220,24 @@ export function useStoredDraft() {
     };
   }, []);
 
-  return { status, draft, initial: draft?.state ?? initialState() };
+  // OVER initialState(), NOT INSTEAD OF IT.
+  //
+  // A draft written by an older build has only the fields that build knew
+  // about, and `version` does not catch it: adding an optional field to the
+  // wizard is not a shape change worth discarding somebody's half-filled form
+  // over. But handing the reducer a state object with `isPerishable` and
+  // `quantity` missing gives every reader `undefined`, and the first thing
+  // that happens is `state.quantity.trim()` at submit -- a crash on the one
+  // action the draft existed to protect.
+  //
+  // Spreading over the defaults means a field the stored draft has wins, and a
+  // field it never heard of takes its initial value. Every future field added
+  // to PostState is covered by this without anybody remembering to.
+  return {
+    status,
+    draft,
+    initial: draft?.state ? { ...initialState(), ...draft.state } : initialState(),
+  };
 }
 
 export type { DraftEnvelope };

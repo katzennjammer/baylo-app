@@ -528,6 +528,30 @@ export interface CreateItemInput {
   imageHashes: (string | null)[];
   /** Max 5. `resolveHubIds` rejects a sixth and the item is not created. */
   hubIds: string[];
+  /**
+   * The categories the poster will take in return — step 5's chip group.
+   *
+   * THIS EXISTED IN THE WIZARD AND WAS NEVER SENT. `returnCategories` has been
+   * collected on step 5 since the flow was built and then dropped on the floor
+   * at submit, so the answer people gave went nowhere. It is now the matcher's
+   * input server-side: it is what decides who gets told about a new listing.
+   *
+   * Capped at 6 by the server. Not perishable-only -- a standard listing is
+   * just as likely to name what it wants back.
+   */
+  lookingForCategories: Category[];
+  /**
+   * The perishable block, or omitted entirely for a standard listing.
+   *
+   * ALL OR NOTHING: the server refuses a quantity with no unit, a unit with no
+   * quantity, a window on a non-perishable, and a perishable with no window.
+   * Sending them as one optional object rather than four loose fields is what
+   * makes those states unrepresentable here rather than merely refused there.
+   */
+  isPerishable?: boolean;
+  quantity?: number | null;
+  quantityUnit?: "KG" | "PCS" | "LITERS" | null;
+  tradeWithinHours?: 6 | 24 | null;
 }
 
 /** What POST /api/items answers with. Only the id is read by this flow. */
@@ -546,7 +570,21 @@ export interface CreatedItem {
     decision: "suggested" | "lowered" | "raisedWithinCap" | "needsReview";
     pending: boolean;
     notice: string | null;
+    /**
+     * TRUE when this was a perishable whose value was lowered to the
+     * unreviewed cap instead of being parked for review.
+     *
+     * A SEPARATE FLAG FROM `pending`, and never both: a clamped listing IS
+     * live, which is the opposite of parked. The dialog styles it as
+     * information rather than as a wait, and `clampNotice` is the server's own
+     * sentence for it. Absent on an older server, which clamps nothing.
+     */
+    clamped?: boolean;
+    clampNotice?: string | null;
+    requestedLeaves?: number | null;
   };
+  /** Set when the listing was posted for an organisation. Null for yourself. */
+  postedAs?: { organizationId: string; name: string } | null;
 }
 
 /**
