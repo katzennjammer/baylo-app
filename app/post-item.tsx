@@ -23,6 +23,7 @@ import {
 } from "../src/api/id-verification";
 import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
 import { useKeyboardState } from "../src/components/auth-sheet";
+import { useConfirmBoost } from "../src/components/useConfirmBoost";
 import {
   PostFooter,
   PostHeader,
@@ -52,6 +53,7 @@ import {
   isChecking,
   isPostable,
   LAST_STEP,
+  parseQuantity,
   PostStateProvider,
   usePost,
 } from "../src/post/state";
@@ -290,6 +292,7 @@ function Wizard() {
   const { addFromCamera } = usePhotos();
   const saveNow = useAutosave(state);
   const createItem = useCreateItem();
+  const { confirmBoost } = useConfirmBoost();
 
   /**
    * BOTH AI EFFECTS LIVE HERE, NOT ON THE STEP THAT SHOWS THEIR RESULT.
@@ -421,10 +424,10 @@ function Wizard() {
               // empty box is a legitimate answer: "a basket of calamansi" has
               // a unit and no number, and the server allows both to be null
               // together. NaN is coerced to null rather than sent.
-              quantity: parsePositive(state.quantity),
+              quantity: parseQuantity(state.quantity),
               // The unit rides along only when there is a number for it to
               // qualify -- the server refuses a unit with no quantity.
-              quantityUnit: parsePositive(state.quantity) === null ? null : state.quantityUnit,
+              quantityUnit: parseQuantity(state.quantity) === null ? null : state.quantityUnit,
               tradeWithinHours: state.tradeWithinHours,
             }
           : {}),
@@ -463,12 +466,26 @@ function Wizard() {
       // promises "Your draft is safe", and that has to be true before the
       // sentence is shown.
       await saveDraft(state);
+      // TEMPORARY (24 Sep 2026): a perishable post failed and this branch was
+      // the only record of why, which it then replaced with a generic line.
+      if (__DEV__) {
+        console.warn(
+          "[post] createItem failed",
+          e instanceof ApiError ? { status: e.status, code: e.code, message: e.message, issues: e.issues } : e,
+        );
+      }
       dispatch({
         type: "post/fail",
         message:
           e instanceof ApiError && e.status === 0
             ? "No connection. We saved your draft — try again once you are back online."
-            : "We could not post this just now. Your draft is safe. Try again in a moment.",
+            : // A 4xx is the server refusing THIS listing for a stated reason
+              // ("Choose how long you can trade this within"). "Try again in a
+              // moment" would send them to repeat the same refusal; the
+              // server's own sentence tells them what to change.
+              e instanceof ApiError && e.status >= 400 && e.status < 500 && e.message
+              ? `${e.message.replace(/\.$/, "")}. Your draft is safe.`
+              : "We could not post this just now. Your draft is safe. Try again in a moment.",
       });
       return;
     }
@@ -482,7 +499,16 @@ function Wizard() {
     // as "we could not post this".
     router.back();
     announcePosted(created.id, created.valueReview?.pending ? created.valueReview.notice : null);
-  }, [createItem, dispatch, router, state]);
+
+    // "Boost this listing after posting": the item exists now, so this is the
+    // same confirm-and-charge dialog as the item screen's Boost button, for
+    // the new id. After the post and outside its try, deliberately: a boost
+    // that is cancelled or refused leaves the listing exactly as posted, and
+    // useConfirmBoost says the boost didn't go through without undoing it.
+    if (state.boostAfterPost && !state.isPerishable) {
+      confirmBoost({ id: created.id, title: state.title.trim() }, { afterPost: true });
+    }
+  }, [confirmBoost, createItem, dispatch, router, state]);
 
   /* ── the footer ── */
 
@@ -556,6 +582,7 @@ function Wizard() {
             titleRef={titleRef}
             onFieldBlur={saveNow}
             retryDetection={retryDetection}
+            scrollerRef={scroller}
           />
         ) : null}
         {step === 2 ? <StepCondition board={board} /> : null}
@@ -772,19 +799,4 @@ function useAndroidBack(handler: () => void) {
     });
     return () => subscription.remove();
   }, []);
-}
-
-
-/**
- * The quantity field's raw string as a number, or null.
- *
- * NULL FOR AN EMPTY BOX, and that is a real answer rather than a missing one:
- * a perishable may have a unit and no number ("a basket of calamansi"), and
- * the server accepts both being null together. NaN, zero and negatives all
- * come back null too -- the field is numeric-only, so those are states a
- * half-typed value passes through rather than things anybody meant.
- */
-function parsePositive(raw: string): number | null {
-  const n = Number.parseFloat(raw.trim());
-  return Number.isFinite(n) && n > 0 ? n : null;
 }

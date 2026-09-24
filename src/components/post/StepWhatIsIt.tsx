@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import {
@@ -66,6 +66,7 @@ export function StepWhatIsIt({
   titleRef,
   onFieldBlur,
   retryDetection,
+  scrollerRef,
 }: {
   board: Board;
   keyboardUp: boolean;
@@ -81,6 +82,8 @@ export function StepWhatIsIt({
    * memo already recorded that this photo had been asked about.
    */
   retryDetection: () => void;
+  /** The wizard's ScrollView, so a perishable field can scroll itself above the IME. */
+  scrollerRef: React.RefObject<ScrollView | null>;
 }) {
   const { state, dispatch } = usePost();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -100,181 +103,27 @@ export function StepWhatIsIt({
     else dispatch({ type: "detect/correct", category, title: state.title });
   };
 
-  /* ── keyboard up: the whole top of the step collapses into one 44 row ── */
-
-  if (keyboardUp && phase !== "failed") {
-    return (
-      <View style={{ paddingHorizontal: board.screenX }}>
-        <SummaryRow
-          uri={lead?.localUri ?? null}
-          title={state.title}
-          category={state.category}
-          condition={state.condition}
-          onChange={() => setPickerOpen(true)}
-        />
-        <View style={{ height: 20 }} />
-        <Text
-          style={[
-            textStyle(postType.fieldLabel),
-            { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
-          ]}
-        >
-          GIVE IT A TITLE
-        </Text>
-        <Field
-          label="Give it a title"
-          value={state.title}
-          placeholder="What is it? Brand and size help"
-          onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-          onBlur={onFieldBlur}
-          error={error}
-          maxLength={rules.titleMax}
-          inputRef={titleRef}
-        />
-        <View style={{ height: postSpace.what.fieldToHelper }} />
-        <HelperCounterRow
-          helper="Say the brand and size if you know them."
-          counter={`${state.title.length}/${rules.titleMax}`}
-        />
-        <CategoryPicker
-          open={pickerOpen}
-          selected={state.category}
-          onSelect={chooseCategory}
-          onClose={() => setPickerOpen(false)}
-        />
-      </View>
-    );
-  }
-
-  /* ── the full step ── */
+  // Only the TOP of the step changes with the keyboard. See the note on the
+  // ItemTypeBlock slot below for why the switch stops there.
+  const compact = keyboardUp && phase !== "failed";
 
   return (
     <View style={{ paddingHorizontal: board.screenX }}>
-      <Text
-        style={[
-          textStyle(postType.stepHeading),
-          {
-            color: postColor.ink,
-            // Detection failed keeps a heading rather than losing one; with the
-            // IME up it drops to 19 so BOTH fields stay visible. Section 6's
-            // budget for that layout is 301 of 442.
-            fontSize: keyboardUp ? postType.stepHeadingTight.fontSize : board.stepHeading,
-            lineHeight: keyboardUp
-              ? postType.stepHeadingTight.lineHeight
-              : postType.stepHeading.lineHeight,
-          },
-        ]}
-      >
-        {phase === "failed" ? "Tell us what it is" : "What are you trading?"}
-      </Text>
-
-      {limit ? (
-        <View style={{ marginTop: 16 }}>
-          <RateLimitPanel
-            seconds={secondsLeft}
-            body="You have tried this a few times in a row. Wait a little and try again — nothing you filled in was lost."
+      {compact ? (
+        /* ── keyboard up: the whole top of the step collapses into one 44 row ── */
+        <Fragment key="compact">
+          <SummaryRow
+            uri={lead?.localUri ?? null}
+            title={state.title}
+            category={state.category}
+            condition={state.condition}
+            onChange={() => setPickerOpen(true)}
           />
-        </View>
-      ) : null}
-
-      {phase === "failed" ? (
-        <FailedForm
-          keyboardUp={keyboardUp}
-          onOpenPicker={() => setPickerOpen(true)}
-          titleRef={titleRef}
-          onFieldBlur={onFieldBlur}
-        />
-      ) : (
-        <>
-          <View
-            style={{
-              marginTop: postSpace.what.headingToRef,
-              flexDirection: "row",
-              gap: postSpace.what.refGap,
-            }}
-          >
-            <ReferenceTile uri={lead?.localUri ?? null} size={board.refTile} />
-            <View style={{ flex: 1, justifyContent: "center" }}>
-              {phase === "detecting" ? (
-                <DetectingColumn slow={state.detection.slow} />
-              ) : (
-                <ResultColumn
-                  framing={
-                    phase === "corrected"
-                      ? "You changed this to"
-                      : "We looked at your photo and think this is a"
-                  }
-                  result={state.title || "—"}
-                  category={state.category}
-                  condition={state.condition}
-                  board={board}
-                />
-              )}
-            </View>
-          </View>
-
-          {phase === "detecting" ? (
-            <View
-              style={{
-                marginTop: postSpace.what.refToConfirm,
-                flexDirection: "row",
-                gap: postSpace.what.confirmGap,
-              }}
-            >
-              <Skeleton width="48%" height={postSize.button.confirm} radius={postRadius.confirmButton} />
-              <Skeleton
-                width="48%"
-                height={postSize.button.confirm}
-                radius={postRadius.confirmButton}
-                tone="soft"
-              />
-            </View>
-          ) : phase === "corrected" ? (
-            <CorrectionBlock onChangeAgain={() => setPickerOpen(true)} />
-          ) : (
-            <View
-              style={{
-                marginTop: postSpace.what.refToConfirm,
-                flexDirection: "row",
-                gap: postSpace.what.confirmGap,
-              }}
-            >
-              <ConfirmButton
-                label="That's right"
-                tone="confirm"
-                style={{ flex: 1 }}
-                icon={
-                  <CheckIcon
-                    size={postSize.chip.check}
-                    stroke={postIcon.checkSmall.stroke}
-                    color={postColor.forest}
-                  />
-                }
-                // Confirming is not a state change — the values are already in
-                // the form. It dismisses the question by moving on, which is
-                // what the footer's Next does, so this is the same action with
-                // the answer's own words on it.
-                onPress={() => dispatch({ type: "next" })}
-              />
-              <ConfirmButton
-                label="Change it"
-                tone="outline"
-                style={{ flex: 1 }}
-                onPress={() => setPickerOpen(true)}
-              />
-            </View>
-          )}
-
-          <Divider style={{ marginTop: postSpace.what.confirmToDivider }} />
-
+          <View style={{ height: 20 }} />
           <Text
             style={[
               textStyle(postType.fieldLabel),
-              {
-                color: postColor.inkMuted,
-                marginTop: postSpace.what.dividerToLabel,
-                marginBottom: postSpace.what.labelToField,
-              },
+              { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
             ]}
           >
             GIVE IT A TITLE
@@ -291,15 +140,186 @@ export function StepWhatIsIt({
           />
           <View style={{ height: postSpace.what.fieldToHelper }} />
           <HelperCounterRow
-            helper="Say the brand and size if you know them. That is what people search for."
+            helper="Say the brand and size if you know them."
             counter={`${state.title.length}/${rules.titleMax}`}
           />
+        </Fragment>
+      ) : (
+        /* ── the full step ── */
+        <Fragment key="full">
+          <Text
+            style={[
+              textStyle(postType.stepHeading),
+              {
+                color: postColor.ink,
+                // Detection failed keeps a heading rather than losing one; with the
+                // IME up it drops to 19 so BOTH fields stay visible. Section 6's
+                // budget for that layout is 301 of 442.
+                fontSize: keyboardUp ? postType.stepHeadingTight.fontSize : board.stepHeading,
+                lineHeight: keyboardUp
+                  ? postType.stepHeadingTight.lineHeight
+                  : postType.stepHeading.lineHeight,
+              },
+            ]}
+          >
+            {phase === "failed" ? "Tell us what it is" : "What are you trading?"}
+          </Text>
 
-          <ItemTypeBlock keyboardUp={keyboardUp} />
-        </>
+          {limit ? (
+            <View style={{ marginTop: 16 }}>
+              <RateLimitPanel
+                seconds={secondsLeft}
+                body="You have tried this a few times in a row. Wait a little and try again — nothing you filled in was lost."
+              />
+            </View>
+          ) : null}
+
+          {phase === "failed" ? (
+            <FailedForm
+              keyboardUp={keyboardUp}
+              onOpenPicker={() => setPickerOpen(true)}
+              titleRef={titleRef}
+              onFieldBlur={onFieldBlur}
+            />
+          ) : (
+            <>
+              <View
+                style={{
+                  marginTop: postSpace.what.headingToRef,
+                  flexDirection: "row",
+                  gap: postSpace.what.refGap,
+                }}
+              >
+                <ReferenceTile uri={lead?.localUri ?? null} size={board.refTile} />
+                <View style={{ flex: 1, justifyContent: "center" }}>
+                  {phase === "detecting" ? (
+                    <DetectingColumn slow={state.detection.slow} />
+                  ) : (
+                    <ResultColumn
+                      framing={
+                        phase === "corrected"
+                          ? "You changed this to"
+                          : "We looked at your photo and think this is a"
+                      }
+                      result={state.title || "—"}
+                      category={state.category}
+                      condition={state.condition}
+                      board={board}
+                    />
+                  )}
+                </View>
+              </View>
+
+              {phase === "detecting" ? (
+                <View
+                  style={{
+                    marginTop: postSpace.what.refToConfirm,
+                    flexDirection: "row",
+                    gap: postSpace.what.confirmGap,
+                  }}
+                >
+                  <Skeleton width="48%" height={postSize.button.confirm} radius={postRadius.confirmButton} />
+                  <Skeleton
+                    width="48%"
+                    height={postSize.button.confirm}
+                    radius={postRadius.confirmButton}
+                    tone="soft"
+                  />
+                </View>
+              ) : phase === "corrected" ? (
+                <CorrectionBlock onChangeAgain={() => setPickerOpen(true)} />
+              ) : (
+                <View
+                  style={{
+                    marginTop: postSpace.what.refToConfirm,
+                    flexDirection: "row",
+                    gap: postSpace.what.confirmGap,
+                  }}
+                >
+                  <ConfirmButton
+                    label="That's right"
+                    tone="confirm"
+                    style={{ flex: 1 }}
+                    icon={
+                      <CheckIcon
+                        size={postSize.chip.check}
+                        stroke={postIcon.checkSmall.stroke}
+                        color={postColor.forest}
+                      />
+                    }
+                    // Confirming is not a state change — the values are already in
+                    // the form. It dismisses the question by moving on, which is
+                    // what the footer's Next does, so this is the same action with
+                    // the answer's own words on it.
+                    onPress={() => dispatch({ type: "next" })}
+                  />
+                  <ConfirmButton
+                    label="Change it"
+                    tone="outline"
+                    style={{ flex: 1 }}
+                    onPress={() => setPickerOpen(true)}
+                  />
+                </View>
+              )}
+
+              <Divider style={{ marginTop: postSpace.what.confirmToDivider }} />
+
+              <Text
+                style={[
+                  textStyle(postType.fieldLabel),
+                  {
+                    color: postColor.inkMuted,
+                    marginTop: postSpace.what.dividerToLabel,
+                    marginBottom: postSpace.what.labelToField,
+                  },
+                ]}
+              >
+                GIVE IT A TITLE
+              </Text>
+              <Field
+                label="Give it a title"
+                value={state.title}
+                placeholder="What is it? Brand and size help"
+                onChangeText={(v) => dispatch({ type: "field/title", value: v })}
+                onBlur={onFieldBlur}
+                error={error}
+                maxLength={rules.titleMax}
+                inputRef={titleRef}
+              />
+              <View style={{ height: postSpace.what.fieldToHelper }} />
+              <HelperCounterRow
+                helper="Say the brand and size if you know them. That is what people search for."
+                counter={`${state.title.length}/${rules.titleMax}`}
+              />
+            </>
+          )}
+        </Fragment>
       )}
 
-      {limit ? (
+      {/*
+        THE PERISHABLE BLOCK HAS A SLOT OF ITS OWN, outside the switch above,
+        and that is the whole of two fixes.
+
+        It used to live inside the detected-photo branch only. So (1) the
+        detection-failed form had no Standard/Perishable toggle at all — a
+        photo we could not read meant a listing that could not be perishable —
+        and (2) it vanished when the keyboard came up, because the compact
+        layout is a different tree. Tapping "Quantity" raised the keyboard,
+        the keyboard swapped the tree, and the field that was just tapped was
+        unmounted with its focus. Adding the block to the compact tree as well
+        would not have fixed that: a TextInput in a different position is a
+        different TextInput, and React would remount it all the same.
+
+        Here it is one element at one position whatever the phase and
+        whatever the keyboard is doing, so it renders in every form and its
+        inputs keep their focus across the collapse. The collapse itself is
+        untouched — the title's keyboard layout is exactly what it was — and
+        now also lifts this block up the screen, which is what makes room for
+        the quantity row above the keyboard. `scrollerRef` finishes the job.
+      */}
+      <ItemTypeBlock keyboardUp={keyboardUp} scrollerRef={scrollerRef} />
+
+      {!compact && limit ? (
         <View style={{ marginTop: 18 }}>
           <OutlineButton
             label="Try detecting again"
@@ -322,6 +342,12 @@ export function StepWhatIsIt({
 }
 
 /* ──────────────────────── standard or perishable ────────────────────── */
+
+/** Space left above the quantity row when it is scrolled clear of the keyboard. */
+const REVEAL_GAP = 16;
+
+/** ScrollView as it is at runtime; see the measure in ItemTypeBlock. */
+type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
 
 /**
  * The item-type toggle, and the three fields that only a perishable has.
@@ -351,8 +377,46 @@ export function StepWhatIsIt({
  * that expires unsold. The helper says that, because the alternative is people
  * choosing 24 out of caution on a thing that is genuinely good for six hours.
  */
-function ItemTypeBlock({ keyboardUp }: { keyboardUp: boolean }) {
+function ItemTypeBlock({
+  keyboardUp,
+  scrollerRef,
+}: {
+  keyboardUp: boolean;
+  scrollerRef: React.RefObject<ScrollView | null>;
+}) {
   const { state, dispatch } = usePost();
+  const quantityRow = useRef<View>(null);
+  const [quantityFocused, setQuantityFocused] = useState(false);
+
+  // Bring the quantity row above the keyboard once it is up.
+  //
+  // Nothing else does this reliably. The focus lands BEFORE the keyboard's
+  // height reaches the host's margin, so at the moment of focus the field is
+  // still "visible" and the ScrollView has no reason to move; a frame later
+  // the viewport shrinks and the keyboard is sitting on it. So this waits for
+  // `keyboardUp` — the render in which the collapse and the margin have both
+  // been committed — and a frame for their layout, then measures the row
+  // against the scroller's content and puts it just under the top edge. The
+  // unit chips are in the same row, so they come with it.
+  //
+  // getInnerViewREF, not getInnerViewNode. The Node variant is a numeric
+  // handle, and on the new architecture measureLayout accepts only a host
+  // element: given a number it logs "must be called with a ref to a native
+  // component" and RETURNS without measuring, so the scroll never happened.
+  useEffect(() => {
+    if (!keyboardUp || !quantityFocused) return;
+    const frame = requestAnimationFrame(() => {
+      const scroller = scrollerRef.current;
+      // Cast: RN 0.86 implements getInnerViewRef (ScrollView.js) but its
+      // ScrollView.d.ts still declares only getInnerViewNode.
+      const content = (scroller as ScrollViewWithInnerRef | null)?.getInnerViewRef();
+      if (!scroller || !content || !quantityRow.current) return;
+      quantityRow.current.measureLayout(content, (_x, y) => {
+        scroller.scrollTo({ y: Math.max(0, y - REVEAL_GAP), animated: true });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [keyboardUp, quantityFocused, scrollerRef]);
 
   return (
     <View style={{ marginTop: postSpace.what.confirmToDivider }}>
@@ -395,14 +459,19 @@ function ItemTypeBlock({ keyboardUp }: { keyboardUp: boolean }) {
 
       {state.isPerishable ? (
         <View style={{ marginTop: postSpace.what.dividerToLabel }}>
-          <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
+          <View
+            ref={quantityRow}
+            style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}
+          >
             <View style={{ flex: 1 }}>
               <Field
-                label="How much"
+                label="Quantity"
                 value={state.quantity}
                 placeholder="2"
                 keyboardType="decimal-pad"
                 onChangeText={(v) => dispatch({ type: "field/quantity", value: v })}
+                onFocus={() => setQuantityFocused(true)}
+                onBlur={() => setQuantityFocused(false)}
               />
             </View>
             <View style={{ flex: 1 }}>

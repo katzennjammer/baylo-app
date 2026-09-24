@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
 
 import { BlockIcon, FlagIcon, PencilIcon, PinIcon, TrashIcon } from "../icons";
 import { ReportReasonRows } from "../ReportSheet";
@@ -8,6 +7,7 @@ import { ApiError } from "../../api/client";
 import { useBlockUser, useDeleteItem, useReport } from "../../api/item";
 import { color, icon } from "../../theme/tokens";
 import type { Item } from "../../api/types";
+import { showDialog } from "../dialog";
 
 /**
  * The three dots on the owner row, wired.
@@ -41,11 +41,11 @@ import type { Item } from "../../api/types";
  * The rows themselves come from `ReportReasonRows`, shared with the item detail
  * screen. See that file for why neither screen may use `Alert` for this.
  *
- * CONFIRMATIONS STAY AS ALERTS. Block and remove are two buttons plus a cancel,
- * which is inside Android's three-button ceiling, and an OS dialog is the right
- * weight for "are you sure" — it is modal over everything, it cannot be mistaken
- * for part of the sheet, and it is what a destructive confirmation looks like on
- * both platforms.
+ * CONFIRMATIONS ARE DIALOGS, NOT PANELS. Block and remove are one action plus a
+ * cancel, and a centred card is the right weight for "are you sure" — modal
+ * over everything, never mistaken for part of the sheet. They are the app's
+ * themed `showDialog` (components/dialog), not the OS `Alert`: the native box
+ * was the one piece of the app still drawn in the platform's colours.
  */
 
 type Panel = "menu" | "report-listing" | "report-user";
@@ -108,14 +108,14 @@ export function ListingMenu({
       {
         onSuccess: () => {
           onClose();
-          Alert.alert(
+          showDialog(
             "Thanks — that is with a moderator",
             "They review every report and will let you know the outcome.",
           );
         },
         onError: (e) => {
           onClose();
-          Alert.alert(
+          showDialog(
             // A 409 is not a failure: this reporter already has an open report
             // against this target. Saying so is the truthful answer and stops
             // them retrying something the server will refuse identically.
@@ -130,7 +130,7 @@ export function ListingMenu({
   };
 
   const confirmBlock = () => {
-    Alert.alert(
+    showDialog(
       `Block ${item.owner.name}?`,
       "You will not see each other's listings and neither of you can message the other. " +
         "Trades already in progress are not cancelled — a block cannot undo a handover, " +
@@ -144,14 +144,14 @@ export function ListingMenu({
             block.mutate(item.owner.id, {
               onSuccess: () => {
                 onClose();
-                Alert.alert(
+                showDialog(
                   `${item.owner.name} is blocked`,
                   "Their listings are gone from your feed. You can undo this in Settings.",
                 );
               },
               onError: (e) => {
                 onClose();
-                Alert.alert(
+                showDialog(
                   "Could not block",
                   e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
                 );
@@ -163,7 +163,7 @@ export function ListingMenu({
   };
 
   const confirmDelete = () => {
-    Alert.alert(
+    showDialog(
       "Remove this listing?",
       "It leaves the feed and the marketplace straight away. Offers and messages about it " +
         "are kept, and a trade already under way is not cancelled.",
@@ -177,7 +177,7 @@ export function ListingMenu({
               onSuccess: onClose,
               onError: (e) => {
                 onClose();
-                Alert.alert(
+                showDialog(
                   "Could not remove that",
                   e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
                 );

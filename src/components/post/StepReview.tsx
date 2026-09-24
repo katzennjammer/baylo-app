@@ -1,21 +1,28 @@
 import { Image } from "expo-image";
 import { Text, View } from "react-native";
 
+import { BOOST_COST_LEAVES, BOOST_HOURS } from "../../api/featured";
 import { useHubs } from "../../api/hubs";
 import { categoryLabel, conditionLabel } from "../../api/post";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { classifyValue } from "../../lib/trade-rules";
-import { effectiveValue, isPostable, usePost, type PostState } from "../../post/state";
+import { effectiveValue, isPostable, parseQuantity, usePost, type PostState } from "../../post/state";
 import {
+  postBorder,
   postColor,
+  postIcon,
   postLines,
   postRadius,
+  postSize,
   postSpace,
   postType,
   textStyle,
   type Board,
 } from "../../theme/post-tokens";
+import { CheckIcon, LeafIcon } from "../icons";
+import { Tappable } from "../Tappable";
 import { MarkerBadge } from "./CameraMarker";
+import { CheckboxIcon } from "./post-icons";
 import { Divider, LeavesChip, SectionLabel, SmallTextButton, Tag } from "./ui";
 
 /**
@@ -89,6 +96,28 @@ export function StepReview({ board }: { board: Board }) {
         </View>
       </Section>
 
+      {state.isPerishable ? (
+        <Section
+          label="PERISHABLE"
+          // Step 1, same as ITEM: the item-type toggle and its three fields
+          // live on the what-is-it step, under the title.
+          onEdit={() => dispatch({ type: "goto", step: 1 })}
+          board={board}
+        >
+          <Text style={[textStyle(postType.stepSub), { color: postColor.ink }]}>
+            {perishableAmount(state)}
+          </Text>
+          <Text
+            style={[
+              textStyle(postType.helper),
+              { color: postColor.inkMuted, marginTop: postSpace.review.contentToTags },
+            ]}
+          >
+            {`Trade within ${state.tradeWithinHours} hours of posting. It goes live straight away.`}
+          </Text>
+        </Section>
+      ) : null}
+
       <Section
         label="VALUE"
         onEdit={() => dispatch({ type: "goto", step: 3 })}
@@ -104,6 +133,16 @@ export function StepReview({ board }: { board: Board }) {
           {reviewLine(state)}
         </Text>
       </Section>
+
+      {/* Straight after VALUE, not after PHOTOS: it is the other thing on this
+          screen that costs Leaves, and at the bottom it read as a footnote. */}
+      {state.isPerishable ? null : (
+        <BoostAfterPost
+          on={state.boostAfterPost}
+          onToggle={() => dispatch({ type: "boost-after-post/set", value: !state.boostAfterPost })}
+          board={board}
+        />
+      )}
 
       <Section
         label="HOPING TO GET"
@@ -179,6 +218,105 @@ export function StepReview({ board }: { board: Board }) {
       </View>
     </View>
   );
+}
+
+/**
+ * "Boost this listing after posting" — a decision card, not a checkbox row.
+ * Standard listings only; the parent does not draw it for a perishable, and
+ * the reducer will not store it for one.
+ *
+ * Bordered and inset from the dividers around it so it reads as a choice on
+ * its own, with the Leaf the item screen's Boost button carries. Ticked, it
+ * goes green-wash and forest, the app's "on" state. The whole card is the
+ * control.
+ *
+ * Ticking it charges nothing. After the post lands, post-item.tsx hands the new
+ * item to useConfirmBoost() — the item screen's and Profile's own dialog — so
+ * the price is quoted and confirmed there, once, by the code that charges it.
+ */
+function BoostAfterPost({
+  on,
+  onToggle,
+  board,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  board: Board;
+}) {
+  return (
+    <>
+      <View style={{ paddingHorizontal: board.reviewX, paddingVertical: postSpace.review.sectionY }}>
+        <Tappable
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: on }}
+          accessibilityLabel={`Boost this listing after posting, ${BOOST_COST_LEAVES} Leaves`}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: postSpace.review.editGap,
+            padding: postSpace.review.sectionY,
+            borderRadius: postRadius.noticePanel,
+            borderWidth: on ? postBorder.fieldActive : postBorder.field,
+            borderColor: on ? postColor.forest : postColor.lineStrong,
+            backgroundColor: on ? postColor.greenWash : postColor.surface,
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: on ? postColor.surface : postColor.greenWash,
+              borderWidth: postBorder.field,
+              borderColor: postColor.greenLine,
+            }}
+          >
+            <LeafIcon size={20} stroke={1.8} color={postColor.forest} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[textStyle(postType.hubName), { color: on ? postColor.forest : postColor.ink }]}>
+              Boost this listing
+            </Text>
+            <Text
+              style={[
+                textStyle(postType.helper),
+                { color: postColor.inkMuted, marginTop: 3 },
+              ]}
+            >
+              {`Featured in its category for ${BOOST_HOURS} hours, right after it posts. ${BOOST_COST_LEAVES} Leaves — you confirm before anything is charged.`}
+            </Text>
+          </View>
+          {on ? (
+            <CheckIcon size={postSize.hub.check} stroke={postIcon.check.stroke} color={postColor.forest} />
+          ) : (
+            <CheckboxIcon
+              size={postSize.hub.checkbox}
+              stroke={postSize.hub.checkboxBorder}
+              color={postColor.lineStrong}
+            />
+          )}
+        </Tappable>
+      </View>
+      <Divider />
+    </>
+  );
+}
+
+/**
+ * The quantity as it will be POSTED, not as it was typed.
+ *
+ * Parsed with the same parseQuantity the submit path uses, so a box holding
+ * "0" or a stray "." reads here exactly as the server will receive it: no
+ * number. The unit is dropped with it, because the submit path drops it too.
+ * Units are written as the item page writes them.
+ */
+function perishableAmount(state: PostState): string {
+  const n = parseQuantity(state.quantity);
+  if (n === null) return "No set quantity";
+  return `${n} ${state.quantityUnit === "LITERS" ? "L" : state.quantityUnit}`;
 }
 
 /* ───────────────────────────── the sections ─────────────────────────── */

@@ -43,7 +43,8 @@ export default function Index() {
   const { session, isLoading } = useSession();
 
   if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
-  if (session) return <Redirect href="/(app)" />;
+  // HOME REDESIGN (preview): land on the new Home rather than the old feed.
+  if (session) return <Redirect href="/(app)/home" />;
   if (introPending() && videoAvailable) return <Redirect href="/intro" />;
   return <Redirect href="/(auth)/login" />;
 }

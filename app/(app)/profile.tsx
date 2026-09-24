@@ -5,6 +5,8 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { useProfileMe } from "../../src/api/profile";
+import { canBoost } from "../../src/api/featured";
+import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
@@ -64,6 +66,7 @@ export default function ProfileScreen() {
   }, [profile?.user.name, user?.id, user?.name]);
 
   const items = profile?.items ?? [];
+  const { confirmBoost, isBoosting } = useConfirmBoost();
   const rows: ProfileListRow[] = tab === "posts"
     ? chunkItems(items).map((postItems) => ({ kind: "posts", items: postItems }))
     : reviews.map((review) => ({ kind: "review", review }));
@@ -85,7 +88,7 @@ export default function ProfileScreen() {
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
-        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} onBoost={canBoost(item) && !isBoosting ? () => confirmBoost(item) : undefined} />)}</View>
       ) : (
         <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
       )}
@@ -191,12 +194,20 @@ export function shelfLabel(item: Item): string | null {
   return null;
 }
 
-export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
+/**
+ * `onBoost` is passed by the OWNER'S shelf only (Profile → My Listings), and
+ * only for a listing canBoost() allows; user.tsx never passes it. A listing
+ * already featured shows a "Featured" pill instead, on the owner's shelf alone.
+ */
+export function ProfileTile({ dark, item, onPress, onBoost, showFeatured = !!onBoost }: { dark: boolean; item: Item; onPress: () => void; onBoost?: () => void; showFeatured?: boolean }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
+  const featured = label === null && item.featuredUntil !== null;
   return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }, label !== null && s.dimmed]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
     {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
     {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
+    {featured && showFeatured ? <View style={s.featuredPill}><Ionicons name="leaf" size={11} color="#FFFFFF" /><Text style={s.statusText} numberOfLines={1}>Featured</Text></View> : null}
+    {onBoost && !featured ? <Pressable onPress={onBoost} hitSlop={8} style={({ pressed }) => [s.boostPill, pressed && { opacity: 0.8 }]} accessibilityRole="button" accessibilityLabel={`Boost ${item.title}`}><Ionicons name="leaf-outline" size={11} color="#FFFFFF" /><Text style={s.statusText}>Boost</Text></Pressable> : null}
   </Pressable>;
 }
 
@@ -386,6 +397,8 @@ const s = StyleSheet.create({
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },
   dimmed: { opacity: 0.6 },
   statusPill: { position: "absolute", top: 6, left: 6, maxWidth: "88%", backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
+  featuredPill: { position: "absolute", top: 6, left: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: color.forest, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
+  boostPill: { position: "absolute", right: 6, bottom: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: color.forest, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4 },
   statusText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 11 },
   empty: { color: color.inkMuted, fontFamily: font.sans, fontSize: 14, textAlign: "center", paddingVertical: 48 },
 });

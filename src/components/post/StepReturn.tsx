@@ -52,6 +52,10 @@ export function StepReturn({
   onFieldBlur: () => void;
 }) {
   const { state, dispatch } = usePost();
+  // At the cap the unselected chips go inert, so the limit is met while
+  // tapping rather than as a "Pick at most 6" error on Post. Selected chips
+  // stay live — deselecting one is how the others come back.
+  const atCap = state.returnCategories.length >= rules.maxReturnCategories;
 
   return (
     <View style={{ paddingHorizontal: board.screenX }}>
@@ -106,7 +110,7 @@ export function StepReturn({
           { color: postColor.inkMuted, marginTop: postSpace.ret.dividerToLabel },
         ]}
       >
-        CATEGORIES YOU WOULD CONSIDER — OPTIONAL
+        {`CATEGORIES YOU WOULD CONSIDER — OPTIONAL, UP TO ${rules.maxReturnCategories}`}
       </Text>
 
       <View
@@ -117,14 +121,18 @@ export function StepReturn({
           gap: postSpace.ret.chipGap,
         }}
       >
-        {CATEGORIES.map((c) => (
-          <Chip
-            key={c}
-            label={CATEGORY_LABELS[c]}
-            selected={state.returnCategories.includes(c)}
-            onPress={() => dispatch({ type: "return/toggle", category: c })}
-          />
-        ))}
+        {CATEGORIES.map((c) => {
+          const selected = state.returnCategories.includes(c);
+          return (
+            <Chip
+              key={c}
+              label={CATEGORY_LABELS[c]}
+              selected={selected}
+              disabled={atCap && !selected}
+              onPress={() => dispatch({ type: "return/toggle", category: c })}
+            />
+          );
+        })}
       </View>
 
       <View style={{ height: 24 }} />

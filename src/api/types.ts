@@ -186,6 +186,12 @@ export interface Item {
     expiresAt: string;
     expired: boolean;
   } | null;
+  /**
+   * When this listing's paid Featured boost ends, or null when it is not
+   * featured right now (never boosted, or the window has passed). The server
+   * computes it against the clock, so null is safe to read as "can boost".
+   */
+  featuredUntil: string | null;
   /** Categories the owner will take back. `[]` means none were stated. */
   lookingFor: string[];
   lookingForLabels: string[];

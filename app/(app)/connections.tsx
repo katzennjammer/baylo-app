@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { followButtonStatus, useFollow, useProfileConnections, useUnfollow } from "../../src/api/profile";
+import { followButtonLabel, followButtonStatus, useFollow, useProfileConnections, useUnfollow } from "../../src/api/profile";
 import type { ProfileConnectionUser } from "../../src/api/types";
 import { ChevronLeftIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
@@ -46,7 +46,7 @@ function ConnectionRow({ user, viewerId, dark, onPress }: { user: ProfileConnect
   const follow = useFollow();
   const unfollow = useUnfollow();
   const label = followButtonStatus(user.follow.status);
-  const buttonLabel = label === "Follow" && user.followsYou ? "Follow back" : label;
+  const buttonLabel = followButtonLabel(user.follow.status, user.followsYou);
   const busy = follow.isPending || unfollow.isPending;
   const disabled = busy || label === "Requested";
   function toggle() {

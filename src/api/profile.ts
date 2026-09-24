@@ -166,3 +166,18 @@ export function followButtonStatus(status: FollowStatus): "Follow" | "Following"
   if (status === "PENDING") return "Requested";
   return "Follow";
 }
+
+/**
+ * The text on a follow button. `followButtonStatus` is the state (it drives
+ * the button's styling and what a tap does); this adds the one case that is
+ * wording only: they follow you and you do not follow them → "Follow Back".
+ * A tap still just follows. Shared by the profile screen and the connections
+ * list so the two cannot drift again — the profile used to ignore `followsYou`.
+ */
+export function followButtonLabel(
+  status: FollowStatus,
+  followsYou: boolean,
+): "Follow" | "Follow Back" | "Following" | "Requested" {
+  const label = followButtonStatus(status);
+  return label === "Follow" && followsYou ? "Follow Back" : label;
+}

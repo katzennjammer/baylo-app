@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -26,6 +25,7 @@ import {
   type,
 } from "../../theme/tokens";
 import type { Item } from "../../api/types";
+import { showDialog } from "../dialog";
 
 /**
  * Editing a listing you own — the three fields that are safe to change here.
@@ -104,7 +104,7 @@ export function EditListingSheet({
       onClose();
       return;
     }
-    Alert.alert("Discard your changes?", "What you have typed will not be saved.", [
+    showDialog("Discard your changes?", "What you have typed will not be saved.", [
       { text: "Keep editing", style: "cancel" },
       { text: "Discard", style: "destructive", onPress: onClose },
     ]);
@@ -121,7 +121,7 @@ export function EditListingSheet({
       {
         onSuccess: onClose,
         onError: (e) =>
-          Alert.alert(
+          showDialog(
             "Could not save that",
             e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
           ),

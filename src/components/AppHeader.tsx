@@ -1,13 +1,20 @@
 import { usePathname, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
-import { BellIcon, LeafIcon, MessageIcon } from "./icons";
-import { NoticeDialog } from "./NoticeDialog";
+import { BellIcon, LeafIcon, MessageIcon, QuestIcon } from "./icons";
 import { Divider } from "./Divider";
 import { OfflineBar } from "./home/OfflineBar";
 import { formatBadge, formatLeaves } from "../lib/format";
@@ -25,9 +32,11 @@ import {
 import { useHome } from "../api/home";
 import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
+import { showDialog } from "./dialog";
 
 /**
- * The header on every tab: wordmark, Leaves balance, notifications, messages.
+ * The header on every tab: wordmark, Leaves balance, notifications, messages
+ * (and Quests on three of them — see `showQuests` below).
  *
  * All four numbers come from useHome(), the SAME query the feed renders from.
  * That is the point of /api/v1/home being a composite endpoint — the viewer
@@ -55,8 +64,16 @@ import { useSession } from "../auth/session";
  * actually reserves, which on Android is frequently 24 rather than 44. Pinning
  * it to 44 would paint 20 px of dead space above the wordmark on most of the
  * devices this ships to.
+ *
+ * QUESTS IS OPT-IN, via `showQuests`. Only the three browsing screens — Home,
+ * Community, Marketplace — pass it, from their Tabs.Screen entries in
+ * (app)/_layout.tsx; every other route gets the header without it. It sits
+ * first in the icon group, before the bell, and opens the Quests stub screen
+ * (which says NOT BUILT YET) rather than a dialog saying the same thing. It
+ * carries no count: there is no quest data to count yet, and a badge of 0 is
+ * not drawn anyway.
  */
-export function AppHeader() {
+export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const router = useRouter();
@@ -136,6 +153,21 @@ export function AppHeader() {
               tight={tight}
             />
 
+            {showQuests ? (
+              <HeaderIconButton
+                label="Quests"
+                count={0}
+                tight={tight}
+                onPress={() => router.push("/quests")}
+              >
+                <QuestIcon
+                  size={icon.headerAction.size}
+                  stroke={icon.headerAction.stroke}
+                  color={color.ink}
+                />
+              </HeaderIconButton>
+            ) : null}
+
             <HeaderIconButton
               label="Notifications"
               count={unread?.notifications ?? 0}
@@ -201,14 +233,12 @@ export function AppHeader() {
 function AccountMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { signOut } = useSession();
-  // Quests has no screen yet, so the menu item opens a notice rather than a
-  // route. The dialog is mounted here (not in the header) so it lives and dies
-  // with the menu that opened it, the same way the Premium/VIP item states
-  // its "coming soon" without leaving the screen.
-  const [questOpen, setQuestOpen] = useState(false);
+  // No Quests item. It used to open a "coming soon" dialog from here; Quests
+  // is now a header icon on Home, Community and Marketplace that opens the
+  // stub screen, and a second entrance saying the same thing was redundant.
 
   const confirmSignOut = () => {
-    Alert.alert(
+    showDialog(
       "Sign out?",
       "This device will forget your tokens, and the session is revoked on the server so it cannot be resumed.",
       [
@@ -234,7 +264,7 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       <Pressable
         onPress={() => {
           onClose();
-          Alert.alert("Premium/VIP", "Premium and VIP features are coming soon.");
+          showDialog("Premium/VIP", "Premium and VIP features are coming soon.");
         }}
         accessibilityRole="menuitem"
         style={s.accountMenuItem}
@@ -256,17 +286,6 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       <Pressable
         onPress={() => {
           onClose();
-          setQuestOpen(true);
-        }}
-        accessibilityRole="menuitem"
-        style={s.accountMenuItem}
-      >
-        <Ionicons name="flag-outline" size={19} color={color.ink} />
-        <Text style={s.accountMenuText}>Quests</Text>
-      </Pressable>
-      <Pressable
-        onPress={() => {
-          onClose();
           confirmSignOut();
         }}
         accessibilityRole="menuitem"
@@ -275,14 +294,6 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
         <Ionicons name="log-out-outline" size={19} color={color.urgent} />
         <Text style={[s.accountMenuText, { color: color.urgent }]}>Sign out</Text>
       </Pressable>
-
-      <NoticeDialog
-        visible={questOpen}
-        title="Quests are on the way"
-        body="Ongoing quests will land here soon — little challenges you complete for Leaves. Check back shortly."
-        icon={<Ionicons name="flag-outline" size={24} color={color.forest} />}
-        onDismiss={() => setQuestOpen(false)}
-      />
     </View>
   );
 }
@@ -299,15 +310,21 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
  * `stale` is the offline treatment — the numerals drop to the disabled grey.
  * The balance is the one number on this screen someone might act on, and while
  * the app cannot reach the server it is a number of unknown age.
+ *
+ * EXPORTED for the Home redesign (preview), which sits it in the search row
+ * beside FilterButton. `style` is merged LAST so that row can give it the
+ * filter button's 44 box and radius without a second copy of the pill.
  */
-function LeavesPill({
+export function LeavesPill({
   value,
   stale,
   tight,
+  style,
 }: {
   value: number | null;
   stale: boolean;
   tight: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const leaf = tight ? icon.headerLeafTight : icon.headerLeaf;
   const ink = stale ? color.inkStale : color.forest;
@@ -322,6 +339,7 @@ function LeavesPill({
           paddingLeft: tight ? size.leaves.headerPillLeftTight : size.leaves.headerPillLeft,
           paddingRight: tight ? size.leaves.headerPillRightTight : size.leaves.headerPillRight,
         },
+        style,
       ]}
       accessibilityRole="text"
       accessibilityLabel={value === null ? "Leaves balance loading" : `${value} Leaves`}

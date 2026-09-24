@@ -21,26 +21,47 @@ import { useSession } from "../../src/auth/session";
  * revoked token it clears the session, this layout re-renders with none, and
  * whatever tab was open is replaced by the login screen.
  *
- * THE BAR, left to right: Home, Marketplace, Post, Trades, Profile.
+ * THE BAR, left to right: Home, Community, Post, Trades, Profile.
  *
  * Messages used to hold the fourth slot and is now a header icon. A bottom tab
  * costs a fifth of the bar permanently, and the bar is for the places you go to
  * do the app's job — look at what is offered, list a thing, run a trade.
  * Messages is where you go when a trade is already happening, which is a
  * notification-shaped need rather than a destination-shaped one: as a header
- * icon it keeps its unread count visible from every tab and gives the slot to
- * Marketplace.
+ * icon it keeps its unread count visible from every tab. The slot it freed went
+ * to Marketplace, and then — once the redesigned Home became the marketplace
+ * — to Community, the old feed.
  *
- * The route itself is untouched. `href: null` takes it off the bar and leaves
- * it navigable, so router.push("/messages") from the header still lands, deep
- * links still resolve, and the screen keeps its place in the group's guard.
- * `TabBar` also refuses to draw any route it has no entry for, so the two
- * mechanisms agree even if `href: null` changes behaviour upstream.
+ * The route itself is untouched. `href: null` leaves it navigable, so
+ * router.push("/messages") from the header still lands, deep links still
+ * resolve, and the screen keeps its place in the group's guard.
+ *
+ * WHAT `href: null` DOES NOT DO IS TAKE IT OFF THIS BAR. expo-router turns the
+ * prop into `tabBarButton: () => null` and `tabBarItemStyle: display none`,
+ * which only the navigator's own bar reads; a bar that draws itself never sees
+ * them. Keeping a route off THIS bar is done by leaving it out of `TABS` in
+ * TabBar.tsx, which is where that is written down.
  *
  * THE BAR IS DRAWN, NOT CONFIGURED. See the note at the top of TabBar — the
  * spec's geometry is not reachable through screenOptions. Everything the
  * navigator would style is therefore left alone here.
  */
+/**
+ * The header for the three browsing screens — Home, Community, Marketplace —
+ * which are the only ones that carry the Quests icon.
+ *
+ * PER-SCREEN HEADER DIFFERENCES LIVE ON THE Tabs.Screen, not in the screen
+ * file. That is the convention already here (`headerShown: false` on Trades,
+ * item, user, connections): the navigator mounts the header, so the screen's
+ * entry in this layout is the one place that decides which header it gets.
+ * Every other route falls through to `screenOptions` and renders AppHeader
+ * exactly as before.
+ *
+ * Defined once at module scope so the three entries share one function rather
+ * than three identical inline lambdas.
+ */
+const questsHeader = () => <AppHeader showQuests />;
+
 export default function AppLayout() {
   const { session, isLoading } = useSession();
 
@@ -72,8 +93,20 @@ export default function AppLayout() {
       // of this file.
       tabBar={(props) => <TabBar {...(props as unknown as TabBarProps)} />}
     >
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="marketplace" options={{ title: "Marketplace" }} />
+      {/* HOME REDESIGN (preview branch). The old feed keeps its route (`index`)
+          and is labelled Community on the bar. Marketplace leaves the bar to
+          keep five slots with Post centred — it is dropped from `TABS` in
+          TabBar.tsx, NOT by the `href: null` below — and stays navigable, with
+          the new Home linking to it (See all, Filter).
+
+          THE HEADER STAYS ON FOR HOME. The search row is a SECOND row under the
+          wordmark, not a replacement for it: the wordmark, the Leaves pill and
+          the bell/messages icons are the app's chrome and Home is not the one
+          screen that goes without them. Home therefore takes no safe-area
+          padding of its own — AppHeader paints behind the status bar and
+          insets its own contents. */}
+      <Tabs.Screen name="home" options={{ title: "Home", header: questsHeader }} />
+      <Tabs.Screen name="index" options={{ title: "Community", header: questsHeader }} />
       <Tabs.Screen name="post" options={{ title: "Post" }} />
       {/* THE ONLY TAB THAT DRAWS ITS OWN BAR.
 
@@ -103,6 +136,14 @@ export default function AppLayout() {
           query-param form is fully documented — useLocalSearchParams() returns
           URL parameters including the query string — so it is the version that
           cannot break on a patch release. */}
+      <Tabs.Screen
+        name="marketplace"
+        options={{ href: null, title: "Marketplace", header: questsHeader }}
+      />
+      {/* Quests is off the bar (five slots, Post centred) and reached from the
+          header icon on Home, Community and Marketplace — see `questsHeader`.
+          Still a stub; see the note in quests.tsx. */}
+      <Tabs.Screen name="quests" options={{ href: null, title: "Quests" }} />
       <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
       <Tabs.Screen name="item" options={{ href: null, title: "Item", headerShown: false }} />
       <Tabs.Screen name="user" options={{ href: null, title: "Profile", headerShown: false }} />

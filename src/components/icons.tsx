@@ -414,3 +414,202 @@ export function StoreIcon(props: IconProps) {
     </Glyph>
   );
 }
+
+/* ────────────────────── home redesign (preview) ─────────────────────── */
+
+/**
+ * Perishable. A bolt, not a clock: the clock already means "rate limited" in
+ * the post flow (post-icons.tsx), and a perishable is an opportunity, not a
+ * wait. Drawn in `color.urgent` by the caller.
+ */
+export function BoltIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12Z" />
+    </Glyph>
+  );
+}
+
+/**
+ * Featured — a paid boost. A star, so it never reads as the perishable bolt
+ * beside it: the two can share a Home grid, and a user has to tell them apart
+ * without tapping in.
+ */
+export function StarIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 5.9L12 16.8l-5.3 2.8 1.1-5.9-4.4-4.2 6-.8z" />
+    </Glyph>
+  );
+}
+
+/** The Community tab — the old Home feed. Two people, same weight as PersonIcon. */
+export function CommunityIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="9" cy="8" r="3.6" />
+      <Path d="M2.5 20.5v-1.2A4.8 4.8 0 0 1 7.3 14.5h3.4a4.8 4.8 0 0 1 4.8 4.8v1.2" />
+      <Path d="M15.5 4.6a3.6 3.6 0 0 1 0 6.8" />
+      <Path d="M18.2 14.8a4.8 4.8 0 0 1 3.3 4.5v1.2" />
+    </Glyph>
+  );
+}
+
+/**
+ * The Quests header icon. A target: a quest is a goal you are working toward,
+ * and the concentric-ring mark is the one shape in this set that says "aim" without
+ * saying anything else.
+ *
+ * WHY NOT ONE OF THE GLYPHS ALREADY HERE. Every near-fit is already spoken for
+ * and would collide on a screen where both appear:
+ *
+ *   LeafIcon    is the CURRENCY. It is in the header pill, on every card's
+ *               value line and in the Exclusive tiles. A leaf on the bar would
+ *               read as "your Leaves", which is a balance, not a destination.
+ *   FlagIcon    is Report. It is the mark in the listing kebab and the report
+ *               sheet, and an icon that shares a glyph with "report this" is
+ *               one people will hesitate over.
+ *   SproutIcon  is the PLANTS category, drawn in the category circles on Home
+ *               itself — one of the screens this icon sits above.
+ *
+ * Two circles and nothing else, because this is drawn at header-icon size: a bullseye with
+ * tick marks or a centre dot turns to mud at that size, and the rings survive.
+ */
+export function QuestIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" />
+      <Circle cx="12" cy="12" r="3.5" />
+    </Glyph>
+  );
+}
+
+/*
+ * Category glyphs, for the Home category circles. One per category enum value
+ * (src/api/post.ts CATEGORIES) that the circles map; anything unmapped falls
+ * back to GridIcon in CategoryCircles. Same 24 box, same round caps and joins,
+ * same scale() conversion — they are Glyphs like everything above.
+ */
+
+/** ELECTRONICS */
+export function MonitorIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="3" y="4" width="18" height="12.5" rx="2" />
+      <Path d="M8.5 20.5h7" />
+      <Path d="M12 16.5v4" />
+    </Glyph>
+  );
+}
+
+/** CLOTHING ("Fashion") */
+export function ShirtIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M8.5 3.5 3 6.6l2 4.4 2.5-1.2v10.7h9V9.8L19 11l2-4.4-5.5-3.1a3.5 3.5 0 0 1-7 0Z" />
+    </Glyph>
+  );
+}
+
+/** BAGS */
+export function BagIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5 8h14l-1 12.5H6Z" />
+      <Path d="M9 10V6.5a3 3 0 0 1 6 0V10" />
+    </Glyph>
+  );
+}
+
+/** FURNITURE ("Home & Garden") */
+export function SofaIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5 11V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3" />
+      <Path d="M3.5 11a1.5 1.5 0 0 1 3 0v2h11v-2a1.5 1.5 0 0 1 3 0v5.5h-17Z" />
+      <Path d="M5.5 16.5V19" />
+      <Path d="M18.5 16.5V19" />
+    </Glyph>
+  );
+}
+
+/** BOOKS ("Books & Media") */
+export function BookIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 5.5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2Z" />
+      <Path d="M4 19.5a2 2 0 0 0 2 2h13v-4" />
+    </Glyph>
+  );
+}
+
+/** GAMING */
+export function GamepadIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M7 7.5h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.4a2.2 2.2 0 0 1-3.8 1l-2.2-2.8h-5l-2.2 2.8a2.2 2.2 0 0 1-3.8-1l-.9-4.4A4.5 4.5 0 0 1 7 7.5Z" />
+      <Path d="M8 10.5v3" />
+      <Path d="M6.5 12h3" />
+      <Path d="M15.5 11h.01" />
+      <Path d="M17.5 13h.01" />
+    </Glyph>
+  );
+}
+
+/** SPORTS */
+export function BallIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" />
+      <Path d="M3.5 12h17" />
+      <Path d="M12 3.5v17" />
+      <Path d="M6 6a8.5 8.5 0 0 1 0 12" />
+      <Path d="M18 6a8.5 8.5 0 0 0 0 12" />
+    </Glyph>
+  );
+}
+
+/** BIKES */
+export function BikeIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="5.5" cy="16" r="3.5" />
+      <Circle cx="18.5" cy="16" r="3.5" />
+      <Path d="M5.5 16 9.5 8.5h5l4 7.5" />
+      <Path d="M9.5 8.5 12 16h-6.5" />
+      <Path d="M8 5.5h3" />
+    </Glyph>
+  );
+}
+
+/** TOYS ("Kids & Toys") */
+export function BlocksIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="3.5" y="12.5" width="7.5" height="7.5" rx="1.5" />
+      <Rect x="13" y="12.5" width="7.5" height="7.5" rx="1.5" />
+      <Rect x="8.25" y="4" width="7.5" height="7.5" rx="1.5" />
+    </Glyph>
+  );
+}
+
+/** PLANTS */
+export function SproutIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 21v-9" />
+      <Path d="M12 12C12 8 9.5 5.5 5 5.5c0 4.5 2.5 6.5 7 6.5Z" />
+      <Path d="M12 14c0-3.5 2.2-5.5 7-5.5 0 3.8-2.4 5.5-7 5.5Z" />
+    </Glyph>
+  );
+}
+
+/** FOOD */
+export function AppleIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 7.5c-1.6-1.2-4.6-1.4-6.3.6-2 2.4-1.2 6.9 1 9.7 1.5 1.9 3 2.4 5.3 1.3 2.3 1.1 3.8.6 5.3-1.3 2.2-2.8 3-7.3 1-9.7-1.7-2-4.7-1.8-6.3-.6Z" />
+      <Path d="M12 7.5c0-2 .8-3.5 2.5-4.5" />
+    </Glyph>
+  );
+}

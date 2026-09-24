@@ -7,6 +7,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { createQueryClient } from "../src/api/queryClient";
+import { DialogHost } from "../src/components/dialog";
 import { PostedDialog } from "../src/components/PostedDialog";
 import { Splash } from "../src/components/Splash";
 import { SessionProvider, useSession } from "../src/auth/session";
@@ -150,6 +151,10 @@ export default function RootLayout() {
               the wizard that triggers it has already popped by the time it
               shows — see src/post/posted-notice.ts. */}
           <PostedDialog />
+          {/* Every confirmation and error dialog in the app — the themed
+              replacement for Alert.alert. Mounted after PostedDialog so it
+              draws above it; it also waits for it. See components/dialog. */}
+          <DialogHost />
         </SafeAreaProvider>
       </SessionProvider>
     </QueryClientProvider>

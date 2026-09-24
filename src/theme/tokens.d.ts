@@ -38,6 +38,21 @@ export type ColorName =
 
 export declare const color: Readonly<Record<ColorName, string>>;
 
+export type DarkColorName =
+  | "surface"
+  | "control"
+  | "ink"
+  | "secondary"
+  | "muted"
+  | "divider"
+  | "border"
+  | "green"
+  | "scrim"
+  | "scrimClear";
+
+/** The consolidated dark palette. See the note in tokens.js. */
+export declare const dark: Readonly<Record<DarkColorName, string>>;
+
 export type FontName =
   | "displayBold"
   | "displaySemi"
@@ -105,7 +120,16 @@ export type TypeRoleName =
   | "hubName"
   | "hubLandmark"
   | "dangerAction"
-  | "carouselCount";
+  | "carouselCount"
+  | "homeSection"
+  | "homeSeeAll"
+  | "heroTitle"
+  | "heroSubhead"
+  | "heroCta"
+  | "categoryLabel"
+  | "exclusiveTitle"
+  | "exclusiveMeta"
+  | "countdownPill";
 
 export declare const type: Readonly<Record<TypeRoleName, TypeRole>>;
 
@@ -216,6 +240,24 @@ export declare const space: Readonly<{
     actionBarClearance: number;
     actionBarY: number;
   }>;
+  home: Readonly<{
+    top: number;
+    searchGap: number;
+    headerToHero: number;
+    heroX: number;
+    heroY: number;
+    heroSubToCta: number;
+    sectionTop: number;
+    headingToContent: number;
+    categoryGap: number;
+    circleToLabel: number;
+    tileBody: number;
+    tileTitleToMeta: number;
+    tileMetaToLeaves: number;
+    tileBadgeInset: number;
+    tileBadgeGap: number;
+    bottom: number;
+  }>;
   matches: Readonly<{
     y: number;
     headerToRail: number;
@@ -254,7 +296,13 @@ export type RadiusName =
   | "rangeInput"
   | "hubRow"
   | "carouselDot"
-  | "carouselCount";
+  | "carouselCount"
+  | "hero"
+  | "heroCta"
+  | "categoryCircle"
+  | "exclusiveTile"
+  | "tileBadge"
+  | "countdownPill";
 
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
@@ -344,6 +392,19 @@ export declare const size: Readonly<{
     actionButton: number;
     backButton: number;
   }>;
+  home: Readonly<{
+    heroHeight: number;
+    heroPhotoFraction: number;
+    heroPhotoBleed: number;
+    heroCta: number;
+    heroCtaX: number;
+    categoryCircle: number;
+    categoryItem: number;
+    exclusiveTileAspect: number;
+    tileBadge: number;
+    countdownPill: number;
+    countdownPillX: number;
+  }>;
   skeletonBlock: Readonly<{
     storyLabel: Readonly<{ w: number; h: number }>;
     name: Readonly<{ w: number; h: number }>;
@@ -400,7 +461,11 @@ export type IconName =
   // other.
   | "orgBadge"
   // The shop-front placeholder in an organisation's square logo slot.
-  | "orgLogo";
+  | "orgLogo"
+  // Home redesign (preview): the glyph inside a category circle, and the
+  // perishable / org badges in an Exclusive tile's corner.
+  | "category"
+  | "tileBadge";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 

@@ -3,7 +3,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Keyboard,
   Modal,
@@ -30,6 +29,7 @@ import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
+import { showDialog } from "../../src/components/dialog";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -219,7 +219,7 @@ export default function MessagesThreadScreen() {
   const confirmBlock = () => {
     if (!partner) return;
     setMenuOpen(false);
-    Alert.alert(
+    showDialog(
       `Block ${otherName}?`,
       "You will not see each other's listings and neither of you can message the other. Trades already in progress are not cancelled.",
       [
@@ -236,7 +236,7 @@ export default function MessagesThreadScreen() {
   const confirmDelete = () => {
     if (!partner) return;
     setMenuOpen(false);
-    Alert.alert(
+    showDialog(
       "Hide conversation?",
       "This removes the conversation from your view only. Messages are kept for both people and for reports.",
       [

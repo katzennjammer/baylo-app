@@ -221,6 +221,18 @@ export interface PostState {
   /** True when "Skip for now" was taken. A real route, not an empty selection. */
   hubsSkipped: boolean;
 
+  /**
+   * The review step's "Boost this listing after posting" box. NOT sent with
+   * the listing: the post and the boost are two requests, and the boost runs
+   * only after the post has landed, through the same useConfirmBoost() the
+   * item screen and Profile use. A failed boost never undoes the post.
+   *
+   * Standard listings only — the server refuses to boost a perishable, which
+   * is already in Exclusive — so `item-type/set` clears it on the way to
+   * Perishable, the same way turning Perishable off clears its own fields.
+   */
+  boostAfterPost: boolean;
+
   posting: boolean;
   postError: string | null;
 
@@ -262,6 +274,7 @@ export function initialState(): PostState {
     tradeWithinHours: 24,
     hubIds: [],
     hubsSkipped: false,
+    boostAfterPost: false,
     posting: false,
     postError: null,
     rateLimit: null,
@@ -296,6 +309,7 @@ export type PostAction =
   | { type: "field/quantity"; value: string }
   | { type: "field/quantity-unit"; value: QuantityUnit }
   | { type: "field/trade-within"; value: TradeWithinHours }
+  | { type: "boost-after-post/set"; value: boolean }
   | { type: "field/condition"; value: Condition }
   | { type: "valuation/pending" }
   | { type: "valuation/done"; payload: ValuationPayload }
@@ -446,7 +460,7 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // one session keeps what was typed. The clear is about what LEAVES the
       // device, not about being tidy.
       return a.perishable
-        ? { ...s, isPerishable: true }
+        ? { ...s, isPerishable: true, boostAfterPost: false }
         : { ...s, isPerishable: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
 
     case "field/quantity":
@@ -461,6 +475,11 @@ export function reduce(s: PostState, a: PostAction): PostState {
 
     case "field/trade-within":
       return { ...s, tradeWithinHours: a.value };
+
+    case "boost-after-post/set":
+      // Refused rather than stored for a perishable: a box that could be
+      // ticked on one would promise a boost the server will not sell.
+      return { ...s, boostAfterPost: a.value && !s.isPerishable };
 
     /* ── valuation ── */
 
@@ -533,6 +552,9 @@ export function reduce(s: PostState, a: PostAction): PostState {
 
     case "return/toggle": {
       const has = s.returnCategories.includes(a.category);
+      // The chips disable themselves at the cap; this is the same rule one
+      // layer down, so no path can build a selection the server will refuse.
+      if (!has && s.returnCategories.length >= rules.maxReturnCategories) return s;
       return {
         ...s,
         returnCategories: has
@@ -643,6 +665,20 @@ export function titleError(s: PostState): string | null {
 /** The value that will actually be posted. The suggestion until it is moved. */
 export function effectiveValue(s: PostState): number | null {
   return s.valueLeaves ?? s.valuation?.suggestedLeaves ?? null;
+}
+
+/**
+ * The quantity field's raw string as a number, or null.
+ *
+ * NULL FOR AN EMPTY BOX, and that is a real answer rather than a missing one:
+ * a perishable may have a unit and no number ("a basket of calamansi"), and
+ * the server accepts both being null together. NaN, zero and negatives all
+ * come back null too -- the field is numeric-only, so those are states a
+ * half-typed value passes through rather than things anybody meant.
+ */
+export function parseQuantity(raw: string): number | null {
+  const n = Number.parseFloat(raw.trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** How many steps of seven are filled in — the draft row's meta line. */

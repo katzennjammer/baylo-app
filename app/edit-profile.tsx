@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -9,6 +9,7 @@ import { request } from "../src/api/client";
 import { useProfileMe } from "../src/api/profile";
 import { uploadPhoto } from "../src/api/post";
 import { color, font } from "../src/theme/tokens";
+import { showDialog } from "../src/components/dialog";
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function EditProfileScreen() {
   async function chooseAvatar() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Photo access needed", "Allow photo access to choose a profile picture.");
+      showDialog("Photo access needed", "Allow photo access to choose a profile picture.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -48,7 +49,7 @@ export default function EditProfileScreen() {
       const uploaded = await uploadPhoto(result.assets[0].uri);
       setAvatar(uploaded.url);
     } catch {
-      Alert.alert("Could not upload photo", "Check your connection and try again.");
+      showDialog("Could not upload photo", "Check your connection and try again.");
     } finally {
       setUploadingAvatar(false);
     }
@@ -73,7 +74,7 @@ export default function EditProfileScreen() {
       await refetch();
       router.back();
     } catch {
-      Alert.alert("Could not save profile", "Check your connection and try again.");
+      showDialog("Could not save profile", "Check your connection and try again.");
     } finally {
       setSaving(false);
     }

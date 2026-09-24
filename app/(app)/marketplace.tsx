@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { CATEGORIES } from "../../src/api/post";
 import { Splash } from "../../src/components/Splash";
 import {
   activeFilterCount,
@@ -128,6 +129,34 @@ export default function MarketplaceScreen() {
 
   /** Grid or map. See the note in the header on why this is a mode, not a skin. */
   const [view, setView] = useState<BrowseView>("grid");
+
+  // ── Arriving from Home ────────────────────────────────────────────────────
+  //
+  // Home's "Barter now" sends `category`; its "See all" sends none. Both send
+  // `applyAt`, a nonce, and the effect is keyed on THAT rather than on the
+  // category. This screen is a tab and stays mounted, so the params are not an
+  // initial state: they are an instruction that can arrive any number of
+  // times, including twice with the same category after the user cleared the
+  // chip in between. A tab-bar tap leaves the params where they were, so it
+  // re-applies nothing.
+  //
+  // It REPLACES the filters rather than adding to them: "Explore Food" landing
+  // on Food-and-whatever-you-searched-last-week is not what was tapped. After
+  // that it is an ordinary chip — the rail's toggle deselects it like any
+  // other, which is how the user gets back to everything.
+  const { category: arrivingCategory, applyAt } = useLocalSearchParams<{
+    category?: string;
+    applyAt?: string;
+  }>();
+  useEffect(() => {
+    if (!applyAt) return;
+    const known = (CATEGORIES as readonly string[]).includes(arrivingCategory ?? "");
+    setFilters(known ? { categories: [arrivingCategory!] } : {});
+    setDraftQuery("");
+    setView("grid");
+    // arrivingCategory is read with the nonce it came with, never on its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyAt]);
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
   /** Null shows every Safe Zone; otherwise the map is narrowed to one type. */

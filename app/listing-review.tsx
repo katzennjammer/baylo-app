@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 
 import { ApiError } from "../src/api/client";
@@ -14,6 +14,7 @@ import { Tappable } from "../src/components/Tappable";
 import { bracketLabel, bracketOf, bracketRange } from "../src/lib/brackets";
 import { valueRejectionSentence } from "../src/lib/value-rejection";
 import { offerBorder, offerColor, offerRadius, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
+import { showDialog } from "../src/components/dialog";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
@@ -124,7 +125,7 @@ function ReviewBody({
   const typedOk = Number.isFinite(typed) && typed > 0 && (cap === null || bracketOf(typed) <= cap);
 
   const fail = (heading: string, e: unknown) =>
-    Alert.alert(heading, e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
+    showDialog(heading, e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
 
   /** PATCH the value; say what the server decided. */
   const setValue = (valueLeaves: number, what: string) =>
@@ -133,20 +134,20 @@ function ReviewBody({
       {
         onSuccess: (r) => {
           if (r.valueReview?.pending) {
-            Alert.alert(
+            showDialog(
               "Sent for review again",
               "The suggestion has moved since, and that value is now more than one bracket above it. A person will look at it.",
             );
             return;
           }
-          Alert.alert("Listed", `${what}. Your listing is live.`, [{ text: "OK", onPress: onGone }]);
+          showDialog("Listed", `${what}. Your listing is live.`, [{ text: "OK", onPress: onGone }]);
         },
         onError: (e) => fail("Could not change the value", e),
       },
     );
 
   const confirmDelete = () =>
-    Alert.alert(
+    showDialog(
       "Delete this listing?",
       locked
         ? "This withdraws your appeal as well. The listing is removed for good."
@@ -168,7 +169,7 @@ function ReviewBody({
       onSuccess: () => {
         setAppealOpen(false);
         setAppealText("");
-        Alert.alert("Appeal sent", "An admin will look at it. The listing stays hidden until then, and its value can't be changed while they do.");
+        showDialog("Appeal sent", "An admin will look at it. The listing stays hidden until then, and its value can't be changed while they do.");
       },
       onError: (e) => fail("Could not send the appeal", e),
     });

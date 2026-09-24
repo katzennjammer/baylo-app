@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Tappable } from "../Tappable";
 import { ApiError } from "../../api/client";
@@ -8,6 +8,7 @@ import { useAddComment, useComments } from "../../api/social";
 import { relativeShort } from "../../lib/format";
 import { border, color, radius, size, space, textStyle, type } from "../../theme/tokens";
 import type { Item, ItemComment } from "../../api/types";
+import { showDialog } from "../dialog";
 
 const MAX_COMMENT = 2000;
 
@@ -22,7 +23,7 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
   const send = () => {
     const content = draft.trim();
     if (!content || add.isPending) return;
-    add.mutate({ content, parentId: replyTo?.id }, { onSuccess: () => { setDraft(""); setReplyTo(null); }, onError: (e) => Alert.alert("Could not post that", e instanceof ApiError ? e.message : "Something went wrong. Please try again.") });
+    add.mutate({ content, parentId: replyTo?.id }, { onSuccess: () => { setDraft(""); setReplyTo(null); }, onError: (e) => showDialog("Could not post that", e instanceof ApiError ? e.message : "Something went wrong. Please try again.") });
   };
   return <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
     <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close comments" />

@@ -2,7 +2,14 @@ import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { GridIcon, HomeIcon, PersonIcon, PlusIcon, SwapIcon, type IconProps } from "./icons";
+import {
+  CommunityIcon,
+  HomeIcon,
+  PersonIcon,
+  PlusIcon,
+  SwapIcon,
+  type IconProps,
+} from "./icons";
 import { useNeedsTodayCount } from "../api/trades";
 import { formatBadge } from "../lib/format";
 import {
@@ -33,8 +40,16 @@ import {
  * is the single most characteristic thing about Direction 1's chrome and it is
  * the thing an icon font cannot do — see the note at the top of `icons.tsx`.
  *
- * ORDER: Home, Marketplace, Post, Trades, Profile. Messages used to hold the
- * fourth slot and is now a header icon; see AppHeader.
+ * ORDER: Home, Community, Post, Trades, Profile. Messages used to hold a slot
+ * and is now a header icon; see AppHeader.
+ *
+ * FIVE ITEMS, AND THE `TABS` MAP BELOW IS THE ONLY THING THAT DECIDES THAT.
+ * See the note on it: expo-router's `href: null` does not reach a custom bar.
+ * Five is also what keeps the circle centred: Post is the third of five, so
+ * its slot's midpoint is the bar's midpoint. A sixth item (Quests, briefly)
+ * puts the centre on a seam between two slots and pushes the circle a
+ * half-slot off it — which is why Quests is a header icon instead, on the
+ * three screens that carry it. See AppHeader's `showQuests`.
  */
 
 /** The props this bar actually uses out of BottomTabBarProps. See the cast in _layout. */
@@ -57,14 +72,35 @@ type Glyph = (props: IconProps) => React.JSX.Element;
  * Route name → glyph and label.
  *
  * The label is here rather than read from each screen's `title` because the bar
- * and the screen want different words: the second tab's screen is Marketplace
- * and its tab says "Market", which is what fits a fifth of a 390 px bar without
- * eliding. A route with no entry here is not drawn — that is what keeps
- * /messages off the bar even if `href: null` stops filtering it upstream.
+ * and the screen want different words: the old Home feed's screen keeps the
+ * route name `index` and says "Community" on the bar, and a tab's word has to
+ * fit a fifth of a 390 px bar without eliding.
+ *
+ * ── THIS MAP IS THE ONLY THING THAT KEEPS A ROUTE OFF THE BAR ────────────
+ *
+ * A route with no entry here is not drawn, and that is not a backstop: it is
+ * the mechanism. `href: null` in (app)/_layout does NOT reach this component.
+ * expo-router's Tabs wrapper destructures it out of the screen's options
+ * (`const { href, ...options } = screen.options`, in its TabsClient) and turns
+ * it into `tabBarButton: () => null` plus `tabBarItemStyle: { display: "none" }`
+ * — two things only the NAVIGATOR'S OWN bar reads. A bar that draws itself
+ * never sees either, so `descriptors[key].options.href` is always `undefined`
+ * here.
+ *
+ * So a route that must stay navigable but off the bar — marketplace, quests,
+ * messages, item, user, connections, hubs, hub — is kept off by being ABSENT FROM THIS
+ * MAP. Marketplace was in it AND carried `href: null`, which is what drew a
+ * sixth tab and pushed the centre circle off centre.
  */
 const TABS: Record<string, { label: string; Glyph: Glyph }> = {
-  index: { label: "Home", Glyph: HomeIcon },
-  marketplace: { label: "Market", Glyph: GridIcon },
+  // HOME REDESIGN (preview): `home` is the new Home; `index` is the old Home
+  // feed, relabelled. Order on the bar comes from _layout, not from here.
+  home: { label: "Home", Glyph: HomeIcon },
+  index: { label: "Community", Glyph: CommunityIcon },
+  // NO `marketplace` ENTRY, DELIBERATELY. The redesigned Home IS the
+  // marketplace, so a Market tab beside it was the same destination twice. The
+  // route stays registered in (app)/_layout and stays navigable — Home's
+  // "See all" and its filter button push it.
   post: { label: "Post", Glyph: PlusIcon },
   trades: { label: "Trades", Glyph: SwapIcon },
   profile: { label: "Profile", Glyph: PersonIcon },
@@ -122,6 +158,10 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
     <View style={[s.bar, { paddingBottom: bottom }]}>
       {state.routes.map((route, index) => {
         const tab = TABS[route.name];
+        // The `href` half is inert — expo-router strips the prop before the
+        // navigator sees it, see the note on TABS — and is kept only so that a
+        // version which did pass it through would be honoured rather than
+        // silently growing the bar. TABS is what actually filters.
         if (!tab || descriptors[route.key]?.options?.href === null) return null;
 
         const focused = state.index === index;
@@ -187,7 +227,17 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
               </View>
             )}
 
+            {/*
+              ONE LINE, ALWAYS. "Community" is the longest label on the bar
+              (54.3px of Public Sans SemiBold at 10px). At five items a slot
+              is 64px even on a 320px phone, so nothing breaks today — but
+              without this, Android's line breaker is entitled to break a
+              long word and give that one tab a two-line label, which changes
+              the height of the whole bar rather than of one word. Truncating
+              is the bounded failure; growing the bar is not.
+            */}
             <Text
+              numberOfLines={1}
               style={[
                 textStyle(focused ? type.tabActive : type.tabInactive),
                 { color: ink, marginTop: space.tab.iconToLabel },

@@ -68,6 +68,32 @@ const color = {
   captionFill: "rgba(20, 20, 15, 0.55)",
 };
 
+/**
+ * The dark palette, written down once.
+ *
+ * Before this existed it was hand-rolled inline as `darkColors` in
+ * connections.tsx, profile.tsx, user.tsx and messages/thread.tsx. These are the
+ * profile/user values verbatim (the superset of the four #171A17 copies), so
+ * those screens can switch to `dark.*` with no visual change. thread.tsx's copy
+ * is a different, warmer set (#14140F base) and is NOT folded in here.
+ *
+ * First consumer: the Home redesign's Exclusive tiles.
+ */
+const dark = {
+  surface: "#171A17",
+  control: "#252A25",
+  ink: "#F4F5F0",
+  secondary: "#B6BDB3",
+  muted: "#929B91",
+  divider: "#343A34",
+  border: "#596159",
+  green: "#72D681",
+  /** `surface` at 78% — the bottom scrim under a tile's title. */
+  scrim: "rgba(23, 26, 23, 0.78)",
+  /** `surface` at 0% — the scrim's transparent end, same RGB so it never greys. */
+  scrimClear: "rgba(23, 26, 23, 0)",
+};
+
 /* ────────────────────────────── 2. TYPE ─────────────────────────────── */
 
 /**
@@ -209,6 +235,20 @@ const type = {
   dangerAction: { fontFamily: font.sansMedium, fontSize: 14 },
   /** The 1-of-N counter over a carousel. */
   carouselCount: { fontFamily: font.mono, fontSize: 10 },
+
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+
+  /** "Categories", "Exclusive". */
+  homeSection: { fontFamily: font.displaySemi, fontSize: 20 },
+  homeSeeAll: { fontFamily: font.sansSemi, fontSize: 13 },
+  heroTitle: { fontFamily: font.displayBold, fontSize: 20, lineHeight: 25 },
+  heroSubhead: { fontFamily: font.sans, fontSize: 13, lineHeight: 17.6 },
+  heroCta: { fontFamily: font.sansBold, fontSize: 13 },
+  categoryLabel: { fontFamily: font.sansMedium, fontSize: 11 },
+  exclusiveTitle: { fontFamily: font.displaySemi, fontSize: 16, lineHeight: 20 },
+  exclusiveMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
+  /** The live countdown beside "Exclusive". Mono, so the digits never jitter. */
+  countdownPill: { fontFamily: font.monoMedium, fontSize: 12 },
 };
 
 /** Truncation, from the spec's own rules. */
@@ -367,6 +407,28 @@ const space = {
     actionBarY: 12,
   },
 
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+  home: {
+    /** Safe-area top + this, then the search row. */
+    top: 8,
+    searchGap: 10,
+    headerToHero: 16,
+    heroX: 18,
+    heroY: 18,
+    heroSubToCta: 12,
+    /** Hero → Categories → Exclusive. */
+    sectionTop: 24,
+    headingToContent: 12,
+    categoryGap: 14,
+    circleToLabel: 7,
+    tileBody: 12,
+    tileTitleToMeta: 3,
+    tileMetaToLeaves: 6,
+    tileBadgeInset: 8,
+    tileBadgeGap: 6,
+    bottom: 28,
+  },
+
   matches: {
     y: 18,
     headerToRail: 12,
@@ -412,6 +474,14 @@ const radius = {
   hubRow: 10,
   carouselDot: 3,
   carouselCount: 10,
+
+  /* Home redesign (preview). */
+  hero: 18,
+  heroCta: 18,
+  categoryCircle: 28,
+  exclusiveTile: 14,
+  tileBadge: 14,
+  countdownPill: 12,
 };
 
 /* ──────────────────────────── 4. COMPONENTS ─────────────────────────── */
@@ -545,6 +615,26 @@ const size = {
     backButton: 44,
   },
 
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+  home: {
+    heroHeight: 148,
+    /** Fraction of the hero's width the photo occupies, measured from the right. */
+    heroPhotoFraction: 0.44,
+    /** How far the photo runs past the hero's right edge before the clip. */
+    heroPhotoBleed: 18,
+    heroCta: 36,
+    heroCtaX: 16,
+    /** 56, not 44: the label sits under it, so the circle IS the target. */
+    categoryCircle: 56,
+    /** Width per category column, so labels centre under their circles. */
+    categoryItem: 64,
+    /** Exclusive tiles are slightly taller than wide, like the reference. */
+    exclusiveTileAspect: 0.86,
+    tileBadge: 28,
+    countdownPill: 26,
+    countdownPillX: 10,
+  },
+
   /**
    * Skeleton block dimensions.
    *
@@ -617,6 +707,10 @@ const icon = {
   offer: { size: 15, stroke: 2 },
   /** Rows in the listing overflow sheet. */
   menuRow: { size: 19, stroke: 1.7 },
+
+  /* Home redesign (preview). */
+  category: { size: 23, stroke: 1.6 },
+  tileBadge: { size: 14, stroke: 1.9 },
 };
 
 const border = {
@@ -672,6 +766,7 @@ function textStyle(role) {
 
 module.exports = {
   color,
+  dark,
   font,
   type,
   lines,

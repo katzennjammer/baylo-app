@@ -658,6 +658,8 @@ export const rules = {
   valueStep: 5,
   /** `MAX_REVALUATIONS`. One per listing, ever. */
   maxRevaluations: 1,
+  /** `MAX_LOOKING_FOR` in the server's validation — it rejects a seventh. */
+  maxReturnCategories: 6,
   /** `resolveHubIds` rejects a sixth. */
   maxHubs: 5,
   /** The wizard's own cap. `createItemSchema` allows 10; the design allows 5. */

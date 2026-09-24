@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
@@ -15,8 +15,12 @@ import {
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf } from "../../src/lib/brackets";
 import { shelfMisses } from "../../src/lib/gap";
+import { formatClock } from "../../src/lib/perishable";
+import { useCountdown } from "../../src/components/post/ui";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
+import { canBoost } from "../../src/api/featured";
+import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useLike } from "../../src/api/social";
 import {
   BlockIcon,
@@ -54,6 +58,7 @@ import {
   type,
 } from "../../src/theme/tokens";
 import type { Item, SafeZoneHub } from "../../src/api/types";
+import { showDialog } from "../../src/components/dialog";
 
 /**
  * Item detail. Reached from the grid, from the feed's Offer Trade button, and
@@ -135,6 +140,7 @@ export default function ItemDetailScreen() {
 
   const report = useReport();
   const block = useBlockUser();
+  const { confirmBoost, isBoosting } = useConfirmBoost();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
   const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
@@ -268,14 +274,14 @@ export default function ItemDetailScreen() {
         onSuccess: () => {
           setReporting(false);
           setActed("reported");
-          Alert.alert(
+          showDialog(
             "Thanks — that is with a moderator",
             "They review every report and will let you know the outcome.",
           );
         },
         onError: (e) => {
           setReporting(false);
-          Alert.alert(
+          showDialog(
             // A 409 is not a failure: it means this reporter already has an
             // open report against this listing. Saying "already reported" is
             // the truthful answer and stops them retrying.
@@ -290,7 +296,7 @@ export default function ItemDetailScreen() {
   };
 
   const onBlock = () => {
-    Alert.alert(
+    showDialog(
       `Block ${item.owner.name}?`,
       "You will not see each other's listings and neither of you can message the other. " +
         "Trades already in progress are not cancelled — a block cannot undo a handover " +
@@ -309,7 +315,7 @@ export default function ItemDetailScreen() {
                 router.back();
               },
               onError: (e) =>
-                Alert.alert(
+                showDialog(
                   "Could not block",
                   e instanceof ApiError ? e.message : "Something went wrong.",
                 ),
@@ -348,18 +354,6 @@ export default function ItemDetailScreen() {
               <Text style={[textStyle(type.detailBody), { color: color.forest }]}>What now?</Text>
             </Tappable>
           ) : null}
-
-          <OwnerRow
-            name={item.owner.name}
-            avatar={item.owner.avatar}
-            location={item.owner.location}
-            tier={item.owner.trustTier}
-            rank={item.owner.rank}
-            org={item.owner.org}
-            onPress={() =>
-              router.push({ pathname: "/user", params: { id: item.owner.id } })
-            }
-          />
 
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
@@ -400,6 +394,35 @@ export default function ItemDetailScreen() {
             onShare={() => void Share.share({ message: item.title, title: item.title })}
           />
 
+          {/* ── Boost ─────────────────────────────────────────────────────
+              OWNER ONLY, and never on a perishable: canBoost() is the
+              client's reading of the rules boostItem() enforces on the server
+              (AVAILABLE, not perishable, not taken down, not already
+              featured). A live boost shows when it ends instead of a button,
+              so nobody is invited to pay twice for the same window. */}
+          {viewer.isOwner && item.featuredUntil ? (
+            <View style={s.featuredNote} accessibilityRole="text">
+              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
+              <Text style={[textStyle(type.detailBody), { color: color.forest, flex: 1 }]}>
+                Featured until {formatFeaturedUntil(item.featuredUntil)}
+              </Text>
+            </View>
+          ) : viewer.isOwner && canBoost(item) ? (
+            <Tappable
+              onPress={() => confirmBoost(item)}
+              disabled={isBoosting}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isBoosting }}
+              style={s.boost}
+              pressedStyle={s.actionPressed}
+            >
+              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
+              <Text style={[textStyle(type.primaryButton), { color: color.forest }]}>
+                {isBoosting ? "Boosting…" : "Boost this listing"}
+              </Text>
+            </Tappable>
+          ) : null}
+
           {/*
             §7.3 of the offer spec — `Where you stand`, "inserted between the
             value row and *Description*".
@@ -422,9 +445,7 @@ export default function ItemDetailScreen() {
               who has to move the stock than to anybody else. */}
           {item.perishable ? (
             <Section heading="Perishable">
-              <Text style={[textStyle(type.detailBody), s.bodyText]}>
-                {perishableLine(item.perishable)}
-              </Text>
+              <PerishableLine perishable={item.perishable} onElapsed={() => void refetch()} />
             </Section>
           ) : null}
 
@@ -483,6 +504,23 @@ export default function ItemDetailScreen() {
               </View>
             </Section>
           ) : null}
+
+          {/* THE SELLER, AFTER THE THING. Item facts first — title, value,
+              window, meeting places — and then who is offering it, as the last
+              read before the pinned Offer Trade bar under the scroll. Report
+              and Block stay directly beneath it: they act on this person, so
+              they come after the row that says who that is. */}
+          <OwnerRow
+            name={item.owner.name}
+            avatar={item.owner.avatar}
+            location={item.owner.location}
+            tier={item.owner.trustTier}
+            rank={item.owner.rank}
+            org={item.owner.org}
+            onPress={() =>
+              router.push({ pathname: "/user", params: { id: item.owner.id } })
+            }
+          />
 
           {/* Own listing: no reporting yourself, no blocking yourself. The
               server refuses both, and offering them would be a dead control. */}
@@ -606,6 +644,15 @@ function Chip({ label }: { label: string }) {
       <Text style={[textStyle(type.chip), { color: color.inkSecondary }]}>{label}</Text>
     </View>
   );
+}
+
+/** "Thu 3:40 PM" — a boost window is never more than a day, so no date. */
+function formatFeaturedUntil(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function Section({ heading, children }: { heading: string; children: React.ReactNode }) {
@@ -933,6 +980,28 @@ const s = StyleSheet.create({
   backPressed: { opacity: 0.6 },
 
   body: { paddingHorizontal: space.detail.x, paddingTop: space.detail.photoToBody },
+  boost: {
+    flexDirection: "row",
+    gap: 8,
+    height: size.detail.actionButton,
+    marginTop: 12,
+    borderRadius: radius.primaryButton,
+    borderWidth: border.chip,
+    borderColor: color.forest,
+    backgroundColor: color.greenWash,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featuredNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: color.greenWash,
+  },
   reviewBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -965,7 +1034,7 @@ const s = StyleSheet.create({
   },
 
   owner: {
-    marginTop: space.detail.chipsToOwner,
+    marginTop: space.detail.sectionY,
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.ownerGap,
@@ -1096,41 +1165,71 @@ const s = StyleSheet.create({
 
 
 /**
- * The perishable line: how much, and how long is left.
+ * The perishable line: how much, and how long is left — as a live clock.
  *
- * ── THE COUNTDOWN IS COMPUTED, NOT LIVE ─────────────────────────────────────
+ * ── LIVE HERE, AND ONLY HERE ────────────────────────────────────────────────
  *
- * It reads `expiresAt` once per render rather than ticking. A listing whose
- * window is measured in hours does not need a second hand, and a timer on a
- * detail screen is a re-render every second for a number that changes every
- * sixty minutes. Re-opening the screen, or pulling to refresh, is what updates
- * it -- which is also when the server's lazy sweep runs.
+ * List surfaces show hours (see lib/perishable) because a 1 s timer per card
+ * is a re-render per card per second. This screen shows ONE listing, so one
+ * timer is cheap, and the person deciding whether to travel for it gets the
+ * real number. It reuses the post flow's rate-limit hook.
  *
- * `expired` comes from the server and means the window has passed but the
- * sweep has not caught up. Said plainly rather than shown as "0 hours left",
- * because those are different facts and only one of them means "do not travel
- * for this".
+ * The clock runs only while the screen is FOCUSED. Unmounting (back) clears
+ * the interval inside useCountdown; pushing another screen on top keeps this
+ * one mounted, so `until` goes null on blur, which clears it there too. On
+ * refocus the clock restarts from `expiresAt`, so it never drifts.
+ *
+ * At zero it asks for a refetch: the server's lazy sweep is what turns the
+ * window into `expired`, and the "closed" wording comes from that flag, not
+ * from this clock — the two are different facts.
  */
-function perishableLine(p: NonNullable<Item["perishable"]>): string {
+function PerishableLine({
+  perishable: p,
+  onElapsed,
+}: {
+  perishable: NonNullable<Item["perishable"]>;
+  onElapsed: () => void;
+}) {
+  const focused = useIsFocused();
+  const seconds = useCountdown(
+    focused && !p.expired ? Date.parse(p.expiresAt) : null,
+    onElapsed,
+  );
+  // While blurred the hook holds 0; on refocus there is one render before its
+  // effect ticks. Computing from `expiresAt` for that frame avoids a 00:00:00
+  // flash. When the window has really elapsed both are 0.
+  const shown =
+    seconds || Math.max(0, Math.ceil((Date.parse(p.expiresAt) - Date.now()) / 1000));
   const amount =
     p.quantity != null && p.quantityUnit
       ? `${p.quantity} ${p.quantityUnit === "LITERS" ? "L" : p.quantityUnit}`
       : null;
 
+  // The clock is in the urgent colour, as Home's Exclusive pill is; the amount
+  // in front of it stays body text, and a closed window is a plain statement.
+  let line: React.ReactNode;
   if (p.expired) {
-    return amount ? `${amount} · this listing's trade window has closed` : "This listing's trade window has closed";
+    line = amount
+      ? `${amount} · this listing's trade window has closed`
+      : "This listing's trade window has closed";
+  } else {
+    const left = <Text style={{ color: color.urgent }}>{`${formatClock(shown)} left`}</Text>;
+    line = amount ? (
+      <>
+        {`${amount} · `}
+        {left}
+      </>
+    ) : (
+      left
+    );
   }
 
-  const hoursLeft = Math.max(
-    0,
-    (new Date(p.expiresAt).getTime() - Date.now()) / (60 * 60 * 1000),
+  return (
+    <Text
+      style={[textStyle(type.detailBody), s.bodyText, { fontVariant: ["tabular-nums"] }]}
+      accessibilityRole="timer"
+    >
+      {line}
+    </Text>
   );
-  const left =
-    hoursLeft < 1
-      ? `under an hour left`
-      : hoursLeft < 2
-        ? `about an hour left`
-        : `about ${Math.floor(hoursLeft)} hours left`;
-
-  return amount ? `${amount} · ${left}` : left;
 }
