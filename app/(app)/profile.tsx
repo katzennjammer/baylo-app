@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useProfileMe } from "../../src/api/profile";
+import { useProfileMe, usePublicProfile } from "../../src/api/profile";
 import { canBoost } from "../../src/api/featured";
 import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
@@ -13,9 +14,10 @@ import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
 import { color, font } from "../../src/theme/tokens";
-import { orgLogoUrl, useOrganizations } from "../../src/api/organizations";
+import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
 import { StoreIcon } from "../../src/components/icons";
+import { OrgStorefrontHeader } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
@@ -37,7 +39,7 @@ import { getApiBase } from "../../src/api/config";
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { data: profile, refetch, isRefetching: profileRefetching } = useProfileMe();
+  const { data: profile, refetch, isRefetching: profileRefetching, isLoading: profileLoading } = useProfileMe();
   const dark = useColorScheme() === "dark";
   const [tab, setTab] = useState<"posts" | "reviews">("posts");
 
@@ -67,14 +69,65 @@ export default function ProfileScreen() {
     });
   }, [profile?.user.name, user?.id, user?.name]);
 
-  // The shop this device is ACTING AS, if any. This tab stays the PERSON'S
-  // profile either way -- profile/me is about the signed-in human (their
-  // Leaves, their shelf, their achievements) and does not read X-Baylo-Org --
-  // so the storefront is one tap away rather than swapped in underneath them.
-  // getActingOrgId() is read per render, not mirrored: see OrgSwitcher.
-  const { data: orgsData } = useOrganizations();
+  // The shop this device is ACTING AS, if any. For somebody who also trades as
+  // themselves this tab stays the PERSON'S profile -- profile/me is about the
+  // signed-in human (their Leaves, their shelf, their achievements) and does
+  // not read X-Baylo-Org -- so the storefront is one tap away rather than
+  // swapped in underneath them. getActingOrgId() is read per render, not
+  // mirrored: see OrgSwitcher.
+  const qc = useQueryClient();
+  const { data: orgsData, isLoading: orgsLoading } = useOrganizations();
+  const [, setContextTick] = useState(0);
+  const [pickingShop, setPickingShop] = useState(false);
   const actingOrgId = getActingOrgId();
   const actingOrg = actingOrgId ? orgsData?.data.organizations.find((o) => o.id === actingOrgId) : undefined;
+
+  // ── SHOP-ONLY ACCOUNTS NEVER SEE A PERSONAL PROFILE ─────────────────────
+  //
+  // Somebody who has never listed, offered or traded as themselves, and who
+  // owns or staffs at least one shop, gets the shop HERE, in place of the
+  // personal layout: an empty personal shelf would only raise the question
+  // "which account am I?". The server decides "never as themselves" (see
+  // hasPersonalActivity() in the API); a server that does not send the flag
+  // gets the personal profile, which is how this tab always behaved.
+  //
+  // Not a permanent mode. The flag is recomputed on every profile/me read, so
+  // the first personal listing puts the personal profile back.
+  //
+  // Only shops whose backing account the server names can be shown, hence the
+  // orgUserId filter (see ActingOrg.orgUserId).
+  const shops = (orgsData?.data.organizations ?? []).filter((o) => !!o.orgUserId);
+  const shopOnly = profile?.hasPersonalActivity === false && shops.length > 0;
+  const actingShop = actingOrg?.orgUserId ? actingOrg : undefined;
+  // One shop: that one. Several: whichever this device is acting as, or the
+  // picker until one is chosen.
+  const shownShop = actingShop ?? (shops.length === 1 ? shops[0] : undefined);
+
+  // Viewing a shop here also ACTS AS it. Otherwise the Post button would list
+  // things on a personal shelf this person has never used, and the first one
+  // would quietly bring back the personal profile. Same steps as OrgSwitcher:
+  // switch, drop every cache fetched as the previous identity, re-render.
+  const selectShop = useCallback(async (organizationId: string) => {
+    setPickingShop(false);
+    if (organizationId !== getActingOrgId()) {
+      await switchToOrganization(organizationId);
+      await qc.invalidateQueries();
+    }
+    setContextTick((t) => t + 1);
+  }, [qc]);
+
+  // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
+  // ONCE per mount, which is once per sign-in because this tab stays mounted.
+  // Without the ref, somebody who deliberately switches to "Myself" (from
+  // Settings, or "Post as myself instead" when their shop is still in review)
+  // would be switched straight back the next time this tab re-rendered.
+  const adoptShopId = shopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
+  const adoptedOnce = useRef(false);
+  useEffect(() => {
+    if (!adoptShopId || adoptedOnce.current) return;
+    adoptedOnce.current = true;
+    void selectShop(adoptShopId);
+  }, [adoptShopId, selectShop]);
 
   const items = profile?.items ?? [];
   const { confirmBoost, isBoosting } = useConfirmBoost();
@@ -88,6 +141,29 @@ export default function ProfileScreen() {
   const onEndReached = useCallback(() => {
     if (tab === "reviews" && hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, tab]);
+  // Held for the first load of either answer, so a shop-only account does not
+  // see its empty personal profile flash first. `isLoading` is false while a
+  // query is paused offline, so with no signal this still falls through to the
+  // personal layout drawn from the stored session, as the header promises.
+  if (profileLoading || orgsLoading) {
+    return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
+  }
+
+  if (shopOnly) {
+    if (pickingShop || !shownShop) {
+      return <ShopPicker dark={dark} shops={shops} activeId={actingShop?.id ?? null} onPick={(id) => void selectShop(id)} />;
+    }
+    return (
+      <ShopView
+        key={shownShop.orgUserId}
+        dark={dark}
+        orgUserId={shownShop.orgUserId!}
+        viewerId={user?.id ?? null}
+        topSlot={shops.length > 1 ? <ShopCard dark={dark} name={shownShop.name} logoUrl={shownShop.logoUrl} actionLabel="Switch shop" onPress={() => setPickingShop(true)} /> : null}
+      />
+    );
+  }
+
   return (
     <FlatList<ProfileListRow>
       style={s.screen}
@@ -113,19 +189,114 @@ export default function ProfileScreen() {
   );
 }
 
-/** "You're acting as <shop>" — the owner's and staff's way into the storefront. */
-function ShopCard({ dark, name, logoUrl, onPress }: { dark: boolean; name: string; logoUrl: string | null; onPress: () => void }) {
+/**
+ * "You're acting as <shop>". On a personal profile it is the way into the
+ * storefront; on a shop-only account's storefront it switches between shops.
+ */
+function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: { dark: boolean; name: string; logoUrl: string | null; onPress: () => void; actionLabel?: string }) {
   const palette = dark ? darkColors : lightColors;
   const logo = orgLogoUrl(logoUrl);
   return (
-    <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. View shop profile`}>
+    <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. ${actionLabel}`}>
       {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
       <View style={s.shopText}>
         <Text style={[s.shopEyebrow, { color: palette.muted }]}>Acting as</Text>
         <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
       </View>
-      <Text style={[s.shopLink, { color: palette.green }]}>View shop</Text>
+      <Text style={[s.shopLink, { color: palette.green }]}>{actionLabel}</Text>
     </Pressable>
+  );
+}
+
+/** A shop-only account with several shops chooses which one this tab shows, and acts as. */
+function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: ActingOrg[]; activeId: string | null; onPick: (organizationId: string) => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={s.screen}>
+      <Text style={[s.pickerTitle, { color: palette.ink }]}>Your shops</Text>
+      <Text style={[s.pickerSub, { color: palette.muted }]}>Choose the shop to open. New listings and offers are made as the shop you choose.</Text>
+      {shops.map((shop) => {
+        const logo = orgLogoUrl(shop.logoUrl);
+        const active = shop.id === activeId;
+        return (
+          <Pressable key={shop.id} onPress={() => onPick(shop.id)} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`Open ${shop.name}`}>
+            {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+            <View style={s.shopText}>
+              <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
+              <Text style={[s.shopEyebrow, { color: palette.muted }]}>{shop.role === "OWNER" ? "Owner" : "Staff"}{active ? " · Acting as" : ""}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.muted} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The storefront, as the Profile tab of a shop-only account.
+ *
+ * The same pieces the public /user screen draws for an organisation, minus the
+ * back row, because here it is a tab rather than a pushed screen. A member
+ * never sees Follow or Message (OrgStorefrontHeader swaps them for Edit and
+ * Share), so those two handlers are inert.
+ */
+function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUserId: string; viewerId: string | null; topSlot: React.ReactNode }) {
+  const router = useRouter();
+  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const { data, isPending, isError, refetch, isRefetching } = usePublicProfile(orgUserId);
+  const reviewQuery = useProfileReviews(orgUserId, tab === "reviews");
+  const palette = dark ? darkColors : lightColors;
+  useRefetchOnFocus(refetch);
+
+  if (isPending) return <View style={[s.screen, s.centred]}><ActivityIndicator color={palette.green} /></View>;
+  const org = data?.user.org;
+  if (isError || !data || !org) {
+    return (
+      <View style={s.screen}>
+        {topSlot}
+        <Text style={[s.empty, { color: palette.muted }]}>Your shop could not be loaded.</Text>
+        <Pressable onPress={() => void refetch()} accessibilityRole="button" style={s.retry}><Text style={[s.shopLink, { color: palette.green }]}>Try again</Text></Pressable>
+      </View>
+    );
+  }
+
+  const rows: ProfileListRow[] = tab === "posts"
+    ? chunkItems(data.items).map((postItems) => ({ kind: "posts", items: postItems }))
+    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+  const inert = () => undefined;
+
+  return (
+    <FlatList<ProfileListRow>
+      style={s.screen}
+      data={rows}
+      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
+      ListHeaderComponent={<>
+        {topSlot}
+        <OrgStorefrontHeader
+          dark={dark}
+          org={org}
+          counts={data.counts}
+          viewerId={viewerId}
+          follow={{ label: "", busy: false, disabled: true, primary: false, onPress: inert }}
+          onMessage={inert}
+          onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
+          onShare={() => void Share.share({ message: `${org.name} on Baylo\n${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
+        />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier /> : null}
+      </>}
+      renderItem={({ item: row }) => row.kind === "posts" ? (
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+      ) : (
+        <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
+      )}
+      onEndReached={() => { if (tab === "reviews" && reviewQuery.hasNextPage && !reviewQuery.isFetchingNextPage) void reviewQuery.fetchNextPage(); }}
+      onEndReachedThreshold={0.6}
+      refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={() => { if (tab === "reviews") void reviewQuery.refetch(); else void refetch(); }} tintColor={palette.green} />}
+      ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
+      ListEmptyComponent={<Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "Your shop's listings will appear here."}</Text>}
+    />
   );
 }
 
@@ -309,6 +480,10 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+  centred: { alignItems: "center", justifyContent: "center" },
+  retry: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 16 },
+  pickerTitle: { fontFamily: font.sansSemi, fontSize: 18, marginHorizontal: 16, marginTop: 16 },
+  pickerSub: { fontFamily: font.sans, fontSize: 13, lineHeight: 18, marginHorizontal: 16, marginTop: 4, marginBottom: 4 },
   shopCard: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginTop: 8, padding: 10, borderRadius: 10, minHeight: 56 },
   shopLogo: { width: 36, height: 36, borderRadius: 8 },
   shopLogoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },

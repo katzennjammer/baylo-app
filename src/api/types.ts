@@ -429,6 +429,12 @@ export interface ProfileMePayload {
   achievementCount: number;
   reputation: ViewerReputation;
   idVerification: ViewerIdVerification;
+  /**
+   * False when this person has never listed, offered or traded AS THEMSELVES,
+   * only for an organisation. Absent from a server older than 24 Sep 2026,
+   * which the Profile tab reads as "has activity": the personal profile.
+   */
+  hasPersonalActivity?: boolean;
 }
 
 export interface PublicProfilePayload {

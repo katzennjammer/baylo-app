@@ -634,7 +634,10 @@ export function useCreateItem() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["browse"] });
       void qc.invalidateQueries({ queryKey: ["home"] });
-      void qc.invalidateQueries({ queryKey: ["profile", "me"] });
+      // The whole ["profile"] prefix, not just ["profile", "me"]: a listing
+      // posted AS AN ORGANISATION lands on the shop's shelf, which the Profile
+      // tab reads as ["profile", <orgUserId>] for a shop-only account.
+      void qc.invalidateQueries({ queryKey: ["profile"] });
     },
   });
 }

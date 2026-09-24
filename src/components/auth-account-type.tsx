@@ -113,7 +113,7 @@ export function AccountTypeStep({
           selected={value === "organization"}
           onPress={() => onChange("organization")}
           title="Organization / MSME"
-          body="Trade as a shop, co-op or non-profit. Staff can post on its behalf, and a verified badge appears once we have checked your business document."
+          body="Trade as a shop, co-op or non-profit. Once we have checked your business document, staff can post on its behalf and it gets a verified badge."
           tone="organization"
         />
       </View>

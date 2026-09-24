@@ -184,9 +184,9 @@ export function OrgDetailsStep({
 
       <View style={{ height: gap.headlineToBody }} />
       <Body>
-        Your account is already created. This adds the shop identity — you can
-        post and trade as soon as it is saved, and the verified badge appears
-        once we have checked the document.
+        Your account is already created. This adds the shop identity. Once we
+        have checked the document, you can post as the shop and it gets the
+        verified badge.
       </Body>
 
       <View style={{ height: gap.bodyToControl.signIn }} />

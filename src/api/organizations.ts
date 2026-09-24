@@ -39,6 +39,26 @@ export interface ActingOrg {
   logoUrl: string | null;
   role: OrgMemberRole;
   verified: boolean;
+  verificationStatus?: OrgVerificationStatus;
+  /**
+   * Non-null when this org may not post: the server's own sentence, shown
+   * verbatim before the post wizard opens. Only a VERIFIED org posts as
+   * itself. Absent from a server older than 24 Sep 2026.
+   */
+  postingRefusal?: { code: OrgPostingRefusalCode; message: string } | null;
+}
+
+/** The 403 codes POST /api/items uses to refuse posting as an unverified org. */
+export const ORG_VERIFICATION_PENDING = "ORG_VERIFICATION_PENDING";
+export const ORG_VERIFICATION_REJECTED = "ORG_VERIFICATION_REJECTED";
+export type OrgPostingRefusalCode = typeof ORG_VERIFICATION_PENDING | typeof ORG_VERIFICATION_REJECTED;
+
+export function isOrgPostingRefusal(e: unknown): e is ApiError {
+  return (
+    e instanceof ApiError &&
+    e.status === 403 &&
+    (e.code === ORG_VERIFICATION_PENDING || e.code === ORG_VERIFICATION_REJECTED)
+  );
 }
 
 export interface OrgInvitation {
@@ -131,8 +151,8 @@ export interface CreatedOrganization {
  * Register an organisation. The caller becomes its first OWNER.
  *
  * The response is deliberately read for its `notice` rather than having the
- * client compose one. "Your organisation is live and can post and trade now;
- * the badge appears once we have checked your document" is a statement about
+ * client compose one. "You can post as it once we have checked your business
+ * document" is a statement about
  * server behaviour, and a client that writes its own version of it is a client
  * that will still be saying it after the behaviour changes.
  */

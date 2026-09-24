@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../src/api/client";
 import {
@@ -22,6 +22,8 @@ import {
   type IdVerificationPayload,
 } from "../src/api/id-verification";
 import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
+import { getActingOrgId } from "../src/api/org-context";
+import { isOrgPostingRefusal, switchToOrganization, useOrganizations, type ActingOrg } from "../src/api/organizations";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import { useConfirmBoost } from "../src/components/useConfirmBoost";
 import {
@@ -138,6 +140,27 @@ export default function PostItemRoute() {
     staleTime: 60_000,
   });
 
+  // ── POSTING AS A SHOP: THE SHOP'S REVIEW, NEVER THE PERSON'S ID ─────────
+  //
+  // Mirrors POST /api/items. Acting as an organisation, the personal ID is
+  // never consulted: a VERIFIED shop posts, and a PENDING or REJECTED one is
+  // refused whatever the person's own ID says, with the server's sentence
+  // (`postingRefusal`), shown here before seven steps rather than after them.
+  // Posting as yourself keeps the personal ID gate. The membership list is
+  // only asked for when a context is set.
+  const actingOrgId = getActingOrgId();
+  const orgs = useOrganizations(!!actingOrgId);
+  const actingShop = actingOrgId
+    ? orgs.data?.data.organizations.find((o) => o.id === actingOrgId)
+    : undefined;
+  const qc = useQueryClient();
+  const [, setContextTick] = useState(0);
+  const postAsMyself = useCallback(async () => {
+    await switchToOrganization(null);
+    await qc.invalidateQueries();
+    setContextTick((t) => t + 1);
+  }, [qc]);
+
   // Held on a blank canvas rather than painting step 1 and then replacing it
   // with a restored step 4. One frame of the wrong screen on every resume is
   // more noticeable than one frame of nothing.
@@ -147,11 +170,15 @@ export default function PostItemRoute() {
   // nothing. A gate that FAILS to load is treated as open — the server is the
   // real check, and a flaky network must not be a second way to be locked out
   // of posting.
-  if (status === "reading" || gate.isPending) {
+  if (status === "reading" || gate.isPending || (!!actingOrgId && orgs.isLoading)) {
     return <View style={{ flex: 1, backgroundColor: postColor.surface }} />;
   }
 
-  if (gate.data && !gate.data.verified) {
+  if (actingShop?.postingRefusal) {
+    return <OrgGatePrompt shop={actingShop} message={actingShop.postingRefusal.message} onPostAsMyself={() => void postAsMyself()} />;
+  }
+
+  if (gate.data && !gate.data.verified && !actingOrgId) {
     return <IdGatePrompt state={gate.data} />;
   }
 
@@ -165,6 +192,48 @@ export default function PostItemRoute() {
         <Wizard />
       </PhotoPipelineProvider>
     </PostStateProvider>
+  );
+}
+
+/* ─────────────────────────── the shop gate prompt ───────────────────── */
+
+/**
+ * What somebody sees when they tap Post while acting as a shop that has not
+ * passed its business review. The sentence is the server's, verbatim, so it
+ * is the same one a refused POST would carry.
+ *
+ * The way out is posting AS THEMSELVES, which the shop's review does not
+ * affect. It switches the context back to "Myself", which is also what the
+ * switcher in Settings does.
+ */
+function OrgGatePrompt({ shop, message, onPostAsMyself }: { shop: ActingOrg; message: string; onPostAsMyself: () => void }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const pending = shop.postingRefusal?.code === "ORG_VERIFICATION_PENDING";
+  return (
+    <View style={{ flex: 1, backgroundColor: postColor.surface, paddingTop: insets.top }}>
+      <View style={{ height: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+        <Tappable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
+          <CloseIcon size={22} color={postColor.ink} />
+        </Tappable>
+      </View>
+
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
+        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>
+          {pending ? `${shop.name} is being reviewed` : `${shop.name} was not approved`}
+        </Text>
+
+        <Text style={[textStyle(postType.stepSub), { color: postColor.inkSecondary, marginTop: 12, lineHeight: 22 }]}>
+          {message}
+        </Text>
+
+        <Text style={[textStyle(postType.stepSub), { color: postColor.inkSecondary, marginTop: 16, lineHeight: 22 }]}>
+          You are posting as {shop.name}. You can still post things of your own as yourself.
+        </Text>
+
+        <PrimaryButton label="Post as myself instead" onPress={onPostAsMyself} style={{ marginTop: 28 }} />
+      </View>
+    </View>
   );
 }
 
@@ -452,6 +521,14 @@ function Wizard() {
       // The draft is saved FIRST. Somebody who has just filled in seven steps
       // and is being redirected must find their work waiting when they come
       // back, or the gate has cost them the listing rather than delayed it.
+      // The shop's review, refusing at the last step: the context was switched
+      // or the shop's status changed after the check above. Same treatment as
+      // the ID gate below: keep the draft, show the server's own sentence.
+      if (isOrgPostingRefusal(e)) {
+        await saveDraft(state);
+        dispatch({ type: "post/fail", message: `${e.message} Your draft is safe.` });
+        return;
+      }
       if (isIdGateError(e)) {
         await saveDraft(state);
         router.push("/verify-id");
