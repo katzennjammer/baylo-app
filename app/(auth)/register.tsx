@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Linking, Platform, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { BackHandler, Linking, Platform, TextInput, View } from "react-native";
 import { router } from "expo-router";
 
 import {
@@ -106,14 +106,19 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: "", email: "", password: "", confirm: "", dob: null };
 
 /**
- * Where the account-type step sits, and the one thing it must not break.
+ * The order of signup, and the one thing it must not break.
  *
- * ── AFTER THE FORM, BEFORE "CHECK YOUR EMAIL" ───────────────────────────────
+ * ── ACCOUNT TYPE → FORM → (BUSINESS DETAILS) → CHECK YOUR EMAIL ─────────────
  *
- * The brief asked for this "right after email/password, before the existing
- * ID-verification step". There is no ID-verification step in this flow — see
- * the note on AccountTypeStep — so it goes at the equivalent moment: the
- * account exists, and nobody has been handed to the app yet.
+ * The account type is asked FIRST, before any personal details, because it
+ * changes the form: an organisation's form asks for the owner's name and date
+ * of birth rather than a generic "Full name". Until 24 Sep 2026 it was asked
+ * after the account had been created, which left the MSME owner filling in a
+ * form that did not say whose details it wanted.
+ *
+ * The choice is plain state here until the form is submitted — nothing is
+ * posted for it — so Back from the form lands on it with the answer intact,
+ * and "Decide later" is simply the individual form with no choice recorded.
  *
  * ── AND NOT AS A BRANCH INSIDE RegisterForm ─────────────────────────────────
  *
@@ -123,19 +128,21 @@ const EMPTY_FORM: FormState = { name: "", email: "", password: "", confirm: "", 
  * flips the layout back — forever. These are separate screens at the top of the
  * component, each returning its own tree, which is the same shape the
  * under-18 refusal and "check your email" already use and the only shape that
- * does not reintroduce that loop.
+ * does not reintroduce that loop. The MSME relabelling inside the form changes
+ * only strings, never the shape, so it is safe.
  *
- * ── EVERY EXIT FROM THIS STEP IS A VALID ACCOUNT ────────────────────────────
+ * ── EVERY EXIT AFTER THE FORM IS A VALID ACCOUNT ────────────────────────────
  *
- * Choosing Individual, choosing Organization and then abandoning the details,
- * or tapping "Decide later" all land on the same "check your email" screen with
- * the same working account. The only difference an organisation makes is that
- * an Organization row exists and this client is now acting as it. Nothing here
- * can strand somebody with a half-made account, because the account was made
- * before this screen rendered.
+ * The business-details step still comes after registerAccount() has
+ * succeeded. Finishing it, or tapping "Do this later", lands on the same
+ * "check your email" screen with the same working account; the only difference
+ * an organisation makes is that an Organization row exists. Nobody can be
+ * stranded with a half-made account, because the account is made before that
+ * screen renders.
  */
 type SignupStage =
   | { kind: "account-type" }
+  | { kind: "form" }
   | { kind: "org-details" }
   | { kind: "check-email" };
 
@@ -157,51 +164,58 @@ export default function RegisterScreen() {
     );
   }
 
-  if (pending) {
+  if (!pending) {
     if (stage.kind === "account-type") {
       return (
         <AccountTypeStep
           value={accountType}
           onChange={setAccountType}
-          onContinue={() =>
-            setStage(
-              accountType === "organization" ? { kind: "org-details" } : { kind: "check-email" },
-            )
-          }
-          // "Decide later" is the individual path without the person having to
-          // claim to be one. It creates nothing; the account is already exactly
-          // what it would be.
-          onSkip={() => setStage({ kind: "check-email" })}
+          onContinue={() => setStage({ kind: "form" })}
+          // "Decide later" is the individual form without the person having to
+          // claim to be one. Any card tapped on the way is dropped, so the form
+          // does not ask for an owner nobody confirmed.
+          onSkip={() => {
+            setAccountType(null);
+            setStage({ kind: "form" });
+          }}
+          onBack={() => router.back()}
         />
       );
     }
 
-    if (stage.kind === "org-details") {
-      return (
-        <OrgDetailsStep
-          // The session is held here and NOT installed -- see the note on the
-          // pending pair. Without passing it, every call this screen makes is
-          // unauthenticated.
-          accessToken={pending.session?.accessToken ?? null}
-          onDone={() => setStage({ kind: "check-email" })}
-          // Abandoning the details leaves an ordinary account and no
-          // Organization row. Nothing to undo, because nothing was created.
-          onSkip={() => setStage({ kind: "check-email" })}
-        />
-      );
-    }
-
-    return <CheckYourEmail state={pending} />;
+    return (
+      <RegisterForm
+        form={form}
+        setForm={setForm}
+        asOwner={accountType === "organization"}
+        onBack={() => setStage({ kind: "account-type" })}
+        onRegistered={(next) => {
+          setPending(next);
+          setStage(
+            accountType === "organization" ? { kind: "org-details" } : { kind: "check-email" },
+          );
+        }}
+        onRejected={setRefused}
+      />
+    );
   }
 
-  return (
-    <RegisterForm
-      form={form}
-      setForm={setForm}
-      onRegistered={setPending}
-      onRejected={setRefused}
-    />
-  );
+  if (stage.kind === "org-details") {
+    return (
+      <OrgDetailsStep
+        // The session is held here and NOT installed -- see the note on the
+        // pending pair. Without passing it, every call this screen makes is
+        // unauthenticated.
+        accessToken={pending.session?.accessToken ?? null}
+        onDone={() => setStage({ kind: "check-email" })}
+        // Abandoning the details leaves an ordinary account and no
+        // Organization row. Nothing to undo, because nothing was created.
+        onSkip={() => setStage({ kind: "check-email" })}
+      />
+    );
+  }
+
+  return <CheckYourEmail state={pending} />;
 }
 
 // ── The form ─────────────────────────────────────────────────────────────────
@@ -234,10 +248,10 @@ interface FieldErrors {
  * is not the same kind of problem as "that is not an email address" and putting
  * them in the same list would say that it is.
  */
-function validate(input: FormState): FieldErrors {
+function validate(input: FormState, copy: FormCopy): FieldErrors {
   const errors: FieldErrors = {};
 
-  if (!input.name.trim()) errors.name = "Enter your name.";
+  if (!input.name.trim()) errors.name = copy.nameMissing;
   else if (input.name.trim().length > 100) errors.name = "That name is too long (100 max).";
 
   // Loose on purpose. The server's zod `.email()` is the real check, and a
@@ -251,22 +265,77 @@ function validate(input: FormState): FieldErrors {
   if (!input.confirm) errors.confirm = "Type your password again.";
   else if (input.confirm !== input.password) errors.confirm = "These don't match yet.";
 
-  if (!input.dob) errors.dateOfBirth = "Pick your date of birth.";
+  if (!input.dob) errors.dateOfBirth = copy.dobMissing;
 
   return errors;
 }
 
+/**
+ * The form's words, for a person and for an MSME owner.
+ *
+ * The account being created is the OWNER's own login either way — the
+ * organisation is a separate row made on the next step — so the fields do not
+ * change, only whose they say they are. Email, password and confirm are not in
+ * here: they are the login either way, and "Owner's email" read as a separate
+ * business contact address, just as "the owner's password" would suggest the
+ * business has one of its own.
+ */
+interface FormCopy {
+  headline: string;
+  subhead: string;
+  name: string;
+  nameMissing: string;
+  dob: string;
+  dobMissing: string;
+}
+
+const INDIVIDUAL_COPY: FormCopy = {
+  headline: "Create your account",
+  subhead: "Set up once, then trade for good.",
+  name: "Full name",
+  nameMissing: "Enter your name.",
+  dob: "Date of birth",
+  dobMissing: "Pick your date of birth.",
+};
+
+const OWNER_COPY: FormCopy = {
+  headline: "Owner's details",
+  subhead: "Your business details come next.",
+  name: "Owner's full name",
+  nameMissing: "Enter the owner's name.",
+  dob: "Owner's date of birth",
+  dobMissing: "Pick the owner's date of birth.",
+};
+
 function RegisterForm({
   form,
   setForm,
+  asOwner,
+  onBack,
   onRegistered,
   onRejected,
 }: {
   form: FormState;
   setForm: (next: FormState) => void;
+  /** An MSME signup: same five fields, labelled as the business owner's. */
+  asOwner: boolean;
+  /** Back to the account-type step, which comes before this form. */
+  onBack: () => void;
   onRegistered: (p: PendingSignup) => void;
   onRejected: (dob: DateParts) => void;
 }) {
+  const copy = asOwner ? OWNER_COPY : INDIVIDUAL_COPY;
+
+  // Android's back button follows the in-band one: to the account-type step,
+  // not out of signup with the form thrown away.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onBack]);
+
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [banner, setBanner] = useState<string | null>(null);
@@ -295,7 +364,7 @@ function RegisterForm({
   async function onSubmit() {
     if (busy) return;
 
-    const errors = validate(form);
+    const errors = validate(form, copy);
     if (Object.values(errors).some(Boolean)) {
       setFieldErrors(errors);
       setBanner(null);
@@ -386,7 +455,7 @@ function RegisterForm({
   const fields = (
     <>
       <Field
-        label="Full name"
+        label={copy.name}
         value={form.name}
         onChangeText={edit("name", "name")}
         onFocus={() => setFocusedField(1)}
@@ -460,6 +529,7 @@ function RegisterForm({
 
       <View style={{ height: gap.betweenInputs }} />
       <DateOfBirthField
+        label={copy.dob}
         value={form.dob}
         onChange={(next) => {
           edit("dob", "dateOfBirth")(next);
@@ -507,7 +577,7 @@ function RegisterForm({
       bandContent={
         <>
           <BandRow
-            leading={<BandBackButton onPress={() => router.back()} label="Back to sign in" />}
+            leading={<BandBackButton onPress={onBack} label="Back to account type" />}
             trailing={<ApiUrlGear variant="band" />}
           >
             <Wordmark />
@@ -519,16 +589,16 @@ function RegisterForm({
       {/* slot 0 — the header block */}
       {keyboardUp ? (
         <CompactHeader
-          title="Create your account"
+          title={copy.headline}
           counter={`${focusedField} of 5`}
-          onBack={() => router.back()}
-          backLabel="Back to sign in"
+          onBack={onBack}
+          backLabel="Back to account type"
         />
       ) : (
         <View>
-          <Headline variant="createAccount">Create your account</Headline>
+          <Headline variant="createAccount">{copy.headline}</Headline>
           <View style={{ height: gap.headlineToSubhead }} />
-          <Subhead>Set up once, then trade for good.</Subhead>
+          <Subhead>{copy.subhead}</Subhead>
         </View>
       )}
 
