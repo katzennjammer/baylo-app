@@ -1,10 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { FlatList, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { useProfileMe } from "../../src/api/profile";
+import { fetchAchievements } from "../../src/api/achievements";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
@@ -12,6 +14,7 @@ import { color, font } from "../../src/theme/tokens";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
+import { NoticeDialog } from "../../src/components/NoticeDialog";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -124,18 +127,82 @@ const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
  * button that opens the achievements screen, shown only while the user still
  * has room on the shelf, so a full shelf is not cluttered with an invitation to
  * add more.
+ *
+ * ── TAPPING AN EARNED BADGE ──────────────────────────────────────
+ *
+ * `displayedAchievements` (from /profile/me) only carries id/name/icon/
+ * imageUrl -- enough to draw the circle, not enough to explain it. Rather
+ * than widen that payload, this reuses the SAME ["achievements"] query the
+ * Achievements screen already runs (fetchAchievements, same query key), so
+ * a user who has opened that screen this session gets the popup instantly
+ * from cache; one who hasn't pays one extra request, on tap, not on load.
  */
 const SHELF_CAP = 4;
 
 function Badges({ dark, achievements, onMore }: { dark: boolean; achievements: DisplayedAchievements; onMore: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detail = useQuery({
+    queryKey: ["achievements"],
+    queryFn: fetchAchievements,
+    staleTime: 30_000,
+    enabled: selectedId !== null,
+  });
+  const selected = detail.data?.achievements.find((a) => a.id === selectedId) ?? null;
+
   const shown = achievements.slice(0, SHELF_CAP);
   const hasRoom = shown.length < SHELF_CAP;
   const data: { key: string; icon: keyof typeof Ionicons.glyphMap; imageUrl: string | null; label: string; more?: boolean }[] = [
     ...shown.map((a) => ({ key: a.id, icon: badgeIcons[a.icon] ?? "trophy-outline", imageUrl: a.imageUrl, label: a.name })),
     ...(hasRoom ? [{ key: "more", icon: "add-outline" as const, imageUrl: null, label: "More", more: true }] : []),
   ];
-  return <View style={s.badges}><FlatList horizontal showsHorizontalScrollIndicator={false} data={data} keyExtractor={(item) => item.key} contentContainerStyle={s.badgesContent} renderItem={({ item }) => <Pressable onPress={item.more ? onMore : undefined} disabled={!item.more} accessibilityRole={item.more ? "button" : undefined} accessibilityLabel={item.more ? "More achievements" : item.label} style={s.badgeItem}><View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>{item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}</View><Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={1} ellipsizeMode="tail">{item.label}</Text></Pressable>} /></View>;
+
+  const selectedIcon = selected ? badgeIcons[selected.icon] ?? "trophy-outline" : "trophy-outline";
+  const selectedBody = selected
+    ? selected.unlockedAt
+      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
+      : selected.description
+    : "";
+
+  return (
+    <View style={s.badges}>
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={data}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={s.badgesContent}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={item.more ? onMore : () => setSelectedId(item.key)}
+            accessibilityRole="button"
+            accessibilityLabel={item.more ? "More achievements" : `${item.label}, view details`}
+            style={s.badgeItem}
+          >
+            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
+              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
+            </View>
+            <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={1} ellipsizeMode="tail">{item.label}</Text>
+          </Pressable>
+        )}
+      />
+      {selected ? (
+        <NoticeDialog
+          visible
+          title={selected.name}
+          body={selectedBody}
+          icon={
+            selected.imageUrl ? (
+              <Image source={{ uri: selected.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+            ) : (
+              <Ionicons name={selectedIcon} size={24} color={color.green} />
+            )
+          }
+          onDismiss={() => setSelectedId(null)}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 /** The same fallback-to-initial avatar FeedCard uses, at the size this screen wants. */
@@ -182,6 +249,7 @@ const s = StyleSheet.create({
   badgeItem: { width: 64, alignItems: "center" },
   badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   badgeArt: { width: "100%", height: "100%" },
+  badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
   moreBadge: { borderStyle: "dashed" },
   badgeLabel: { width: 64, fontFamily: font.sans, fontSize: 11, marginTop: 4, textAlign: "center" },
   rule: { height: 1, marginTop: 12 },
