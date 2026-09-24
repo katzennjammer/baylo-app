@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
 import { useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,13 +9,14 @@ import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
 import { ChevronLeftIcon } from "../../src/components/icons";
-import { OrgStorefrontHeader } from "../../src/components/OrgStorefrontHeader";
+import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { getApiBase } from "../../src/api/config";
+import { getActingOrgId } from "../../src/api/org-context";
 import { Tappable } from "../../src/components/Tappable";
 import { bracketLabel } from "../../src/lib/brackets";
 import { TIER_LABEL } from "../../src/lib/trust";
 import type { Item } from "../../src/api/types";
-import { color, font, icon, space, textStyle, type } from "../../src/theme/tokens";
+import { color, dark as darkTokens, font, icon, space, textStyle, type } from "../../src/theme/tokens";
 
 type ProfileRow = { kind: "posts"; items: Item[] } | { kind: "review"; review: ProfileReview };
 
@@ -32,6 +33,9 @@ export default function UserProfileScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<"posts" | "reviews">("posts");
   const reviewQuery = useProfileReviews(id, tab === "reviews");
+  // The storefront's invite field needs both: see useStorefrontKeyboard.
+  const list = useRef<FlatList<ProfileRow>>(null);
+  const { keyboardUp, imeInset } = useStorefrontKeyboard();
 
   useEffect(() => {
     if (isOwnProfile) router.replace("/(app)/profile");
@@ -81,11 +85,23 @@ export default function UserProfileScreen() {
       onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
       onShare={() => void Share.share({ message: `${org.name} on Baylo
 ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
+      // Only while acting AS this shop -- otherwise Post lists on the viewer's
+      // personal shelf. getActingOrgId() is read per render, as elsewhere.
+      onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+      scrollerRef={list}
+      keyboardUp={keyboardUp}
     />
   ) : null;
+  const emptyList = org ? (
+    tab === "reviews"
+      ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." />
+      : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} />
+  ) : <Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "No posts yet."}</Text>;
 
   return <FlatList<ProfileRow>
-    style={[s.screen, { backgroundColor: palette.surface }]}
+    ref={list}
+    style={[s.screen, { backgroundColor: palette.surface, marginBottom: imeInset }]}
+    keyboardShouldPersistTaps="handled"
     data={rows}
     keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
     ListHeaderComponent={<>
@@ -117,7 +133,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
     onEndReachedThreshold={0.6}
     refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={onRefresh} tintColor={palette.green} />}
     ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
-    ListEmptyComponent={<Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "No posts yet."}</Text>}
+    ListEmptyComponent={emptyList}
   />;
 }
 
@@ -129,4 +145,4 @@ const s = StyleSheet.create({
   screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 }, footer: { paddingVertical: 18 },
 });
 const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider, border: color.controlLine, green: color.green };
-const darkColors = { surface: "#171A17", control: "#252A25", ink: "#F4F5F0", secondary: "#B6BDB3", muted: "#929B91", divider: "#343A34", border: "#596159", green: "#72D681" };
+const darkColors = { surface: darkTokens.surface, control: darkTokens.control, ink: darkTokens.ink, secondary: darkTokens.secondary, muted: darkTokens.muted, divider: darkTokens.divider, border: darkTokens.border, green: darkTokens.green };

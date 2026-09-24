@@ -17,7 +17,7 @@ import { color, font } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
 import { StoreIcon } from "../../src/components/icons";
-import { OrgStorefrontHeader } from "../../src/components/OrgStorefrontHeader";
+import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
@@ -248,6 +248,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
   const reviewQuery = useProfileReviews(orgUserId, tab === "reviews");
   const palette = dark ? darkColors : lightColors;
   useRefetchOnFocus(refetch);
+  // The storefront's invite field needs both: see useStorefrontKeyboard.
+  const list = useRef<FlatList<ProfileListRow>>(null);
+  const { keyboardUp, imeInset } = useStorefrontKeyboard();
 
   if (isPending) return <View style={[s.screen, s.centred]}><ActivityIndicator color={palette.green} /></View>;
   const org = data?.user.org;
@@ -268,7 +271,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
 
   return (
     <FlatList<ProfileListRow>
-      style={s.screen}
+      ref={list}
+      style={[s.screen, { marginBottom: imeInset }]}
+      keyboardShouldPersistTaps="handled"
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
@@ -282,6 +287,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
           onMessage={inert}
           onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
           onShare={() => void Share.share({ message: `${org.name} on Baylo\n${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
+          onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+          scrollerRef={list}
+          keyboardUp={keyboardUp}
         />
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier /> : null}
@@ -295,7 +303,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={() => { if (tab === "reviews") void reviewQuery.refetch(); else void refetch(); }} tintColor={palette.green} />}
       ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
-      ListEmptyComponent={<Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "Your shop's listings will appear here."}</Text>}
+      ListEmptyComponent={tab === "reviews"
+        ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
+        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
     />
   );
 }

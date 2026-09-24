@@ -184,7 +184,10 @@ function IdentityRow({
 }
 
 /**
- * An invitation, with the only two answers there are.
+ * An invitation, with the only two answers there are: Decline, outlined, and
+ * Accept, filled, so the yes is the louder of the two and under the thumb.
+ * Decline asks nothing further -- it is undone by the owner inviting again,
+ * which the server allows because declining leaves no tombstone.
  *
  * Accepting does NOT switch to the organisation. Somebody accepting an
  * invitation is agreeing to be staff, which is not the same statement as "post
@@ -195,6 +198,7 @@ function IdentityRow({
 function InvitationRow({ invite }: { invite: OrgInvitation }) {
   const respond = useRespondToInvitation(invite.organization.id);
   const busy = respond.isPending;
+  const answering = busy ? respond.variables?.action : undefined;
 
   return (
     <View style={rowStyles.row}>
@@ -217,6 +221,21 @@ function InvitationRow({ invite }: { invite: OrgInvitation }) {
         onPress={
           busy
             ? undefined
+            : () => respond.mutate({ membershipId: invite.membershipId, action: "decline" })
+        }
+        accessibilityRole="button"
+        accessibilityLabel={`Decline invitation from ${invite.organization.name}`}
+        style={rowStyles.decline}
+        pressedStyle={{ opacity: 0.8 }}
+      >
+        <Text style={[textStyle(type.detailBody), { color: color.ink }]}>
+          {answering === "decline" ? "…" : "Decline"}
+        </Text>
+      </Tappable>
+      <Tappable
+        onPress={
+          busy
+            ? undefined
             : () => respond.mutate({ membershipId: invite.membershipId, action: "accept" })
         }
         accessibilityRole="button"
@@ -225,7 +244,7 @@ function InvitationRow({ invite }: { invite: OrgInvitation }) {
         pressedStyle={{ opacity: 0.8 }}
       >
         <Text style={[textStyle(type.detailBody), { color: color.onGreen }]}>
-          {busy ? "…" : "Accept"}
+          {answering === "accept" ? "…" : "Accept"}
         </Text>
       </Tappable>
     </View>
@@ -260,5 +279,12 @@ const rowStyles = {
     paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: color.green,
+  },
+  decline: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
   },
 };

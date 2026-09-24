@@ -34,7 +34,8 @@ export type ColorName =
   | "skeleton"
   | "skeletonSoft"
   | "failedIcon"
-  | "captionFill";
+  | "captionFill"
+  | "onScrim";
 
 export declare const color: Readonly<Record<ColorName, string>>;
 
@@ -48,7 +49,9 @@ export type DarkColorName =
   | "border"
   | "green"
   | "scrim"
-  | "scrimClear";
+  | "scrimClear"
+  | "greenWash"
+  | "onGreenWash";
 
 /** The consolidated dark palette. See the note in tokens.js. */
 export declare const dark: Readonly<Record<DarkColorName, string>>;
@@ -129,7 +132,22 @@ export type TypeRoleName =
   | "categoryLabel"
   | "exclusiveTitle"
   | "exclusiveMeta"
-  | "countdownPill";
+  | "countdownPill"
+  | "storefrontName"
+  | "storefrontMeta"
+  | "storefrontCategory"
+  | "storefrontBody"
+  | "storefrontBadge"
+  | "storefrontStat"
+  | "storefrontStatLabel"
+  | "storefrontSection"
+  | "storefrontLink"
+  | "storefrontOverlay"
+  | "storefrontStaffName"
+  | "storefrontStaffRole"
+  | "storefrontStep"
+  | "storefrontEmptyTitle"
+  | "storefrontLogoInitial";
 
 export declare const type: Readonly<Record<TypeRoleName, TypeRole>>;
 
@@ -266,6 +284,14 @@ export declare const space: Readonly<{
     thumbToTitle: number;
     titleToMeta: number;
   }>;
+  storefront: Readonly<Record<
+    | "logoToName" | "nameToMeta" | "nameGap" | "metaGap" | "metaToBody" | "block" | "actionGap"
+    | "statsY" | "statGap" | "cardPad" | "progressTop" | "progressBottom" | "stepY" | "stepGap"
+    | "staffTop" | "staffRowTop" | "staffGap" | "inviteTop" | "inviteGap" | "bottom"
+    | "overlayInset" | "overlayGap" | "overlayX" | "descriptionY" | "descriptionX" | "descriptionGap"
+    | "emptyY" | "emptyGap",
+    number
+  >>;
 }>;
 
 export type RadiusName =
@@ -302,7 +328,15 @@ export type RadiusName =
   | "categoryCircle"
   | "exclusiveTile"
   | "tileBadge"
-  | "countdownPill";
+  | "countdownPill"
+  | "storefrontLogo"
+  | "storefrontButton"
+  | "storefrontCard"
+  | "storefrontSetupCard"
+  | "storefrontBadge"
+  | "storefrontPill"
+  | "storefrontInput"
+  | "storefrontProgress";
 
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
@@ -405,6 +439,11 @@ export declare const size: Readonly<{
     countdownPill: number;
     countdownPillX: number;
   }>;
+  storefront: Readonly<Record<
+    | "banner" | "logo" | "logoRing" | "logoLift" | "button" | "badge" | "badgeX" | "pill" | "pillX"
+    | "staffAvatar" | "stepMark" | "progress" | "input" | "descriptionMark",
+    number
+  >>;
   skeletonBlock: Readonly<{
     storyLabel: Readonly<{ w: number; h: number }>;
     name: Readonly<{ w: number; h: number }>;
@@ -465,7 +504,12 @@ export type IconName =
   // Home redesign (preview): the glyph inside a category circle, and the
   // perishable / org badges in an Exclusive tile's corner.
   | "category"
-  | "tileBadge";
+  | "tileBadge"
+  // MSME storefront.
+  | "storefrontBadge"
+  | "storefrontShare"
+  | "storefrontStep"
+  | "storefrontPlus";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 

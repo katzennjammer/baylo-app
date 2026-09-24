@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, request } from "./client";
 import { getApiBase } from "./config";
+import { NOTIFICATIONS_KEY } from "./notifications";
 import { clearActingOrg, setActingOrgId } from "./org-context";
 
 /**
@@ -255,11 +256,11 @@ export function useInviteMember(organizationId: string) {
   });
 }
 
-/** Accept an invitation, or leave. The invited person's own two verbs. */
+/** Accept or decline an invitation, or leave. The invited person's own verbs. */
 export function useRespondToInvitation(organizationId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { membershipId: string; action: "accept" | "leave" }) =>
+    mutationFn: (input: { membershipId: string; action: "accept" | "decline" | "leave" }) =>
       apiV1(`/api/v1/organizations/${organizationId}/members/${input.membershipId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -274,6 +275,8 @@ export function useRespondToInvitation(organizationId: string) {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY }),
         qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
+        // Answering deletes the invite's ORG_INVITE notification server-side.
+        qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
       ]);
     },
   });

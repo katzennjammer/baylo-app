@@ -66,6 +66,8 @@ const color = {
 
   /** The scrim behind the "expand" label on a cropped photo. */
   captionFill: "rgba(20, 20, 15, 0.55)",
+  /** Text and glyphs drawn ON `captionFill` — the storefront's "Change cover". */
+  onScrim: "#FFFFFF",
 };
 
 /**
@@ -92,6 +94,11 @@ const dark = {
   scrim: "rgba(23, 26, 23, 0.78)",
   /** `surface` at 0% — the scrim's transparent end, same RGB so it never greys. */
   scrimClear: "rgba(23, 26, 23, 0)",
+  /* The dark stand-ins for `color.greenWash` / `color.forest` on a badge. Were
+     inline in the storefront header, profile.tsx and user.tsx as #244A31 /
+     #BFE8C7; the storefront reads them from here now. */
+  greenWash: "#244A31",
+  onGreenWash: "#BFE8C7",
 };
 
 /* ────────────────────────────── 2. TYPE ─────────────────────────────── */
@@ -249,6 +256,27 @@ const type = {
   exclusiveMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
   /** The live countdown beside "Exclusive". Mono, so the digits never jitter. */
   countdownPill: { fontFamily: font.monoMedium, fontSize: 12 },
+
+  /* ── MSME storefront (docs/design/MSME Profile 1a) ────────────────────────
+     The design sets these in Figtree 800/700; Figtree is not bundled, so the
+     heavy display weight maps to Bricolage Bold and the UI weights to Public
+     Sans, the same substitution every other screen makes. */
+  storefrontName: { fontFamily: font.displayBold, fontSize: 24, letterSpacing: -0.48, lineHeight: 29 },
+  storefrontMeta: { fontFamily: font.sans, fontSize: 14 },
+  storefrontCategory: { fontFamily: font.sansSemi, fontSize: 14 },
+  storefrontBody: { fontFamily: font.sans, fontSize: 15, lineHeight: 21.75 },
+  storefrontBadge: { fontFamily: font.sansBold, fontSize: 12 },
+  storefrontStat: { fontFamily: font.sansBold, fontSize: 20, fontVariant: ["tabular-nums"] },
+  storefrontStatLabel: { fontFamily: font.sans, fontSize: 12 },
+  storefrontSection: { fontFamily: font.sansBold, fontSize: 17 },
+  storefrontLink: { fontFamily: font.sansBold, fontSize: 13 },
+  storefrontOverlay: { fontFamily: font.sansSemi, fontSize: 12 },
+  storefrontStaffName: { fontFamily: font.sansSemi, fontSize: 15 },
+  storefrontStaffRole: { fontFamily: font.sans, fontSize: 13 },
+  storefrontStep: { fontFamily: font.sans, fontSize: 14 },
+  storefrontEmptyTitle: { fontFamily: font.sansBold, fontSize: 16 },
+  /** The initial in a logo-less shop's square. The person avatar's face, at the logo's scale. */
+  storefrontLogoInitial: { fontFamily: font.sansBold, fontSize: 34 },
 };
 
 /** Truncation, from the spec's own rules. */
@@ -437,6 +465,46 @@ const space = {
     thumbToTitle: 8,
     titleToMeta: 5,
   },
+
+  /* ── MSME storefront ──────────────────────────────────────────────────────
+     Read off "MSME Profile 1a". The design's 20 px gutter is NOT carried over:
+     the tabs and grid under the header sit on `screenX`, and a header on a
+     different gutter from the list it heads reads as misaligned. */
+  storefront: {
+    /** Logo → name row. */
+    logoToName: 12,
+    nameToMeta: 4,
+    nameGap: 8,
+    metaGap: 6,
+    metaToBody: 12,
+    /** Description → actions, actions → stats card, stats card → setup card. */
+    block: 16,
+    actionGap: 10,
+    statsY: 12,
+    statGap: 2,
+    cardPad: 16,
+    /** Setup card: heading → progress bar → first step. */
+    progressTop: 10,
+    progressBottom: 6,
+    stepY: 10,
+    stepGap: 12,
+    /** Stats / setup card → the staff section. */
+    staffTop: 20,
+    staffRowTop: 10,
+    staffGap: 12,
+    inviteTop: 12,
+    inviteGap: 8,
+    /** The header's bottom edge → the tabs. */
+    bottom: 22,
+    overlayInset: 12,
+    overlayGap: 8,
+    overlayX: 12,
+    descriptionY: 12,
+    descriptionX: 14,
+    descriptionGap: 10,
+    emptyY: 28,
+    emptyGap: 6,
+  },
 };
 
 const radius = {
@@ -482,6 +550,16 @@ const radius = {
   exclusiveTile: 14,
   tileBadge: 14,
   countdownPill: 12,
+
+  /* MSME storefront. */
+  storefrontLogo: 22,
+  storefrontButton: 14,
+  storefrontCard: 16,
+  storefrontSetupCard: 18,
+  storefrontBadge: 12,
+  storefrontPill: 17,
+  storefrontInput: 12,
+  storefrontProgress: 3,
 };
 
 /* ──────────────────────────── 4. COMPONENTS ─────────────────────────── */
@@ -635,6 +713,28 @@ const size = {
     countdownPillX: 10,
   },
 
+  /* ── MSME storefront ──────────────────────────────────────────────────── */
+  storefront: {
+    banner: 148,
+    logo: 84,
+    /** The page-coloured ring that lifts the logo off a busy banner. */
+    logoRing: 4,
+    /** How far the logo rises into the banner. Just under half, as drawn. */
+    logoLift: 40,
+    /** Edit / Follow / Message / Share. 46, not 44: the design's own value. */
+    button: 46,
+    badge: 24,
+    badgeX: 9,
+    /** "Change cover" and "+ Invite". */
+    pill: 34,
+    pillX: 12,
+    staffAvatar: 44,
+    stepMark: 22,
+    progress: 6,
+    input: 44,
+    descriptionMark: 24,
+  },
+
   /**
    * Skeleton block dimensions.
    *
@@ -711,6 +811,12 @@ const icon = {
   /* Home redesign (preview). */
   category: { size: 23, stroke: 1.6 },
   tileBadge: { size: 14, stroke: 1.9 },
+
+  /* MSME storefront. */
+  storefrontBadge: { size: 13, stroke: 1.9 },
+  storefrontShare: { size: 19, stroke: 2 },
+  storefrontStep: { size: 12, stroke: 2.4 },
+  storefrontPlus: { size: 14, stroke: 2.2 },
 };
 
 const border = {

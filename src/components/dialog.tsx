@@ -41,7 +41,8 @@ import { Tappable } from "./Tappable";
  *   cancel       outlined, ink — present, never the loudest thing
  *
  * One button fills the width. Two sit side by side, cancel first, so the
- * action is always under the right thumb. More than two stack.
+ * action is always under the right thumb. More than two stack -- and so do
+ * two whose labels will not fit half a card (SIDE_BY_SIDE_MAX_CHARS below).
  *
  * ── DISMISSING ──────────────────────────────────────────────────────────────
  *
@@ -63,6 +64,16 @@ interface Dialog {
   message?: string;
   buttons: DialogButton[];
 }
+
+/**
+ * The longest label that fits one of two side-by-side buttons on a 360dp
+ * phone: 24 scrim + 24 card padding each side leaves 264, less the 10 gap is
+ * 127 a button, less 16 padding each side is ~95px of 15px bold -- about 11
+ * characters. Past that the label is cut to one line with an ellipsis, which
+ * turned the staff roster's "Withdraw invitation" into "Withdraw in…"
+ * (24 Sep 2026). Stacking gives every button the full width instead.
+ */
+const SIDE_BY_SIDE_MAX_CHARS = 11;
 
 let queue: Dialog[] = [];
 let nextId = 1;
@@ -112,7 +123,8 @@ export function DialogHost() {
   const cancelFirst = dialog
     ? [...dialog.buttons].sort((a, b) => Number(b.style === "cancel") - Number(a.style === "cancel"))
     : [];
-  const stacked = cancelFirst.length > 2;
+  const stacked =
+    cancelFirst.length > 2 || cancelFirst.some((b) => b.text.length > SIDE_BY_SIDE_MAX_CHARS);
 
   return (
     <Modal

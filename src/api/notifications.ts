@@ -85,6 +85,10 @@ export function useNotifications() {
  *                                               you lives on your own profile,
  *                                               so that is where this lands.
  *   report         → null                       moderation is web-admin only.
+ *   org_invite     → /settings                  a staff invitation. The id is
+ *                                               the membership's; Accept and
+ *                                               Decline live in Settings'
+ *                                               "Posting as" Invitations list.
  *   listing_review → /listing-review?id=<itemId> a value review decided, a
  *                                               takedown, or an appeal outcome
  *                                               on your OWN listing. Its own
@@ -152,6 +156,12 @@ export function notificationTarget(n: NotificationItem): string | null {
      * reachable. Better than null, which renders an untappable row.
      */
     case "organization":
+      return "/settings";
+    /*
+     * A staff invitation. Answering it deletes this notification server-side,
+     * so a row that is still here is an invitation that is still open.
+     */
+    case "org_invite":
       return "/settings";
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
