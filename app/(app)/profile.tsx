@@ -12,9 +12,11 @@ import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
-import { color, font, icon } from "../../src/theme/tokens";
-import { GridIcon, StoreIcon, VerifiedOrgIcon } from "../../src/components/icons";
-import { ORG_BADGE_LABEL } from "../../src/lib/org";
+import { color, font } from "../../src/theme/tokens";
+import { orgLogoUrl, useOrganizations } from "../../src/api/organizations";
+import { getActingOrgId } from "../../src/api/org-context";
+import { StoreIcon } from "../../src/components/icons";
+import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
@@ -65,6 +67,15 @@ export default function ProfileScreen() {
     });
   }, [profile?.user.name, user?.id, user?.name]);
 
+  // The shop this device is ACTING AS, if any. This tab stays the PERSON'S
+  // profile either way -- profile/me is about the signed-in human (their
+  // Leaves, their shelf, their achievements) and does not read X-Baylo-Org --
+  // so the storefront is one tap away rather than swapped in underneath them.
+  // getActingOrgId() is read per render, not mirrored: see OrgSwitcher.
+  const { data: orgsData } = useOrganizations();
+  const actingOrgId = getActingOrgId();
+  const actingOrg = actingOrgId ? orgsData?.data.organizations.find((o) => o.id === actingOrgId) : undefined;
+
   const items = profile?.items ?? [];
   const { confirmBoost, isBoosting } = useConfirmBoost();
   const rows: ProfileListRow[] = tab === "posts"
@@ -83,6 +94,7 @@ export default function ProfileScreen() {
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
+        {actingOrg?.orgUserId ? <ShopCard dark={dark} name={actingOrg.name} logoUrl={actingOrg.logoUrl} onPress={() => router.push({ pathname: "/user", params: { id: actingOrg.orgUserId } })} /> : null}
         <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
@@ -98,6 +110,22 @@ export default function ProfileScreen() {
       ListFooterComponent={tab === "reviews" && isFetchingNextPage ? <ActivityIndicator color={dark ? darkColors.green : color.green} style={s.footer} /> : null}
       ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
     />
+  );
+}
+
+/** "You're acting as <shop>" — the owner's and staff's way into the storefront. */
+function ShopCard({ dark, name, logoUrl, onPress }: { dark: boolean; name: string; logoUrl: string | null; onPress: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  const logo = orgLogoUrl(logoUrl);
+  return (
+    <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. View shop profile`}>
+      {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+      <View style={s.shopText}>
+        <Text style={[s.shopEyebrow, { color: palette.muted }]}>Acting as</Text>
+        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
+      </View>
+      <Text style={[s.shopLink, { color: palette.green }]}>View shop</Text>
+    </Pressable>
   );
 }
 
@@ -134,14 +162,19 @@ export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active:
   );
 }
 
-export function ReviewSummary({ dark, summary }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null }) {
+/**
+ * `hideTier` is for an organisation's storefront. Orgs do not climb the trust
+ * ladder, so the server's trustTier is null for one, and the fallback below
+ * would label a sari-sari store "New Trader".
+ */
+export function ReviewSummary({ dark, summary, hideTier = false }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean }) {
   const palette = dark ? darkColors : lightColors;
   if (!summary) return <View style={s.summaryLoading}><ActivityIndicator color={palette.green} /></View>;
   return (
     <View style={[s.summary, { backgroundColor: palette.surface }]}>
       <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "-"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>average rating</Text></View>
       <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.totalReviews}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>reviews</Text></View>
-      <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>
+      {hideTier ? null : <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>}
     </View>
   );
 }
@@ -273,76 +306,16 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
   );
 }
 
-/**
- * An organisation's logo: SQUARE, with a shop front where a person gets
- * initials.
- *
- * ── THE SHAPE IS THE POINT, NOT A PREFERENCE ────────────────────────────────
- *
- * A round mask is a portrait convention — it crops to a face. Business logos
- * are laid out to the edges of a square, so the same mask takes the corners
- * off a wordmark and turns most of them into an unreadable blob. The spec asks
- * for a square and this is why. The radius is 12 rather than 0 so it still
- * belongs to the same surface as everything else on the screen.
- *
- * Exactly the same 76 as the avatar, so an org profile and a person's profile
- * have identical header geometry — which is the rest of the spec's ask: change
- * the identity block and nothing else.
- *
- * The placeholder is StoreIcon and not the initial letter. An initial in a
- * square reads as a person whose avatar failed to load; a shop front says what
- * kind of account this is even before the name is read.
- */
-export function OrgLogo({ uri, name }: { uri: string | null; name: string }) {
-  if (uri) {
-    return <Image source={{ uri }} contentFit="cover" style={s.orgLogo} accessibilityLabel={`${name} logo`} />;
-  }
-  return (
-    <View style={s.orgLogoFallback} accessibilityLabel={`${name}, no logo`}>
-      <StoreIcon size={icon.orgLogo.size} stroke={icon.orgLogo.stroke} color={color.forest} />
-    </View>
-  );
-}
-
-/**
- * "Verified organization", with a checkmark, where the trust tier sits.
- *
- * REPLACES the tier badge rather than joining it — organisations do not climb
- * the trade-count ladder, so there is never a tier to sit beside. The full
- * label rather than the card's "Verified org": a profile header has the width,
- * and both strings live in ORG_BADGE_LABEL so they cannot drift apart.
- *
- * Rendered ONLY when `verified`. A PENDING organisation shows no badge at all
- * — see the note on ownerBadge().
- */
-export function VerifiedOrgBadge({ dark }: { dark: boolean }) {
-  return (
-    <View
-      style={[s.orgBadge, { backgroundColor: dark ? "#244A31" : color.greenWash }]}
-      accessibilityRole="text"
-      accessibilityLabel={ORG_BADGE_LABEL.full}
-    >
-      <VerifiedOrgIcon
-        size={icon.orgBadge.size}
-        stroke={icon.orgBadge.stroke}
-        color={dark ? "#BFE8C7" : color.forest}
-      />
-      <Text style={[s.orgBadgeText, { color: dark ? "#BFE8C7" : color.forest }]}>
-        {ORG_BADGE_LABEL.full}
-      </Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  // Same 76 as the avatar: an org header and a person's header must have
-  // identical geometry. Only the mask differs.
-  orgLogo: { width: 76, height: 76, borderRadius: 12 },
-  orgLogoFallback: { width: 76, height: 76, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
-  orgBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 4, paddingVertical: 3, paddingHorizontal: 7, marginTop: 6 },
-  orgBadgeText: { fontFamily: font.sansSemi, fontSize: 11 },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+  shopCard: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginTop: 8, padding: 10, borderRadius: 10, minHeight: 56 },
+  shopLogo: { width: 36, height: 36, borderRadius: 8 },
+  shopLogoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
+  shopText: { flex: 1, minWidth: 0 },
+  shopEyebrow: { fontFamily: font.sans, fontSize: 11 },
+  shopName: { fontFamily: font.sansSemi, fontSize: 14, marginTop: 1 },
+  shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 76, height: 76, borderRadius: 38 },
   avatarFallback: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: color.green },

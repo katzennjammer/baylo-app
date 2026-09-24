@@ -29,7 +29,8 @@ import {
 import { authText, authType, sheetColor } from "../theme/auth-sheet-tokens";
 
 /**
- * Registering the organisation: name, business category, and the document.
+ * Registering the organisation: name, business category, DTI registration
+ * number, and the document.
  *
  * ── THE ACCOUNT ALREADY EXISTS BY THE TIME ANYONE SEES THIS ─────────────────
  *
@@ -60,6 +61,14 @@ import { authText, authType, sheetColor } from "../theme/auth-sheet-tokens";
  */
 
 const MAX_NAME = 120;
+const MAX_DTI = 64;
+
+/**
+ * The same loose SHAPE check the server makes, so the common typo is caught
+ * before a round trip. Not a validity check: nothing asks DTI whether the
+ * number exists. A reviewer compares it with the photographed certificate.
+ */
+const DTI_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ./-]*$/;
 
 export function OrgDetailsStep({
   accessToken,
@@ -90,11 +99,12 @@ export function OrgDetailsStep({
   const create = useCreateOrganization();
 
   const [name, setName] = useState("");
+  const [dti, setDti] = useState("");
   const [category, setCategory] = useState<BusinessCategoryOption | null>(null);
   const [documentUri, setDocumentUri] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [errors, setErrors] = useState<{ name?: string; category?: string; document?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; dti?: string; category?: string; document?: string }>({});
 
   // apiV1() unwraps to { data, meta }, so the payload is one level in.
   const categories = data?.data.businessCategories ?? [];
@@ -122,6 +132,11 @@ export function OrgDetailsStep({
     const next: typeof errors = {};
     if (trimmed.length < 2) next.name = "Enter your business name.";
     else if (trimmed.length > MAX_NAME) next.name = `That name is too long (${MAX_NAME} max).`;
+    const dtiValue = dti.trim().replace(/\s+/g, " ");
+    if (dtiValue.length < 3) next.dti = "Enter the registration number on your DTI certificate.";
+    else if (dtiValue.length > MAX_DTI || !DTI_PATTERN.test(dtiValue)) {
+      next.dti = "Use only letters, digits, spaces, \"-\", \"/\" or \".\".";
+    }
     if (!category) next.category = "Pick the closest one.";
     if (!documentUri) next.document = "Attach your registration or permit.";
 
@@ -137,6 +152,7 @@ export function OrgDetailsStep({
       await create.mutateAsync({
         name: trimmed,
         businessCategory: category!.value,
+        dtiRegistrationNumber: dtiValue,
         documentUri: documentUri!,
         ...(accessToken ? { accessToken } : {}),
       });
@@ -185,6 +201,21 @@ export function OrgDetailsStep({
         error={errors.name}
         maxLength={MAX_NAME}
         autoCapitalize="words"
+        editable={!busy}
+      />
+
+      <View style={{ height: gap.betweenInputs }} />
+      <Field
+        label="DTI registration number"
+        value={dti}
+        onChangeText={(v) => {
+          setDti(v);
+          setErrors((e) => (e.dti ? { ...e, dti: undefined } : e));
+        }}
+        error={errors.dti}
+        maxLength={MAX_DTI}
+        autoCapitalize="characters"
+        autoCorrect={false}
         editable={!busy}
       />
 

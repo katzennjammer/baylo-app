@@ -5,7 +5,7 @@ import { getApiBase } from "./config";
 import { clearActingOrg, setActingOrgId } from "./org-context";
 
 /**
- * Organisations / SMMEs: creating one, listing the ones you may act as, and
+ * Organisations / MSMEs: creating one, listing the ones you may act as, and
  * switching context.
  *
  * ── THE DOCUMENT GOES UP AS MULTIPART, NOT THROUGH /api/upload ──────────────
@@ -29,6 +29,12 @@ export type OrgVerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface ActingOrg {
   id: string;
+  /**
+   * The org's backing account -- the id its storefront profile is read by.
+   * Optional: a server from before the storefront does not send it, and the
+   * Profile tab then keeps showing the person's own profile.
+   */
+  orgUserId?: string;
   name: string;
   logoUrl: string | null;
   role: OrgMemberRole;
@@ -50,7 +56,7 @@ export interface OrganizationsPayload {
   organizations: ActingOrg[];
   invitations: OrgInvitation[];
   businessCategories: BusinessCategoryOption[];
-  limits: { maxNameLength: number; maxImageBytes: number };
+  limits: { maxNameLength: number; maxImageBytes: number; maxDtiLength?: number };
 }
 
 /**
@@ -87,6 +93,11 @@ export function useOrganizations(enabled = true, accessToken?: string | null) {
 export interface CreateOrganizationInput {
   name: string;
   businessCategory: string;
+  /**
+   * The DTI registration number, as typed. REQUIRED by the server, which only
+   * checks its shape -- a reviewer compares it against the document photo.
+   */
+  dtiRegistrationNumber: string;
   /** The local URI of the photographed DTI/SEC registration or permit. */
   documentUri: string;
   /**
@@ -136,6 +147,7 @@ export async function createOrganization(
   const form = new FormData();
   form.append("name", input.name);
   form.append("businessCategory", input.businessCategory);
+  form.append("dtiRegistrationNumber", input.dtiRegistrationNumber);
   form.append("file", {
     uri: input.documentUri,
     name: "business-document.jpg",
@@ -242,6 +254,74 @@ export function useRespondToInvitation(organizationId: string) {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY }),
         qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
+      ]);
+    },
+  });
+}
+
+/** An OWNER changing somebody's role. The server refuses demoting the last owner. */
+export function useChangeMemberRole(organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { membershipId: string; role: OrgMemberRole }) =>
+      apiV1(`/api/v1/organizations/${organizationId}/members/${input.membershipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: input.role }),
+      }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
+  });
+}
+
+/** An OWNER removing a member, or withdrawing an invitation. */
+export function useRemoveMember(organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (membershipId: string) =>
+      apiV1(`/api/v1/organizations/${organizationId}/members/${membershipId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
+        // The public Staff stat counts ACTIVE members.
+        qc.invalidateQueries({ queryKey: ["profile"] }),
+      ]);
+    },
+  });
+}
+
+export interface UpdateOrganizationInput {
+  /** An /api/upload URL, or null to clear. Omitted = unchanged. */
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
+  description?: string | null;
+}
+
+/**
+ * The storefront's own settings. OWNER only; the server 404s anyone else.
+ *
+ * Images are uploaded through `uploadPhoto()` FIRST and arrive here as URLs --
+ * the public path, like an avatar, because a logo and a banner exist to be
+ * seen. The opposite of the business document above, which must never take it.
+ */
+export function useUpdateOrganization(organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateOrganizationInput) =>
+      apiV1(`/api/v1/organizations/${organizationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY }),
+        qc.invalidateQueries({ queryKey: ["profile"] }),
+        // Cards carry the logo in owner.org.logoUrl.
+        qc.invalidateQueries({ queryKey: ["home"] }),
+        qc.invalidateQueries({ queryKey: ["browse"] }),
       ]);
     },
   });

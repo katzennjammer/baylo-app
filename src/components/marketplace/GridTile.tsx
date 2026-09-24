@@ -19,6 +19,9 @@ import { bracketLabel, bracketOf, bracketsWord, type Bracket } from "../../lib/b
 import { bracketsBeyondReach } from "../../lib/gap";
 import { reach as reachCopy } from "../offer/copy";
 import type { Item } from "../../api/types";
+import { OrgChips } from "../OrgChips";
+import { businessCategoryLabel } from "../../lib/business-category";
+import { ORG_BADGE_LABEL } from "../../lib/org";
 
 /**
  * One listing in the browse grid.
@@ -38,6 +41,12 @@ import type { Item } from "../../api/types";
  *   which is documented as reading high. A trust signal that is wrong in the
  *   optimistic direction is worse on a grid than absent, because a grid is
  *   scanned rather than read. The detail screen shows the real one.
+ *
+ *   EXCEPT for an organisation. The verified-MSME checkmark is not a trust
+ *   tier: /browse sends it resolved (`owner.org.verified`, straight from the
+ *   review decision) and it cannot read high, so none of the reasoning above
+ *   applies. An org's tile carries its business-category chip, plus the
+ *   checkmark once verified -- see OrgChips. A person's tile is unchanged.
  *
  *   The social row and Offer Trade. Both need the item's full context, and both
  *   are one tap away.
@@ -114,6 +123,10 @@ export const GridTile = memo(function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
+        (item.owner.org
+          ? ` From ${item.owner.org.name}, ${businessCategoryLabel(item.owner.org.businessCategory)}` +
+            (item.owner.org.verified ? `, ${ORG_BADGE_LABEL.full}.` : ".")
+          : "") +
         (item.valueLeaves === null
           ? " Unvalued."
           : own
@@ -164,6 +177,12 @@ export const GridTile = memo(function GridTile({
         <Text style={[textStyle(type.gridMeta), s.meta]} numberOfLines={1}>
           {item.conditionLabel}
         </Text>
+
+        {item.owner.org ? (
+          <View style={s.org}>
+            <OrgChips org={item.owner.org} />
+          </View>
+        ) : null}
 
         {/*
           Omitted rather than shown as "0" or "—" for a listing made before the
@@ -228,6 +247,7 @@ const s = StyleSheet.create({
   body: { padding: space.browse.tileBody },
   title: { color: color.ink },
   meta: { marginTop: space.browse.tileTitleToMeta, color: color.inkMuted },
+  org: { marginTop: space.browse.tileTitleToMeta },
   leaves: {
     marginTop: space.browse.tileMetaToLeaves,
     flexDirection: "row",

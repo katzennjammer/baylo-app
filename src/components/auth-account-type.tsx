@@ -105,7 +105,7 @@ export function AccountTypeStep({
       <AccountCard
         selected={value === "organization"}
         onPress={() => onChange("organization")}
-        title="Organization / SMME"
+        title="Organization / MSME"
         body="Trade as a shop, co-op or non-profit. Staff can post on its behalf, and a verified badge appears once we have checked your business document."
         icon={<StoreIcon size={26} stroke={1.6} color={sheetColor.ink} />}
       />

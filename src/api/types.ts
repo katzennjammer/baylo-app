@@ -449,7 +449,21 @@ export interface PublicProfilePayload {
      * `trustTier` is ALWAYS null alongside it; the server guarantees that, so
      * no screen has to choose between two badges.
      */
-    org: (OrgBadge & { createdAt: string; staffCount: number }) | null;
+    org: (OrgBadge & {
+      createdAt: string;
+      staffCount: number;
+      /**
+       * The storefront fields. OPTIONAL on the wire, not just nullable: a
+       * server from before the storefront omits them, and the storefront then
+       * renders its fallbacks (gradient band, no tagline, stat from counts).
+       */
+      bannerUrl?: string | null;
+      description?: string | null;
+      /** COMPLETED trades on either side, counted from the rows. */
+      completedTrades?: number;
+      /** The viewer's ACTIVE role in this org, or null for a non-member. */
+      viewerRole?: "OWNER" | "STAFF" | null;
+    }) | null;
   };
   counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following"> & {
     /** ACTIVE staff, or null for a person. Sent beside followers, not instead. */

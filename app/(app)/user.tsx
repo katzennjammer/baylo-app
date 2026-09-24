@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
 import { useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -7,8 +7,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { followButtonLabel, useFollow, usePublicProfile, useUnfollow } from "../../src/api/profile";
 import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
-import { Avatar, Badges, OrgLogo, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, VerifiedOrgBadge, shelfLabel } from "./profile";
+import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
 import { ChevronLeftIcon } from "../../src/components/icons";
+import { OrgStorefrontHeader } from "../../src/components/OrgStorefrontHeader";
+import { getApiBase } from "../../src/api/config";
 import { Tappable } from "../../src/components/Tappable";
 import { bracketLabel } from "../../src/lib/brackets";
 import { TIER_LABEL } from "../../src/lib/trust";
@@ -59,55 +61,56 @@ export default function UserProfileScreen() {
     else follow.mutate({ userId: data.user.id });
   }
 
+  const openMessage = () => router.push({ pathname: "/messages/thread", params: { partner: data.user.id, partnerName: data.user.name, partnerAvatar: data.user.avatar ?? "" } });
+
+  /*
+    AN ORGANISATION GETS THE STOREFRONT HEADER, a different layout rather than
+    this one with a square avatar: banner + anchored logo, business identity,
+    Staff / Active listings / Trades completed, and the members-only roster.
+    See OrgStorefrontHeader. Everything from the tabs down -- the posts grid
+    and the reviews list -- is the same code path as a person's.
+  */
+  const header = org ? (
+    <OrgStorefrontHeader
+      dark={dark}
+      org={org}
+      counts={data.counts}
+      viewerId={session?.user.id ?? null}
+      follow={{ label: followButtonLabel(status, data.follow.followsYou), busy, disabled: busy || status === "PENDING", primary: status === "NONE", onPress: toggleFollow }}
+      onMessage={openMessage}
+      onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
+      onShare={() => void Share.share({ message: `${org.name} on Baylo
+${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
+    />
+  ) : null;
+
   return <FlatList<ProfileRow>
     style={[s.screen, { backgroundColor: palette.surface }]}
     data={rows}
     keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
     ListHeaderComponent={<>
       <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} />
+      {header ?? (
       <View style={s.header}>
-        {/*
-          THE IDENTITY BLOCK IS THE ONLY THING THAT CHANGES FOR AN ORGANISATION.
-          Square logo instead of a round avatar, and ONE "Staff" stat where a
-          person gets Followers and Following -- which the spec asks for, and
-          which also means an org header has no tappable stat, because there is
-          no staff-list screen a stranger is entitled to open. The org's own
-          members reach the roster from settings, not from here.
-          Everything below -- bio, Follow, Message, tabs, the posts grid --
-          is identical for both, deliberately.
-        */}
+        {/* A PERSON. Organisations never reach this block -- see `header` above. */}
         <View style={s.identityRow}>
-          {org ? <OrgLogo uri={org.logoUrl} name={data.user.name} /> : <Avatar uri={data.user.avatar} name={data.user.name} />}
+          <Avatar uri={data.user.avatar} name={data.user.name} />
           <View style={s.stats}>
             <Stat dark={dark} label="Posts" value={data.counts.listed} />
-            {org ? (
-              <Stat dark={dark} label="Staff" value={data.counts.staff ?? org.staffCount} />
-            ) : (
-              <>
-                <Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} />
-                <Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} />
-              </>
-            )}
+            <Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} />
+            <Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} />
           </View>
         </View>
-        {/*
-          One badge, never two. An organisation gets the checkmark and never a
-          trust tier -- the server sends trustTier: null for one, so this is an
-          either/or in the data as well as in the layout. An UNVERIFIED org
-          gets neither, which is the honest rendering of a real account that
-          has not been reviewed yet.
-        */}
-        {org?.verified ? (
-          <VerifiedOrgBadge dark={dark} />
-        ) : data.user.trustTier ? (
+        {data.user.trustTier ? (
           <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[data.user.trustTier as keyof typeof TIER_LABEL] ?? data.user.trustTier}</Text></View>
         ) : null}
         {data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{data.user.bio}</Text> : null}
-        <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : followButtonLabel(status, data.follow.followsYou)}</Text></Pressable><Pressable onPress={() => router.push({ pathname: "/messages/thread", params: { partner: data.user.id, partnerName: data.user.name, partnerAvatar: data.user.avatar ?? "" } })} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable></View>
+        <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : followButtonLabel(status, data.follow.followsYou)}</Text></Pressable><Pressable onPress={openMessage} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable></View>
         {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} onMore={() => undefined} /> : null}
       </View>
+      )}
       <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-      {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} /> : null}
+      {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} /> : null}
     </>}
     renderItem={({ item: row }) => row.kind === "posts" ? <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View> : <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { if (row.review.item) router.push({ pathname: "/item", params: { id: row.review.item.id } }); }} />}
     onEndReached={() => { if (tab === "reviews" && reviewQuery.hasNextPage && !reviewQuery.isFetchingNextPage) void reviewQuery.fetchNextPage(); }}

@@ -54,9 +54,11 @@ export function isOrgOwner(owner: Pick<ItemOwner, "org">): boolean {
 /**
  * The label beside the checkmark.
  *
- * "Verified org" on a card and "Verified organization" on a profile: the card's
- * badge sits in a row with a name and a value and has roughly sixty points to
- * live in, while the profile has the width for the whole word. Same claim, two
- * lengths, chosen here so the two cannot come to say different things.
+ * "Verified MSME" everywhere -- MSME being the Philippine DTI's own term,
+ * Micro, Small and Medium Enterprises. Card and profile used to carry two
+ * lengths ("Verified org" / "Verified organization"); the new term is short
+ * enough for the card's sixty-odd points, so both keys now say the same thing.
+ * The two keys are kept so a future longer profile wording is a one-line change
+ * and cannot drift from the card's.
  */
-export const ORG_BADGE_LABEL = { compact: "Verified org", full: "Verified organization" } as const;
+export const ORG_BADGE_LABEL = { compact: "Verified MSME", full: "Verified MSME" } as const;

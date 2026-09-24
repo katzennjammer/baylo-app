@@ -11,6 +11,7 @@ import {
 } from "../api/organizations";
 import { getActingOrgId } from "../api/org-context";
 import { Tappable } from "./Tappable";
+import { ORG_BADGE_LABEL } from "../lib/org";
 import { CheckIcon, StoreIcon, VerifiedOrgIcon } from "./icons";
 import { color, icon, radius, textStyle, type } from "../theme/tokens";
 
@@ -155,7 +156,7 @@ function IdentityRow({
       onPress={disabled ? undefined : onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`${label}. ${sub}${verified ? ". Verified organization" : ""}`}
+      accessibilityLabel={`${label}. ${sub}${verified ? `. ${ORG_BADGE_LABEL.full}` : ""}`}
       style={[rowStyles.row, selected && rowStyles.rowOn]}
       pressedStyle={{ opacity: 0.8 }}
     >

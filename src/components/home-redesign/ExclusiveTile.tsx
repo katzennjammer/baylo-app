@@ -18,6 +18,9 @@ import {
 } from "../../theme/tokens";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import type { Item } from "../../api/types";
+import { ORG_BADGE_LABEL } from "../../lib/org";
+import { businessCategoryLabel } from "../../lib/business-category";
+import { OrgChips } from "../OrgChips";
 
 /**
  * A listing in the Home screen's Exclusive grid — the dark variant.
@@ -32,7 +35,9 @@ import type { Item } from "../../api/types";
  * with GridTile's own 120 ms transition and the same failed-photo fallback.
  *
  * Badges: bolt = perishable, star = a live Featured boost, rosette = verified
- * org. Bolt and star never meet on one tile — the server refuses to boost a
+ * MSME. An org poster's business category rides on the scrim under the poster
+ * line as a chip (OrgChips, rosette suppressed -- the icon column already
+ * draws it). Bolt and star never meet on one tile — the server refuses to boost a
  * perishable and /featured filters them out — but each is decided on its own.
  *
  * Value follows GridTile's rule: the exact figure on your own listing, the
@@ -80,7 +85,8 @@ export const ExclusiveTile = memo(function ExclusiveTile({
         (perishable ? " Perishable." : "") +
         (featured ? " Featured." : "") +
         (expiryLabel ? ` ${expiryLabel}.` : "") +
-        (org ? " Verified organization." : "") +
+        (org ? ` ${ORG_BADGE_LABEL.full}.` : "") +
+        (item.owner.org ? ` ${businessCategoryLabel(item.owner.org.businessCategory)}.` : "") +
         (item.valueLeaves === null
           ? ""
           : own
@@ -135,6 +141,11 @@ export const ExclusiveTile = memo(function ExclusiveTile({
           {poster}
           {expiryLabel ? <Text style={{ color: color.urgent }}>{` · ${expiryLabel}`}</Text> : null}
         </Text>
+        {item.owner.org ? (
+          <View style={{ marginTop: space.home.tileTitleToMeta }}>
+            <OrgChips org={item.owner.org} showBadge={false} tone="dark" />
+          </View>
+        ) : null}
         {item.valueLeaves === null ? null : (
           <View style={s.leaves}>
             <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={dark.green} />
