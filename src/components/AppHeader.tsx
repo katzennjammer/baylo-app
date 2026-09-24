@@ -68,10 +68,10 @@ import { showDialog } from "./dialog";
  * QUESTS IS OPT-IN, via `showQuests`. Only the three browsing screens — Home,
  * Community, Marketplace — pass it, from their Tabs.Screen entries in
  * (app)/_layout.tsx; every other route gets the header without it. It sits
- * first in the icon group, before the bell, and opens the Quests stub screen
- * (which says NOT BUILT YET) rather than a dialog saying the same thing. It
- * carries no count: there is no quest data to count yet, and a badge of 0 is
- * not drawn anyway.
+ * first in the icon group, before the bell, and opens the Quests screen
+ * (today's five quests from /api/v1/quests). It carries no count: completion
+ * is only computed when that screen fetches, so a badge here would be stale
+ * by construction.
  */
 export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {}) {
   const insets = useSafeAreaInsets();
@@ -235,7 +235,7 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
   const { signOut } = useSession();
   // No Quests item. It used to open a "coming soon" dialog from here; Quests
   // is now a header icon on Home, Community and Marketplace that opens the
-  // stub screen, and a second entrance saying the same thing was redundant.
+  // Quests screen, and a second entrance was redundant.
 
   const confirmSignOut = () => {
     showDialog(

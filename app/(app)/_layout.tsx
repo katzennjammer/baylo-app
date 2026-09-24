@@ -142,7 +142,7 @@ export default function AppLayout() {
       />
       {/* Quests is off the bar (five slots, Post centred) and reached from the
           header icon on Home, Community and Marketplace — see `questsHeader`.
-          Still a stub; see the note in quests.tsx. */}
+          Refetches on focus; see the note in quests.tsx. */}
       <Tabs.Screen name="quests" options={{ href: null, title: "Quests" }} />
       <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
       <Tabs.Screen name="item" options={{ href: null, title: "Item", headerShown: false }} />
