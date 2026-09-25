@@ -122,7 +122,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
         ) : null}
         {data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{data.user.bio}</Text> : null}
         <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : followButtonLabel(status, data.follow.followsYou)}</Text></Pressable><Pressable onPress={openMessage} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable></View>
-        {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} onMore={() => undefined} /> : null}
+        {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} showEarnedDate={false} onMore={() => undefined} /> : null}
       </View>
       )}
       <ProfileTabs dark={dark} active={tab} onChange={setTab} />

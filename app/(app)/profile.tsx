@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleShe
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useProfileMe, usePublicProfile } from "../../src/api/profile";
 import { canBoost } from "../../src/api/featured";
@@ -22,6 +22,8 @@ import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
+import { fetchAchievements } from "../../src/api/achievements";
+import { NoticeDialog } from "../../src/components/NoticeDialog";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -501,18 +503,86 @@ const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
  * button that opens the achievements screen, shown only while the user still
  * has room on the shelf, so a full shelf is not cluttered with an invitation to
  * add more.
+ *
+ * ── TAPPING AN EARNED BADGE ──────────────────────────────────────
+ *
+ * `displayedAchievements` (from /profile/me) only carries id/name/icon/
+ * imageUrl -- enough to draw the circle, not enough to explain it. Rather
+ * than widen that payload, this reuses the SAME ["achievements"] query the
+ * Achievements screen already runs (fetchAchievements, same query key), so
+ * a user who has opened that screen this session gets the popup instantly
+ * from cache; one who hasn't pays one extra request, on tap, not on load.
+ *
+ * That query is the VIEWER's achievements. The description is the same for
+ * everybody, but the unlock date is the viewer's, so on somebody else's
+ * profile (user.tsx) `showEarnedDate` is false and the date is left out
+ * rather than showing the viewer's date under another person's badge.
  */
 const SHELF_CAP = 4;
 
-export function Badges({ dark, achievements, showMore = true, onMore }: { dark: boolean; achievements: DisplayedAchievements; showMore?: boolean; onMore: () => void }) {
+export function Badges({ dark, achievements, showMore = true, showEarnedDate = true, onMore }: { dark: boolean; achievements: DisplayedAchievements; showMore?: boolean; showEarnedDate?: boolean; onMore: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detail = useQuery({
+    queryKey: ["achievements"],
+    queryFn: fetchAchievements,
+    staleTime: 30_000,
+    enabled: selectedId !== null,
+  });
+  const selected = detail.data?.achievements.find((a) => a.id === selectedId) ?? null;
   const shown = achievements.slice(0, SHELF_CAP);
   const hasRoom = showMore && shown.length < SHELF_CAP;
   const data: { key: string; icon: keyof typeof Ionicons.glyphMap; imageUrl: string | null; label: string; more?: boolean }[] = [
     ...shown.map((a) => ({ key: a.id, icon: badgeIcons[a.icon] ?? "trophy-outline", imageUrl: a.imageUrl, label: a.name })),
     ...(hasRoom ? [{ key: "more", icon: "add-outline" as const, imageUrl: null, label: "More", more: true }] : []),
   ];
-  return <View style={s.badges}><FlatList horizontal showsHorizontalScrollIndicator={false} data={data} keyExtractor={(item) => item.key} contentContainerStyle={s.badgesContent} renderItem={({ item }) => <Pressable onPress={item.more ? onMore : undefined} disabled={!item.more} accessibilityRole={item.more ? "button" : undefined} accessibilityLabel={item.more ? "More achievements" : item.label} style={s.badgeItem}><View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>{item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}</View><Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text></Pressable>} /></View>;
+
+  const selectedIcon = selected ? badgeIcons[selected.icon] ?? "trophy-outline" : "trophy-outline";
+  const selectedBody = selected
+    ? showEarnedDate && selected.unlockedAt
+      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
+      : selected.description
+    : "";
+
+  return (
+    <View style={s.badges}>
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={data}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={s.badgesContent}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={item.more ? onMore : () => setSelectedId(item.key)}
+            accessibilityRole="button"
+            accessibilityLabel={item.more ? "More achievements" : `${item.label}, view details`}
+            style={s.badgeItem}
+          >
+            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
+              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
+            </View>
+            <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text>
+          </Pressable>
+        )}
+      />
+      {selected ? (
+        <NoticeDialog
+          visible
+          title={selected.name}
+          body={selectedBody}
+          icon={
+            selected.imageUrl ? (
+              <Image source={{ uri: selected.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+            ) : (
+              <Ionicons name={selectedIcon} size={24} color={color.green} />
+            )
+          }
+          onDismiss={() => setSelectedId(null)}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 function shortBadgeLabel(label: string): string {
@@ -579,6 +649,7 @@ const s = StyleSheet.create({
   badgeItem: { width: 76, alignItems: "center" },
   badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   badgeArt: { width: "100%", height: "100%" },
+  badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
   moreBadge: { borderStyle: "dashed" },
   badgeLabel: { width: 76, fontFamily: font.sans, fontSize: 11, lineHeight: 14, marginTop: 4, textAlign: "center" },
   tabs: { height: 45, flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
