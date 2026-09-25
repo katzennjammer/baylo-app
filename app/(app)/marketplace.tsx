@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -25,6 +25,7 @@ import {
   type BrowseFilters,
 } from "../../src/api/browse";
 import {
+  BusinessCategoryRail,
   CategoryRail,
   FilterButton,
   SearchField,
@@ -45,6 +46,7 @@ import {
   BrowseSkeleton,
 } from "../../src/components/marketplace/BrowseStates";
 import { GridTile } from "../../src/components/marketplace/GridTile";
+import { OrgMatches } from "../../src/components/marketplace/OrgMatches";
 import { useReach, tileOutOfReach } from "../../src/api/offer";
 import { useSession } from "../../src/auth/session";
 import { HowTradingWorksSheet } from "../../src/components/offer/OfferSheet";
@@ -118,6 +120,13 @@ const LOCATION_FIX_TIMEOUT_MS = 10_000;
  * from a table scan. The category chips ARE live, because a chip is one
  * complete decision and a half-typed word is not.
  */
+/**
+ * Hidden tabs a search result leads into. Focus moving to one of these keeps
+ * the search; see "The search does not outlive the visit" below. `messages`
+ * because an item's "Message" goes there and back comes through the item.
+ */
+const SEARCH_DRILL_DOWNS = new Set(["item", "user", "hub", "hubs", "connections", "messages"]);
+
 export default function MarketplaceScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -144,15 +153,20 @@ export default function MarketplaceScreen() {
   // on Food-and-whatever-you-searched-last-week is not what was tapped. After
   // that it is an ordinary chip — the rail's toggle deselects it like any
   // other, which is how the user gets back to everything.
-  const { category: arrivingCategory, applyAt } = useLocalSearchParams<{
+  //
+  // Home's search box sends `q` the same way, so what was typed there is what
+  // gets searched here -- including the shop-name matches above the grid.
+  const { category: arrivingCategory, q: arrivingQuery, applyAt } = useLocalSearchParams<{
     category?: string;
+    q?: string;
     applyAt?: string;
   }>();
   useEffect(() => {
     if (!applyAt) return;
     const known = (CATEGORIES as readonly string[]).includes(arrivingCategory ?? "");
-    setFilters(known ? { categories: [arrivingCategory!] } : {});
-    setDraftQuery("");
+    const q = arrivingQuery?.trim().slice(0, 100) || undefined;
+    setFilters({ ...(known ? { categories: [arrivingCategory!] } : {}), ...(q ? { q } : {}) });
+    setDraftQuery(q ?? "");
     setView("grid");
     // arrivingCategory is read with the nonce it came with, never on its own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -409,6 +423,8 @@ export default function MarketplaceScreen() {
   const {
     items,
     facets,
+    businessFacets,
+    orgMatches,
     isPending,
     isError,
     error,
@@ -461,9 +477,58 @@ export default function MarketplaceScreen() {
    * tapped. Leaving a `false` behind would give the same query two cache keys
    * and refetch the whole first page every time the pill was turned off.
    */
+  //
+  // Turning it off also clears the shop-type chips under it: they only exist
+  // while it is on, and the server refuses a shop type without it.
   const toggleOrgsOnly = useCallback(() => {
-    setFilters((f) => (f.orgsOnly ? { ...f, orgsOnly: undefined } : { ...f, orgsOnly: true }));
+    setFilters((f) =>
+      f.orgsOnly
+        ? { ...f, orgsOnly: undefined, businessCategories: undefined }
+        : { ...f, orgsOnly: true },
+    );
   }, []);
+
+  /** A shop-type chip under the Organizations pill. Multi-select, no cap. */
+  const toggleBusinessCategory = useCallback((businessCategory: string) => {
+    setFilters((f) => {
+      const current = f.businessCategories ?? [];
+      const next = current.includes(businessCategory)
+        ? current.filter((c) => c !== businessCategory)
+        : [...current, businessCategory];
+      return { ...f, businessCategories: next.length > 0 ? next : undefined };
+    });
+  }, []);
+
+  // ── The search does not outlive the visit ─────────────────────────────────
+  //
+  // This screen is a tab and stays mounted, so its useState outlives leaving
+  // it: search "Baylo", go Home, come back through "See all" (a plain push
+  // with no `applyAt`), and the box still said Baylo. Nothing persisted it on
+  // purpose; it just never died (25 Sep 2026).
+  //
+  // Focus/blur cannot tell the two journeys apart: the listing and profile a
+  // result opens are hidden TABS too (see app/(app)/_layout.tsx), so opening
+  // an item blurs this screen exactly as going Home does. What differs is
+  // WHERE focus went. The tab navigator's state is watched while this screen
+  // is in the background: focus moving to a drill-down keeps the search, so
+  // back from an item still shows the results it came from; focus moving
+  // anywhere else clears it, so the next visit starts on an empty box. Only
+  // the search -- the chips are a separate, visible decision.
+  //
+  // Screens on the ROOT stack above the tabs (offer, notifications, settings)
+  // do not change this navigator's state, so they keep the search as well.
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener("state", (e) => {
+        const state = (e.data as { state?: { index: number; routes: { name: string }[] } }).state;
+        const focused = state?.routes[state.index]?.name;
+        if (!focused || focused === "marketplace" || SEARCH_DRILL_DOWNS.has(focused)) return;
+        setDraftQuery("");
+        setFilters((f) => (f.q === undefined ? f : { ...f, q: undefined }));
+      }),
+    [navigation],
+  );
 
   const clearEverything = useCallback(() => {
     setDraftQuery("");
@@ -547,7 +612,21 @@ export default function MarketplaceScreen() {
           orgsOnly={filters.orgsOnly ?? false}
           onToggleOrgs={toggleOrgsOnly}
         />
+        {filters.orgsOnly ? (
+          <View style={s.subRail}>
+            <BusinessCategoryRail
+              facets={businessFacets}
+              selected={filters.businessCategories ?? []}
+              onToggle={toggleBusinessCategory}
+            />
+          </View>
+        ) : null}
       </View>
+
+      <OrgMatches
+        orgs={orgMatches}
+        onOpen={(org) => router.push({ pathname: "/user", params: { id: org.orgUserId } })}
+      />
 
       {items.length > 0 ? (
         <Text style={[textStyle(type.resultCount), s.count]}>
@@ -736,6 +815,7 @@ export default function MarketplaceScreen() {
               query={filters.q ?? ""}
               filterCount={filterCount}
               orgsOnly={filters.orgsOnly ?? false}
+              shopsMatched={orgMatches.length > 0}
               onClear={clearEverything}
             />
           ) : (
@@ -874,6 +954,7 @@ const s = StyleSheet.create({
     paddingTop: space.browse.searchY,
   },
   rail: { paddingVertical: space.browse.chipsY },
+  subRail: { paddingTop: space.browse.chipsY },
 
   /* The toggle sits under the search row in grid mode and at the top of the
      screen in map mode, where there is no search row above it to sit under. */

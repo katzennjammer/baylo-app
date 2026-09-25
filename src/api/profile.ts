@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, request } from "./client";
-import type { FollowStatus, ProfileConnectionUser, ProfileMePayload, PublicProfilePayload } from "./types";
+import type { BrowsePayload, FollowStatus, ProfileConnectionUser, ProfileMePayload, PublicProfilePayload } from "./types";
 
 /**
  * GET /api/v1/profile/me — the viewer's own shelf, standing and ID gate.
@@ -77,16 +77,22 @@ export function useFollow() {
     onMutate: async ({ userId }) => {
       await queryClient.cancelQueries({ queryKey: ["profile", userId] });
       await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
-      queryClient.setQueryData<PublicProfilePayload>(["profile", userId], (profile) => profile ? {
-        ...profile,
-        counts: { ...profile.counts, followers: profile.counts.followers + 1 },
-        follow: { ...profile.follow, status: "ACCEPTED" },
-      } : profile);
+      patchCachedProfile(queryClient, userId, "ACCEPTED");
       updateConnectionCaches(queryClient, userId, "ACCEPTED");
+      updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
     },
     onError: (_error, { userId }) => {
-      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      // The status flags on every connections list this patched; the count
+      // and the followee's own list are re-read in onSettled.
       void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+      updateBrowseOrgCaches(queryClient, userId, "NONE");
+    },
+    // Success or not: the server's count and the followee's follower list are
+    // the truth the optimistic patch guessed at. The list has to be refetched
+    // rather than patched -- a new follower is a row it does not have yet.
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections", userId] });
     },
   });
 }
@@ -101,18 +107,64 @@ export function useUnfollow() {
     onMutate: async ({ userId }) => {
       await queryClient.cancelQueries({ queryKey: ["profile", userId] });
       await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
-      queryClient.setQueryData<PublicProfilePayload>(["profile", userId], (profile) => profile ? {
-        ...profile,
-        counts: { ...profile.counts, followers: Math.max(0, profile.counts.followers - 1) },
-        follow: { ...profile.follow, status: "NONE" },
-      } : profile);
+      patchCachedProfile(queryClient, userId, "NONE");
       updateConnectionCaches(queryClient, userId, "NONE");
+      updateBrowseOrgCaches(queryClient, userId, "NONE");
     },
     onError: (_error, { userId }) => {
-      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      // The status flags on every connections list this patched; the count
+      // and the followee's own list are re-read in onSettled.
       void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+      updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
+    },
+    // Success or not: the server's count and the followee's follower list are
+    // the truth the optimistic patch guessed at. The list has to be refetched
+    // rather than patched -- a new follower is a row it does not have yet.
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections", userId] });
     },
   });
+}
+
+/**
+ * The optimistic half of follow / unfollow on a profile that is on screen.
+ *
+ * THE CACHE HOLDS THE ENVELOPE, NOT THE PAYLOAD. usePublicProfile() stores
+ * apiV1()'s `{ data, meta }` and unwraps it with `select`, and `select` only
+ * shapes what the screen reads -- setQueryData sees the raw entry. From 16 Sep
+ * 2026 (3b83e43) until this was fixed, the updaters here read
+ * `profile.counts.followers` off the envelope, threw inside onMutate, and so
+ * the POST was never sent: every Follow tap on a profile silently rolled back
+ * to "Follow" and the old count. The type parameter below is the real shape so
+ * that drift is a compile error next time.
+ *
+ * Moving from "not ACCEPTED" to ACCEPTED is +1, the reverse -1; anything else
+ * leaves the count alone, so a double tap cannot count twice.
+ */
+function patchCachedProfile(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueryData<{ data: PublicProfilePayload; meta: Record<string, unknown> }>(
+    ["profile", userId],
+    (entry) => {
+      if (!entry) return entry;
+      const profile = entry.data;
+      const was = profile.follow.status;
+      if (was === status) return entry;
+      const delta = status === "ACCEPTED" ? 1 : was === "ACCEPTED" ? -1 : 0;
+      return {
+        ...entry,
+        data: {
+          ...profile,
+          counts: { ...profile.counts, followers: Math.max(0, profile.counts.followers + delta) },
+          follow: { ...profile.follow, status },
+        },
+      };
+    },
+  );
 }
 
 function updateConnectionCaches(
@@ -127,6 +179,36 @@ function updateConnectionCaches(
       pages: data.pages.map((page) => ({
         ...page,
         users: page.users.map((user) => user.id === userId ? { ...user, follow: { status } } : user),
+      })),
+    } : data,
+  );
+}
+
+/**
+ * The search results' shop cards carry the viewer's follow state too, so a
+ * follow from the storefront shows on the card when you come back, and one
+ * from the card shows on the storefront. `userId` is the shop's backing
+ * account, which is what a card's `orgUserId` is.
+ */
+function updateBrowseOrgCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueriesData<{ pages: Array<{ payload: BrowsePayload }> }>(
+    { queryKey: ["browse"] },
+    (data) => data ? {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        payload: {
+          ...page.payload,
+          organizations: page.payload.organizations?.map((org) => {
+            if (org.orgUserId !== userId || org.follow === status) return org;
+            const delta = status === "ACCEPTED" ? 1 : org.follow === "ACCEPTED" ? -1 : 0;
+            return { ...org, follow: status, followers: org.followers === undefined ? undefined : Math.max(0, org.followers + delta) };
+          }),
+        },
       })),
     } : data,
   );

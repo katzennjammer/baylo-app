@@ -15,6 +15,7 @@ import {
 } from "../api/organizations";
 import type { PublicProfilePayload } from "../api/types";
 import { businessCategoryLabel } from "../lib/business-category";
+import { compactCount, formatFollowers } from "../lib/format";
 import { ORG_BADGE_LABEL } from "../lib/org";
 import { border, color, dark as darkTokens, icon, radius, size, space, textStyle, type } from "../theme/tokens";
 import { useKeyboardState } from "./auth-sheet";
@@ -39,6 +40,11 @@ import { Tappable } from "./Tappable";
  * tagline is the org's own column), no Followers/Following stats, and no
  * achievements shelf (the backing account cannot log in to pick badges, so the
  * shelf could only ever be empty or accidental).
+ *
+ * Followers ARE shown, as one "1.2K followers" line right above the Follow
+ * button -- people follow shops, and the count is the shop's social proof.
+ * Following a shop is the ordinary Follow row on its backing account, so this
+ * is the same `counts.followers` a person's profile shows.
  *
  * Below this header the screen is UNCHANGED from a person's: the same tabs and
  * the same three-across listings grid. That half is shared on purpose. The
@@ -206,6 +212,12 @@ export function OrgStorefrontHeader({
             <Text style={[textStyle(type.storefrontStep), s.flex, { color: palette.muted }]}>Add a short description of your shop</Text>
           </Tappable>
         ) : null}
+
+        {/* ── Follower count, directly over the Follow button it goes with. ── */}
+        <Text style={[textStyle(type.storefrontMeta), s.followers, { color: palette.muted }]} accessibilityLabel={formatFollowers(counts.followers)}>
+          <Text style={{ color: palette.ink }}>{compactCount(counts.followers)}</Text>
+          {counts.followers === 1 ? " follower" : " followers"}
+        </Text>
 
         {/* ── Actions: members manage and share; everyone else follows and messages. ── */}
         <View style={s.actions}>
@@ -603,7 +615,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   flex: { flex: 1, minWidth: 0 },
-  actions: { flexDirection: "row", gap: space.storefront.actionGap, marginTop: space.storefront.block },
+  followers: { marginTop: space.storefront.block },
+  actions: { flexDirection: "row", gap: space.storefront.actionGap, marginTop: space.storefront.metaToBody },
   actionButton: {
     flex: 1,
     height: size.storefront.button,

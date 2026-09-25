@@ -19,6 +19,8 @@ import type { BrowsePayload } from "./types";
  *   q          1–100 chars. Matches title OR DESCRIPTION, not title alone.
  *   category   one value, or several comma-separated (max 5).
  *   condition  one value.
+ *   orgsOnly   "true", or absent.
+ *   businessCategory  comma-separated shop categories; ONLY with orgsOnly.
  *   minLeaves  / maxLeaves — inclusive bounds; min may not exceed max.
  *   cursor, limit, lat, lng, radiusKm, sort
  *
@@ -55,6 +57,15 @@ export interface BrowseFilters {
    * a sheet containing nothing.
    */
   orgsOnly?: boolean;
+  /**
+   * The chips under the Organizations pill: kinds of SHOP (Sari-sari store,
+   * Apparel...), from Organization.businessCategory. AND with everything else,
+   * OR among themselves -- the same arrangement `categories` has.
+   *
+   * Meaningless without `orgsOnly`, and the server 400s on it alone, so the
+   * pill's toggle clears it and `toQueryString` never sends it by itself.
+   */
+  businessCategories?: readonly string[];
 }
 
 /** Mirrors MAX_CATEGORIES in the server's browse route. */
@@ -115,6 +126,9 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
   // so sending "false" would be a no-op that changes the cache key -- two keys
   // for one query, and a refetch every time the pill is turned off.
   if (filters.orgsOnly) p.set("orgsOnly", "true");
+  if (filters.orgsOnly && filters.businessCategories && filters.businessCategories.length > 0) {
+    p.set("businessCategory", filters.businessCategories.join(","));
+  }
 
   // `!= null` rather than truthiness: 0 is a legitimate lower bound and `if
   // (min)` would silently drop it, which reads as "the filter did nothing".
@@ -160,6 +174,8 @@ function browseKey(f: BrowseFilters) {
       // are: `false` and `undefined` are the same query and must be the same
       // cache key.
       orgsOnly: f.orgsOnly ? true : undefined,
+      businessCategories:
+        f.orgsOnly && f.businessCategories?.length ? [...f.businessCategories].sort() : undefined,
       condition: f.condition || undefined,
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,
@@ -194,6 +210,13 @@ export function useBrowse(filters: BrowseFilters) {
      * them.
      */
     facets: pages[0]?.payload.facets.categories ?? [],
+    /** Kinds of shop with something available. Empty unless `orgsOnly`. */
+    businessFacets: pages[0]?.payload.facets.businessCategories ?? [],
+    /**
+     * Shops whose NAME matched `q`, for the top card. From page 0, which is
+     * the only page the server fills it on.
+     */
+    orgMatches: pages[0]?.payload.organizations ?? [],
   };
 }
 

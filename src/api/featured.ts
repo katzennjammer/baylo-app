@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1 } from "./client";
+import { ORGANIZATIONS_KEY } from "./organizations";
 import { PROFILE_ME_KEY } from "./profile";
 import type { Item } from "./types";
 
@@ -77,6 +78,9 @@ export function useBoostItem() {
       // on the listing lives in the item and every list that carries it.
       void qc.invalidateQueries({ queryKey: ["home"] });
       void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+      // A shop's listing is paid for from the shop's balance, which the switcher
+      // and the storefront read from the organisations list.
+      void qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["item", itemId] });
       void qc.invalidateQueries({ queryKey: ["featured"] });
       void qc.invalidateQueries({ queryKey: ["browse"] });

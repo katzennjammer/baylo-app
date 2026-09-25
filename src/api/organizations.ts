@@ -47,6 +47,12 @@ export interface ActingOrg {
    * itself. Absent from a server older than 24 Sep 2026.
    */
   postingRefusal?: { code: OrgPostingRefusalCode; message: string } | null;
+  /**
+   * The SHOP's Leaf balance, not the person's. Sent only in this list -- the
+   * caller's own ACTIVE memberships -- so it is never public. Absent from a
+   * server older than 25 Sep 2026, and then nothing draws it.
+   */
+  leaves?: number;
 }
 
 /** The 403 codes POST /api/items uses to refuse posting as an unverified org. */
@@ -277,6 +283,9 @@ export function useRespondToInvitation(organizationId: string) {
         qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
         // Answering deletes the invite's ORG_INVITE notification server-side.
         qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+        // The header's Leaves pill is the acting shop's, from /home. Leaving
+        // just dropped that context, so the pill must be re-asked as you.
+        ...(input.action === "leave" ? [qc.invalidateQueries({ queryKey: ["home"] })] : []),
       ]);
     },
   });

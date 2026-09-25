@@ -45,6 +45,28 @@ export function formatLeaves(n: number): string {
 }
 
 /**
+ * Follower counts: `"1 follower"`, `"950 followers"`, `"1.2K followers"`,
+ * `"3.4M followers"` -- the shape social and shop profiles use.
+ *
+ * Compact from 1,000, one decimal dropped when it is zero ("12K", not
+ * "12.0K"). Truncated like formatLeaves: 1,999 followers is "1.9K", never a
+ * rounded-up "2K" the shop has not reached.
+ */
+export function formatFollowers(n: number): string {
+  return `${compactCount(n)} ${Math.trunc(n) === 1 ? "follower" : "followers"}`;
+}
+
+/** The figure alone: `950`, `1.2K`, `12K`, `3.4M`. See formatFollowers. */
+export function compactCount(n: number): string {
+  const v = Math.max(0, Math.trunc(n));
+  const one = (x: number, unit: string) => {
+    const t = Math.trunc(x * 10) / 10;
+    return `${t % 1 === 0 ? t.toFixed(0) : t.toFixed(1)}${unit}`;
+  };
+  return v < 1_000 ? String(v) : v < 1_000_000 ? one(v / 1_000, "K") : one(v / 1_000_000, "M");
+}
+
+/**
  * Unread badges. Past 99 the badge stops being a number and becomes a shape, so
  * it caps — 2e pins the badge's height and lets only its width breathe, and an
  * uncapped four-digit count would run out from under the icon it belongs to.

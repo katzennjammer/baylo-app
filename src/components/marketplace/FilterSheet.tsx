@@ -81,6 +81,10 @@ export function FilterSheet({
       // `q` is owned by the search field, not by this sheet. Carrying it
       // through unchanged is what stops Apply from clearing the search box.
       q: filters.q,
+      // Same for the Organizations pill and the shop-type chips under it:
+      // they live on the rail, and Apply used to switch the pill off.
+      orgsOnly: filters.orgsOnly,
+      businessCategories: filters.businessCategories,
       categories,
       condition,
       // The bracket's own bounds, so the server's inclusive range covers

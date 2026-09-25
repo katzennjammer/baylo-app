@@ -209,9 +209,47 @@ export interface Item {
 }
 
 /** GET /api/v1/browse — `meta.nextCursor` carries the keyset cursor. */
+/**
+ * An organisation whose NAME matched the search, drawn as a top card above the
+ * item grid. First page of a search only; an empty array otherwise.
+ */
+export interface BrowseOrgMatch {
+  id: string;
+  /** The storefront is read by this id — `/user?id=<orgUserId>`. */
+  orgUserId: string;
+  name: string;
+  logoUrl: string | null;
+  businessCategory: string;
+  businessCategoryLabel: string;
+  verified: boolean;
+  /**
+   * The viewer's Follow edge to the shop's backing account -- the same Follow
+   * row a person's profile uses. These three are absent from a server older
+   * than the card's Follow button; the card then draws no button.
+   */
+  follow?: FollowStatus;
+  /** ACCEPTED followers of the shop. */
+  followers?: number;
+  /** The viewer is an ACTIVE member (owner or staff): no Follow on their own shop. */
+  isMember?: boolean;
+}
+
+export interface BusinessCategoryFacet {
+  businessCategory: string;
+  label: string;
+  /** Shops in this category with something available — not listings. */
+  count: number;
+}
+
 export interface BrowsePayload {
   items: Item[];
-  facets: { categories: { category: string; label: string; count: number }[] };
+  /** Absent from a server older than 25 Sep 2026. */
+  organizations?: BrowseOrgMatch[];
+  facets: {
+    categories: { category: string; label: string; count: number }[];
+    /** Only filled while `orgsOnly` is on. Absent from an older server. */
+    businessCategories?: BusinessCategoryFacet[];
+  };
 }
 
 /**
@@ -304,6 +342,13 @@ export interface MatchCandidate {
 /** GET /api/v1/home — the whole home tab in one request. */
 export interface HomePayload {
   viewer: HomeViewer;
+  /**
+   * The shop this request acted as (X-Baylo-Org), with the SHOP's balance --
+   * what the header pill shows while acting as it. Null acting as yourself, or
+   * when the server refused the context. `viewer.leaves` is always the
+   * person's. Absent from a server older than 25 Sep 2026.
+   */
+  acting?: { organizationId: string; name: string; leaves: number } | null;
   unread: {
     messages: number;
     messageConversations: number;
@@ -758,8 +803,17 @@ export interface NotificationItem {
   entityId: string | null;
   /** The lead photo for an item notification, when the event has no actor. */
   itemImage: string | null;
-  /** Who did it. Null for anything the system itself raised. */
-  actor: { id: string; name: string | null; avatar: string | null } | null;
+  /**
+   * The organisation an `org_invite` or `organization` row is about. Its logo
+   * is the row's picture, in place of the inviting owner's face. Absent from a
+   * server older than 25 Sep 2026.
+   */
+  org?: { id: string; name: string; logoUrl: string | null } | null;
+  /**
+   * Who did it. Null for anything the system itself raised. `isOrg` marks a
+   * shop's backing account, which is drawn as a shop when it has no logo.
+   */
+  actor: { id: string; name: string | null; avatar: string | null; isOrg?: boolean } | null;
 }
 
 export interface NotificationsPayload {

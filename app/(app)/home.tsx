@@ -225,9 +225,17 @@ export default function HomeScreen() {
         <SearchField
           value={draftQuery}
           onChange={setDraftQuery}
-          // TODO(home-redesign): Marketplace reads no route params, so the
-          // query is not carried over yet. Opens Marketplace as-is.
-          onSubmit={openMarketplace}
+          // Carried over as `q`, with the same nonce the category links use,
+          // so Marketplace searches it (shop names included) rather than
+          // opening blank. An empty box just opens Marketplace.
+          onSubmit={() =>
+            draftQuery.trim()
+              ? router.push({
+                  pathname: "/(app)/marketplace",
+                  params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
+                })
+              : openMarketplace()
+          }
         />
         <FilterButton count={0} onPress={openMarketplace} />
       </View>

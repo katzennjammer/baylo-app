@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Image, Text, View } from "react-native";
 
 import {
+  orgLogoUrl,
   switchToOrganization,
   useOrganizations,
   useRespondToInvitation,
@@ -10,9 +11,10 @@ import {
   type OrgInvitation,
 } from "../api/organizations";
 import { getActingOrgId } from "../api/org-context";
+import { LeavesPill } from "./AppHeader";
 import { Tappable } from "./Tappable";
 import { ORG_BADGE_LABEL } from "../lib/org";
-import { CheckIcon, StoreIcon, VerifiedOrgIcon } from "./icons";
+import { CheckIcon, PersonIcon, StoreIcon, VerifiedOrgIcon } from "./icons";
 import { color, icon, radius, textStyle, type } from "../theme/tokens";
 
 /**
@@ -46,6 +48,14 @@ import { color, icon, radius, textStyle, type } from "../theme/tokens";
  * drops the lot, which is heavy-handed and correct: this is a rare action, and
  * anything cheaper means auditing every query key for identity-dependence
  * forever.
+ *
+ * ── THE COPY SAYS "LISTINGS", AND ONLY LISTINGS, ON PURPOSE ─────────────────
+ *
+ * The only server write that reads X-Baylo-Org is POST /api/items. Offers,
+ * messages and trades are made as the signed-in person whatever is selected
+ * here. This card used to say "New listings, offers and messages are
+ * attributed to whoever is selected", which promised the shop a reach it does
+ * not have. If org trading lands, widen the copy with it -- not before.
  */
 export function OrgSwitcher() {
   const qc = useQueryClient();
@@ -83,18 +93,20 @@ export function OrgSwitcher() {
         Posting as
       </Text>
       <Text style={[textStyle(type.detailBody), { color: color.inkMuted, marginBottom: 10 }]}>
-        New listings, offers and messages are attributed to whoever is selected here.
+        Choose who your new listings are posted as. Offers, messages and trades are
+        always sent as you, whichever is selected.
       </Text>
 
       <IdentityRow
         label="Myself"
         sub="Your own account"
+        effect="New listings go on your personal profile."
         selected={activeId === null}
         disabled={busy}
         onPress={() => void switchTo(null)}
         leading={
           <View style={rowStyles.logoFallback}>
-            <StoreIcon size={18} stroke={1.6} color={color.inkMuted} />
+            <PersonIcon size={18} stroke={1.6} color={color.inkMuted} />
           </View>
         }
       />
@@ -104,13 +116,15 @@ export function OrgSwitcher() {
           key={org.id}
           label={org.name}
           sub={org.role === "OWNER" ? "Owner" : "Staff"}
+          effect={postingEffect(org)}
           verified={org.verified}
+          balance={org.leaves}
           selected={activeId === org.id}
           disabled={busy}
           onPress={() => void switchTo(org.id)}
           leading={
-            org.logoUrl ? (
-              <Image source={{ uri: org.logoUrl }} style={rowStyles.logo} resizeMode="cover" />
+            orgLogoUrl(org.logoUrl) ? (
+              <Image source={{ uri: orgLogoUrl(org.logoUrl)! }} style={rowStyles.logo} resizeMode="cover" />
             ) : (
               <View style={rowStyles.logoFallback}>
                 <StoreIcon size={18} stroke={1.6} color={color.forest} />
@@ -134,29 +148,55 @@ export function OrgSwitcher() {
   );
 }
 
+/**
+ * What choosing this shop changes, in one line. A shop that cannot post yet
+ * says so here, before somebody switches to it and finds out in the wizard.
+ */
+function postingEffect(org: ActingOrg): string {
+  if (org.verificationStatus === "PENDING") {
+    return `Listings will be posted as ${org.name} once it is verified.`;
+  }
+  if (org.verificationStatus === "REJECTED") {
+    return `${org.name} can't post until its business documents are fixed.`;
+  }
+  return `New listings go on ${org.name}'s storefront.`;
+}
+
 function IdentityRow({
   label,
   sub,
+  effect,
   selected,
   disabled,
   onPress,
   leading,
   verified,
+  balance,
 }: {
   label: string;
   sub: string;
+  /** What selecting this row changes. See the note on the card's copy. */
+  effect: string;
   selected: boolean;
   disabled?: boolean;
   onPress: () => void;
   leading: React.ReactNode;
   verified?: boolean;
+  /**
+   * A shop's own Leaf balance, drawn with the header's pill so it reads as the
+   * same kind of number. Shops only: the person's balance is already in the
+   * header, and a second copy on "Myself" would be one more place to go stale.
+   */
+  balance?: number;
 }) {
   return (
     <Tappable
       onPress={disabled ? undefined : onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`${label}. ${sub}${verified ? `. ${ORG_BADGE_LABEL.full}` : ""}`}
+      accessibilityLabel={`${label}. ${sub}${verified ? `. ${ORG_BADGE_LABEL.full}` : ""}${
+        balance !== undefined ? `. Shop balance ${balance} Leaves` : ""
+      }. ${effect}`}
       style={[rowStyles.row, selected && rowStyles.rowOn]}
       pressedStyle={{ opacity: 0.8 }}
     >
@@ -175,7 +215,11 @@ function IdentityRow({
           ) : null}
         </View>
         <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>{sub}</Text>
+        <Text style={[textStyle(type.detailBody), { color: selected ? color.forest : color.inkSecondary, marginTop: 2 }]}>
+          {effect}
+        </Text>
       </View>
+      {balance !== undefined ? <LeavesPill value={balance} stale={false} tight /> : null}
       {selected ? (
         <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
       ) : null}
@@ -202,8 +246,8 @@ function InvitationRow({ invite }: { invite: OrgInvitation }) {
 
   return (
     <View style={rowStyles.row}>
-      {invite.organization.logoUrl ? (
-        <Image source={{ uri: invite.organization.logoUrl }} style={rowStyles.logo} resizeMode="cover" />
+      {orgLogoUrl(invite.organization.logoUrl) ? (
+        <Image source={{ uri: orgLogoUrl(invite.organization.logoUrl)! }} style={rowStyles.logo} resizeMode="cover" />
       ) : (
         <View style={rowStyles.logoFallback}>
           <StoreIcon size={18} stroke={1.6} color={color.forest} />

@@ -206,6 +206,66 @@ export function CategoryRail({
   );
 }
 
+/**
+ * The second rail, under the first while the Organizations pill is on: what
+ * KIND of shop. Sari-sari store, Apparel, Food & beverage...
+ *
+ * FROM THE SERVER'S FACETS, like the category rail and for the same reason --
+ * a category only appears when some shop in it has something available, so no
+ * chip leads to an empty grid, and a kind of shop nobody runs yet never shows.
+ *
+ * Styled a step quieter than the rail above (a green wash when on, not a solid
+ * green) because it REFINES the pill rather than standing beside it. It sits
+ * under Organizations and only exists while that is on; turning the pill off
+ * clears these too, since a shop category without "organisations only" is a
+ * filter the server refuses.
+ */
+export function BusinessCategoryRail({
+  facets,
+  selected,
+  onToggle,
+}: {
+  facets: { businessCategory: string; label: string; count: number }[];
+  selected: readonly string[];
+  onToggle: (businessCategory: string) => void;
+}) {
+  if (facets.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.rail}
+      style={s.railOuter}
+      accessibilityLabel="Kind of shop"
+    >
+      <Text style={[textStyle(type.photoCaption), { color: color.inkMuted }]}>Shop type</Text>
+      {facets.map((f) => {
+        const on = selected.includes(f.businessCategory);
+        return (
+          <Tappable
+            key={f.businessCategory}
+            onPress={() => onToggle(f.businessCategory)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={`${f.label}, ${f.count} ${f.count === 1 ? "shop" : "shops"}`}
+            style={[s.chip, s.subChip, on && s.subChipOn]}
+            pressedStyle={s.chipPressed}
+          >
+            <Text
+              style={[
+                textStyle(type.trendingChip),
+                { color: on ? color.forest : color.inkSecondary },
+              ]}
+            >
+              {f.label}
+            </Text>
+          </Tappable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 /* ─────────────────────────── grid ⇄ map ─────────────────────────────── */
 
 export type BrowseView = "grid" | "map";
@@ -356,6 +416,8 @@ const s = StyleSheet.create({
   },
   chipOn: { backgroundColor: color.green, borderColor: "transparent" },
   chipBlocked: { opacity: 0.5 },
+  subChip: { height: size.browse.chip - 6 },
+  subChipOn: { backgroundColor: color.greenWash, borderColor: color.forest },
   chipPressed: { opacity: 0.75 },
 
   toggle: {

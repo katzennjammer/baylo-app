@@ -11,7 +11,8 @@ import {
 import type { NotificationItem } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
 import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
-import { PersonIcon } from "../src/components/icons";
+import { PersonIcon, StoreIcon } from "../src/components/icons";
+import { orgLogoUrl } from "../src/api/organizations";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { RowChevron, Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
@@ -46,6 +47,11 @@ import {
  *
  * A system row has no actor. "your offer on X expired after 3 days" is already a
  * whole sentence, and it gets the leaf-less placeholder rather than a face.
+ *
+ * A row about an ORGANISATION -- an invitation to its staff, the outcome of its
+ * document review -- shows the shop's logo, not the inviting owner's face: the
+ * shop is what the row is about, and the owner is usually photo-less, which
+ * drew a blank grey tile. No logo draws the store glyph, never a blank.
  *
  * ══ EVERY ROW IS READ ON OPEN. THE DOTS STAY ANYWAY. ═══════════════════════
  *
@@ -170,15 +176,7 @@ function NotificationRow({
         paddingVertical: 14,
       }}
     >
-      <Thumb
-        image={item.actor?.avatar ?? item.itemImage}
-        size={offerSize.tradeRow.thumb}
-        icon={
-          item.actor ? undefined : (
-            <PersonIcon size={20} stroke={1.5} color={offerColor.inkDisabled} />
-          )
-        }
-      />
+      <RowPicture item={item} />
 
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <Text
@@ -231,4 +229,40 @@ function NotificationRow({
       {body}
     </Tappable>
   );
+}
+
+/**
+ * The picture at the head of a row, most specific first:
+ *
+ *   an organisation row   the shop's logo, else the store glyph
+ *   an actor              their photo, else a store glyph for a shop's
+ *                         account and a person glyph for a person
+ *   neither               the listing's photo, else the person glyph
+ *
+ * Every branch ends in a glyph rather than an empty grey square. The grey
+ * square is what a MISSING PHOTO looks like elsewhere in the app, and a person
+ * or shop with no picture is not a photo that failed to load.
+ */
+function RowPicture({ item }: { item: NotificationItem }) {
+  const glyph = (kind: "store" | "person") =>
+    kind === "store" ? (
+      <StoreIcon size={20} stroke={1.6} color={offerColor.inkSecondary} />
+    ) : (
+      <PersonIcon size={20} stroke={1.5} color={offerColor.inkDisabled} />
+    );
+
+  let image: string | null;
+  let icon: React.ReactNode;
+  if (item.org) {
+    image = orgLogoUrl(item.org.logoUrl);
+    icon = glyph("store");
+  } else if (item.actor) {
+    image = item.actor.avatar;
+    icon = glyph(item.actor.isOrg ? "store" : "person");
+  } else {
+    image = item.itemImage;
+    icon = glyph("person");
+  }
+
+  return <Thumb image={image} size={offerSize.tradeRow.thumb} icon={icon} />;
 }

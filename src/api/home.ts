@@ -49,6 +49,8 @@ export function useHome() {
     /** Everything that is not the feed comes from page 0. */
     viewer: first?.viewer,
     unread: first?.unread,
+    /** The shop the last fetch acted as, or null. See HomePayload.acting. */
+    acting: first?.acting ?? null,
     trending: first?.trending ?? [],
     matches: first?.matches ?? [],
     /** Every page's feed, flattened, in order, with repeats dropped. */

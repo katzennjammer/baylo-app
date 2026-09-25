@@ -92,6 +92,7 @@ export function BrowseNoMatches({
   query,
   filterCount,
   orgsOnly = false,
+  shopsMatched = false,
   onClear,
 }: {
   query: string;
@@ -105,6 +106,12 @@ export function BrowseNoMatches({
    * fix is a single obvious tap.
    */
   orgsOnly?: boolean;
+  /**
+   * The search matched a SHOP by name, drawn above this. "No matches" under a
+   * card that plainly is one would contradict it, so the copy narrows to
+   * listings.
+   */
+  shopsMatched?: boolean;
   onClear?: () => void;
 }) {
   const q = query.trim();
@@ -116,7 +123,9 @@ export function BrowseNoMatches({
         <SearchIcon size={icon.emptyGrid.size} stroke={icon.emptyGrid.stroke} color={color.inkMuted} />
       </View>
 
-      <Text style={[textStyle(type.emptyHeadline), s.headline]}>No matches</Text>
+      <Text style={[textStyle(type.emptyHeadline), s.headline]}>
+        {shopsMatched ? "No listings match" : "No matches"}
+      </Text>
 
       {/*
         The search term is quoted back. Somebody who mistyped a word is looking
@@ -125,7 +134,7 @@ export function BrowseNoMatches({
       */}
       <Text style={[textStyle(type.emptyBody), s.body]}>
         {q
-          ? `Nothing matched “${q}”`
+          ? `${shopsMatched ? "No listings" : "Nothing"} matched “${q}”`
           : orgsOnly && filterCount === 0
             ? "No organisations have anything listed right now"
             : "Nothing matched these filters"}

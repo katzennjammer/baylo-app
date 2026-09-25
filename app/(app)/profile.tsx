@@ -69,12 +69,16 @@ export default function ProfileScreen() {
     });
   }, [profile?.user.name, user?.id, user?.name]);
 
-  // The shop this device is ACTING AS, if any. For somebody who also trades as
-  // themselves this tab stays the PERSON'S profile -- profile/me is about the
-  // signed-in human (their Leaves, their shelf, their achievements) and does
-  // not read X-Baylo-Org -- so the storefront is one tap away rather than
-  // swapped in underneath them. getActingOrgId() is read per render, not
-  // mirrored: see OrgSwitcher.
+  // The shop this device is ACTING AS, if any. getActingOrgId() is read per
+  // render, not mirrored: see OrgSwitcher.
+  //
+  // WHILE ACTING AS A SHOP, THIS TAB IS THE SHOP -- for everybody, not just
+  // shop-only accounts. Until 25 Sep 2026 somebody with a personal history
+  // who switched to their shop still got their PERSONAL profile here, under a
+  // small "Acting as" strip: the Post button made shop listings while the tab
+  // showed their own shelf, which is the wrong half of the account to put in
+  // front of them. Now the storefront is shown with a prominent "Switch to
+  // Myself" above it, and choosing that brings the personal profile back.
   const qc = useQueryClient();
   const { data: orgsData, isLoading: orgsLoading } = useOrganizations();
   const [, setContextTick] = useState(0);
@@ -107,7 +111,7 @@ export default function ProfileScreen() {
   // things on a personal shelf this person has never used, and the first one
   // would quietly bring back the personal profile. Same steps as OrgSwitcher:
   // switch, drop every cache fetched as the previous identity, re-render.
-  const selectShop = useCallback(async (organizationId: string) => {
+  const selectShop = useCallback(async (organizationId: string | null) => {
     setPickingShop(false);
     if (organizationId !== getActingOrgId()) {
       await switchToOrganization(organizationId);
@@ -115,6 +119,15 @@ export default function ProfileScreen() {
     }
     setContextTick((t) => t + 1);
   }, [qc]);
+  const [switchingToSelf, setSwitchingToSelf] = useState(false);
+  const switchToMyself = useCallback(async () => {
+    setSwitchingToSelf(true);
+    try {
+      await selectShop(null);
+    } finally {
+      setSwitchingToSelf(false);
+    }
+  }, [selectShop]);
 
   // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
   // ONCE per mount, which is once per sign-in because this tab stays mounted.
@@ -164,13 +177,25 @@ export default function ProfileScreen() {
     );
   }
 
+  // A person with their own history, currently acting as one of their shops.
+  if (actingShop) {
+    return (
+      <ShopView
+        key={actingShop.orgUserId}
+        dark={dark}
+        orgUserId={actingShop.orgUserId!}
+        viewerId={user?.id ?? null}
+        topSlot={<SwitchToMyselfCard dark={dark} shopName={actingShop.name} personName={profile?.user.name ?? user?.name ?? null} busy={switchingToSelf} onPress={() => void switchToMyself()} />}
+      />
+    );
+  }
+
   return (
     <FlatList<ProfileListRow>
       style={s.screen}
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
-        {actingOrg?.orgUserId ? <ShopCard dark={dark} name={actingOrg.name} logoUrl={actingOrg.logoUrl} onPress={() => router.push({ pathname: "/user", params: { id: actingOrg.orgUserId } })} /> : null}
         <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
@@ -205,6 +230,30 @@ function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: {
       </View>
       <Text style={[s.shopLink, { color: palette.green }]}>{actionLabel}</Text>
     </Pressable>
+  );
+}
+
+/**
+ * The way back to the personal profile, above the storefront of a shop the
+ * person is acting as. PROMINENT ON PURPOSE -- a full-width card with a filled
+ * button, not a strip -- because it is also the answer to "why is my profile
+ * gone?", and a person who does not see it will think their account changed.
+ * It says what switching does, not just that it can be done.
+ */
+function SwitchToMyselfCard({ dark, shopName, personName, busy, onPress }: { dark: boolean; shopName: string; personName: string | null; busy: boolean; onPress: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={[s.selfCard, { backgroundColor: dark ? "#1F3326" : color.greenWash, borderColor: dark ? "#2F5A3B" : color.greenLine }]}>
+      <View style={s.selfCardText}>
+        <Text style={[s.shopEyebrow, { color: palette.muted }]}>You are acting as</Text>
+        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shopName}</Text>
+        <Text style={[s.selfCardBody, { color: palette.secondary }]}>New listings you post go on this shop.</Text>
+      </View>
+      <Pressable onPress={busy ? undefined : onPress} style={[s.selfButton, { backgroundColor: palette.green, opacity: busy ? 0.6 : 1 }]} accessibilityRole="button" accessibilityState={{ busy }} accessibilityLabel={`Switch to myself${personName ? `, ${personName}` : ""}. Shows your personal profile`}>
+        <Ionicons name="person-outline" size={16} color={dark ? "#10210F" : color.onGreen} />
+        <Text style={[s.selfButtonText, { color: dark ? "#10210F" : color.onGreen }]}>{busy ? "Switching…" : "Switch to Myself"}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -499,6 +548,11 @@ const s = StyleSheet.create({
   shopLogoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
   shopText: { flex: 1, minWidth: 0 },
   shopEyebrow: { fontFamily: font.sans, fontSize: 11 },
+  selfCard: { marginHorizontal: 16, marginTop: 10, marginBottom: 4, padding: 14, borderRadius: 12, borderWidth: 1, gap: 12 },
+  selfCardText: { gap: 1 },
+  selfCardBody: { fontFamily: font.sans, fontSize: 12, marginTop: 4 },
+  selfButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10 },
+  selfButtonText: { fontFamily: font.sansSemi, fontSize: 14 },
   shopName: { fontFamily: font.sansSemi, fontSize: 14, marginTop: 1 },
   shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },

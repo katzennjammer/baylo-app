@@ -577,10 +577,10 @@ function Wizard() {
     router.back();
     announcePosted(created.id, created.valueReview?.pending ? created.valueReview.notice : null);
 
-    // "Boost this listing after posting": the item exists now, so this is the
-    // same confirm-and-charge dialog as the item screen's Boost button, for
-    // the new id. After the post and outside its try, deliberately: a boost
-    // that is cancelled or refused leaves the listing exactly as posted, and
+    // "Boost this listing after posting": the item exists now, so charge it
+    // straight away -- the ticked card on the review step WAS the confirm, so
+    // `afterPost` skips the second dialog. After the post and outside its try,
+    // deliberately: a refused boost leaves the listing exactly as posted, and
     // useConfirmBoost says the boost didn't go through without undoing it.
     if (state.boostAfterPost && !state.isPerishable) {
       confirmBoost({ id: created.id, title: state.title.trim() }, { afterPost: true });

@@ -21,42 +21,52 @@ import { showDialog } from "./dialog";
  *
  * `afterPost` is that caller: the listing is already up, so a refusal says so
  * in front of the reason. Nothing here can touch the post.
+ *
+ * AND `afterPost` SKIPS THE CONFIRM (25 Sep 2026). The review step's "Boost
+ * this listing after posting" card already names the price and was ticked
+ * before Post was tapped; asking "Boost this listing?" a second time, over
+ * the posted popup, repeated a decision the person had just made. The item
+ * screen and My Listings have no such prior step, so they keep the dialog.
  */
 export function useConfirmBoost() {
   const boost = useBoostItem();
 
+  const run = useCallback(
+    (item: { id: string; title: string }, afterPost: boolean) => {
+      boost.mutateAsync(item.id).then(
+        () =>
+          showDialog(
+            "Listing featured",
+            `"${item.title}" is in Featured for the next ${BOOST_HOURS} hours.`,
+          ),
+        (e: unknown) => {
+          const [title, body] = boostErrorCopy(e);
+          showDialog(
+            title,
+            afterPost ? `Your listing is posted, but the boost didn't go through. ${body}` : body,
+          );
+        },
+      );
+    },
+    [boost],
+  );
+
   const confirmBoost = useCallback(
     (item: { id: string; title: string }, opts?: { afterPost?: boolean }) => {
+      if (opts?.afterPost) {
+        run(item, true);
+        return;
+      }
       showDialog(
         "Boost this listing?",
         `Feature this for ${BOOST_HOURS} hours for ${BOOST_COST_LEAVES} Leaves?`,
         [
           { text: "Cancel", style: "cancel" },
-          {
-            text: "Confirm",
-            onPress: () => {
-              boost.mutateAsync(item.id).then(
-                () =>
-                  showDialog(
-                    "Listing featured",
-                    `"${item.title}" is in Featured for the next ${BOOST_HOURS} hours.`,
-                  ),
-                (e: unknown) => {
-                  const [title, body] = boostErrorCopy(e);
-                  showDialog(
-                    title,
-                    opts?.afterPost
-                      ? `Your listing is posted, but the boost didn't go through. ${body}`
-                      : body,
-                  );
-                },
-              );
-            },
-          },
+          { text: "Confirm", onPress: () => run(item, false) },
         ],
       );
     },
-    [boost],
+    [run],
   );
 
   return { confirmBoost, isBoosting: boost.isPending };

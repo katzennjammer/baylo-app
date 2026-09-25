@@ -24,6 +24,7 @@ import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useLike } from "../../src/api/social";
 import {
   BlockIcon,
+  BoltIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   FlagIcon,
@@ -355,6 +356,13 @@ export default function ItemDetailScreen() {
             </Tappable>
           ) : null}
 
+          {/* A perishable's clock sits ABOVE the title: it is the one fact
+              that can make the rest of the page moot. The amount stays below,
+              in the Perishable section. */}
+          {item.perishable ? (
+            <PerishableClock perishable={item.perishable} onElapsed={() => void refetch()} />
+          ) : null}
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
           {item.description.trim() ? (
@@ -443,9 +451,11 @@ export default function ItemDetailScreen() {
               The window is the one fact about their own listing they cannot
               see anywhere else, and "4 hours left" is more use to the person
               who has to move the stock than to anybody else. */}
-          {item.perishable ? (
+          {item.perishable && perishableAmount(item.perishable) ? (
             <Section heading="Perishable">
-              <PerishableLine perishable={item.perishable} onElapsed={() => void refetch()} />
+              <Text style={[textStyle(type.detailBody), s.bodyText]}>
+                {perishableAmount(item.perishable)}
+              </Text>
             </Section>
           ) : null}
 
@@ -1013,6 +1023,12 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
   },
   title: { color: color.ink },
+  clockRow: {
+    marginBottom: space.detail.titleToLeaves,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: size.leaves.gap,
+  },
   leavesRow: {
     marginTop: space.detail.titleToLeaves,
     flexDirection: "row",
@@ -1164,8 +1180,15 @@ const s = StyleSheet.create({
 });
 
 
+/** "1.5 KG", "2 L" — or null when the owner gave no amount. */
+function perishableAmount(p: NonNullable<Item["perishable"]>): string | null {
+  return p.quantity != null && p.quantityUnit
+    ? `${p.quantity} ${p.quantityUnit === "LITERS" ? "L" : p.quantityUnit}`
+    : null;
+}
+
 /**
- * The perishable line: how much, and how long is left — as a live clock.
+ * The perishable clock above the title: how long is left — as a live clock.
  *
  * ── LIVE HERE, AND ONLY HERE ────────────────────────────────────────────────
  *
@@ -1183,7 +1206,7 @@ const s = StyleSheet.create({
  * window into `expired`, and the "closed" wording comes from that flag, not
  * from this clock — the two are different facts.
  */
-function PerishableLine({
+function PerishableClock({
   perishable: p,
   onElapsed,
 }: {
@@ -1200,36 +1223,18 @@ function PerishableLine({
   // flash. When the window has really elapsed both are 0.
   const shown =
     seconds || Math.max(0, Math.ceil((Date.parse(p.expiresAt) - Date.now()) / 1000));
-  const amount =
-    p.quantity != null && p.quantityUnit
-      ? `${p.quantity} ${p.quantityUnit === "LITERS" ? "L" : p.quantityUnit}`
-      : null;
 
-  // The clock is in the urgent colour, as Home's Exclusive pill is; the amount
-  // in front of it stays body text, and a closed window is a plain statement.
-  let line: React.ReactNode;
-  if (p.expired) {
-    line = amount
-      ? `${amount} · this listing's trade window has closed`
-      : "This listing's trade window has closed";
-  } else {
-    const left = <Text style={{ color: color.urgent }}>{`${formatClock(shown)} left`}</Text>;
-    line = amount ? (
-      <>
-        {`${amount} · `}
-        {left}
-      </>
-    ) : (
-      left
-    );
-  }
-
+  // The bolt and the urgent colour are the Exclusive badge's; a closed
+  // window is a plain statement in the same place.
   return (
-    <Text
-      style={[textStyle(type.detailBody), s.bodyText, { fontVariant: ["tabular-nums"] }]}
-      accessibilityRole="timer"
-    >
-      {line}
-    </Text>
+    <View style={s.clockRow}>
+      <BoltIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.urgent} />
+      <Text
+        style={[textStyle(type.detailLeaves), { color: color.urgent }]}
+        accessibilityRole="timer"
+      >
+        {p.expired ? "Trade window closed" : `${formatClock(shown)} left`}
+      </Text>
+    </View>
   );
 }

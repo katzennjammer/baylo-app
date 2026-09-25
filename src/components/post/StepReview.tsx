@@ -230,9 +230,10 @@ export function StepReview({ board }: { board: Board }) {
  * goes green-wash and forest, the app's "on" state. The whole card is the
  * control.
  *
- * Ticking it charges nothing. After the post lands, post-item.tsx hands the new
- * item to useConfirmBoost() — the item screen's and Profile's own dialog — so
- * the price is quoted and confirmed there, once, by the code that charges it.
+ * Ticking it charges nothing yet. After the post lands, post-item.tsx hands
+ * the new item to useConfirmBoost() with `afterPost`, which charges WITHOUT a
+ * second dialog (25 Sep 2026): this card quotes the price, so ticking it and
+ * tapping Post is the confirmation. The copy must keep naming the price.
  */
 function BoostAfterPost({
   on,
@@ -286,7 +287,7 @@ function BoostAfterPost({
                 { color: postColor.inkMuted, marginTop: 3 },
               ]}
             >
-              {`Featured in its category for ${BOOST_HOURS} hours, right after it posts. ${BOOST_COST_LEAVES} Leaves — you confirm before anything is charged.`}
+              {`Featured in its category for ${BOOST_HOURS} hours, right after it posts, for ${BOOST_COST_LEAVES} Leaves.`}
             </Text>
           </View>
           {on ? (
