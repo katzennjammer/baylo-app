@@ -25,6 +25,8 @@ import {
   type,
 } from "../../theme/tokens";
 import type { Item } from "../../api/types";
+import { relookingFor } from "../../post/wanted-keywords";
+import { rules } from "../../theme/post-tokens";
 import { showDialog } from "../dialog";
 
 /**
@@ -112,11 +114,24 @@ export function EditListingSheet({
 
   const save = () => {
     if (blocked) return;
+    const wantedChanged = wanted.trim() !== (item.wanted ?? "");
     update.mutate(
       {
         title: trimmedTitle,
         description: description.trim(),
         wantedItems: wanted.trim(),
+        // The matcher reads the categories, not this text, so a rewritten want
+        // has to move them too or the listing keeps matching its ORIGINAL
+        // categories. Sent only when the text changed: an edit to the title
+        // alone leaves them exactly as stored.
+        ...(wantedChanged && {
+          lookingForCategories: relookingFor(
+            item.lookingFor,
+            item.wanted ?? "",
+            wanted,
+            rules.maxReturnCategories,
+          ),
+        }),
       },
       {
         onSuccess: onClose,

@@ -205,3 +205,29 @@ export function mergeLookingFor(
   }
   return out;
 }
+
+/**
+ * The listing's categories after its free text is edited.
+ *
+ * The stored list is ONE array — chips and keyword matches merged at post time,
+ * with no record of which was which — and the edit sheet has no chips. So the
+ * chips are recovered by subtraction: whatever the stored list holds that the
+ * OLD text does not name was tapped, and is kept; whatever the old text named
+ * is re-derived from the NEW text, then merged exactly as at post time.
+ *
+ * THE ONE AMBIGUITY, AND WHICH WAY IT FALLS: a category that was both tapped
+ * and named in the old text ("Bags" chip, "a bag" typed) is indistinguishable
+ * from a keyword match, so if the new text stops naming it, it goes. That is
+ * the right side to err on — the bug being fixed is a listing matched forever
+ * against a want its owner has since rewritten.
+ */
+export function relookingFor(
+  stored: readonly string[],
+  oldWanted: string,
+  newWanted: string,
+  max: number,
+): Category[] {
+  const fromOldText = new Set<string>(categoriesFromWanted(oldWanted));
+  const chips = stored.filter((c) => !fromOldText.has(c)) as Category[];
+  return mergeLookingFor(chips, newWanted, max);
+}

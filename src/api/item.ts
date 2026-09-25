@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
 import { PROFILE_ME_KEY } from "./profile";
+import type { Category } from "./post";
 import type { ItemDetailPayload } from "./types";
 
 /**
@@ -180,6 +181,12 @@ export interface EditListingInput {
   description?: string;
   /** "What are you hoping to get?" — free text. `""` clears it. */
   wantedItems?: string;
+  /**
+   * The categories the matcher reads, RESTATED IN FULL (`[]` clears them).
+   * EditListingSheet sends it only alongside a changed `wantedItems`; see
+   * `relookingFor` in src/post/wanted-keywords.ts. At most six.
+   */
+  lookingForCategories?: Category[];
   /**
    * The listing's Safe-Zone hubs, RESTATED IN FULL. The server replaces the
    * association set with this — `[]` clears it. At most `rules.maxHubs`; the
