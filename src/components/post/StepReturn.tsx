@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Text, TextInput, View } from "react-native";
 
 import { CATEGORIES, CATEGORY_LABELS } from "../../api/post";
 import { usePost } from "../../post/state";
+import { mergeLookingFor } from "../../post/wanted-keywords";
 import {
   postColor,
   postSpace,
@@ -57,6 +59,20 @@ export function StepReturn({
   // stay live — deselecting one is how the others come back.
   const atCap = state.returnCategories.length >= rules.maxReturnCategories;
 
+  // What the text adds to the chips, shown so the poster can see what is being
+  // sent on their behalf. Derived from the SAME merge the submit uses, minus
+  // the chips — so a category already tapped is not repeated, and one the cap
+  // squeezes out is not shown, because it will not be sent either. Recomputed
+  // per keystroke like the counter beside it: the table walk is cheap, and a
+  // debounced line would lag the text it describes.
+  const inferred = useMemo(
+    () =>
+      mergeLookingFor(state.returnCategories, state.wanted, rules.maxReturnCategories).filter(
+        (c) => !state.returnCategories.includes(c),
+      ),
+    [state.returnCategories, state.wanted],
+  );
+
   return (
     <View style={{ paddingHorizontal: board.screenX }}>
       <Text
@@ -101,6 +117,13 @@ export function StepReturn({
         helper="You can leave this open if you are not sure yet."
         counter={`${state.wanted.length}/${rules.wantedMax}`}
       />
+      {inferred.length > 0 ? (
+        <Text
+          style={[textStyle(postType.helper), { color: postColor.inkSecondary, marginTop: 6 }]}
+        >
+          {`Also matching: ${inferred.map((c) => CATEGORY_LABELS[c]).join(", ")}`}
+        </Text>
+      ) : null}
 
       <Divider style={{ marginTop: postSpace.ret.helperToDivider }} />
 
