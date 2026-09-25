@@ -49,13 +49,15 @@ import { color, icon, radius, textStyle, type } from "../theme/tokens";
  * anything cheaper means auditing every query key for identity-dependence
  * forever.
  *
- * ── THE COPY SAYS "LISTINGS", AND ONLY LISTINGS, ON PURPOSE ─────────────────
+ * ── THE COPY SAYS LISTINGS AND MESSAGES, AND NOT OFFERS OR TRADES ───────────
  *
- * The only server write that reads X-Baylo-Org is POST /api/items. Offers,
- * messages and trades are made as the signed-in person whatever is selected
- * here. This card used to say "New listings, offers and messages are
- * attributed to whoever is selected", which promised the shop a reach it does
- * not have. If org trading lands, widen the copy with it -- not before.
+ * The writes that read X-Baylo-Org are POST /api/items and, since 25 Sep 2026,
+ * messaging: acting as a shop, Messages is the shop's inbox and a reply goes
+ * out as the shop. Offers and trades are still made as the signed-in person
+ * whatever is selected here. This card once said "New listings, offers and
+ * messages are attributed to whoever is selected", which promised the shop a
+ * reach it did not have. If org trading lands, widen the copy with it -- not
+ * before.
  */
 export function OrgSwitcher() {
   const qc = useQueryClient();
@@ -93,8 +95,8 @@ export function OrgSwitcher() {
         Posting as
       </Text>
       <Text style={[textStyle(type.detailBody), { color: color.inkMuted, marginBottom: 10 }]}>
-        Choose who your new listings are posted as. Offers, messages and trades are
-        always sent as you, whichever is selected.
+        Choose who your new listings and messages are posted as. Offers and trades
+        are always sent as you, whichever is selected.
       </Text>
 
       <IdentityRow

@@ -17,10 +17,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { threadQueryKey, useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
+import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
 import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon, TrashIcon } from "../../src/components/icons";
@@ -95,7 +96,7 @@ export default function MessagesThreadScreen() {
 
   const onNewMessage = useCallback((message: Omit<ThreadMessage, "read">) => {
     if (!partner || message.senderId !== partner) return;
-    queryClient.setQueryData<LegacyThreadResponse>(["messages", "thread", partner], (current) => {
+    queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) => {
       if (!current || current.messages.some((item) => item.id === message.id)) return current;
       return { ...current, messages: [...current.messages, { ...message, read: true }] };
     });
@@ -117,10 +118,13 @@ export default function MessagesThreadScreen() {
     }
   }, [partner]);
 
+  // The INBOX's channel: the shop's while acting as it, where the partner's
+  // messages to the shop are published. See the note in src/api/messages.
+  const inboxId = thread.data?.currentUserId || session?.user.id;
   useEffect(() => {
-    if (!session?.user.id) return;
-    return subscribeToUserChannel(session.user.id, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
-  }, [onNewMessage, onOfferUpdated, onTyping, session?.user.id]);
+    if (!inboxId) return;
+    return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
+  }, [onNewMessage, onOfferUpdated, onTyping, inboxId]);
 
   useEffect(() => {
     if (thread.data) {
@@ -408,7 +412,10 @@ export default function MessagesThreadScreen() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         colors={palette}
-        onBlock={confirmBlock}
+        // Not while acting as a shop: POST /api/v1/blocks acts as the PERSON, so
+        // it would block from their own account and leave the shop's thread
+        // open. Shop-level blocking is not built.
+        onBlock={getActingOrgId() ? undefined : confirmBlock}
         onDelete={confirmDelete}
       />
       <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
@@ -429,7 +436,7 @@ function ConversationMenu({
 }: {
   visible: boolean;
   onClose: () => void;
-  onBlock: () => void;
+  onBlock?: () => void;
   onDelete: () => void;
   colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
 }) {
@@ -437,7 +444,7 @@ function ConversationMenu({
   return (
     <SheetShell title="Conversation" onClose={onClose} colors={colors}>
       <SheetRows>
-        <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} />
+        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} /> : null}
         <SheetRow glyph={<TrashIcon size={20} stroke={1.6} color={colors.urgent} />} label="Delete conversation" destructive colors={colors} onPress={onDelete} />
       </SheetRows>
     </SheetShell>

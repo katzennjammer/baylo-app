@@ -347,8 +347,13 @@ export interface HomePayload {
    * what the header pill shows while acting as it. Null acting as yourself, or
    * when the server refused the context. `viewer.leaves` is always the
    * person's. Absent from a server older than 25 Sep 2026.
+   *
+   * `orgUserId` is the shop's backing account: its inbox, and the realtime
+   * channel the header listens on while acting as it. `unread` below is that
+   * inbox's while `acting` is non-null. Absent from a server before the shop
+   * inbox (25 Sep 2026, evening).
    */
-  acting?: { organizationId: string; name: string; leaves: number } | null;
+  acting?: { organizationId: string; name: string; leaves: number; orgUserId?: string } | null;
   unread: {
     messages: number;
     messageConversations: number;

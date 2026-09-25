@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
+import { getActingOrgId } from "./org-context";
 import type { NotificationItem, NotificationsPayload } from "./types";
 
 /**
@@ -20,10 +21,16 @@ export const NOTIFICATIONS_KEY = ["notifications"] as const;
 /** Matches the trades lists: a minute-old copy is fine while a fresh one loads. */
 const NOTIFICATIONS_STALE_MS = 30_000;
 
-/** GET /api/v1/notifications — newest first, one page of 50. */
+/**
+ * GET /api/v1/notifications — newest first, one page of 50.
+ *
+ * Acting as a shop the server answers with the SHOP's rows (X-Baylo-Org), so
+ * the acting org is part of the key: one identity's bell never renders under
+ * the other. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
+ */
 export function useNotifications() {
   return useQuery({
-    queryKey: NOTIFICATIONS_KEY,
+    queryKey: [...NOTIFICATIONS_KEY, getActingOrgId() ?? "self"],
     queryFn: () => apiV1<NotificationsPayload>("/api/v1/notifications?limit=50"),
     select: (r) => r.data,
     staleTime: NOTIFICATIONS_STALE_MS,

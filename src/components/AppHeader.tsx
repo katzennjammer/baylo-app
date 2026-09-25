@@ -84,10 +84,14 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // The badges below count the acting shop's inbox while acting as it (see
+  // `unread` on /api/v1/home), so the channel that refreshes them is the
+  // shop's: notifications to the shop are published there, not to the person.
+  const inboxChannelId = acting?.orgUserId ?? session?.user.id;
   useEffect(() => {
-    if (!session?.user.id) return;
+    if (!inboxChannelId) return;
     return subscribeToUserChannel(
-      session.user.id,
+      inboxChannelId,
       () => undefined,
       undefined,
       undefined,
@@ -96,7 +100,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
         void queryClient.invalidateQueries({ queryKey: ["notifications"] });
       },
     ) ?? undefined;
-  }, [queryClient, session?.user.id]);
+  }, [queryClient, inboxChannelId]);
 
   // A 401 is not a connection problem, and saying so would be the last thing
   // someone reads before being bounced to the login screen. By the time the

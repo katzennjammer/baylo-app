@@ -4,9 +4,11 @@ import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from "reac
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useConversations } from "../../src/api/messages";
+import { useHome } from "../../src/api/home";
+import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { MessageIcon } from "../../src/components/icons";
+import { MessageIcon, StoreIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
 import { color, font, icon, radius, textStyle } from "../../src/theme/tokens";
@@ -36,13 +38,31 @@ export default function MessagesScreen() {
     [data],
   );
 
-  useEffect(() => {
-    if (!session?.user.id) return;
+  // Acting as a shop this list is the SHOP's inbox (the server reads the same
+  // X-Baylo-Org header), so the realtime channel is the shop's too: `viewerId`
+  // is whoever the list was fetched for. See the note in src/api/messages.
+  const inboxId = data?.viewerId ?? session?.user.id;
+  // Say whose inbox it is only when the server says it answered as the shop,
+  // the same test the header pill uses. Deduped with the header's query.
+  const { acting } = useHome();
+  const shopName = acting && acting.organizationId === getActingOrgId() ? acting.name : null;
 
-    return subscribeToUserChannel(session.user.id, () => {
+  useEffect(() => {
+    if (!inboxId) return;
+
+    return subscribeToUserChannel(inboxId, () => {
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
     }) ?? undefined;
-  }, [queryClient, session?.user.id]);
+  }, [queryClient, inboxId]);
+
+  const shopStrip = shopName ? (
+    <View style={styles.shopStrip}>
+      <StoreIcon size={14} stroke={1.6} color={color.forest} />
+      <Text style={styles.shopStripText} numberOfLines={1}>
+        {`Inbox for ${shopName} · replies are sent as the shop`}
+      </Text>
+    </View>
+  ) : null;
 
   if (isPending) {
     return (
@@ -68,16 +88,24 @@ export default function MessagesScreen() {
 
   if (conversations.length === 0) {
     return (
-      <View style={styles.centered}>
-        <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-        <Text style={styles.headline}>No conversations yet.</Text>
-        <Text style={styles.body}>Messages will appear here when someone starts a conversation.</Text>
+      <View style={styles.screen}>
+        {shopStrip}
+        <View style={styles.centered}>
+          <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
+          <Text style={styles.headline}>No conversations yet.</Text>
+          <Text style={styles.body}>
+            {shopName
+              ? `Messages to ${shopName} will appear here.`
+              : "Messages will appear here when someone starts a conversation."}
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
+      {shopStrip}
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.partnerId}
@@ -155,6 +183,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: color.inkSecondary,
     textAlign: "center",
+  },
+  shopStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: color.greenWash,
+    borderBottomWidth: 1,
+    borderBottomColor: color.divider,
+  },
+  shopStripText: {
+    flex: 1,
+    fontFamily: font.sansSemi,
+    fontSize: 12,
+    color: color.forest,
   },
   retryButton: {
     marginTop: 18,
