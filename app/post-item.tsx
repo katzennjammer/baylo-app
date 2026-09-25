@@ -49,6 +49,7 @@ import { discardDraft, saveDraft, useAutosave, useStoredDraft } from "../src/pos
 import { announcePosted } from "../src/post/posted-notice";
 import { PhotoPipelineProvider, usePhotos } from "../src/post/photos";
 import { useValuation } from "../src/post/valuation";
+import { mergeLookingFor } from "../src/post/wanted-keywords";
 import {
   canAdvance,
   effectiveValue,
@@ -480,8 +481,14 @@ function Wizard() {
         hubIds: state.hubIds.slice(0, rules.maxHubs),
         // Step 5's chip group, which until now was collected and thrown away.
         // Server-side this is the matcher's input: it decides who is told
-        // about this listing. Not perishable-only.
-        lookingForCategories: state.returnCategories,
+        // about this listing. Not perishable-only. The free text above adds
+        // any categories it names by keyword -- chips first, never displaced,
+        // within the server's cap. See src/post/wanted-keywords.ts.
+        lookingForCategories: mergeLookingFor(
+          state.returnCategories,
+          state.wanted,
+          rules.maxReturnCategories,
+        ),
         // The perishable block, or nothing at all. Spread conditionally so a
         // standard listing sends no perishable keys rather than four nulls --
         // the server refuses a window on a non-perishable, and sending the
