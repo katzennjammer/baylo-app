@@ -5,7 +5,7 @@ import { Image } from "expo-image";
 
 import { ApiError } from "../src/api/client";
 import { APPEAL_MESSAGE_MAX, useAppealListing, useDeleteItem, useItem, useUpdateItem } from "../src/api/item";
-import type { ListingReview } from "../src/api/types";
+import type { Item, ListingReview } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
 import { Hairline, OfferScreenHost, PrimaryButton, SecondaryButton, Section, SectionLabel } from "../src/components/offer/chrome";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
@@ -15,12 +15,13 @@ import { bracketLabel, bracketOf, bracketRange } from "../src/lib/brackets";
 import { valueRejectionSentence } from "../src/lib/value-rejection";
 import { offerBorder, offerColor, offerRadius, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
 import { showDialog } from "../src/components/dialog";
+import { startRelist } from "../src/post/relist";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
  * can do about it.
  *
- * ── THREE STATES, ONE SCREEN ────────────────────────────────────────────────
+ * ── THREE STATES, ONE SCREEN (AND EXPIRED) ──────────────────────────────────
  *
  *   waiting    parked for a value review; an admin has not answered.
  *   rejected   the review said no, with a reason. The three exits the
@@ -28,6 +29,8 @@ import { showDialog } from "../src/components/dialog";
  *              within the cap, delete — plus Appeal.
  *   hidden     a moderator takedown. Nothing to edit your way out of: Appeal
  *              or delete.
+ *   expired    a perishable's window ran out unsold. Not a review at all, so
+ *              it is drawn from the item's status, not `review`: Relist.
  *
  * The whole screen is drawn from `review` on the item detail. Everything the
  * owner is shown here is what the server decided to show — the reason CODE
@@ -68,6 +71,8 @@ export default function ListingReviewScreen() {
         <TradesErrorPanel onRetry={() => void detail.refetch()} />
       ) : detail.isPending || !item ? (
         <TradesSkeleton />
+      ) : detail.data.viewer.isOwner && item.status === "EXPIRED" ? (
+        <ExpiredBody item={item} />
       ) : !detail.data.viewer.isOwner || review === null ? (
         /*
          * Reached with a stale notification — the listing has since been
@@ -92,6 +97,49 @@ export default function ListingReviewScreen() {
         />
       )}
     </OfferScreenHost>
+  );
+}
+
+/**
+ * A perishable whose window ran out unsold -- where the LISTING_EXPIRED
+ * notice and the shelf's "Expired" tile both land.
+ *
+ * Relist is the only way on, and it is a NEW post: `startRelist()` writes the
+ * old listing into the wizard's draft and opens it, so the same photo, title,
+ * category and quantity come back and everything else -- the value, the
+ * status, the clock -- is decided afresh. This listing stays as it is.
+ */
+function ExpiredBody({ item }: { item: Item }) {
+  const router = useRouter();
+  const image = item.images[0] ?? null;
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <Section pad={{ top: 14, bottom: 14 }}>
+        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
+            {image ? <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]} numberOfLines={2}>{item.title}</Text>
+            <Tappable onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} accessibilityRole="link">
+              <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.deep, marginTop: 2 }]}>Open the listing</Text>
+            </Tappable>
+          </View>
+        </View>
+      </Section>
+      <Hairline />
+
+      <Section pad={{ top: 18, bottom: 14 }}>
+        <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink }]}>Expired unsold</Text>
+        <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary, marginTop: 8 }]}>
+          Its trade window closed before anyone traded for it, so it is off the feed and only you can see it. Relist to post it again as a new listing with the same photo and details and a fresh window.
+        </Text>
+      </Section>
+
+      <Gutter style={{ paddingTop: 8, gap: 12 }}>
+        <PrimaryButton label="Relist" onPress={() => void startRelist(item, () => router.replace("/post-item"))} />
+      </Gutter>
+    </ScrollView>
   );
 }
 

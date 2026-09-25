@@ -454,6 +454,9 @@ export function shelfLabel(item: Item): string | null {
   if (item.status === "VALUE_REJECTED") return "Value not approved";
   if (item.status === "IN_TRADE") return "In trade";
   if (item.status === "TRADED") return "Traded";
+  // A perishable whose window ran out unsold. The tile opens /listing-review,
+  // whose expired state is where Relist lives.
+  if (item.status === "EXPIRED") return "Expired";
   return null;
 }
 

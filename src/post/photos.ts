@@ -99,6 +99,44 @@ function usePhotoPipeline() {
     [],
   );
 
+  /* ── the duplicate check ── */
+
+  const check = useCallback(
+    async (id: string, url: string, controller: AbortController) => {
+      const patch = (p: Partial<Photo>) => dispatch({ type: "photo/patch", id, patch: p });
+
+      patch({ dup: "running" });
+      let verdict: { status: PhashStatus; hash: string | null; matchedItemId?: string };
+      try {
+        verdict = await checkDuplicate(url, controller.signal);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        if (e instanceof ApiError && e.status === 429) {
+          // NOT a verdict about the photo. It stays `running` and the step
+          // shows the countdown with a re-check.
+          dispatch({ type: "rate-limit", action: "duplicate", seconds: e.retryAfter ?? 60 });
+          return;
+        }
+        // Anything else already resolved to `failed` inside checkDuplicate; this
+        // branch is only reachable for the 429 re-throw, so treating an unknown
+        // throw as a block keeps the fail-closed guarantee intact.
+        patch({ dup: "failed" });
+        return;
+      }
+      if (controller.signal.aborted) return;
+
+      patch({ dup: verdict.status, hash: verdict.hash });
+
+      // The matched listing is fetched only when a panel will show it. `passed`
+      // shows nothing, ever, so it costs nothing.
+      if (verdict.matchedItemId && verdict.status !== "passed") {
+        const match = await fetchMatchedListing(verdict.matchedItemId);
+        if (!controller.signal.aborted) patch({ match });
+      }
+    },
+    [dispatch],
+  );
+
   /* ── upload → duplicate check ── */
 
   const run = useCallback(
@@ -132,39 +170,34 @@ function usePhotoPipeline() {
         return;
       }
 
-      /* ── the duplicate check ── */
-
-      patch({ dup: "running" });
-      let verdict: { status: PhashStatus; hash: string | null; matchedItemId?: string };
-      try {
-        verdict = await checkDuplicate(url, controller.signal);
-      } catch (e) {
-        if (controller.signal.aborted) return;
-        if (e instanceof ApiError && e.status === 429) {
-          // NOT a verdict about the photo. It stays `running` and the step
-          // shows the countdown with a re-check.
-          dispatch({ type: "rate-limit", action: "duplicate", seconds: e.retryAfter ?? 60 });
-          return;
-        }
-        // Anything else already resolved to `failed` inside checkDuplicate; this
-        // branch is only reachable for the 429 re-throw, so treating an unknown
-        // throw as a block keeps the fail-closed guarantee intact.
-        patch({ dup: "failed" });
-        return;
-      }
-      if (controller.signal.aborted) return;
-
-      patch({ dup: verdict.status, hash: verdict.hash });
-
-      // The matched listing is fetched only when a panel will show it. `passed`
-      // shows nothing, ever, so it costs nothing.
-      if (verdict.matchedItemId && verdict.status !== "passed") {
-        const match = await fetchMatchedListing(verdict.matchedItemId);
-        if (!controller.signal.aborted) patch({ match });
-      }
+      await check(photo.id, url, controller);
     },
-    [dispatch],
+    [dispatch, check],
   );
+
+  /*
+   * ── RESUME: AN UPLOADED PHOTO WITH NO VERDICT GETS ITS CHECK ─────────────
+   *
+   * Once, on mount. A restored draft can hold a photo whose upload landed but
+   * whose check never came back (the draft strips `running` to `idle`), and a
+   * relist draft holds only such photos. Nothing else would ever check them,
+   * and step 0's Next waits on a verdict, so the wizard would sit there
+   * disabled with no way forward but removing the photo.
+   */
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    for (const photo of state.photos) {
+      if (photo.upload !== "done" || !photo.url || photo.dup !== "idle") continue;
+      const controller = new AbortController();
+      controllers.current.set(photo.id, controller);
+      void check(photo.id, photo.url, controller);
+    }
+    // Mount only: `state.photos` here is the restored draft, which is the set
+    // this is for. Later photos come through `add`, which checks its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── adding ── */
 

@@ -1,14 +1,18 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { ApiError } from "../src/api/client";
+import { ApiError, apiV1 } from "../src/api/client";
+import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
   useMarkAllNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
-import type { NotificationItem } from "../src/api/types";
+import type { ItemDetailPayload, NotificationItem } from "../src/api/types";
+import { showDialog } from "../src/components/dialog";
+import { startRelist } from "../src/post/relist";
 import { Splash } from "../src/components/Splash";
 import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
 import { PersonIcon, StoreIcon } from "../src/components/icons";
@@ -191,6 +195,9 @@ function NotificationRow({
         <Text style={[textStyle(offerType.deadline), { color: offerColor.inkTertiary }]}>
           {relativeShort(item.createdAt)}
         </Text>
+        {item.type === "LISTING_EXPIRED" && item.entityId ? (
+          <RelistButton itemId={item.entityId} />
+        ) : null}
       </View>
 
       {/* The unread mark: a plain dot, never a colour event on the whole row.
@@ -227,6 +234,62 @@ function NotificationRow({
       pressedStyle={{ backgroundColor: offerColor.quiet }}
     >
       {body}
+    </Tappable>
+  );
+}
+
+/**
+ * The expiry notice's one-tap Relist. The row itself still opens the listing
+ * screen; this skips it.
+ *
+ * The item is fetched at the tap, not trusted from the row: the notice can be
+ * days old, and what the draft is built from has to be the listing as it is
+ * now. It is relisted only while it is still the owner's and still EXPIRED --
+ * anything else is said, not guessed at.
+ */
+function RelistButton({ itemId }: { itemId: string }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const relist = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const detail = await qc.fetchQuery({
+        queryKey: itemKey(itemId),
+        queryFn: () => apiV1<ItemDetailPayload>(`/api/v1/items/${encodeURIComponent(itemId)}`),
+        staleTime: 0,
+      });
+      const { item, viewer } = detail.data;
+      if (!viewer.isOwner || item.status !== "EXPIRED") {
+        showDialog("Can't relist this", "This listing is no longer an expired listing of yours.");
+        return;
+      }
+      await startRelist(item, () => router.push("/post-item"));
+    } catch (e) {
+      showDialog(
+        "Can't relist this",
+        e instanceof ApiError && e.status === 404
+          ? "This listing no longer exists."
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Tappable
+      onPress={() => void relist()}
+      accessibilityRole="button"
+      accessibilityLabel="Relist"
+      hitSlop={8}
+      style={{ alignSelf: "flex-start", marginTop: 6 }}
+    >
+      <Text style={[textStyle(offerType.rowSubtitle), { color: busy ? offerColor.inkTertiary : offerColor.deep }]}>
+        {busy ? "Opening…" : "Relist"}
+      </Text>
     </Tappable>
   );
 }
