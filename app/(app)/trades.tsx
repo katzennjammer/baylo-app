@@ -12,7 +12,7 @@ import {
 } from "../../src/api/trades";
 import { Splash } from "../../src/components/Splash";
 import { Hairline } from "../../src/components/offer/chrome";
-import { BlockHeader, Gutter, TradesHost, TradesTitle } from "../../src/components/trades/chrome";
+import { BlockHeader, Gutter, TradesHost } from "../../src/components/trades/chrome";
 import * as copy from "../../src/components/trades/copy";
 import {
   HistoryCollapsedRow,
@@ -63,9 +63,11 @@ import { offerColor, offerSize } from "../../src/theme/offer-tokens";
  *
  * `(app)/_layout.tsx` gives every tab `AppHeader` — the wordmark, the Leaves
  * pill, the message and bell icons. §3.5's running y starts at 0 with a 44 status
- * bar and puts a 22px `Trades` in the 44 that follows, so the header would push
- * every measured value in that table down by its own height. `headerShown: false`
- * on this one Tabs.Screen is the whole change.
+ * bar, so the header would push every measured value in that table down by its
+ * own height. `headerShown: false` on this one Tabs.Screen is the whole change.
+ *
+ * There is no in-screen `Trades` title either (removed 26 Sep 2026): the tab
+ * bar already says where you are, so the section headers open the screen.
  *
  * ══ THE ROWS HERE DO NOT CARRY CONTROLS; THE PUSHED SCREENS DO ══════════════
  *
@@ -111,7 +113,6 @@ export default function TradesScreen() {
   if (active.isPending && !active.data) {
     return (
       <TradesHost>
-        <TradesTitle title={copy.nav.trades} />
         <TradesSkeleton />
       </TradesHost>
     );
@@ -139,7 +140,6 @@ export default function TradesScreen() {
   if (nothingEverHappened) {
     return (
       <TradesHost>
-        <TradesTitle title={copy.nav.trades} />
         <TradesEmpty onBrowse={() => router.push("/(app)/marketplace")} />
       </TradesHost>
     );
@@ -147,8 +147,6 @@ export default function TradesScreen() {
 
   return (
     <TradesHost>
-      <TradesTitle title={copy.nav.trades} />
-
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         refreshControl={

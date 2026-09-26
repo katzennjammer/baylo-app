@@ -111,11 +111,11 @@ export default function AppLayout() {
       {/* THE ONLY TAB THAT DRAWS ITS OWN BAR.
 
           §3.5 of the offer/trades spec gives Trades a running y that starts at 0
-          with a 44 status bar and puts a 22px Bricolage `Trades` in the 44 that
-          follows — content begins at 88. `AppHeader` above it would push every
-          measured value in that table down by its own height, so this screen
-          renders `TradesTitle` instead and the navigator's header is off. Every
-          other tab keeps the wordmark, the Leaves pill and the two icons. */}
+          with a 44 status bar. `AppHeader` above it would push every measured
+          value in that table down by its own height, so the navigator's header
+          is off. There is no in-screen `Trades` title either (removed 26 Sep
+          2026) — it only repeated this tab's label. Every other tab keeps the
+          wordmark, the Leaves pill and the two icons. */}
       <Tabs.Screen name="trades" options={{ title: "Trades", headerShown: false }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
 

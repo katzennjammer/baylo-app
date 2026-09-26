@@ -75,7 +75,9 @@ import {
  */
 export default function OfferReviewScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  // `shop=1` comes from a SHOP's message thread (app/messages/thread.tsx): the
+  // offer is addressed to the shop, not to the signed-in person.
+  const { id, shop } = useLocalSearchParams<{ id?: string; shop?: string }>();
 
   const active = useActiveTrades();
   const me = useProfileMe();
@@ -114,9 +116,17 @@ export default function OfferReviewScreen() {
           />
         ) : active.isPending ? null : (
           <Gutter style={{ paddingTop: 18 }}>
+            {/* ── A SHOP'S OFFER IS NOT A CLOSED ONE (26 Sep 2026) ──────────
+                  This screen finds its offer in GET /api/v1/trades, which lists
+                  the signed-in PERSON's offers only. An offer sent to a shop is
+                  never in it, so the not-open copy below told staff a PENDING
+                  offer had been withdrawn. Answering as the shop is org trading,
+                  which is not built; until it is, this says so, and nothing
+                  here pretends to handle the offer. */}
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              That offer is not open any more. It may have been withdrawn, or it may have
-              expired on its own.
+              {shop === "1"
+                ? "Offers sent to the shop can't be answered here yet. The offer is still open; answering offers as the shop is coming later."
+                : "That offer is not open any more. It may have been withdrawn, or it may have expired on its own."}
             </Text>
           </Gutter>
         )}

@@ -195,10 +195,12 @@ export async function fetchConversations(
       };
     }
 
-    if (error instanceof ApiError && error.status === 403) {
-      return { conversations: [] };
-    }
-
+    // A 403 is THROWN, never read as an empty list (26 Sep 2026). It used to
+    // return `{ conversations: [] }`, so a refused request -- a shop context
+    // the server no longer honours, say -- rendered "No conversations yet",
+    // identical to an inbox that really is empty. That made a shop owner's
+    // empty screen undiagnosable from the phone. The screen now shows a
+    // refusal as a refusal; see `conversationsErrorCopy()` in (app)/messages.
     throw error;
   }
 }

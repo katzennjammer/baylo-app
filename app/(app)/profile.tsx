@@ -15,7 +15,7 @@ import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
 import { color, font } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
-import { getActingOrgId } from "../../src/api/org-context";
+import { getActingOrgId, hasChosenActingOrg } from "../../src/api/org-context";
 import { StoreIcon } from "../../src/components/icons";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
@@ -105,6 +105,13 @@ export default function ProfileScreen() {
   const shops = (orgsData?.data.organizations ?? []).filter((o) => !!o.orgUserId);
   const shopOnly = profile?.hasPersonalActivity === false && shops.length > 0;
   const actingShop = actingOrg?.orgUserId ? actingOrg : undefined;
+  // ...UNLESS they picked "Myself" this session. The routing above is a
+  // DEFAULT for somebody who has not chosen yet; a null context alone cannot
+  // tell "never touched the switcher" from "just chose Myself in Settings",
+  // and until 26 Sep 2026 this tab treated both as the former and kept
+  // showing the storefront after an explicit switch. Acting as a shop still
+  // shows the shop either way.
+  const showShopOnly = shopOnly && (!!actingShop || !hasChosenActingOrg());
   // One shop: that one. Several: whichever this device is acting as, or the
   // picker until one is chosen.
   const shownShop = actingShop ?? (shops.length === 1 ? shops[0] : undefined);
@@ -131,16 +138,14 @@ export default function ProfileScreen() {
     }
   }, [selectShop]);
 
-  // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
-  // ONCE per mount, which is once per sign-in because this tab stays mounted.
-  // Without the ref, somebody who deliberately switches to "Myself" (from
+  // One shop and nothing chosen yet this session: adopt the shop. Adopting is
+  // itself a choice (hasChosenActingOrg() flips), so this runs at most once per
+  // sign-in, and never after somebody deliberately picks "Myself" (from
   // Settings, or "Post as myself instead" when their shop is still in review)
-  // would be switched straight back the next time this tab re-rendered.
-  const adoptShopId = shopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
-  const adoptedOnce = useRef(false);
+  // -- including when they pick it before this tab has ever mounted.
+  const adoptShopId = showShopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
   useEffect(() => {
-    if (!adoptShopId || adoptedOnce.current) return;
-    adoptedOnce.current = true;
+    if (!adoptShopId || hasChosenActingOrg()) return;
     void selectShop(adoptShopId);
   }, [adoptShopId, selectShop]);
 
@@ -164,7 +169,7 @@ export default function ProfileScreen() {
     return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
   }
 
-  if (shopOnly) {
+  if (showShopOnly) {
     if (pickingShop || !shownShop) {
       return <ShopPicker dark={dark} shops={shops} activeId={actingShop?.id ?? null} onPick={(id) => void selectShop(id)} />;
     }

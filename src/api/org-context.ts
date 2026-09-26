@@ -44,9 +44,22 @@ export const ORG_CONTEXT_HEADER = "X-Baylo-Org";
 
 let actingOrgId: string | null = null;
 
+// Whether the context was SET this session (a switcher, "Post as myself
+// instead", the Profile tab adopting a shop) rather than merely restored from
+// storage or left at its null default. Memory-only on purpose: the Profile
+// tab's shop-only auto-routing is a default for "nothing chosen yet", and a
+// fresh launch or sign-in is exactly that. What it must never do is override
+// "Myself" picked a moment ago -- null alone cannot tell those two apart.
+let chosenThisSession = false;
+
 /** The organisation this client is acting as, or null for "as myself". */
 export function getActingOrgId(): string | null {
   return actingOrgId;
+}
+
+/** True once the acting context has been deliberately set this session. */
+export function hasChosenActingOrg(): boolean {
+  return chosenThisSession;
 }
 
 /**
@@ -60,6 +73,7 @@ export function getActingOrgId(): string | null {
  */
 export async function setActingOrgId(id: string | null): Promise<void> {
   actingOrgId = id;
+  chosenThisSession = true;
   try {
     if (id) await SecureStore.setItemAsync(ORG_KEY, id);
     else await SecureStore.deleteItemAsync(ORG_KEY);
@@ -88,5 +102,8 @@ export async function restoreActingOrg(): Promise<void> {
  */
 export function clearActingOrg(): void {
   actingOrgId = null;
+  // Not a choice: sign-out, or the server refusing the header. The next
+  // session (or this one, after a revoked membership) starts from the default.
+  chosenThisSession = false;
   void SecureStore.deleteItemAsync(ORG_KEY).catch(() => {});
 }

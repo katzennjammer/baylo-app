@@ -11,10 +11,9 @@ import {
   offerType,
   textStyle,
 } from "../../theme/offer-tokens";
-import { font } from "../../theme/tokens";
 
 /**
- * The Trades tab's own chrome — the large title, the block label, the host.
+ * The Trades tab's own chrome — the block label, the host.
  *
  * ── ALMOST NOTHING NEW ──────────────────────────────────────────────────────
  *
@@ -26,17 +25,19 @@ import { font } from "../../theme/tokens";
  * its own opening line — so a second set of buttons here would be a second
  * system pretending to be the same one.
  *
- * What genuinely is this screen's own is below: a 22px large title where the
- * offer flow has a 15px nav title, and the `label + 21` block header §4 gives
- * the sections.
+ * What genuinely is this screen's own is below: the `label + 21` block header
+ * §4 gives the sections.
  *
  * ── THE TAB'S APP HEADER IS TURNED OFF FOR THIS SCREEN ──────────────────────
  *
  * `(app)/_layout.tsx` puts `AppHeader` on every tab. §3.5's running y starts at
- * 0 with a 44 status bar and puts the `Trades` title in the 44 that follows, so
- * the wordmark row would push every measured value in the table down by its own
- * height. `headerShown: false` on the Trades screen is the whole change, and it
- * is why `TradesTitle` below draws a bar rather than configuring one.
+ * 0 with a 44 status bar, so the wordmark row would push every measured value in
+ * the table down by its own height. `headerShown: false` on the Trades screen is
+ * the whole change.
+ *
+ * NO IN-SCREEN TITLE EITHER (26 Sep 2026). §3.5 drew a 22px `Trades` bar under
+ * the status area; it only repeated the tab bar's own `Trades` label, so it was
+ * removed and the section headers start the screen.
  */
 
 /* ───────────────────────────── the host ─────────────────────────────── */
@@ -81,45 +82,6 @@ export function TradesHost({
       }}
     >
       {children}
-    </View>
-  );
-}
-
-/* ────────────────────────── the large title ─────────────────────────── */
-
-/**
- * §3.5's nav bar: `Trades`, 22px Bricolage, 16 of side padding.
- *
- * NOT `offerType.screenHeading` (25px) and not `navTitle` (15px). §3.5 names 22
- * specifically, which is `tokens.type.wordmarkTight`'s size and the same figure
- * the frames draw — a title that is a destination's name rather than a
- * screen-full heading. The role is composed here rather than added to
- * `offer-tokens` because it appears on exactly one screen.
- *
- * `trailing` carries frame 9d's `14 trades` mono, which rides the same bar when
- * the History list is pushed.
- */
-export function TradesTitle({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        height: offerSpace.navBar,
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: offerSpace.screenX,
-      }}
-    >
-      <Text
-        accessibilityRole="header"
-        style={[
-          textStyle({ fontFamily: font.displayBold, fontSize: 22, letterSpacing: -0.44 }),
-          { color: offerColor.ink, flex: 1 },
-        ]}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
-      {trailing}
     </View>
   );
 }

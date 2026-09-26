@@ -10,7 +10,7 @@ import {
   type ActingOrg,
   type OrgInvitation,
 } from "../api/organizations";
-import { getActingOrgId } from "../api/org-context";
+import { getActingOrgId, hasChosenActingOrg } from "../api/org-context";
 import { LeavesPill } from "./AppHeader";
 import { Tappable } from "./Tappable";
 import { ORG_BADGE_LABEL } from "../lib/org";
@@ -73,7 +73,9 @@ export function OrgSwitcher() {
   const activeId = getActingOrgId();
 
   async function switchTo(organizationId: string | null) {
-    if (busy || organizationId === activeId) return;
+    // Re-tapping the active row still counts once: "Myself" on a fresh session
+    // is already null, but tapping it is the choice the Profile tab honours.
+    if (busy || (organizationId === activeId && hasChosenActingOrg())) return;
     setBusy(true);
     try {
       await switchToOrganization(organizationId);
