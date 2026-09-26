@@ -4,7 +4,6 @@ import { ScrollView, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import { currentConsent } from "../src/api/offer";
-import { useProfileMe } from "../src/api/profile";
 import { useActiveTrades, useOfferDecision } from "../src/api/trades";
 import type { LiveOffer } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
@@ -75,12 +74,12 @@ import {
  */
 export default function OfferReviewScreen() {
   const router = useRouter();
-  // `shop=1` comes from a SHOP's message thread (app/messages/thread.tsx): the
-  // offer is addressed to the shop, not to the signed-in person.
-  const { id, shop } = useLocalSearchParams<{ id?: string; shop?: string }>();
+  // Acting as a shop, the Trades list this screen reads IS the shop's (the
+  // server resolves X-Baylo-Org), so an offer sent to the shop is found here
+  // and answered as the shop like any other (26 Sep 2026).
+  const { id } = useLocalSearchParams<{ id?: string }>();
 
   const active = useActiveTrades();
-  const me = useProfileMe();
   const decide = useOfferDecision();
   const [failure, setFailure] = useState<string | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -116,17 +115,8 @@ export default function OfferReviewScreen() {
           />
         ) : active.isPending ? null : (
           <Gutter style={{ paddingTop: 18 }}>
-            {/* ── A SHOP'S OFFER IS NOT A CLOSED ONE (26 Sep 2026) ──────────
-                  This screen finds its offer in GET /api/v1/trades, which lists
-                  the signed-in PERSON's offers only. An offer sent to a shop is
-                  never in it, so the not-open copy below told staff a PENDING
-                  offer had been withdrawn. Answering as the shop is org trading,
-                  which is not built; until it is, this says so, and nothing
-                  here pretends to handle the offer. */}
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              {shop === "1"
-                ? "Offers sent to the shop can't be answered here yet. The offer is still open; answering offers as the shop is coming later."
-                : "That offer is not open any more. It may have been withdrawn, or it may have expired on its own."}
+              That offer is not open any more. It may have been withdrawn, or it may have expired on its own.
             </Text>
           </Gutter>
         )}
@@ -142,9 +132,11 @@ export default function OfferReviewScreen() {
   const fee = offer.bridgeFeeLeaves ?? 0;
   const receiverPays = fee > 0 && offer.bridgeFeePayer === "receiver";
   const proposerPaid = fee > 0 && offer.bridgeFeePayer === "proposer";
-  // The receiver's balance, for the sheet. /profile/me is cached from the
-  // tab bar's own read; on a cold deep link it is one request.
-  const balance = me.data?.user.leaves ?? null;
+  // The receiver's balance, for the sheet: the Trades list's `viewer`, which
+  // is the SHOP's while acting as one -- the balance the fee is actually held
+  // from. Not /profile/me, which is always the signed-in person's and would
+  // show a staff member their own Leaves above a fee the shop pays.
+  const balance = active.data?.viewer.leaves ?? null;
 
   const run = (action: "accept" | "decline") => {
     setFailure(null);

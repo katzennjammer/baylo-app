@@ -121,11 +121,6 @@ export default function MessagesThreadScreen() {
   // The INBOX's channel: the shop's while acting as it, where the partner's
   // messages to the shop are published. See the note in src/api/messages.
   const inboxId = thread.data?.currentUserId || session?.user.id;
-  // An offer in the SHOP's thread is addressed to the shop, and the offer
-  // screen reads the signed-in person's trades, so it can never find one.
-  // The flag lets it say that instead of "not open any more" (26 Sep 2026).
-  const offerReviewSuffix =
-    session?.user.id && inboxId && inboxId !== session.user.id ? "&shop=1" : "";
   useEffect(() => {
     if (!inboxId) return;
     return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
@@ -339,9 +334,9 @@ export default function MessagesThreadScreen() {
                             if (__DEV__) console.log("[messages/offer_update_lookup]", { payload, trade: activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId) ?? null });
                             router.push(payload.type === "offer_update" && typeof payload.tradeId === "string"
                               ? `/trade-code?id=${encodeURIComponent(payload.tradeId)}&returnTo=trades`
-                              : `/offer-review?id=${encodeURIComponent(id)}${offerReviewSuffix}`);
+                              : `/offer-review?id=${encodeURIComponent(id)}`);
                           } catch {
-                            router.push(`/offer-review?id=${encodeURIComponent(id)}${offerReviewSuffix}`);
+                            router.push(`/offer-review?id=${encodeURIComponent(id)}`);
                           }
                         },
                         onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
