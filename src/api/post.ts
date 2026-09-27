@@ -295,15 +295,19 @@ export interface IdentifyResult {
 /**
  * What the photo is.
  *
- * ── THIS ENDPOINT ANSWERS 200 ON FAILURE ────────────────────────────────────
+ * ── TWO WAYS TO FAIL, ONE MEANING ───────────────────────────────────────────
  *
- * Deliberately, server-side: a vision call that throws returns
- * `{ name: "", category: "OTHER", condition: "GOOD", tags: [] }` with a 200,
- * because a listing flow that dead-ends on an AI outage is a worse product than
- * one that asks the user to type. So a caller cannot use the HTTP status to
- * tell success from failure — an EMPTY `name` is the signal, and it is the only
- * one there is. `detectionFailed()` below is where that reading lives so no
- * screen re-derives it.
+ * A vision call that THROWS server-side (outage, no API credit) is a 503 since
+ * 27 Sep 2026, and throws here. It used to be a 200 carrying
+ * `{ name: "", category: "OTHER", ... }`, which kept the wizard moving but
+ * hid a whole evening of identification silently failing on an unfunded key.
+ *
+ * A model that answers but cannot read the photo is still a 200 with an EMPTY
+ * `name`. `detectionFailed()` below is where that reading lives.
+ *
+ * Callers treat both the same way -- see useDetection(), where a throw and an
+ * empty name both land on "Tell us what it is". A listing flow must never
+ * dead-end on an AI outage; it asks the user to type instead.
  *
  * A 429 is still a real 429 and still throws, with Retry-After attached.
  */

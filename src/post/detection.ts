@@ -8,17 +8,16 @@ import { usePost } from "./state";
 /**
  * Detection, and the two clocks that run beside it.
  *
- * ── THE ENDPOINT CANNOT FAIL, SO THE TIMER IS THE FAILURE DETECTOR ──────────
+ * ── THREE WAYS DETECTION FAILS, ONE LAYOUT ──────────────────────────────────
  *
- * /api/ai/identify answers HTTP 200 with empty fields when the vision call
- * throws — a deliberate server-side choice, because a listing flow that
- * dead-ends on an Anthropic outage is worse than one that asks the user to
- * type. The consequence for this client is that "did it work" is not a status
- * code: it is `name === ""`, and it is also "we have been waiting fifteen
- * seconds and nothing has come back at all".
+ * "Did it work" has three negative answers: /api/ai/identify throws (a 503
+ * when the vision call fails -- an outage, or no API credit), it answers 200
+ * with an empty `name` (the model could not read the photo), or fifteen
+ * seconds pass and nothing has come back at all.
  *
- * Both land on the SAME layout, because to the person filling in the form they
- * are the same event. Nothing on that layout says sorry, error or failed, it
+ * All three land on the SAME layout, because to the person filling in the form
+ * they are the same event -- a listing flow that dead-ends on an Anthropic
+ * outage is worse than one that asks the user to type. Nothing on that layout says sorry, error or failed, it
  * carries no icon and no warm colour. It is an ordinary form that happens not
  * to be prefilled — which is what it is.
  *

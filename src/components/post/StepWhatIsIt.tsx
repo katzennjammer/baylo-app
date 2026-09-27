@@ -53,9 +53,9 @@ import {
  * trading?" to "Tell us what it is" and a category picker appears where the
  * confirm row was. That is the entire difference.
  *
- * The reason is that the user did nothing. /api/ai/identify answers 200 with
- * empty fields when its vision call throws, so "failed" here means our model
- * could not read a photograph — which is our problem, and dressing it as the
+ * The reason is that the user did nothing. "Failed" here means our model could
+ * not read a photograph, or /api/ai/identify could not reach it at all (a 503)
+ * — which is our problem, and dressing it as the
  * user's mistake would be both wrong and, given how often a dark room causes
  * it, frequent.
  */
