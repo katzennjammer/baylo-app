@@ -47,6 +47,21 @@ const pkg = JSON.parse(readFileSync(join(root, "node_modules", "leaflet", "packa
 const js = readFileSync(join(dist, "leaflet.js"), "utf8")
 const css = readFileSync(join(dist, "leaflet.css"), "utf8")
 
+// ── leaflet.markercluster (1 Oct 2026) ─────────────────────────────────────
+//
+// The numbered bubbles that stand in for pins too close to tell apart, split
+// apart on zoom. Vendored the same way and for the same reasons as Leaflet:
+// no CDN, nothing fetched at runtime. Pinned exactly in package.json.
+//
+// ONLY MarkerCluster.css, NOT MarkerCluster.Default.css. The first is the
+// plugin's mechanics (the split/merge animation); the second is its default
+// green/yellow/orange bubble colours, which Baylo replaces with its own green
+// in map-html.ts. Shipping the default sheet would mean overriding it.
+const mcDist = join(root, "node_modules", "leaflet.markercluster", "dist")
+const mcPkg = JSON.parse(readFileSync(join(root, "node_modules", "leaflet.markercluster", "package.json"), "utf8"))
+const mcJs = readFileSync(join(mcDist, "leaflet.markercluster.js"), "utf8")
+const mcCss = readFileSync(join(mcDist, "MarkerCluster.css"), "utf8")
+
 /**
  * Both files are injected between literal <script>/<style> tags, so a "</script>"
  * ANYWHERE in the text — including inside one of Leaflet's own string constants —
@@ -57,15 +72,20 @@ const css = readFileSync(join(dist, "leaflet.css"), "utf8")
 const deTag = (s) => s.replace(/<\/(script|style)/gi, "<\\/$1")
 
 const hash = createHash("sha256").update(js).update(css).digest("hex").slice(0, 16)
+const mcHash = createHash("sha256").update(mcJs).update(mcCss).digest("hex").slice(0, 16)
 
 const banner = `// GENERATED FILE — DO NOT EDIT.
 //
-// Produced by scripts/vendor-leaflet.mjs from the installed \`leaflet\` package.
+// Produced by scripts/vendor-leaflet.mjs from the installed \`leaflet\` and
+// \`leaflet.markercluster\` packages.
 // Regenerate with:  node scripts/vendor-leaflet.mjs
 //
-//   leaflet version: ${pkg.version}
-//   source:          node_modules/leaflet/dist/{leaflet.js,leaflet.css}
-//   sha256(js+css):  ${hash}
+//   leaflet version:               ${pkg.version}
+//   source:                        node_modules/leaflet/dist/{leaflet.js,leaflet.css}
+//   sha256(js+css):                ${hash}
+//   leaflet.markercluster version: ${mcPkg.version}
+//   source:                        node_modules/leaflet.markercluster/dist/{leaflet.markercluster.js,MarkerCluster.css}
+//   sha256(js+css):                ${mcHash}
 //
 // Read scripts/vendor-leaflet.mjs for why this is a committed string blob
 // rather than a CDN tag or a require(). Nothing here is hand-written, and an
@@ -81,11 +101,20 @@ export const LEAFLET_CSS = ${JSON.stringify(deTag(css))}
 
 /** The version these two strings were cut from, for the map's own diagnostics. */
 export const LEAFLET_VERSION = ${JSON.stringify(pkg.version)}
+
+/** leaflet.markercluster ${mcPkg.version}, minified. Injected AFTER Leaflet: it extends L. */
+export const MARKERCLUSTER_JS = ${JSON.stringify(deTag(mcJs))}
+
+/** The plugin's mechanics stylesheet only (animation), not its default colours. */
+export const MARKERCLUSTER_CSS = ${JSON.stringify(deTag(mcCss))}
+
+export const MARKERCLUSTER_VERSION = ${JSON.stringify(mcPkg.version)}
 `
 
 writeFileSync(out, banner, "utf8")
 
 console.log(
-  `vendored leaflet ${pkg.version} → src/components/map/leaflet-bundle.generated.ts ` +
-    `(${(js.length / 1024).toFixed(0)} KB js + ${(css.length / 1024).toFixed(0)} KB css, sha ${hash})`,
+  `vendored leaflet ${pkg.version} + leaflet.markercluster ${mcPkg.version} → src/components/map/leaflet-bundle.generated.ts ` +
+    `(${((js.length + mcJs.length) / 1024).toFixed(0)} KB js + ${((css.length + mcCss.length) / 1024).toFixed(0)} KB css, ` +
+    `sha ${hash} / ${mcHash})`,
 )

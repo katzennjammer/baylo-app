@@ -1,4 +1,9 @@
-import { LEAFLET_CSS, LEAFLET_JS } from "./leaflet-bundle.generated";
+import {
+  LEAFLET_CSS,
+  LEAFLET_JS,
+  MARKERCLUSTER_CSS,
+  MARKERCLUSTER_JS,
+} from "./leaflet-bundle.generated";
 import {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
@@ -194,6 +199,22 @@ const PIN = {
   nearbyRing: "#3DBE5A",
 };
 
+/**
+ * Cluster bubbles (1 Oct 2026), from the same hand-kept palette: the brand
+ * green (`color.green`) with `color.onGreen` for the count -- the grid and map
+ * chips' selected pair, 6.42:1 -- and a `color.surface` ring so a bubble
+ * stands off the tiles. Replaces the plugin's default green/yellow/orange,
+ * whose stylesheet is deliberately not vendored.
+ */
+const CLUSTER = { fill: "#3DBE5A", text: "#0B2A15", ring: "#FAFAF7" };
+
+/**
+ * How close, in screen pixels, two pins must be to share a bubble. The pin is
+ * 32 px wide; 48 merges pins that overlap or nearly touch, and leaves pins a
+ * finger-width apart as separate targets.
+ */
+const CLUSTER_RADIUS_PX = 48;
+
 /* ─────────────────────────────── the page ───────────────────────────── */
 
 /**
@@ -224,7 +245,24 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <style>${LEAFLET_CSS}</style>
+<style>${MARKERCLUSTER_CSS}</style>
 <style>
+  /* Cluster bubbles: Baylo green, sized by count in iconCreateFunction. */
+  .baylo-cluster-wrap { background: none; border: 0; }
+  .baylo-cluster {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: ${CLUSTER.fill};
+    border: 3px solid ${CLUSTER.ring};
+    color: ${CLUSTER.text};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 700 14px sans-serif;
+    box-shadow: 0 2px 6px rgba(20, 20, 15, 0.28);
+  }
   html, body { margin: 0; padding: 0; height: 100%; background: #EDEBE3; }
   /* The canvas colour under the tiles. Matches the app's divider grey so the
      gap before the first tile paints reads as "loading", not as "broken". */
@@ -306,6 +344,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
 <body>
 <div id="map"></div>
 <script>${LEAFLET_JS}</script>
+<script>${MARKERCLUSTER_JS}</script>
 <script>
 (function () {
   var HUBS = ${safeJson(hubs)};
@@ -428,6 +467,30 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
   var markers = {};
   var selectedId = null;
 
+  /* ── clusters ────────────────────────────────────────────────────────────
+     Pins within CLUSTER_RADIUS_PX of each other merge into one numbered
+     bubble; zooming in splits it, and tapping it zooms to its pins. At the
+     deepest zoom, pins at the same spot fan out (spiderfy) instead.
+     Interactive map only: the inline preview on item detail shows one
+     listing's hubs at a fixed scale and has nothing to zoom into. */
+  var clusters = INTERACTIVE
+    ? L.markerClusterGroup({
+        maxClusterRadius: ${CLUSTER_RADIUS_PX},
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true,
+        iconCreateFunction: function (cluster) {
+          var n = cluster.getChildCount();
+          var d = n < 10 ? 38 : n < 100 ? 44 : 50;
+          return L.divIcon({
+            className: 'baylo-cluster-wrap',
+            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe zones">' + n + '</div>',
+            iconSize: [d, d]
+          });
+        }
+      })
+    : null;
+
   HUBS.forEach(function (hub) {
     var marker = L.marker([hub.latitude, hub.longitude], {
       icon: iconFor(hub, false),
@@ -443,9 +506,11 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       select(hub.id);
       post({ type: 'hub', id: hub.id });
     });
-    marker.addTo(map);
+    if (clusters) clusters.addLayer(marker);
+    else marker.addTo(map);
     markers[hub.id] = { hub: hub, marker: marker };
   });
+  if (clusters) map.addLayer(clusters);
 
   if (USER_LOCATION) {
     L.marker([USER_LOCATION.latitude, USER_LOCATION.longitude], {
@@ -472,6 +537,22 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       entry.marker.setIcon(iconFor(entry.hub, which === id));
     });
     selectedId = id;
+  }
+
+  /* A hub chosen from OUTSIDE the map (the nearby strip under it) may be
+     inside a bubble, or off screen, where highlighting its pin would change
+     nothing visible. zoomToShowLayer zooms and pans until the pin is its own
+     marker (spiderfying at the deepest zoom if it must), then the pin is
+     highlighted. A pin the person just tapped is already visible, so this is
+     a plain select for it. */
+  function reveal(id) {
+    var entry = markers[id];
+    if (!entry) return;
+    if (clusters && clusters.getVisibleParent(entry.marker) !== entry.marker) {
+      clusters.zoomToShowLayer(entry.marker, function () { select(id); });
+    } else {
+      select(id);
+    }
   }
 
   map.on('click', function () {
@@ -534,15 +615,30 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
     fitPoints(pts, animate);
   }
 
-  if (FOCUS_ID && markers[FOCUS_ID]) {
-    var f = markers[FOCUS_ID].hub;
-    map.setView([f.latitude, f.longitude], ${SINGLE_HUB_ZOOM});
-    select(FOCUS_ID);
-  } else if (USER_LOCATION) {
-    fitNearby(false);
-  } else {
-    fitAll(false);
+  function openingView() {
+    if (FOCUS_ID && markers[FOCUS_ID]) {
+      var f = markers[FOCUS_ID].hub;
+      map.setView([f.latitude, f.longitude], ${SINGLE_HUB_ZOOM});
+      // reveal, not select: at this zoom the pin can still sit in a bubble.
+      reveal(FOCUS_ID);
+    } else if (USER_LOCATION) {
+      fitNearby(false);
+    } else {
+      fitAll(false);
+    }
   }
+  openingView();
+
+  /* THE OPENING FIT RUNS AGAIN ONCE THE VIEW HAS ITS REAL SIZE (1 Oct 2026).
+     This document can run before the native WebView is measured (see the
+     onLoadEnd note in HubMap). fitBounds against a too-small viewport picks a
+     far-out zoom -- the whole island instead of the hubs -- and the later
+     invalidateSize() fixed the size but never the zoom. So the first
+     invalidate() re-fits, unless the person has already touched the map:
+     moving it under their finger would be worse than a wide first view. */
+  var touched = false;
+  var refitted = false;
+  document.getElementById('map').addEventListener('touchstart', function () { touched = true; }, { passive: true });
 
   /* ── the RN-callable surface ─────────────────────────────────────────── */
   //
@@ -555,9 +651,15 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       var entry = markers[id];
       if (!entry) return;
       map.setView([entry.hub.latitude, entry.hub.longitude], zoom || ${SINGLE_HUB_ZOOM}, { animate: true });
-      select(id);
+      // The zoom above may still leave it in a bubble; reveal() finishes the job.
+      map.once('moveend', function () { reveal(id); });
     },
-    select: function (id) { select(id); },
+    // From RN whenever the selection changes: a strip tap, a pin tap echoed
+    // back, or a sheet closing (null). See reveal().
+    select: function (id) {
+      if (id) reveal(id);
+      else select(null);
+    },
     fitAll: function () { fitAll(true); },
     retryTiles: function () {
       okPosted = false;
@@ -565,7 +667,13 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       errorCount = 0;
       tiles.redraw();
     },
-    invalidate: function () { map.invalidateSize(); }
+    invalidate: function () {
+      map.invalidateSize();
+      if (!refitted && !touched) {
+        refitted = true;
+        openingView();
+      }
+    }
   };
 
   post({ type: 'ready' });

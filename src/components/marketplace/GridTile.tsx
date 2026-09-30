@@ -2,8 +2,11 @@ import { Image } from "expo-image";
 import { memo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { ImageIcon, LeafIcon } from "../icons";
+import { ImageIcon, LeafIcon, LockIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { CountdownPill } from "../CountdownPill";
+import { expiryTierLabel } from "../../lib/perishable";
+import { listingArea } from "../../lib/listing-area";
 import {
   border,
   color,
@@ -14,10 +17,9 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
-import { offerType, outOfReach } from "../../theme/offer-tokens";
+import { offerType } from "../../theme/offer-tokens";
 import { bracketLabel, bracketOf, bracketsWord, type Bracket } from "../../lib/brackets";
 import { bracketsBeyondReach } from "../../lib/gap";
-import { reach as reachCopy } from "../offer/copy";
 import type { Item } from "../../api/types";
 import { OrgChips } from "../OrgChips";
 import { businessCategoryLabel } from "../../lib/business-category";
@@ -55,23 +57,31 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  * feed's is. A grid whose rows are different heights is not a grid, and the
  * tile's job is comparison — equal boxes are what make two things comparable.
  *
- * ── OUT OF REACH: THREE PROPERTIES CHANGE, AND ONLY THREE ───────────────────
+ * ── OUT OF REACH: A BADGE, NOT A GREY PHOTO (30 Sep 2026) ───────────────────
  *
- * §1.9 and §7.2 of the offer spec are unusually strict about this, so it is
- * worth listing what is UNTOUCHED: the border, the radius, the size, the tile's
- * position in the sort, and the tap behaviour. Only the photo (grayscale then
- * 62% opacity), the title's ink (#5C5B52) and the value line's ink (#8C8A7E)
- * move. §7.2's own reasoning for the sort: "sorting out-of-reach items last is
- * a soft form of hiding".
+ * The photo stays in FULL COLOUR. A small lock badge in its top-right corner
+ * names the bracket ("Bracket 5"), and the value line becomes the distance in
+ * secondary ink ("1 bracket above you"). This replaced the offer spec's
+ * §1.9 treatment (photo greyscale at 62%, title and value inks dimmed): a
+ * washed-out photo made a listing look sold or broken, when all it means is
+ * "not a straightforward trade for you yet".
  *
- * THE TILE STAYS TAPPABLE. Grey means "not straightforward", never "locked" —
- * and the detail screen it opens shows the photo in FULL COLOUR, because the
- * grey is a grid-level signal about reach rather than a claim about the item.
+ * Still UNTOUCHED: the border, the radius, the size, the tile's position in
+ * the sort, and the tap behaviour. §7.2's reasoning for the sort stands:
+ * "sorting out-of-reach items last is a soft form of hiding".
  *
- * The value line changes SHAPE as well as colour when a tile is out of reach:
- * §10.8 fixes it as a sentence rather than a figure, so the leaf glyph comes
- * off. A leaf beside a sentence about distance reads as a price tag, and the
- * number after the interpunct is not a price.
+ * THE TILE STAYS TAPPABLE and opens the same detail screen.
+ *
+ * The value line changes SHAPE as well as ink when a tile is out of reach: a
+ * sentence rather than a figure, so the leaf glyph comes off. A leaf beside a
+ * sentence about distance reads as a price tag.
+ *
+ * ── PERISHABLES ─────────────────────────────────────────────────────────────
+ *
+ * A perishable that is still open carries the CountdownPill over the photo's
+ * bottom-left corner ("Ends tomorrow"). The label is computed when the tile
+ * renders; the grid does not tick (see lib/perishable), so a tier boundary is
+ * picked up on the next refetch, focus or scroll re-render.
  *
  * ── A BRACKET FOR OTHER PEOPLE'S TILES, THE NUMBER FOR YOUR OWN ─────────────
  *
@@ -115,6 +125,15 @@ export const GridTile = memo(function GridTile({
       ? bracketsBeyondReach(item.valueLeaves, reach) || null
       : null;
 
+  // Hub city, else the seller's city, else nothing. See lib/listing-area.
+  const area = listingArea(item);
+
+  // `!= null`: a server without the perishables work omits the key.
+  const expiry =
+    item.perishable != null && !item.perishable.expired
+      ? expiryTierLabel(item.perishable.expiresAt)
+      : null;
+
   return (
     <Tappable
       onPress={() => onPress(item)}
@@ -123,6 +142,7 @@ export const GridTile = memo(function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
+        (area ? ` In ${area}.` : "") +
         (item.owner.org
           ? ` From ${item.owner.org.name}, ${businessCategoryLabel(item.owner.org.businessCategory)}` +
             (item.owner.org.verified ? `, ${ORG_BADGE_LABEL.full}.` : ".")
@@ -132,17 +152,15 @@ export const GridTile = memo(function GridTile({
           : own
             ? ` Your listing, ${item.valueLeaves} Leaves.`
             : ` ${bracketLabel(bracket as number)}.`) +
-        // The grey is invisible to a screen reader, so the distance is said. It
-        // is said as a distance and not as a refusal, per §10.8's closing list
-        // of words this area never uses.
-        (beyond !== null ? ` ${bracketsWord(beyond)} above your reach.` : "")
+        // Said as a distance, not as a refusal, per §10.8's closing list of
+        // words this area never uses.
+        (beyond !== null ? ` ${bracketsWord(beyond)} above your reach.` : "") +
+        (expiry ? ` ${expiry}.` : "")
       }
       style={[s.tile, { width }]}
       pressedStyle={s.tilePressed}
     >
-      {/* §11: "Grey tile: no transition. It renders grey from first paint." So
-          the filter is a style on the box rather than something animated on. */}
-      <View style={[s.photoBox, beyond !== null && { filter: outOfReach.photoFilter }]}>
+      <View style={s.photoBox}>
         {cover && !failed ? (
           <Image
             source={{ uri: cover }}
@@ -160,22 +178,36 @@ export const GridTile = memo(function GridTile({
             />
           </View>
         )}
+
+        {/* Out of reach: the bracket, on a scrim so it reads on any photo. The
+            screen reader already hears it in the tile's label above. */}
+        {beyond !== null ? (
+          <View style={s.lockBadge} pointerEvents="none" importantForAccessibility="no-hide-descendants">
+            <LockIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.onScrim} />
+            <Text
+              style={[textStyle(type.storefrontOverlay), { color: color.onScrim }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={size.home.overlayMaxFontScale}
+            >
+              {bracketLabel(bracket as number)}
+            </Text>
+          </View>
+        ) : null}
+
+        {expiry ? (
+          <View style={s.countdown} pointerEvents="none" importantForAccessibility="no-hide-descendants">
+            <CountdownPill label={expiry} />
+          </View>
+        ) : null}
       </View>
 
       <View style={s.body}>
-        <Text
-          style={[
-            textStyle(type.gridTitle),
-            s.title,
-            beyond !== null && { color: outOfReach.titleInk },
-          ]}
-          numberOfLines={2}
-        >
+        <Text style={[textStyle(type.gridTitle), s.title]} numberOfLines={2}>
           {item.title}
         </Text>
 
         <Text style={[textStyle(type.gridMeta), s.meta]} numberOfLines={1}>
-          {item.conditionLabel}
+          {area ? `${item.conditionLabel} · ${area}` : item.conditionLabel}
         </Text>
 
         {item.owner.org ? (
@@ -190,24 +222,18 @@ export const GridTile = memo(function GridTile({
           an item worth nothing, and there is no treatment for the difference.
         */}
         {item.valueLeaves === null ? null : beyond !== null ? (
-          // §10.8's sentence, in §1.9's ink. Public Sans 600 12 rather than the
-          // in-reach line's Bold 12 — §1.9 names the weight explicitly, and at
-          // this length Bold reads as emphasis on a fact that is not the point.
-          //
-          // TWO LINES, NOT ONE. `Bracket 6 · 2 brackets above your reach` is
-          // over 200px at this size and a tile on a 390-wide phone is ~173, so
-          // one line clipped it — the design canvas only fit it because its
-          // artboard tiles are wider. §1.9 fixes the line's colour, weight and
-          // size and says nothing about its height; the sentence is the spec's,
-          // and a clipped sentence is worse than a taller tile.
+          // The distance, in secondary ink. The bracket itself moved to the
+          // lock badge on the photo, so this line no longer repeats it, and
+          // "1 bracket above you" fits one line on a 320 dp tile where the old
+          // "Bracket 6 · 2 brackets above your reach" needed two.
           <Text
             style={[
               textStyle(offerType.tileValueLine),
-              { color: outOfReach.valueInk, marginTop: space.browse.tileMetaToLeaves },
+              { color: color.inkSecondary, marginTop: space.browse.tileMetaToLeaves },
             ]}
             numberOfLines={2}
           >
-            {reachCopy.tileValue(bracket as number, beyond)}
+            {`${bracketsWord(beyond)} above you`}
           </Text>
         ) : (
           <View style={s.leaves}>
@@ -243,6 +269,26 @@ const s = StyleSheet.create({
   },
   photo: { width: "100%", height: "100%" },
   photoFailed: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // Both overlays share the Home tiles' badge inset and pill height, so a
+  // badge on a Marketplace tile and one on a Home card are the same object.
+  lockBadge: {
+    position: "absolute",
+    top: space.home.tileBadgeInset,
+    right: space.home.tileBadgeInset,
+    height: size.home.countdownPill,
+    paddingHorizontal: size.home.countdownPillX - 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: size.leaves.gap,
+    borderRadius: radius.countdownPill,
+    backgroundColor: color.captionFill,
+  },
+  countdown: {
+    position: "absolute",
+    left: space.home.tileBadgeInset,
+    bottom: space.home.tileBadgeInset,
+    right: space.home.tileBadgeInset,
+  },
 
   body: { padding: space.browse.tileBody },
   title: { color: color.ink },

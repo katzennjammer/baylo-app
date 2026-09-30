@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { CloseIcon, FilterIcon, GridIcon, PinIcon, SearchIcon } from "../icons";
+import { CloseIcon, FilterIcon, GridIcon, MapIcon, SearchIcon, StoreIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
   border,
@@ -16,10 +16,13 @@ import {
 /**
  * The search row and the category rail — everything above the grid.
  *
- * ON THE PLACEHOLDER TEXT. It reads "Search items", not "Search by title".
- * The server's `q` matches title OR DESCRIPTION, and a placeholder promising
- * titles would make a correct result look like a bug the first time a match
- * came from the body of a description. The field is labelled for what it does.
+ * ON THE PLACEHOLDER TEXT. It reads "Search" (1 Oct 2026; it was "Search
+ * items"), and never "Search by title": the server's `q` matches title OR
+ * DESCRIPTION, and a placeholder promising titles would make a correct result
+ * look like a bug the first time a match came from a description. Shortened
+ * because the field now shares its row with the Grid/Map toggle, and "Search
+ * items" clipped at 320 dp with large text. The screen-reader label keeps the
+ * full description.
  */
 
 export function SearchField({
@@ -44,8 +47,12 @@ export function SearchField({
         returnKeyType="search"
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="Search items"
+        placeholder="Search"
         placeholderTextColor={color.inkMuted}
+        // The field shares its row with the Grid/Map toggle and the filter
+        // button, so it is narrower than it was; uncapped, 2x text clips the
+        // placeholder hard at 320 dp.
+        maxFontSizeMultiplier={size.home.headingMaxFontScale}
         style={[textStyle(type.searchInput), s.input]}
         accessibilityLabel="Search items by title or description"
       />
@@ -66,6 +73,9 @@ export function SearchField({
     </View>
   );
 }
+
+/** The filter button's side padding. */
+const FILTER_X = 13;
 
 /** Opens the filter sheet. Carries a count when anything is set. */
 export function FilterButton({
@@ -108,11 +118,29 @@ export function FilterButton({
  *
  * MULTI-SELECT, capped by the server at five. Tapping a selected chip clears
  * it, which is the only affordance a chip row needs.
+ *
+ * ── THE RAIL, LEFT TO RIGHT (1 Oct 2026) ───────────────────────────────────
+ *
+ *   Shops only │ All  categories…
+ *
+ * "All" is lit exactly when no category is chosen, and tapping it clears the
+ * categories. It is the rail's default state made visible: without it, "no
+ * chip lit" was the only way the rail said "everything", which reads as
+ * nothing selected rather than all of it. It leaves "Shops only" alone: that
+ * is a different kind of filter, about the poster, not the item.
+ *
+ * "Shops only" sits FIRST, before a thin divider, and not among the categories
+ * for the same reason. It is the old Organizations pill under a clearer name,
+ * the same `orgsOnly` filter: listings from shop accounts. It carries no count
+ * (inventing one would cost a second aggregate on every browse request) and
+ * does NOT respect `atCap`: the cap is five CATEGORIES, and a user with five
+ * chosen must still be able to narrow them to shops.
  */
 export function CategoryRail({
   facets,
   selected,
   onToggle,
+  onClearCategories,
   max,
   orgsOnly,
   onToggleOrgs,
@@ -120,19 +148,22 @@ export function CategoryRail({
   facets: { category: string; label: string; count: number }[];
   selected: readonly string[];
   onToggle: (category: string) => void;
+  /** "All": clears the chosen categories. */
+  onClearCategories: () => void;
   max: number;
-  /** The Organizations pill's state. See the note on its chip below. */
+  /** "Shops only" -- the `orgsOnly` filter. See the note above. */
   orgsOnly: boolean;
   onToggleOrgs: () => void;
 }) {
-  // The org pill survives an empty facet list, which the categories do not.
+  // The shops chip survives an empty facet list, which the categories do not.
   // Facets are "categories with something visible in them", so an empty rail
-  // means an empty marketplace -- but "show me organisations" is still a
-  // question worth being able to ask, and hiding the only control that answers
-  // it is how a filter becomes undiscoverable.
+  // means an empty marketplace -- but "show me shops" is still a question worth
+  // being able to ask, and hiding the only control that answers it is how a
+  // filter becomes undiscoverable.
   if (facets.length === 0 && !orgsOnly) return null;
 
   const atCap = selected.length >= max;
+  const allOn = selected.length === 0;
 
   return (
     <ScrollView
@@ -142,34 +173,40 @@ export function CategoryRail({
       // Chips are 36 tall inside a 44 row; the extra is the touch target.
       style={s.railOuter}
     >
-      {/*
-        FIRST IN THE RAIL, AND NOT SORTED IN AMONG THE CATEGORIES. It is a
-        different KIND of filter -- a fact about the poster rather than about
-        the item -- and putting it at the head is what keeps it from reading as
-        a twenty-first category. It carries no count, for the same reason: the
-        facet counts come from the category groupBy, and inventing a number
-        here would mean a second aggregate on every browse request to answer a
-        question the pill does not need answered.
-
-        It also does NOT respect `atCap`: the cap is five CATEGORIES, and this
-        is not one of them. A user with five categories chosen must still be
-        able to narrow those five to organisations.
-      */}
       <Tappable
         onPress={onToggleOrgs}
         accessibilityRole="button"
         accessibilityState={{ selected: orgsOnly }}
-        accessibilityLabel="Organizations only"
-        style={[s.chip, orgsOnly && s.chipOn]}
+        accessibilityLabel="Shops only"
+        style={[s.chip, s.chipWithIcon, orgsOnly && s.chipOn]}
+        pressedStyle={s.chipPressed}
+      >
+        <StoreIcon
+          size={icon.tileBadge.size}
+          stroke={icon.tileBadge.stroke}
+          color={orgsOnly ? color.onGreen : color.inkSecondary}
+        />
+        <Text
+          style={[textStyle(type.trendingChip), { color: orgsOnly ? color.onGreen : color.inkSecondary }]}
+        >
+          Shops only
+        </Text>
+      </Tappable>
+
+      <View style={s.railDivider} accessible={false} />
+
+      <Tappable
+        onPress={onClearCategories}
+        accessibilityRole="button"
+        accessibilityState={{ selected: allOn }}
+        accessibilityLabel="All categories"
+        style={[s.chip, allOn && s.chipOn]}
         pressedStyle={s.chipPressed}
       >
         <Text
-          style={[
-            textStyle(type.trendingChip),
-            { color: orgsOnly ? color.onGreen : color.inkSecondary },
-          ]}
+          style={[textStyle(type.trendingChip), { color: allOn ? color.onGreen : color.inkSecondary }]}
         >
-          Organizations
+          All
         </Text>
       </Tappable>
 
@@ -207,7 +244,7 @@ export function CategoryRail({
 }
 
 /**
- * The second rail, under the first while the Organizations pill is on: what
+ * The second rail, under the first while "Shops only" is on: what
  * KIND of shop. Sari-sari store, Apparel, Food & beverage...
  *
  * FROM THE SERVER'S FACETS, like the category rail and for the same reason --
@@ -215,10 +252,10 @@ export function CategoryRail({
  * chip leads to an empty grid, and a kind of shop nobody runs yet never shows.
  *
  * Styled a step quieter than the rail above (a green wash when on, not a solid
- * green) because it REFINES the pill rather than standing beside it. It sits
- * under Organizations and only exists while that is on; turning the pill off
- * clears these too, since a shop category without "organisations only" is a
- * filter the server refuses.
+ * green) because it REFINES the chip rather than standing beside it. It sits
+ * under "Shops only" and only exists while that is on; turning the chip off
+ * clears these too, since a shop category without `orgsOnly` is a filter the
+ * server refuses.
  */
 export function BusinessCategoryRail({
   facets,
@@ -293,6 +330,9 @@ export function ViewToggle({
   view: BrowseView;
   onChange: (next: BrowseView) => void;
 }) {
+  // ICON-ONLY (30 Sep 2026): it shares one row with the search field and the
+  // filter button, and at 320 dp the words cost the field its width. The
+  // labels stay for screen readers, which is where they were doing the work.
   return (
     <View
       style={s.toggle}
@@ -300,7 +340,7 @@ export function ViewToggle({
       accessibilityLabel="Show listings as a grid or on a map"
     >
       <ToggleSegment
-        label="Grid"
+        label="Grid view"
         selected={view === "grid"}
         onPress={() => onChange("grid")}
         glyph={
@@ -312,11 +352,11 @@ export function ViewToggle({
         }
       />
       <ToggleSegment
-        label="Map"
+        label="Map view"
         selected={view === "map"}
         onPress={() => onChange("map")}
         glyph={
-          <PinIcon
+          <MapIcon
             size={icon.filter.size - 2}
             stroke={icon.filter.stroke}
             color={view === "map" ? color.onGreen : color.inkSecondary}
@@ -344,19 +384,68 @@ function ToggleSegment({
       accessibilityRole="tab"
       accessibilityState={{ selected }}
       accessibilityLabel={label}
+      // The segment is 30 tall; the slop brings the target to the 44 floor.
+      hitSlop={7}
       style={[s.segment, selected && s.segmentOn]}
       pressedStyle={s.segmentPressed}
     >
       {glyph}
-      <Text
-        style={[
-          textStyle(type.chip),
-          { color: selected ? color.onGreen : color.inkSecondary },
-        ]}
-      >
-        {label}
-      </Text>
     </Tappable>
+  );
+}
+
+/* ─────────────────────────────── sort ──────────────────────────────── */
+
+/**
+ * The orders GET /api/v1/browse supports, and which of them this control
+ * offers. The API has three (lib/v1/browse-query.ts):
+ *
+ *   recent    newest first -- the default          -> "Newest"
+ *   expiring  soonest trade window first; the server
+ *             REQUIRES perishable=true with it     -> "Ending soon"
+ *   nearest   by distance; REQUIRES lat and lng     -> not offered yet
+ *
+ * "Nearest" needs the phone's position, and on this screen position is only
+ * ever read by the map's location flow. Wiring the grid to it is its own
+ * change, not a line in a sort control.
+ */
+export type BrowseSort = "newest" | "endingSoon";
+
+export function SortToggle({
+  sort,
+  onChange,
+}: {
+  sort: BrowseSort;
+  onChange: (next: BrowseSort) => void;
+}) {
+  const option = (value: BrowseSort, label: string) => {
+    const on = sort === value;
+    return (
+      <Tappable
+        key={value}
+        onPress={() => onChange(value)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        accessibilityLabel={label}
+        hitSlop={7}
+        style={[s.sortSegment, on && s.segmentOn]}
+        pressedStyle={s.segmentPressed}
+      >
+        <Text
+          style={[textStyle(type.chip), { color: on ? color.onGreen : color.inkSecondary }]}
+          maxFontSizeMultiplier={size.home.headingMaxFontScale}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </Tappable>
+    );
+  };
+  return (
+    <View style={s.toggle} accessibilityRole="tablist" accessibilityLabel="Sort listings">
+      {option("newest", "Newest")}
+      {option("endingSoon", "Ending soon")}
+    </View>
   );
 }
 
@@ -389,7 +478,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     height: size.browse.filterButton,
-    paddingHorizontal: 13,
+    paddingHorizontal: FILTER_X,
     borderRadius: radius.filterButton,
     borderWidth: border.chip,
     borderColor: color.controlLine,
@@ -415,7 +504,14 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   chipOn: { backgroundColor: color.green, borderColor: "transparent" },
+  chipWithIcon: { flexDirection: "row", gap: size.leaves.gap },
   chipBlocked: { opacity: 0.5 },
+  // Between the categories and "Shops only": a different kind of filter.
+  railDivider: {
+    width: border.hairline,
+    height: size.browse.chip - 14,
+    backgroundColor: color.controlLineStrong,
+  },
   subChip: { height: size.browse.chip - 6 },
   subChipOn: { backgroundColor: color.greenWash, borderColor: color.forest },
   chipPressed: { opacity: 0.75 },
@@ -429,12 +525,19 @@ const s = StyleSheet.create({
     borderWidth: border.chip,
     borderColor: color.controlLine,
   },
+  // Icon-only: square, so the two segments read as one compact control.
   segment: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    justifyContent: "center",
+    width: size.browse.chip - 6,
     height: size.browse.chip - 8,
-    paddingHorizontal: 11,
+    borderRadius: radius.filterButton - 3,
+  },
+  sortSegment: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: size.browse.chip - 8,
+    paddingHorizontal: 10,
     borderRadius: radius.filterButton - 3,
   },
   segmentOn: { backgroundColor: color.green },

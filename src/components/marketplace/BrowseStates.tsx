@@ -136,7 +136,7 @@ export function BrowseNoMatches({
         {q
           ? `${shopsMatched ? "No listings" : "Nothing"} matched “${q}”`
           : orgsOnly && filterCount === 0
-            ? "No organisations have anything listed right now"
+            ? "No shops have anything listed right now"
             : "Nothing matched these filters"}
         {narrowed && q ? ` with the filters you have on.` : "."}
         {narrowed || q ? " Try widening the search." : ""}

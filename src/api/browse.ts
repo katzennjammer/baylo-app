@@ -156,7 +156,10 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
   // Tri-state: "false" is a real filter here (standard listings only), unlike
   // orgsOnly, so it is sent. Absent is both.
   if (filters.perishable != null) p.set("perishable", String(filters.perishable));
-  if (filters.sort) p.set("sort", filters.sort);
+  // Only with perishable=true: the server 400s `expiring` without it, and a
+  // filter change elsewhere (the sheet, the helper, a removed chip) must not be
+  // able to turn a sort into an error. Dropped rather than sent.
+  if (filters.sort === "expiring" && filters.perishable === true) p.set("sort", filters.sort);
 
   if (cursor) p.set("cursor", cursor);
 
@@ -203,7 +206,8 @@ function browseKey(f: BrowseFilters) {
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,
       perishable: f.perishable ?? undefined,
-      sort: f.sort,
+      // Keyed as sent: an `expiring` that toQueryString() drops is no sort.
+      sort: f.sort === "expiring" && f.perishable === true ? f.sort : undefined,
     },
   ] as const;
 }

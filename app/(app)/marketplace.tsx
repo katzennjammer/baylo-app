@@ -29,7 +29,9 @@ import {
   CategoryRail,
   FilterButton,
   SearchField,
+  SortToggle,
   ViewToggle,
+  type BrowseSort,
   type BrowseView,
 } from "../../src/components/marketplace/BrowseControls";
 import { useHubs } from "../../src/api/hubs";
@@ -57,7 +59,7 @@ import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/rea
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { withTimeout } from "../../src/lib/with-timeout";
-import { border, color, radius, space, textStyle, type } from "../../src/theme/tokens";
+import { border, color, radius, size, space, textStyle, type } from "../../src/theme/tokens";
 import type { Item, SafeZoneHub } from "../../src/api/types";
 import type { MapHub } from "../../src/components/map/map-html";
 
@@ -265,6 +267,8 @@ export default function MarketplaceScreen() {
     // that is already running.
     if (locationState !== "idle") return;
     let cancelled = false;
+    // Whether this run reached a final state. See the cleanup below.
+    let settled = false;
     setLocationState("loading");
     void (async () => {
       try {
@@ -331,10 +335,28 @@ export default function MarketplaceScreen() {
         }
       } catch {
         if (!cancelled) setLocationState("unavailable");
+      } finally {
+        settled = true;
       }
     })();
     return () => {
       cancelled = true;
+      // THE SECOND "FINDING NEARBY SAFE ZONES…" HANG (fixed 1 Oct 2026).
+      //
+      // The deps fix above stopped the effect cancelling ITSELF. It did not
+      // cover the effect being cancelled by the screen: switching to Grid (a
+      // `view` change) while the lookup was in flight ran this cleanup, which
+      // discarded the run's result -- and left `locationState` at "loading".
+      // Back on the map, the effect re-ran, hit the `!== "idle"` guard, and
+      // returned: "loading" forever, with nothing in flight to end it. The
+      // same happens when the permission dialog is up and the person taps
+      // Grid, or when the lookup is simply slow and they look away.
+      //
+      // So a run that is torn down BEFORE it settled hands the state back to
+      // "idle", and the next visit to the map starts a fresh lookup. A run that
+      // DID settle leaves its result alone: "ready" and "unavailable" are
+      // answers, and re-asking on every toggle would re-prompt and re-fetch.
+      if (!settled) setLocationState("idle");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, locationAttempt]);
@@ -490,8 +512,13 @@ export default function MarketplaceScreen() {
     });
   }, []);
 
+  /** The "All" chip. Undefined, not [], for the same cache-key reason as below. */
+  const clearCategories = useCallback(() => {
+    setFilters((f) => (f.categories?.length ? { ...f, categories: undefined } : f));
+  }, []);
+
   /**
-   * The Organizations pill.
+   * "Shops only" (the old Organizations pill; same `orgsOnly` filter).
    *
    * Cleared to `undefined` rather than set to `false`, so the filter object
    * and its query key are identical to what they were before the pill was ever
@@ -509,7 +536,7 @@ export default function MarketplaceScreen() {
     );
   }, []);
 
-  /** A shop-type chip under the Organizations pill. Multi-select, no cap. */
+  /** A shop-type chip under "Shops only". Multi-select, no cap. */
   const toggleBusinessCategory = useCallback((businessCategory: string) => {
     setFilters((f) => {
       const current = f.businessCategories ?? [];
@@ -612,16 +639,35 @@ export default function MarketplaceScreen() {
   const filtering = isFiltered(filters);
   const filterCount = activeFilterCount(filters);
 
+  /**
+   * The sort control's state, read off the filters rather than held beside
+   * them, so the two cannot disagree. "Ending soon" is the API's `expiring`,
+   * which the server allows only with perishable=true: choosing it turns the
+   * perishables filter on (its removable chip shows that), and removing that
+   * chip drops the sort with it. "Newest" clears only the sort.
+   */
+  const sort: BrowseSort = filters.sort === "expiring" && filters.perishable === true ? "endingSoon" : "newest";
+  const setSort = useCallback((next: BrowseSort) => {
+    setFilters((f) =>
+      next === "endingSoon" ? { ...f, perishable: true, sort: "expiring" } : { ...f, sort: undefined },
+    );
+  }, []);
+
+  /**
+   * "20+ items": /browse returns pages and a cursor, never a total, so the
+   * count is what has loaded plus a "+" while more pages exist. Not
+   * monospace: it is a phrase, not a column of figures.
+   */
+  const countLabel = `${items.length}${hasNextPage ? "+" : ""} ${items.length === 1 && !hasNextPage ? "item" : "items"}`;
+
   /** The controls stay mounted in every state — they are how you leave one. */
   const header = (
     <View>
+      {/* One row: search (flexible), Grid/Map, filters. */}
       <View style={s.searchRow}>
         <SearchField value={draftQuery} onChange={setDraftQuery} onSubmit={submitSearch} />
-        <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} />
-      </View>
-
-      <View style={s.toggleRow}>
         <ViewToggle view={view} onChange={setView} />
+        <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} />
       </View>
 
       <View style={s.rail}>
@@ -629,6 +675,7 @@ export default function MarketplaceScreen() {
           facets={facets}
           selected={filters.categories ?? []}
           onToggle={toggleCategory}
+          onClearCategories={clearCategories}
           max={MAX_CATEGORIES}
           orgsOnly={filters.orgsOnly ?? false}
           onToggleOrgs={toggleOrgsOnly}
@@ -650,7 +697,8 @@ export default function MarketplaceScreen() {
         <View style={s.activeRow}>
           <RemovableChip
             label={filters.perishable ? "Perishables only" : "No perishables"}
-            onRemove={() => setFilters((f) => ({ ...f, perishable: null }))}
+            // The sort goes with it: "Ending soon" is only valid on perishables.
+            onRemove={() => setFilters((f) => ({ ...f, perishable: null, sort: undefined }))}
           />
         </View>
       ) : null}
@@ -660,11 +708,21 @@ export default function MarketplaceScreen() {
         onOpen={(org) => router.push({ pathname: "/user", params: { id: org.orgUserId } })}
       />
 
-      {items.length > 0 ? (
-        <Text style={[textStyle(type.resultCount), s.count]}>
-          {items.length}
-          {hasNextPage ? "+" : ""} {items.length === 1 ? "result" : "results"}
-        </Text>
+      {/* The sort shows even on an empty page: "Ending soon" on a moment with
+          no perishables is how you get back to "Newest". */}
+      {items.length > 0 || sort !== "newest" ? (
+        <View style={s.countRow}>
+          <Text
+            style={[textStyle(type.metadata), s.countText]}
+            numberOfLines={1}
+            // Shares the row with the sort control; see headingMaxFontScale.
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+            accessibilityLiveRegion="polite"
+          >
+            {items.length > 0 ? countLabel : ""}
+          </Text>
+          <SortToggle sort={sort} onChange={setSort} />
+        </View>
       ) : null}
     </View>
   );
@@ -695,7 +753,18 @@ export default function MarketplaceScreen() {
 
     return (
       <View style={s.screen}>
-        <View style={s.toggleRowTop}>
+        {/* The toolbar row, titled for what is on screen. The item controls
+            stay out (they narrow listings; the map shows hubs -- see
+            ViewToggle), and the title fills the space they left. */}
+        <View style={[s.searchRow, s.searchRowMap]}>
+          <Text
+            style={[textStyle(type.homeSection), s.mapTitle]}
+            accessibilityRole="header"
+            numberOfLines={1}
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+          >
+            Safe zones
+          </Text>
           <ViewToggle view={view} onChange={setView} />
         </View>
 
@@ -710,21 +779,24 @@ export default function MarketplaceScreen() {
         </View>
 
         <View style={s.locationRow}>
-          <Text style={s.locationStatus} accessibilityLiveRegion="polite">
-            {locationState === "loading"
-              ? "Finding nearby Safe Zones…"
-              : locationState === "ready"
-                ? "Nearby Safe Zones are highlighted first"
-                : locationState === "unavailable"
-                  ? locationDenied
-                    ? // Naming the actual cause, because "Location unavailable" is
-                      // what you see whether the permission was refused, the
-                      // phone's GPS is off, or the fix simply timed out -- three
-                      // different fixes behind one sentence. Denied is the one
-                      // that needs Settings, so it is the one that says so.
-                      "Location is off for Baylo. All Safe Zones are shown."
-                    : "Location unavailable. Showing all Safe Zones."
-                  : ""}
+          {/* ABOUT THE HUBS, NOT THE GPS (1 Oct 2026). The line used to narrate
+              the location lookup ("Finding nearby Safe Zones…"), which is not
+              what the person is looking at -- the hubs are drawn whether or
+              not a position ever arrives. So: nothing until the hubs load,
+              then their count, and "Showing all safe zones" when location is
+              denied, off or too slow (the Allow / Try again button beside it
+              says which). A lookup still in progress changes nothing on
+              screen; if it lands, the nearby strip appears. */}
+          <Text
+            style={[textStyle(type.metadata), s.locationStatus]}
+            accessibilityLiveRegion="polite"
+            numberOfLines={1}
+          >
+            {!hubsQuery.isSuccess
+              ? ""
+              : locationState === "unavailable"
+                ? "Showing all safe zones"
+                : `${visibleHubs.length} ${visibleHubs.length === 1 ? "safe zone" : "safe zones"}`}
           </Text>
           {locationState === "unavailable" ? (
             <Tappable
@@ -752,8 +824,8 @@ export default function MarketplaceScreen() {
               style={s.locationRetry}
               pressedStyle={s.locationRetryPressed}
             >
-              <Text style={[textStyle(type.photoCaption), { color: color.forest }]}>
-                {locationDenied ? "Allow" : "Try again"}
+              <Text style={[textStyle(type.chip), { color: color.forest }]}>
+                {locationDenied ? "Allow location" : "Try again"}
               </Text>
             </Tappable>
           ) : null}
@@ -994,23 +1066,12 @@ const s = StyleSheet.create({
     paddingHorizontal: space.screenX,
     paddingTop: space.browse.searchY,
   },
+  // Map mode: the same row at the field's height, so the toggle sits at the
+  // same vertical centre as in grid mode.
+  searchRowMap: { minHeight: size.browse.searchField + space.browse.searchY },
+  mapTitle: { flex: 1, color: color.ink },
   rail: { paddingVertical: space.browse.chipsY },
   subRail: { paddingTop: space.browse.chipsY },
-
-  /* The toggle sits under the search row in grid mode and at the top of the
-     screen in map mode, where there is no search row above it to sit under. */
-  toggleRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingHorizontal: space.screenX,
-    paddingTop: space.browse.chipsY,
-  },
-  toggleRowTop: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingHorizontal: space.screenX,
-    paddingTop: space.browse.searchY,
-  },
   legend: { paddingVertical: space.browse.chipsY },
   locationRow: {
     flexDirection: "row",
@@ -1019,14 +1080,10 @@ const s = StyleSheet.create({
     paddingHorizontal: space.screenX,
     minHeight: 18,
   },
-  locationStatus: {
-    flex: 1,
-    color: color.inkMuted,
-    ...textStyle(type.photoCaption),
-  },
+  locationStatus: { flex: 1, color: color.inkSecondary },
   locationRetry: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.photoCaption,
     borderWidth: border.hairline,
     borderColor: color.greenLine,
@@ -1086,11 +1143,15 @@ const s = StyleSheet.create({
     paddingBottom: space.browse.countY,
   },
   mapCentre: { flex: 1, alignItems: "center", justifyContent: "center" },
-  count: {
+  countRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.browse.searchGap,
     paddingHorizontal: space.browse.gridX,
     paddingBottom: space.browse.countY,
-    color: color.inkMuted,
   },
+  countText: { flexShrink: 1, color: color.inkSecondary },
   // The extra room keeps the last row clear of the search helper button.
   content: { paddingBottom: space.trending.y + SEARCH_HELPER_CLEARANCE },
   // `gap` on the wrapper spaces the columns; the row spacing is the same value

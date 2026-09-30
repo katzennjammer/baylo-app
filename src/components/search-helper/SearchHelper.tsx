@@ -78,17 +78,30 @@ export function SearchHelper({
   onSeeAll?: (filters: BrowseFilters) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // "HELP ME FIND", WITH A MAGNIFIER (1 Oct 2026). Deliberately modest: the
+  // sheet is the keyword matcher described above, not a conversation. It
+  // calls no model and needs no API credit; it turns words into /browse
+  // filters on the phone. A sparkle and "Ask Baylo" read as an AI assistant,
+  // which this is not. The Premium assistant (POST /api/v1/assistant) is a
+  // separate backend, not wired here; when it is, this label can grow up.
   return (
     <>
       <Tappable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Search helper"
-        accessibilityHint="Type what you're looking for in simple words"
+        accessibilityLabel="Help me find"
+        accessibilityHint="Opens the search helper. Type what you're looking for in simple words"
         style={s.fab}
         pressedStyle={s.fabPressed}
       >
-        <SearchIcon size={24} stroke={2.1} color={color.onGreen} />
+        <SearchIcon size={FAB_ICON} stroke={2.1} color={color.onGreen} />
+        <Text
+          style={[textStyle(type.heroCta), { color: color.onGreen }]}
+          maxFontSizeMultiplier={size.home.headingMaxFontScale}
+          numberOfLines={1}
+        >
+          Help me find
+        </Text>
       </Tappable>
       {open ? <HelperSheet onClose={() => setOpen(false)} onSeeAll={onSeeAll} /> : null}
     </>
@@ -421,21 +434,28 @@ function Results({
   );
 }
 
-const FAB = 56;
+/** The extended pill's height, and its magnifier. */
+const FAB = 48;
+const FAB_ICON = 18;
 
 /**
  * Bottom padding a scrolling screen adds so its last row is never under the
- * button: the button (56) and its margin (16).
+ * button: the pill (48), its margin from the screen's bottom edge (16), and
+ * the same again as clear space above it, so a card's title in the last row
+ * ends above the pill rather than just touching it. Home and Marketplace both
+ * read this, so the two screens stay in step with the button.
  */
-export const SEARCH_HELPER_CLEARANCE = FAB + 16;
+export const SEARCH_HELPER_CLEARANCE = FAB + space.screenX * 2;
 
 const s = StyleSheet.create({
   fab: {
     position: "absolute",
     right: space.screenX,
     bottom: space.screenX,
-    width: FAB,
     height: FAB,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    gap: 8,
     borderRadius: FAB / 2,
     backgroundColor: color.green,
     alignItems: "center",

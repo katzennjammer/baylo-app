@@ -145,9 +145,13 @@ const s = StyleSheet.create({
     borderColor: color.greenLine,
     backgroundColor: color.greenWash,
   },
+  // The grid chips' selected style exactly (BrowseControls `chipOn`): brand
+  // green with `color.onGreen` ink, 6.4:1. It was a FOREST fill under that
+  // same ink -- dark on dark, about 1.5:1, and the "All" chip was unreadable.
+  // Light text would not rescue green: white on #3DBE5A is only ~2.3:1.
   entryOn: {
-    borderColor: color.forest,
-    backgroundColor: color.forest,
+    borderColor: "transparent",
+    backgroundColor: color.green,
   },
   entryPressed: { opacity: 0.72 },
   well: {

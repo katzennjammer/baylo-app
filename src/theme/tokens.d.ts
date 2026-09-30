@@ -448,6 +448,7 @@ export declare const size: Readonly<{
     squiggleHeight: number;
     squiggleStroke: number;
     headingMaxFontScale: number;
+    overlayMaxFontScale: number;
     spotlightPerScreen: number;
     spotlightAspect: number;
     spotlightHeroFraction: number;

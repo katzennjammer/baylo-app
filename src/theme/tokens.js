@@ -749,6 +749,14 @@ const size = {
      * it keeps scaling.
      */
     headingMaxFontScale: 1.3,
+    /**
+     * Largest font scale a badge ON A PHOTO follows (the lock badge, the
+     * countdown pill on a grid tile). Measured 30 Sep 2026: at 320 dp a tile
+     * leaves 127 dp for an overlay, and "A few hours left" needs 125 at 1.15x
+     * but 139 at 1.3x. Past this it would cover the photo; the same facts are
+     * in the tile's screen-reader label.
+     */
+    overlayMaxFontScale: 1.15,
     /** Shop Spotlight cards visible at once; the part-card says it scrolls. */
     spotlightPerScreen: 1.6,
     /** Width over height: tall, a promo card rather than a tile. */

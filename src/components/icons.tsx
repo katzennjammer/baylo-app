@@ -323,6 +323,34 @@ export function PinIcon(props: IconProps) {
   );
 }
 
+/**
+ * Marketplace's Grid/Map toggle: a folded map. Not PinIcon, which marks one
+ * place (a pickup, a hub); the toggle switches to a whole view of places.
+ */
+export function MapIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M3.5 6.2 9 4l6 2.2L20.5 4v13.8L15 20l-6-2.2L3.5 20Z" />
+      <Path d="M9 4v13.8" />
+      <Path d="M15 6.2V20" />
+    </Glyph>
+  );
+}
+
+/**
+ * The out-of-reach badge on a grid tile. It sits beside the bracket it is
+ * about, on a tile that still opens: the badge says "above your reach", not
+ * "forbidden".
+ */
+export function LockIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="5" y="10.5" width="14" height="10" rx="2.2" />
+      <Path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" />
+    </Glyph>
+  );
+}
+
 /** Report. A flag, which is the mark every platform uses for exactly this. */
 export function FlagIcon(props: IconProps) {
   return (
