@@ -58,7 +58,7 @@ export function premiumGateReason(e: unknown): PremiumReason | null {
 }
 
 /**
- * The one way to the Premium screen, so every gate opens the SAME paywall.
+ * The one way to the Premium sheet, so every gate opens the SAME paywall.
  * `reason` only adds a line at the top saying what was just blocked.
  */
 export function openPremium(router: Pick<ReturnType<typeof useRouter>, "push">, reason?: PremiumReason, bracket?: number) {

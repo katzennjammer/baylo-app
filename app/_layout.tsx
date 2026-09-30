@@ -146,6 +146,20 @@ export default function RootLayout() {
               name="(auth)"
               options={{ contentStyle: { backgroundColor: sheetColor.frame } }}
             />
+            {/*
+              Premium is a bottom sheet, not a page. The route stays so
+              `openPremium()` is still the one way in; this makes it draw over
+              the screen that opened it with no navigator slide of its own —
+              the `OfferSheet` inside brings the slide-up and the scrim.
+            */}
+            <Stack.Screen
+              name="premium"
+              options={{
+                presentation: "transparentModal",
+                animation: "none",
+                contentStyle: { backgroundColor: "transparent" },
+              }}
+            />
           </Stack>
           {/* The "Your listing is up." popup. Here, under every screen, because
               the wizard that triggers it has already popped by the time it

@@ -1,12 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Path, Rect } from "react-native-svg";
 
 import { useProfileMe } from "../src/api/profile";
-import { OfferBottomBar, OfferNav, OfferScreenHost, PrimaryButton, SecondaryButton, SectionLabel } from "../src/components/offer/chrome";
+import { PrimaryButton, SecondaryButton, SectionLabel } from "../src/components/offer/chrome";
 import { LockIcon } from "../src/components/offer/icons";
+import { OfferSheet } from "../src/components/offer/OfferSheet";
 import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
-import { Splash } from "../src/components/Splash";
 import { bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
 import {
   hasPremiumAccess,
@@ -26,7 +26,7 @@ import {
 } from "../src/theme/offer-tokens";
 
 /**
- * The Premium screen — the ONE paywall.
+ * The Premium sheet — the ONE paywall.
  *
  * Reached from the account menu, and from every place the bracket gate blocks
  * an action: the locked offer bar on item detail, the composer's lock panel,
@@ -34,7 +34,15 @@ import {
  * `openPremium()` in src/lib/premium). There is no second paywall anywhere;
  * a gate that wants to explain itself sends people here with `reason`.
  *
- * ── THE VISUAL LANGUAGE IS `How trading works`'s ────────────────────────────
+ * ── IT IS A SHEET, AND THE SAME ONE AS `How trading works` ──────────────────
+ *
+ * Still a route, so `openPremium()` stays the one way in and every entry point
+ * gets the same thing: app/_layout declares `/premium` a `transparentModal`
+ * with no navigator animation, and this screen draws nothing but an
+ * `OfferSheet` — the shell `How trading works` uses — over whatever opened it.
+ * The sheet brings its own slide-up, scrim and rounded top. Unlike that
+ * first-run prompt this one is dismissible: a scrim tap, the back gesture, a
+ * drag down on the handle, or `Done`, all of which pop the route.
  *
  * Same tokens, same rhythm: `offerSpace.prompt`'s 20 gutter, a 700 Bricolage
  * heading, then titled paragraphs — a 15/600 `reachHeading` over a 14/21
@@ -106,18 +114,32 @@ export default function PremiumScreen() {
     params.reason === "premium" || params.reason === "vip" ? params.reason : null;
   const bracket = params.bracket ? Number(params.bracket) : NaN;
   const { data, isLoading } = useProfileMe();
-
-  if (isLoading) return <Splash waitingOn="Loading Premium" />;
+  const { height: windowHeight } = useWindowDimensions();
 
   const rep = data?.reputation;
   const active = hasPremiumAccess(rep);
   const p = offerSpace.prompt;
+  // `How trading works`'s sizing: its height, clamped to the window; the body scrolls.
+  const height = Math.min(p.height, Math.round(windowHeight * 0.88));
+  const close = () => router.back();
+
+  if (isLoading) {
+    return (
+      <OfferSheet dismissible swipeToDismiss onDismiss={close} height={height}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={offerColor.green} accessibilityLabel="Loading Premium" />
+        </View>
+      </OfferSheet>
+    );
+  }
 
   return (
-    <OfferScreenHost imeInset={0}>
-      <OfferNav title="Premium" onBack={() => router.back()} />
-
-      <ScrollView contentContainerStyle={{ paddingHorizontal: p.x, paddingTop: p.top, paddingBottom: p.bottom }}>
+    <OfferSheet dismissible swipeToDismiss onDismiss={close} height={height}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: p.x, paddingTop: p.handleToHeading, paddingBottom: p.listToButton }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* ── Hero ─────────────────────────────────────────────────────── */}
         <View style={{ alignItems: "center" }}>
           <View
@@ -231,21 +253,32 @@ export default function PremiumScreen() {
         ) : null}
       </ScrollView>
 
-      <OfferBottomBar
-        footnote={active ? null : "Payments open in a future update. You will not be charged today."}
-      >
+      {/* Pinned under the scroll, as `Got it` is. The sheet already pads for
+          the home indicator, so this is not `OfferBottomBar`, which would pad
+          for it a second time. */}
+      <View style={{ paddingHorizontal: p.x }}>
         {active ? (
-          <SecondaryButton label="Done" onPress={() => router.back()} />
+          <SecondaryButton label="Done" onPress={close} />
         ) : (
-          <PrimaryButton
-            label={`Subscribe · ${PREMIUM_PRICE_LABEL}`}
-            onPress={() => {}}
-            disabled
-            disabledHint="Payments open in a future update. You will not be charged today."
-          />
+          <>
+            <PrimaryButton
+              label={`Subscribe · ${PREMIUM_PRICE_LABEL}`}
+              onPress={() => {}}
+              disabled
+              disabledHint="Payments open in a future update. You will not be charged today."
+            />
+            <Text
+              style={[
+                textStyle(offerType.helper),
+                { color: offerColor.inkTertiary, marginTop: offerSpace.bottomBar.buttonToFootnote },
+              ]}
+            >
+              Payments open in a future update. You will not be charged today.
+            </Text>
+          </>
         )}
-      </OfferBottomBar>
-    </OfferScreenHost>
+      </View>
+    </OfferSheet>
   );
 }
 

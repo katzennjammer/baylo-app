@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   Text,
@@ -43,6 +44,10 @@ import {
  * trade `sheet-ui.tsx` already declined once. What IS shared is the geometry and
  * the motion, and that lives here rather than being written twice.
  *
+ * The Premium paywall (app/premium.tsx) is the third body on this shell, so it
+ * reads as the same object as `How trading works` wherever it is opened from.
+ * It is the one caller that passes `swipeToDismiss`.
+ *
  * ── THE MOTION IS §11's, NOT `animationType="slide"`'s ──────────────────────
  *
  * §11 gives the sheet a 260ms translateY and the scrim a 180ms fade — two
@@ -65,16 +70,51 @@ export function OfferSheet({
   onDismiss,
   /** §3.6 fixes the prompt's height at 512. The picker hugs its content. */
   height,
+  /**
+   * Drag the handle down to close. Opt-in, and only meaningful on a
+   * dismissible sheet: the handle strip is the drag target rather than the
+   * whole sheet, so a body that scrolls keeps its own vertical gesture.
+   */
+  swipeToDismiss = false,
   children,
 }: {
   dismissible: boolean;
   onDismiss: () => void;
   height?: number;
+  swipeToDismiss?: boolean;
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const slide = useRef(new Animated.Value(1)).current;
+  const drag = useRef(new Animated.Value(0)).current;
+  const sheetHeight = useRef<number>(offerSpace.prompt.height);
+  // The responder is built once; the latest `onDismiss` is read through a ref.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4,
+      // Only downward travel moves the sheet; pulling up does nothing.
+      onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_, g) => {
+        const shouldClose = g.dy > sheetHeight.current * 0.25 || g.vy > 0.8;
+        Animated.timing(drag, {
+          toValue: shouldClose ? sheetHeight.current : 0,
+          duration: offerMotion.sheetInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (finished && shouldClose) dismissRef.current();
+        });
+      },
+      onPanResponderTerminate: () =>
+        Animated.timing(drag, { toValue: 0, duration: offerMotion.sheetInMs, useNativeDriver: true }).start(),
+    }),
+  ).current;
+  const canSwipe = swipeToDismiss && dismissible;
 
   useEffect(() => {
     if (reduced) {
@@ -128,6 +168,9 @@ export function OfferSheet({
         />
 
         <Animated.View
+          onLayout={(e) => {
+            sheetHeight.current = e.nativeEvent.layout.height;
+          }}
           style={{
             height,
             backgroundColor: offerColor.paper,
@@ -147,13 +190,20 @@ export function OfferSheet({
                       outputRange: [0, offerSpace.prompt.height],
                     }),
               },
+              // The finger's travel, on top of the entrance. Zero unless dragged.
+              { translateY: drag },
             ],
           }}
         >
           {/* §1.1's `surface/quiet` handle track. Present on both sheets: it
               says "this is a sheet" even where it cannot be dragged, and §3.6
               measures the prompt's first gap from it. */}
-          <View style={{ alignItems: "center", paddingTop: 10 }}>
+          <View
+            style={{ alignItems: "center", paddingTop: 10 }}
+            // A 4px bar is too thin to grab; the full-width strip around it is the target.
+            hitSlop={canSwipe ? { top: 10, bottom: 16 } : undefined}
+            {...(canSwipe ? pan.panHandlers : {})}
+          >
             <View
               style={{
                 width: offerSize.handle.w,
