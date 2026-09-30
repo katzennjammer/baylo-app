@@ -236,9 +236,11 @@ export interface MapHtmlOptions {
   focusHubId?: string;
   /** Draw at a fixed scale with gestures off — the inline preview on item detail. */
   interactive: boolean;
+  /** Levels wider than the fitted view. The item-detail preview uses it. */
+  zoomOut?: number;
 }
 
-export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: MapHtmlOptions): string {
+export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoomOut }: MapHtmlOptions): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -351,6 +353,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
   var USER_LOCATION = ${safeJson(userLocation ?? null)};
   var FOCUS_ID = ${safeJson(focusHubId ?? null)};
   var INTERACTIVE = ${interactive ? "true" : "false"};
+  var ZOOM_OUT = ${Math.max(0, Math.round(zoomOut ?? 0))};
   var GLYPHS = ${safeJson(GLYPHS)};
   var FALLBACK_GLYPH = ${safeJson(FALLBACK_GLYPH)};
   var PIN = ${safeJson(PIN)};
@@ -577,10 +580,21 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
     if (pts.length === 1) {
       // fitBounds on a single point has no scale to work from and snaps to
       // maxZoom, which shows four roof tiles and no context.
-      map.setView(pts[0], ${SINGLE_HUB_ZOOM}, { animate: !!animate });
+      map.setView(pts[0], ${SINGLE_HUB_ZOOM} - ZOOM_OUT, { animate: !!animate });
       return;
     }
-    map.fitBounds(L.latLngBounds(pts), {
+    var bounds = L.latLngBounds(pts);
+    if (ZOOM_OUT > 0) {
+      // The listing preview: the fitted zoom, then ZOOM_OUT levels wider, so
+      // the pins sit in their neighbourhood rather than filling the frame.
+      var fitted = map.getBoundsZoom(bounds, false, L.point(
+        FIT_PADDING[0][1] + FIT_PADDING[1][1],
+        FIT_PADDING[0][0] + FIT_PADDING[1][0]
+      ));
+      map.setView(bounds.getCenter(), Math.min(fitted, ${SINGLE_HUB_ZOOM}) - ZOOM_OUT, { animate: !!animate });
+      return;
+    }
+    map.fitBounds(bounds, {
       paddingTopLeft: FIT_PADDING[0],
       paddingBottomRight: FIT_PADDING[1],
       maxZoom: ${SINGLE_HUB_ZOOM},

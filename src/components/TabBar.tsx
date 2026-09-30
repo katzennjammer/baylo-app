@@ -131,6 +131,13 @@ const FAB_ROUTE = "post";
  */
 const BADGED_ROUTE = "trades";
 
+/**
+ * Routes that draw their own bottom bar and so take this one away (1 Oct
+ * 2026). The listing screen pins a favourite + "Send offer" bar where this
+ * sits; the Post circle under it would be a second primary action.
+ */
+const BARLESS_ROUTES = new Set(["item"]);
+
 export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -153,6 +160,9 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   // taking the larger keeps the bar off the system affordance without opening
   // a gap above it on the devices that need nothing.
   const bottom = Math.max(insets.bottom, space.tab.bottom);
+
+  // After every hook, so the hook order never changes with the route.
+  if (BARLESS_ROUTES.has(state.routes[state.index]?.name ?? "")) return null;
 
   return (
     <View style={[s.bar, { paddingBottom: bottom }]}>

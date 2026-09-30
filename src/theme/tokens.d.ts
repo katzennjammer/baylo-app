@@ -435,6 +435,7 @@ export declare const size: Readonly<{
     dangerRow: number;
     actionButton: number;
     backButton: number;
+    overlayButton: number;
     countdownPill: number;
     countdownPillX: number;
   }>;
@@ -534,6 +535,7 @@ export type IconName =
   | "spotlightBadge"
   | "countdown"
   | "countdownLarge"
+  | "photoOverlay"
   // MSME storefront.
   | "storefrontBadge"
   | "storefrontShare"

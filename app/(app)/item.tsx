@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,10 +13,10 @@ import {
   WhereYouStand,
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
-import { bracketLabel, bracketOf } from "../../src/lib/brackets";
-import { shelfMisses } from "../../src/lib/gap";
-import { formatClock } from "../../src/lib/perishable";
-import { useCountdown } from "../../src/components/post/ui";
+import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
+import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
+import { secondsLeft } from "../../src/lib/perishable";
+import { useLiveDerived } from "../../src/lib/live-clock";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
 import { canBoost } from "../../src/api/featured";
@@ -24,31 +24,37 @@ import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useLike } from "../../src/api/social";
 import {
   BlockIcon,
-  BoltIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CommentIcon,
   FlagIcon,
+  HeartIcon,
+  KebabIcon,
   LeafIcon,
   PinIcon,
-  WarningIcon,
+  ShareIcon,
   StoreIcon,
+  SwapIcon,
   VerifiedOrgIcon,
+  WarningIcon,
 } from "../../src/components/icons";
+import { CountdownPill } from "../../src/components/CountdownPill";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
-import { ReportSheet } from "../../src/components/ReportSheet";
+import { ReportReasonRows } from "../../src/components/ReportSheet";
+import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { EditListingSheet } from "../../src/components/home/EditListingSheet";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
+import { LISTING_PREVIEW_ZOOM_OUT } from "../../src/components/map/osm";
+import { openDirections } from "../../src/components/map/directions";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
 import { CommentsSheet } from "../../src/components/home/CommentsSheet";
-import { SocialRow } from "../../src/components/home/FeedCard";
 import { Tappable } from "../../src/components/Tappable";
-import { TIER_LABEL, type TrustTier } from "../../src/lib/trust";
 import { openPremium, type PremiumReason } from "../../src/lib/premium";
 import { ORG_BADGE_LABEL } from "../../src/lib/org";
 import { businessCategoryLabel } from "../../src/lib/business-category";
-import type { OrgBadge } from "../../src/api/types";
+import type { TrustTier } from "../../src/lib/trust";
 import {
   border,
   color,
@@ -60,52 +66,63 @@ import {
   textStyle,
   type,
 } from "../../src/theme/tokens";
-import type { Item, SafeZoneHub } from "../../src/api/types";
+import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
 
 /**
- * Item detail. Reached from the grid, from the feed's Offer Trade button, and
- * from anywhere else that has an item id.
+ * The listing screen. Every listing opens here, whatever its kind: a person's
+ * or a shop's, perishable or not, in reach or not, yours or someone else's.
  *
  * ONE REQUEST. /api/v1/items/[id] is a composite: the item, the owner with a
  * REAL trust tier, the Safe-Zone hubs, and everything an offer sheet would
  * need. Nothing on this screen issues a second fetch.
  *
- * ── THE TRUST BADGE IS THE SERVER'S OR IT IS NOTHING ────────────────────────
+ * ── LAYOUT (1 Oct 2026) ─────────────────────────────────────────────────────
+ *
+ *   Photo, full bleed, with round back / share / ⋯ buttons over it and page
+ *   dots from the second photo. Report and Block live in the ⋯ menu, with the
+ *   same handlers and confirmations they had as rows at the bottom.
+ *
+ *   The live CountdownPill (large), for perishables only. A standard listing
+ *   has no pill and no gap: the title moves up.
+ *
+ *   Title, description, then the bracket with the viewer's distance to it
+ *   ("within your reach" / "2 brackets above you", the Marketplace tile's
+ *   rule), then condition · category · quantity as tags.
+ *
+ *   "Trades for": `wanted` (the owner's words) over `lookingForLabels` (the
+ *   categories the matcher uses), in one card. Gone when both are empty.
+ *
+ *   The seller directly after, then "Ask a question" (the comments), then the
+ *   Safe Zone. No like/comment count row: the heart is in the bottom bar.
+ *
+ *   A sticky bottom bar in place of the tab bar (TabBar hides itself on this
+ *   route): the heart and "Send offer" for a visitor; the owner's own actions
+ *   for the owner. The offer rules underneath it are unchanged -- see
+ *   `BottomBar` for the order they are checked in.
+ *
+ * ── THE TRUST TIER IS THE SERVER'S OR IT IS NOTHING ─────────────────────────
  *
  * `resolveTier()` — the client-side approximation the feed and the grid fall
- * back to — is NOT used here, and that is the single most deliberate decision
- * on this screen. It reads `totalTrades`, a denormalised counter that sits
- * above the real completed count on live rows, and it cannot see deferred-
- * agreement defaults at all, so it reads HIGH for exactly the people it matters
- * most for. This is the screen where somebody decides whether to go and meet a
- * stranger in person. An inflated badge here is worse than no badge, so when
- * `trustTier` is null nothing is drawn.
+ * back to — is NOT used here. It reads `totalTrades`, a denormalised counter
+ * that sits above the real completed count on live rows, and it cannot see
+ * deferred-agreement defaults at all, so it reads HIGH for exactly the people
+ * it matters most for. This is the screen where somebody decides whether to go
+ * and meet a stranger in person, so when `trustTier` is null no tier is shown.
  *
- * ── THE MAP, AND WHY IT IS ONLY NOW HERE ────────────────────────────────────
+ * ── THE MAP ─────────────────────────────────────────────────────────────────
  *
- * This section listed hubs as text and nothing else, because the coordinates
- * were not verified: 9 of 22 had passed geocoding and pins for the other 13
- * would have been the ones nobody had checked. All 22 were confirmed by hand on
- * 2026-08-29 — which also overturned three of the nine — so the pins now mean
- * something and the map is drawn.
+ * All 22 hub coordinates were confirmed by hand on 2026-08-29, so the pins
+ * mean something. The preview opens two levels wider than the full map would
+ * (LISTING_PREVIEW_ZOOM_OUT) and takes no gestures: one tap opens the full map.
+ * The hub rows stay under it -- a pin gets two people to the same building,
+ * the LANDMARK gets them to the same spot inside it. Each active hub has a
+ * "Directions" link to the phone's own maps app, at the hub's coordinates.
  *
- * THE TEXT LIST DID NOT GO AWAY, and should not. A pin gets two people to the
- * same building; the LANDMARK gets them to the same spot inside it, and that is
- * the harder half — "Parkmall" is not a meeting point, a mall has six
- * entrances. The map is above the list, not instead of it.
- *
- * The preview takes no gestures of its own: one tap anywhere on it opens the
- * full map. A pannable map inside a scrolling page fights the scroll, and this
- * one is four pins in a fixed frame, where panning has nothing to reveal.
- *
- * THE SELLER'S OWN PICKUP POINT IS NOT RENDERED AT ALL — least of all now that
- * there is a map to render it on. `item.pickup` arrives coarsened to ~1 km for
- * anyone who is not the owner or an accepted trade counterparty, and even
- * coarsened it is a claim about where somebody lives; a ~1 km circle around a
- * listing re-posted weekly from the same house resolves to that house after a
- * few observations. The hub coordinate is the only location this feature puts
- * on a screen, and `HubMap` has no prop that could accept another.
+ * THE SELLER'S OWN PICKUP POINT IS NOT RENDERED AT ALL. `item.pickup` arrives
+ * coarsened to ~1 km for anyone who is not the owner or an accepted
+ * counterparty, and even coarsened it is a claim about where somebody lives.
+ * The hub coordinate is the only location this screen puts anywhere.
  */
 export default function ItemDetailScreen() {
   const router = useRouter();
@@ -141,23 +158,32 @@ export default function ItemDetailScreen() {
     null,
   );
 
+  /**
+   * Whether a perishable's window has run out, by the live clock or by the
+   * server's flag. Re-renders this screen once, when it flips -- the pill does
+   * the per-second work.
+   */
+  const perishable = data?.item.perishable ?? null;
+  const ended = useLiveDerived(
+    (now) => perishable !== null && (perishable.expired || secondsLeft(perishable.expiresAt, now) <= 0),
+    perishable !== null && !perishable.expired,
+  );
+
   const report = useReport();
   const block = useBlockUser();
   const { confirmBoost, isBoosting } = useConfirmBoost();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
   const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
-   * Whether the reason picker is up.
-   *
-   * IT REPLACED AN Alert, AND THAT WAS A BUG FIX, NOT A RESTYLE. The reasons
-   * were the buttons of an `Alert.alert` — six of them plus a Cancel — and
-   * Android renders at most THREE buttons in a dialog and silently drops the
-   * rest. Testers on Android were being offered half the reasons, with no
-   * indication that the list was truncated. See ReportSheet for the full note.
+   * The ⋯ menu, and which panel of it is showing. The report reasons are a
+   * PANEL of the menu, not a second modal over it -- see SheetShell's note on
+   * `onBack`. The reasons themselves are ReportReasonRows: never an Alert,
+   * which on Android silently drops every button past the third.
    */
-  const [reporting, setReporting] = useState(false);
+  const [menu, setMenu] = useState<null | "menu" | "report">(null);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(comments === "1");
+  const [barHeight, setBarHeight] = useState<number>(size.detail.actionButton + space.detail.actionBarY * 2);
   const { mutate: like } = useLike();
 
   const apiError = error instanceof ApiError ? error : null;
@@ -213,15 +239,8 @@ export default function ItemDetailScreen() {
 
   const { item, viewer, review } = data;
   const hubs = item.safeZones ?? [];
+  const own = viewer.isOwner;
 
-  /*
-   * §7 of the offer spec — is this listing beyond the viewer's reach?
-   *
-   * `useReach()` and `useProfileMe()` are the same two queries the marketplace
-   * grid already runs, so reaching this screen from a tile costs nothing extra;
-   * TanStack dedupes both by key. Reached by deep link, it is one request.
-   *
-   */
   /**
    * THE LOCK WINS OVER THE INSERT. `Where you stand` ends "you can send an
    * offer regardless", and the premium lock says you cannot; drawing both
@@ -232,9 +251,6 @@ export default function ItemDetailScreen() {
    */
   // "vip" locks the control too (bracket 9+, which Premium does not open).
   const locked = viewer.offerLock !== null;
-  const actionBarHeight = locked && item.valueLeaves !== null
-    ? size.detail.actionButton + space.detail.actionBarY * 2 + 8 + 16
-    : size.detail.actionButton + space.detail.actionBarY * 2;
   const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
   const outOfReach =
     !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
@@ -266,17 +282,33 @@ export default function ItemDetailScreen() {
     ) : null;
 
   /**
-   * A reason was picked. The sheet stays up while the request is in flight —
+   * The Marketplace tile's distance line, beside the bracket: strictly
+   * greater is out of reach; in the reach bracket is in reach. Nothing while
+   * the reach is loading (null is not zero), for an unvalued listing, or on
+   * your own.
+   */
+  const beyond =
+    !own && reach != null && item.valueLeaves !== null
+      ? bracketsBeyondReach(item.valueLeaves, reach)
+      : null;
+  const reachLine =
+    beyond === null ? null : beyond === 0 ? "within your reach" : `${bracketsWord(beyond)} above you`;
+
+  const amount = item.perishable ? perishableAmount(item.perishable) : null;
+  const wanted = item.wanted?.trim() ?? "";
+  const lookingFor = item.lookingForLabels.join(" · ");
+
+  /**
+   * A reason was picked. The menu stays up while the request is in flight —
    * SheetShell swaps its Cancel for a spinner — and comes down on either
-   * outcome, because both of them are answered by a dialog and a sheet still
-   * standing behind one reads as a step that did not finish.
+   * outcome, because both of them are answered by a dialog.
    */
   const onPickReason = (category: string) => {
     report.mutate(
       { targetType: "listing", targetId: item.id, category },
       {
         onSuccess: () => {
-          setReporting(false);
+          setMenu(null);
           setActed("reported");
           showDialog(
             "Thanks — that is with a moderator",
@@ -284,7 +316,7 @@ export default function ItemDetailScreen() {
           );
         },
         onError: (e) => {
-          setReporting(false);
+          setMenu(null);
           showDialog(
             // A 409 is not a failure: it means this reporter already has an
             // open report against this listing. Saying "already reported" is
@@ -299,6 +331,7 @@ export default function ItemDetailScreen() {
     );
   };
 
+  // The confirmation is the themed dialog, which stacks over the open menu.
   const onBlock = () => {
     showDialog(
       `Block ${item.owner.name}?`,
@@ -313,35 +346,61 @@ export default function ItemDetailScreen() {
           onPress: () =>
             block.mutate(item.owner.id, {
               onSuccess: () => {
+                setMenu(null);
                 setActed("blocked");
                 // The listing is now invisible to this viewer, so staying on it
                 // would show something the rest of the app has just hidden.
                 router.back();
               },
-              onError: (e) =>
+              onError: (e) => {
+                setMenu(null);
                 showDialog(
                   "Could not block",
                   e instanceof ApiError ? e.message : "Something went wrong.",
-                ),
+                );
+              },
             }),
         },
       ],
     );
   };
 
+  const onShare = () => void Share.share({ message: item.title, title: item.title });
+
   return (
     <View style={s.screen}>
-      <BackRow onPress={() => router.back()} />
+      <ScrollView contentContainerStyle={{ paddingBottom: barHeight + space.detail.sectionY }}>
+        <View>
+          <PhotoCarousel images={item.images} title={item.title} counter={false} />
 
-      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: actionBarHeight }]}>
-        <PhotoCarousel images={item.images} title={item.title} />
+          {/* Over the photo. The status bar is drawn over it too, so the row
+              starts below the inset. */}
+          <View style={[s.photoButtons, { top: insets.top + 8 }]} pointerEvents="box-none">
+            <PhotoButton label="Go back" onPress={() => router.back()}>
+              <ChevronLeftIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
+            </PhotoButton>
+            <View style={s.photoButtonsRight} pointerEvents="box-none">
+              <PhotoButton label="Share" onPress={onShare}>
+                <ShareIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
+              </PhotoButton>
+              {/* Report and Block act on someone else. On your own listing the
+                  server refuses both, so there is no menu to open. */}
+              {!own ? (
+                <PhotoButton label="More options" onPress={() => setMenu("menu")}>
+                  <View style={s.horizontal}>
+                    <KebabIcon size={icon.photoOverlay.size} color={color.onScrim} />
+                  </View>
+                </PhotoButton>
+              ) : null}
+            </View>
+          </View>
+        </View>
 
         <View style={s.body}>
           {/* The owner's own listing, when something has happened to it:
               parked for review, refused, or taken down. One line and a way to
-              the screen that explains it — the detail page itself stays the
-              listing, not the case file. */}
-          {viewer.isOwner && review ? (
+              the screen that explains it. */}
+          {own && review ? (
             <Tappable
               onPress={() => router.push({ pathname: "/listing-review", params: { id: item.id } })}
               accessibilityRole="button"
@@ -359,145 +418,116 @@ export default function ItemDetailScreen() {
             </Tappable>
           ) : null}
 
-          {/* A perishable's clock sits ABOVE the title: it is the one fact
-              that can make the rest of the page moot. The amount stays below,
-              in the Perishable section. */}
+          {/* Perishables only; a standard listing has no pill and no gap. At
+              zero it asks for a refetch: the server's lazy sweep is what turns
+              the window into `expired`. */}
           {item.perishable ? (
-            <PerishableClock perishable={item.perishable} onElapsed={() => void refetch()} />
+            <CountdownPill
+              size="large"
+              expiresAt={item.perishable.expiresAt}
+              expired={item.perishable.expired}
+              onEnd={item.perishable.expired ? undefined : () => void refetch()}
+              style={s.countdown}
+            />
           ) : null}
 
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
           {item.description.trim() ? (
-            <Text style={[textStyle(type.detailBody), s.postCaption]}>{item.description}</Text>
+            <Text style={[textStyle(type.detailBody), s.description]}>{item.description}</Text>
           ) : null}
 
           {/* Omitted, never "0", for a listing that predates the valuation
-              model — an unvalued item is not an item worth nothing.
-
-              YOUR OWN LISTING SHOWS THE NUMBER; ANYONE ELSE'S SHOWS THE
-              BRACKET. See `src/lib/brackets.ts`. The row keeps its shape — the
-              leaf, the figure slot, the unit — so the two read as the same
-              row with a different resolution rather than as two rows. */}
-          {item.valueLeaves !== null ? (
+              model — an unvalued item is not an item worth nothing. The
+              bracket, never the figure: see `src/lib/brackets.ts`. */}
+          {listingBracket !== null ? (
             <View
-              style={s.leavesRow}
+              style={s.bracketRow}
+              accessible
               accessibilityRole="text"
-              accessibilityLabel={bracketLabel(bracketOf(item.valueLeaves))}
+              accessibilityLabel={
+                bracketLabel(listingBracket) +
+                (beyond === null
+                  ? ""
+                  : beyond === 0
+                    ? ", within your reach"
+                    : `, ${bracketsWord(beyond)} above your reach`)
+              }
             >
-              <LeafIcon
-                size={icon.detailLeaf.size}
-                stroke={icon.detailLeaf.stroke}
-                color={color.forest}
-              />
+              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
               <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {bracketLabel(bracketOf(item.valueLeaves))}
+                {bracketLabel(listingBracket)}
               </Text>
+              {reachLine ? (
+                <Text style={[textStyle(type.detailBody), s.reachLine]}>· {reachLine}</Text>
+              ) : null}
             </View>
           ) : null}
 
-          {/* Condition and category, in this screen's `Chip` — the same outline
-              chip pair the feed card draws.
-              The category is what the Home/Marketplace filters match on, so
-              showing it is how an owner finds their own listing again. Both
-              labels arrive resolved from the server — never the raw enum. */}
-          <View style={s.metaChips}>
-            <Chip label={item.conditionLabel} />
-            <Chip label={item.categoryLabel} />
+          {/* Both labels arrive resolved from the server — never the raw enum.
+              The quantity replaced the old "Perishable: 1 KG" section. */}
+          <View style={s.tags}>
+            <Tag label={item.conditionLabel} />
+            <Tag label={item.categoryLabel} />
+            {amount ? <Tag label={amount} /> : null}
           </View>
 
-          <SocialRow
-            likes={item.stats.likes}
-            liked={item.stats.liked}
-            comments={item.stats.comments}
-            onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
-            onComment={() => setCommentsOpen(true)}
-            onShare={() => void Share.share({ message: item.title, title: item.title })}
-          />
-
-          {/* ── Boost ─────────────────────────────────────────────────────
-              OWNER ONLY, and never on a perishable: canBoost() is the
-              client's reading of the rules boostItem() enforces on the server
-              (AVAILABLE, not perishable, not taken down, not already
-              featured). A live boost shows when it ends instead of a button,
-              so nobody is invited to pay twice for the same window. */}
-          {viewer.isOwner && item.featuredUntil ? (
+          {/* ── Owner: a live boost says when it ends. The Boost button itself
+              is in the bottom bar with Edit. */}
+          {own && item.featuredUntil ? (
             <View style={s.featuredNote} accessibilityRole="text">
               <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
               <Text style={[textStyle(type.detailBody), { color: color.forest, flex: 1 }]}>
                 Featured until {formatFeaturedUntil(item.featuredUntil)}
               </Text>
             </View>
-          ) : viewer.isOwner && canBoost(item) ? (
-            <Tappable
-              onPress={() => confirmBoost(item)}
-              disabled={isBoosting}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isBoosting }}
-              style={s.boost}
-              pressedStyle={s.actionPressed}
+          ) : null}
+
+          {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
+              is beyond the viewer's reach. Unchanged; only its place moved. */}
+          {!own ? reachInsert : null}
+
+          {wanted || lookingFor ? (
+            <View
+              style={s.tradesFor}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`Trades for: ${[wanted, lookingFor].filter(Boolean).join(". ")}`}
             >
-              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-              <Text style={[textStyle(type.primaryButton), { color: color.forest }]}>
-                {isBoosting ? "Boosting…" : "Boost this listing"}
-              </Text>
-            </Tappable>
+              <View style={s.tradesForIcon}>
+                <SwapIcon size={icon.hubPin.size} stroke={icon.hubPin.stroke} color={color.forest} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[textStyle(type.detailSection), { color: color.forest }]}>Trades for</Text>
+                <Text style={[textStyle(type.detailBody), s.tradesForMain]}>{wanted || lookingFor}</Text>
+                {wanted && lookingFor ? (
+                  <Text style={[textStyle(type.hubLandmark), s.tradesForSub]}>{lookingFor}</Text>
+                ) : null}
+              </View>
+            </View>
           ) : null}
 
-          {/*
-            §7.3 of the offer spec — `Where you stand`, "inserted between the
-            value row and *Description*".
+          <SellerRow
+            owner={item.owner}
+            onPress={() => router.push({ pathname: "/user", params: { id: item.owner.id } })}
+          />
 
-            It is drawn whenever this listing is beyond the viewer's reach — the
-            grid's own test, held in `shouldShowWhereYouStand` — including for a
-            viewer with nothing posted, who gets the empty-shelf variant rather
-            than a greyed tile with no explanation behind it. Note what does NOT
-            change when it appears: the
-            carousel above stays in FULL COLOUR (§7.3 is explicit — the grey
-            belongs to the grid, not the item), while the bottom bar explains
-            the reach block when the listing is outside the viewer's bracket.
-          */}
-          {!viewer.isOwner ? reachInsert : null}
+          <Tappable
+            onPress={() => setCommentsOpen(true)}
+            accessibilityRole="button"
+            style={s.askRow}
+            pressedStyle={s.pressed}
+          >
+            <CommentIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.forest} />
+            <Text style={[textStyle(type.secondaryButton), { color: color.forest }]}>Ask a question</Text>
+          </Tappable>
 
-          {/* ── Perishable ──────────────────────────────────────────────
-              Shown to the OWNER TOO, unlike most of this screen's sections.
-              The window is the one fact about their own listing they cannot
-              see anywhere else, and "4 hours left" is more use to the person
-              who has to move the stock than to anybody else. */}
-          {item.perishable && perishableAmount(item.perishable) ? (
-            <Section heading="Perishable">
-              <Text style={[textStyle(type.detailBody), s.bodyText]}>
-                {perishableAmount(item.perishable)}
-              </Text>
-            </Section>
-          ) : null}
-
-          {/* `wanted` is the owner's own words about what they will take back.
-              Rendered plainly rather than in the urgency treatment — it is a
-              wish list, not a deadline. */}
-          {!viewer.isOwner && item.wanted?.trim() ? (
-            <Section heading="Wanted in return">
-              <Text style={[textStyle(type.detailBody), s.bodyText]}>{item.wanted}</Text>
-            </Section>
-          ) : null}
-
-          {/* The categories the owner named, which is a different statement
-              from `wanted`: that is prose, this is the list the matcher uses
-              to decide who hears about this listing. Both are shown when both
-              exist -- they are two answers to the same question, one exact. */}
-          {item.lookingForLabels.length > 0 ? (
-            <Section heading="Looking for">
-              <Text style={[textStyle(type.detailBody), s.bodyText]}>
-                {item.lookingForLabels.join(" · ")}
-              </Text>
-            </Section>
-          ) : null}
-
-          {!viewer.isOwner && hubs.length > 0 ? (
-            <Section heading="Meet at a Safe Zone">
+          {!own && hubs.length > 0 ? (
+            <View style={s.section}>
+              <Text style={[textStyle(type.detailSection), s.sectionHeading]}>Meet at a Safe Zone</Text>
               {/* The whole preview is one target. `HubMap` with
                   `interactive={false}` takes no touches, so this Tappable
-                  receives them — see the note on that prop. */}
+                  receives them. */}
               <Tappable
                 onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
                 accessibilityRole="button"
@@ -507,13 +537,13 @@ export default function ItemDetailScreen() {
                 }
                 style={s.mapPreview}
               >
-                {/* `listHubs={false}`: the hub rows are already printed
-                    directly below this preview, so the fallback shows the
-                    notice alone rather than the same rows twice. */}
+                {/* `listHubs={false}`: the hub rows are printed directly below,
+                    so the fallback shows the notice alone. */}
                 <MapErrorBoundary hubs={hubs} listHubs={false}>
                   <HubMap
                     hubs={hubs}
                     interactive={false}
+                    zoomOut={LISTING_PREVIEW_ZOOM_OUT}
                     emptyMessage="No Safe Zone set for this listing."
                     style={s.mapSurface}
                   />
@@ -525,64 +555,39 @@ export default function ItemDetailScreen() {
                   <HubRow key={h.id} hub={h} />
                 ))}
               </View>
-            </Section>
-          ) : null}
-
-          {/* THE SELLER, AFTER THE THING. Item facts first — title, value,
-              window, meeting places — and then who is offering it, as the last
-              read before the pinned Offer Trade bar under the scroll. Report
-              and Block stay directly beneath it: they act on this person, so
-              they come after the row that says who that is. */}
-          <OwnerRow
-            name={item.owner.name}
-            avatar={item.owner.avatar}
-            location={item.owner.location}
-            tier={item.owner.trustTier}
-            rank={item.owner.rank}
-            org={item.owner.org}
-            onPress={() =>
-              router.push({ pathname: "/user", params: { id: item.owner.id } })
-            }
-          />
-
-          {/* Own listing: no reporting yourself, no blocking yourself. The
-              server refuses both, and offering them would be a dead control. */}
-          {!viewer.isOwner ? (
-            <View style={s.danger}>
-              <DangerRow
-                icon={
-                  <FlagIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.inkSecondary} />
-                }
-                label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
-                disabled={acted === "reported" || report.isPending}
-                onPress={() => setReporting(true)}
-              />
-              <DangerRow
-                icon={
-                  <BlockIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.urgent} />
-                }
-                label={`Block ${item.owner.name}`}
-                destructive
-                disabled={block.isPending || acted === "blocked"}
-                onPress={onBlock}
-              />
             </View>
           ) : null}
         </View>
       </ScrollView>
 
-      {locked && item.valueLeaves !== null ? (
-        <PremiumLockedBar
-          kind={viewer.offerLock ?? "premium"}
-          bracket={bracketOf(item.valueLeaves)}
-          owner={firstName(item.owner.name)}
-          onPress={() => openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!))}
-        />
-      ) : (
-        <ActionBar
+      <View
+        style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
+        onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+      >
+        <BottomBar
+          own={own}
           action={viewer.action}
           existingOfferId={viewer.existingOfferId}
+          ended={ended}
+          lock={
+            locked && item.valueLeaves !== null
+              ? {
+                  kind: viewer.offerLock ?? "premium",
+                  bracket: bracketOf(item.valueLeaves),
+                  owner: firstName(item.owner.name),
+                  onPress: () =>
+                    openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
+                }
+              : null
+          }
+          liked={item.stats.liked}
+          onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
           onEdit={() => setEditing(true)}
+          boost={
+            own && !item.featuredUntil && canBoost(item)
+              ? { busy: isBoosting, onPress: () => confirmBoost(item) }
+              : null
+          }
           onOffer={() => {
             if (cannotOffer) {
               setReachDialogOpen(true);
@@ -591,19 +596,17 @@ export default function ItemDetailScreen() {
             router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
           }}
         />
-      )}
+      </View>
 
       {/*
         THE ONE-BRACKET RULE, STATED THE RIGHT WAY ROUND.
 
-        This used to say the item was "N brackets above your reach", which
-        read as though one bracket up were not allowed — and it is. An offer
-        may be the same bracket as the listing, one below, or one above; what
-        is not allowed is two or more apart, in either direction. So the
-        sentence names the rule and then the direction this shelf missed in.
-        `misses === null` with `outOfReach` true cannot happen (the reach is
-        one above the best item, so anything past it is two above), but the
-        fallback wording is still true if it ever did.
+        An offer may be the same bracket as the listing, one below, or one
+        above; what is not allowed is two or more apart, in either direction.
+        So the sentence names the rule and then the direction this shelf
+        missed in. `misses === null` with `outOfReach` true cannot happen (the
+        reach is one above the best item, so anything past it is two above),
+        but the fallback wording is still true if it ever did.
       */}
       <NoticeDialog
         visible={reachDialogOpen}
@@ -627,19 +630,33 @@ export default function ItemDetailScreen() {
         onDismiss={() => setReachDialogOpen(false)}
       />
 
-      {/*
-        Mounted last so it sits over the sticky ActionBar. It renders nothing
-        until `reporting` is true; the Modal inside it is created and destroyed
-        with the picker rather than kept alive behind the screen.
-      */}
-      {reporting ? (
-        <ReportSheet
-          target="listing"
-          targetName="this listing"
-          busy={report.isPending}
-          onPick={onPickReason}
-          onClose={() => setReporting(false)}
-        />
+      {menu ? (
+        <SheetShell
+          title={menu === "report" ? "Why are you reporting this listing?" : item.title}
+          onBack={menu === "report" ? () => setMenu("menu") : undefined}
+          onClose={() => setMenu(null)}
+          busy={report.isPending || block.isPending}
+        >
+          {menu === "report" ? (
+            <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
+          ) : (
+            <SheetRows>
+              <SheetRow
+                glyph={<FlagIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
+                label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
+                disabled={acted === "reported" || report.isPending}
+                onPress={() => setMenu("report")}
+              />
+              <SheetRow
+                glyph={<BlockIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.urgent} />}
+                label={`Block ${item.owner.name}`}
+                destructive
+                disabled={block.isPending || acted === "blocked"}
+                onPress={onBlock}
+              />
+            </SheetRows>
+          )}
+        </SheetShell>
       ) : null}
       <EditListingSheet item={editing ? item : null} onClose={() => setEditing(false)} />
       <CommentsSheet item={commentsOpen ? item : null} onClose={() => setCommentsOpen(false)} />
@@ -649,6 +666,7 @@ export default function ItemDetailScreen() {
 
 /* ─────────────────────────────── pieces ─────────────────────────────── */
 
+/** The plain back row, for the loading and error states that have no photo. */
 function BackRow({ onPress }: { onPress: () => void }) {
   const insets = useSafeAreaInsets();
   return (
@@ -658,7 +676,7 @@ function BackRow({ onPress }: { onPress: () => void }) {
         accessibilityRole="button"
         accessibilityLabel="Go back"
         style={s.back}
-        pressedStyle={s.backPressed}
+        pressedStyle={s.pressed}
       >
         <ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={color.ink} />
       </Tappable>
@@ -666,9 +684,33 @@ function BackRow({ onPress }: { onPress: () => void }) {
   );
 }
 
-function Chip({ label }: { label: string }) {
+/** A round button over the photo: the scrim and ink the photo badges use. */
+function PhotoButton({
+  label,
+  onPress,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={s.chip}>
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={s.photoButton}
+      pressedStyle={s.pressed}
+      hitSlop={4}
+    >
+      {children}
+    </Tappable>
+  );
+}
+
+function Tag({ label }: { label: string }) {
+  return (
+    <View style={s.tag}>
       <Text style={[textStyle(type.chip), { color: color.inkSecondary }]}>{label}</Text>
     </View>
   );
@@ -683,51 +725,53 @@ function formatFeaturedUntil(iso: string): string {
   });
 }
 
-function Section({ heading, children }: { heading: string; children: React.ReactNode }) {
-  return (
-    <View style={s.section}>
-      <Text style={[textStyle(type.detailSection), s.sectionHeading]}>{heading}</Text>
-      {children}
-    </View>
-  );
+/** "1.5 kg", "3 pcs", "2 L" — or null when the owner gave no amount. */
+function perishableAmount(p: NonNullable<Item["perishable"]>): string | null {
+  if (p.quantity == null || !p.quantityUnit) return null;
+  // Lowercase units, except the litre: a lowercase "l" reads as the digit 1.
+  const unit = p.quantityUnit === "LITERS" ? "L" : p.quantityUnit.toLowerCase();
+  return `${p.quantity} ${unit}`;
 }
 
 /**
- * The owner, tappable through to their profile.
+ * Who is offering it, tappable through to their profile.
  *
- * The tier badge renders ONLY when the server sent a tier. See the note at the
- * top of this file — there is no fallback here on purpose.
+ * A PERSON: avatar, name, "Rising Trader · Cebu · 12 trades". The tier is
+ * the server's resolved one or it is left out (see the file header); there
+ * is no tier badge any more, the tier is in the line. The trade count is
+ * `totalTrades`, which is fine as a displayed statistic (not as a tier input).
+ *
+ * A SHOP: its square logo, its name, the verified checkmark once reviewed,
+ * and its business category. The chevron opens the storefront, which is the
+ * shop's backing account's profile.
  */
-function OwnerRow({
-  name,
-  avatar,
-  location,
-  tier,
-  rank,
-  org,
-  onPress,
-}: {
-  name: string;
-  avatar: string | null;
-  location: string | null;
-  tier: TrustTier | null;
-  rank: string;
-  /** Set when the owner is an organisation. Replaces the avatar and the tier. */
-  org: OrgBadge | null;
-  onPress: () => void;
-}) {
+function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => void }) {
+  const org: OrgBadge | null = owner.org;
+  const tier: TrustTier | null = owner.trustTier;
+  const meta = org
+    ? businessCategoryLabel(org.businessCategory)
+    : [
+        tier,
+        owner.location?.trim() || null,
+        `${owner.totalTrades} ${owner.totalTrades === 1 ? "trade" : "trades"}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${name}${tier ? `, ${tier}` : ""}. View profile.`}
-      style={s.owner}
-      pressedStyle={s.ownerPressed}
+      accessibilityLabel={
+        `${org ? org.name : owner.name}` +
+        (org?.verified ? `, ${ORG_BADGE_LABEL.full}` : "") +
+        `. ${meta}. ${org ? "Open storefront." : "View profile."}`
+      }
+      style={s.seller}
+      pressedStyle={s.pressed}
     >
-      {/* Square for an organisation, round for a person -- the same rule the
-          profile header follows, and for the same reason: a round mask crops
-          the corners off a wordmark. The shop front replaces the initial,
-          which in a square would read as a broken avatar. */}
+      {/* Square for a shop, round for a person: a round mask crops the
+          corners off a wordmark. */}
       {org ? (
         org.logoUrl ? (
           <Image source={{ uri: org.logoUrl }} contentFit="cover" style={[s.avatar, s.orgAvatar]} />
@@ -736,49 +780,30 @@ function OwnerRow({
             <StoreIcon size={22} stroke={1.6} color={color.forest} />
           </View>
         )
-      ) : avatar ? (
-        <Image source={{ uri: avatar }} contentFit="cover" style={s.avatar} />
+      ) : owner.avatar ? (
+        <Image source={{ uri: owner.avatar }} contentFit="cover" style={s.avatar} />
       ) : (
         <View style={[s.avatar, s.avatarFallback]}>
           <Text style={[textStyle(type.avatarInitials40), { color: color.forest }]}>
-            {name.trim().charAt(0).toUpperCase() || "?"}
+            {owner.name.trim().charAt(0).toUpperCase() || "?"}
           </Text>
         </View>
       )}
 
-      <View style={s.ownerText}>
-        <View style={s.ownerNameRow}>
-          <Text style={[textStyle(type.username), s.ownerName]} numberOfLines={1}>
-            {name}
+      <View style={s.sellerText}>
+        <View style={s.sellerNameRow}>
+          <Text style={[textStyle(type.username), s.sellerName]} numberOfLines={1}>
+            {org ? org.name : owner.name}
           </Text>
-          {/* One badge, never two. An unverified organisation gets neither --
-              see ownerBadge(). */}
           {org?.verified ? (
-            <View style={[s.tierBadge, s.orgTierBadge]} accessibilityRole="text" accessibilityLabel={ORG_BADGE_LABEL.full}>
+            <View style={s.verifiedBadge}>
               <VerifiedOrgIcon size={icon.orgBadge.size} stroke={icon.orgBadge.stroke} color={color.forest} />
-              <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>
-                {ORG_BADGE_LABEL.compact}
-              </Text>
+              <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>{ORG_BADGE_LABEL.compact}</Text>
             </View>
-          ) : tier ? (
-            <TierBadge tier={tier} />
           ) : null}
         </View>
-        {/* The Leaf rank is a different ladder from trust and is labelled as
-            what it is, so the two are never read as one claim.
-
-            AN ORGANISATION GETS ITS BUSINESS CATEGORY INSTEAD. The leaf rank
-            is earned by a person building a reputation, and printing
-            "Guardian" under a shop is the same category error the trust tier
-            would be -- quieter, and just as wrong. */}
-        <Text style={[textStyle(type.metadata), s.ownerMeta]} numberOfLines={1}>
-          {org
-            ? location?.trim()
-              ? `${location} · ${businessCategoryLabel(org.businessCategory)}`
-              : businessCategoryLabel(org.businessCategory)
-            : location?.trim()
-              ? `${location} · ${rank}`
-              : rank}
+        <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
+          {meta}
         </Text>
       </View>
 
@@ -787,33 +812,12 @@ function OwnerRow({
   );
 }
 
-const TIER_TREATMENT: Record<TrustTier, { backgroundColor: string; borderColor: string; color: string }> = {
-  "New Trader":     { backgroundColor: color.control,   borderColor: color.controlLine, color: color.inkMuted },
-  "Rising Trader":  { backgroundColor: color.control,   borderColor: color.controlLine, color: color.inkMuted },
-  "Trusted Trader": { backgroundColor: color.greenWash, borderColor: color.greenLine,   color: color.forest },
-  "Top Trader":     { backgroundColor: color.green,     borderColor: "transparent",     color: color.onGreen },
-};
-
-function TierBadge({ tier }: { tier: TrustTier }) {
-  const t = TIER_TREATMENT[tier];
-  return (
-    <View
-      style={[s.tierBadge, { backgroundColor: t.backgroundColor, borderColor: t.borderColor }]}
-      accessibilityRole="text"
-      accessibilityLabel={tier}
-    >
-      <Text style={[textStyle(type.tierBadge), { color: t.color }]}>{TIER_LABEL[tier]}</Text>
-    </View>
-  );
-}
-
 /**
- * One Safe-Zone hub.
+ * One Safe-Zone hub, with a way to get there.
  *
- * A DEACTIVATED HUB IS SHOWN, struck through and labelled. The association
- * survives deactivation on the server precisely so the listing does not
- * silently lose the only answer it had to "where would we meet?" — filtering it
- * out here would undo that on the one screen it was built for.
+ * A DEACTIVATED HUB IS SHOWN, struck through and labelled, and gets no
+ * Directions: sending someone to a place that is no longer a Safe Zone is
+ * the one thing this row must not do.
  */
 function HubRow({ hub }: { hub: SafeZoneHub }) {
   return (
@@ -833,7 +837,7 @@ function HubRow({ hub }: { hub: SafeZoneHub }) {
             { color: hub.isActive ? color.ink : color.inkStale },
             !hub.isActive && s.struck,
           ]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {hub.name}
         </Text>
@@ -842,158 +846,191 @@ function HubRow({ hub }: { hub: SafeZoneHub }) {
             ? `${hub.typeLabel} · ${hub.landmark}`
             : "No longer a Safe Zone — agree somewhere else"}
         </Text>
+        {hub.isActive ? (
+          <Tappable
+            onPress={() => void directionsTo(hub)}
+            accessibilityRole="link"
+            accessibilityLabel={`Directions to ${hub.name}`}
+            style={s.directions}
+            pressedStyle={s.pressed}
+          >
+            <Text style={[textStyle(type.hubName), { color: color.forest }]}>Directions</Text>
+          </Tappable>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function DangerRow({
-  icon: glyph,
-  label,
-  destructive = false,
-  disabled = false,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  destructive?: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Tappable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      style={[s.dangerRow, disabled && s.dangerDisabled]}
-      pressedStyle={s.dangerPressed}
-    >
-      {glyph}
-      <Text
-        style={[
-          textStyle(type.dangerAction),
-          { color: destructive ? color.urgent : color.inkSecondary },
-        ]}
-      >
-        {label}
-      </Text>
-    </Tappable>
-  );
+/**
+ * The phone's own maps app at the hub's coordinates, through the same helper
+ * the map's hub card uses (`geo:`, then OpenStreetMap on the web). See
+ * components/map/directions for why it tries the open instead of asking.
+ */
+async function directionsTo(hub: SafeZoneHub) {
+  const outcome = await openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name });
+  if (outcome === "failed") showDialog("Could not open maps", "No maps app or browser is available on this phone.");
 }
 
 /**
- * The sticky primary.
+ * The sticky bar. Checked in this order, so each state is the first true one:
  *
- * It says WHY it is unavailable rather than being hidden or inert. A greyed
- * button with no explanation is the state people screenshot and send to
- * support; "You cannot offer on your own listing" ends the question.
+ *   1. Your own listing: your actions — Edit, and Boost while it can be
+ *      boosted — or the inert "In trade" / "Traded". No heart, no offer.
+ *   2. In trade / traded: said, inert. (Unchanged.)
+ *   3. A perishable that has ended: "This listing has ended", inert.
+ *   4. The premium / VIP lock: the lock line and its explanation, opening the
+ *      Premium screen. (Unchanged: it says what is locked, never "Upgrade".)
+ *   5. "Send offer", or "See your offer" when one is pending. An out-of-reach
+ *      tap still opens the one-bracket notice instead of the composer.
+ *
+ * The heart sits beside 2–5.
  */
-function ActionBar({
+function BottomBar({
+  own,
   action,
   existingOfferId,
+  ended,
+  lock,
+  liked,
+  onLike,
   onEdit,
+  boost,
   onOffer,
 }: {
+  own: boolean;
   action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
   existingOfferId: string | null;
+  ended: boolean;
+  lock: { kind: PremiumReason; bracket: number; owner: string; onPress: () => void } | null;
+  liked: boolean;
+  onLike: () => void;
   onEdit: () => void;
+  boost: { busy: boolean; onPress: () => void } | null;
   onOffer: () => void;
 }) {
-  if (action === "EDIT" || action === "IN_TRADE" || action === "TRADED") {
-    const label = action === "EDIT" ? "Edit listing" : action === "IN_TRADE" ? "In trade" : "Traded";
+  const inert = (label: string) => (
+    <View style={[s.action, s.actionInert]} accessible accessibilityRole="text">
+      <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.inkMuted }]} numberOfLines={2}>
+        {label}
+      </Text>
+    </View>
+  );
+
+  if (own) {
+    if (action === "IN_TRADE" || action === "TRADED") {
+      return <View style={s.barRow}>{inert(action === "IN_TRADE" ? "In trade" : "Traded")}</View>;
+    }
     return (
-      <View style={s.actionBar}>
+      <View style={s.barRow}>
         <Tappable
-          onPress={action === "EDIT" ? onEdit : undefined}
-          disabled={action !== "EDIT"}
+          onPress={onEdit}
           accessibilityRole="button"
-          accessibilityState={{ disabled: action !== "EDIT" }}
-          style={[s.action, action !== "EDIT" && s.actionInert]}
-          pressedStyle={s.actionPressed}
+          style={[s.action, s.actionOutline]}
+          pressedStyle={s.pressed}
         >
-          <Text style={[textStyle(type.primaryButton), { color: action === "EDIT" ? color.forest : color.inkMuted }]}>{label}</Text>
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Edit listing</Text>
         </Tappable>
+        {boost ? (
+          <Tappable
+            onPress={boost.onPress}
+            disabled={boost.busy}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: boost.busy }}
+            style={s.action}
+            pressedStyle={s.pressed}
+          >
+            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
+              {boost.busy ? "Boosting…" : "Boost"}
+            </Text>
+          </Tappable>
+        ) : null}
+      </View>
+    );
+  }
+
+  const heart = (
+    <Tappable
+      onPress={onLike}
+      accessibilityRole="button"
+      accessibilityLabel="Favorite"
+      accessibilityState={{ selected: liked }}
+      style={s.heart}
+      pressedStyle={s.pressed}
+    >
+      <HeartIcon liked={liked} size={icon.social.size} stroke={icon.social.stroke} color={liked ? color.like : color.ink} />
+    </Tappable>
+  );
+
+  if (action === "IN_TRADE" || action === "TRADED") {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert(action === "IN_TRADE" ? "In trade" : "Traded")}
+      </View>
+    );
+  }
+
+  if (ended) {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("This listing has ended")}
+      </View>
+    );
+  }
+
+  if (lock) {
+    // It replaces the offer button rather than sitting beside it: a locked
+    // line above a live "Send offer" would be the contradiction the server
+    // then resolves with a 403. It must not imply a purchase is possible
+    // today — the Premium screen says payments are not open yet.
+    const c = lock.kind === "vip" ? vipCopy : premiumCopy;
+    return (
+      <View>
+        <View style={s.barRow}>
+          {heart}
+          <Tappable
+            onPress={lock.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={c.a11y(lock.bracket)}
+            style={[s.action, s.actionInert, s.actionLocked]}
+            pressedStyle={s.pressed}
+          >
+            <LockIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.inkSecondary} />
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.inkSecondary, flexShrink: 1 }]} numberOfLines={2}>
+              {c.bar}
+            </Text>
+          </Tappable>
+        </View>
+        <Text style={[textStyle(type.gridMeta), s.lockedBody]} onPress={lock.onPress}>
+          {c.body(lock.bracket, lock.owner)} <Text style={s.lockedLink}>{c.see}</Text>
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={s.actionBar}>
+    <View style={s.barRow}>
+      {heart}
       <Tappable
         onPress={onOffer}
         disabled={action !== "SEND_OFFER"}
         accessibilityRole="button"
         accessibilityState={{ disabled: action !== "SEND_OFFER" }}
         style={s.action}
-        pressedStyle={s.actionPressed}
+        pressedStyle={s.pressed}
       >
-        <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
+        <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]} numberOfLines={2}>
           {/*
             "See your offer", not "Update your offer". Nothing on the server can
-            change or withdraw a sent offer — PATCH /api/offers/[id] is the
-            RECEIVER's accept/decline and 403s the sender, and `OfferStatus` has
-            no WITHDRAWN member. The button leads to §5.2's pending-offer state,
-            which shows what was sent and says it expires on its own; a label
-            promising an edit would be promising a screen that cannot exist yet.
+            change or withdraw a sent offer, so the button leads to §5.2's
+            pending-offer state rather than promising an edit.
           */}
           {existingOfferId ? "See your offer" : "Send offer"}
         </Text>
       </Tappable>
     </View>
-  );
-}
-
-/**
- * The offer control under a premium lock: bracket 7 and above with no
- * subscription (`kind` "premium"), or bracket 9 and above with no VIP ("vip").
- *
- * ── WHAT IT MUST NOT DO ─────────────────────────────────────────────────────
- *
- * It must not imply a purchase is possible today. The bar is tappable and
- * opens the Premium screen — the ONE paywall — which shows the price and says
- * plainly that payments are not open yet. The bar itself never says "Upgrade"
- * or "Subscribe"; it says what is locked and where to read more.
- *
- * And it must not make the listing feel hidden. Everything above this bar —
- * the photos in full colour, the title, the bracket, the owner, the hubs, the
- * report and block rows — is untouched, and the tile in the grid is not greyed
- * for this reason. The lock explains the CONTROL, not the listing: the whole
- * point of showing bracket 7+ listings to everyone is that people can see
- * what is up there.
- *
- * It replaces `ActionBar` rather than sitting beside it. A locked line above
- * a live green "Offer Trade" would be the contradiction the server would then
- * resolve with a 403.
- */
-function PremiumLockedBar({
-  kind,
-  bracket,
-  owner,
-  onPress,
-}: {
-  kind: PremiumReason;
-  bracket: number;
-  owner: string;
-  onPress: () => void;
-}) {
-  const c = kind === "vip" ? vipCopy : premiumCopy;
-  return (
-    <Tappable
-      onPress={onPress}
-      style={s.actionBar}
-      pressedStyle={{ opacity: 0.85 }}
-      accessibilityRole="button"
-      accessibilityLabel={c.a11y(bracket)}
-    >
-      <View style={[s.action, s.actionInert, s.actionLocked]}>
-        <LockIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.inkSecondary} />
-        <Text style={[textStyle(type.primaryButton), { color: color.inkSecondary }]}>{c.bar}</Text>
-      </View>
-      <Text style={[textStyle(type.gridMeta), s.lockedBody]}>
-        {c.body(bracket, owner)} <Text style={s.lockedLink}>{c.see}</Text>
-      </Text>
-    </Tappable>
   );
 }
 
@@ -1013,7 +1050,7 @@ function DetailSkeleton() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  scroll: { paddingBottom: size.detail.actionButton + space.detail.actionBarY * 2 },
+  pressed: { opacity: 0.7 },
 
   backRow: { paddingHorizontal: space.screenXTight, paddingTop: 4 },
   back: {
@@ -1022,31 +1059,27 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backPressed: { opacity: 0.6 },
 
-  body: { paddingHorizontal: space.detail.x, paddingTop: space.detail.photoToBody },
-  boost: {
+  photoButtons: {
+    position: "absolute",
+    left: space.screenXTight,
+    right: space.screenXTight,
     flexDirection: "row",
-    gap: 8,
-    height: size.detail.actionButton,
-    marginTop: 12,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.chip,
-    borderColor: color.forest,
-    backgroundColor: color.greenWash,
+    justifyContent: "space-between",
+  },
+  photoButtonsRight: { flexDirection: "row", gap: 8 },
+  photoButton: {
+    width: size.detail.overlayButton,
+    height: size.detail.overlayButton,
+    borderRadius: size.detail.overlayButton / 2,
+    backgroundColor: color.captionFill,
     alignItems: "center",
     justifyContent: "center",
   },
-  featuredNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: color.greenWash,
-  },
+  // The kebab glyph is vertical; the photo's "more" is the horizontal ⋯.
+  horizontal: { transform: [{ rotate: "90deg" }] },
+
+  body: { paddingHorizontal: space.detail.x, paddingTop: space.detail.photoToBody },
   reviewBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1057,32 +1090,28 @@ const s = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: color.greenWash,
   },
+  countdown: { marginBottom: space.detail.titleToLeaves },
   title: { color: color.ink },
-  clockRow: {
-    marginBottom: space.detail.titleToLeaves,
+  description: { color: color.inkSecondary, marginTop: 10 },
+
+  bracketRow: {
+    marginTop: space.detail.titleToLeaves + 4,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: size.leaves.gap,
+    columnGap: size.leaves.gap,
+    rowGap: 2,
   },
-  metaChips: {
+  reachLine: { color: color.inkSecondary },
+
+  tags: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: space.card.chipGap,
-    marginTop: space.card.titleToChips,
-  },
-  leavesRow: {
-    marginTop: space.detail.titleToLeaves,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: size.leaves.gap,
-  },
-  chips: {
     marginTop: space.detail.leavesToChips,
-    flexDirection: "row",
-    gap: space.card.chipGap,
   },
-  chip: {
+  tag: {
     paddingHorizontal: space.chip.x,
     paddingVertical: space.chip.y,
     borderRadius: radius.chip,
@@ -1091,7 +1120,40 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
 
-  owner: {
+  featuredNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: color.greenWash,
+  },
+
+  tradesFor: {
+    marginTop: space.detail.sectionY,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: space.detail.hubIconToText,
+    padding: space.browse.tileBody + 2,
+    borderRadius: radius.hubRow,
+    borderWidth: border.chip,
+    borderColor: color.greenLine,
+    backgroundColor: color.greenWash,
+  },
+  tradesForIcon: {
+    width: size.detail.hubIcon,
+    height: size.detail.hubIcon,
+    borderRadius: size.detail.hubIcon / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.surface,
+  },
+  tradesForMain: { color: color.ink, marginTop: 2 },
+  tradesForSub: { color: color.inkSecondary, marginTop: 2 },
+
+  seller: {
     marginTop: space.detail.sectionY,
     flexDirection: "row",
     alignItems: "center",
@@ -1101,7 +1163,6 @@ const s = StyleSheet.create({
     borderBottomWidth: border.hairline,
     borderColor: color.divider,
   },
-  ownerPressed: { opacity: 0.7 },
   avatar: {
     width: size.avatar.owner,
     height: size.avatar.owner,
@@ -1109,35 +1170,37 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
   },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
-  ownerText: { flex: 1 },
-  ownerNameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
-  ownerName: { flexShrink: 1, color: color.ink },
-  ownerMeta: { marginTop: space.card.nameToMeta, color: color.inkMuted },
-  // Square logo in the same 40 slot as the avatar, so an org row and a
-  // person's row have identical geometry. Only the mask differs.
+  // Square logo in the same 40 slot as the avatar; only the mask differs.
   orgAvatar: { borderRadius: 8 },
-  orgTierBadge: {
+  sellerText: { flex: 1 },
+  sellerNameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
+  sellerName: { flexShrink: 1, color: color.ink },
+  sellerMeta: { marginTop: space.card.nameToMeta, color: color.inkSecondary },
+  verifiedBadge: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: color.greenWash,
-    borderColor: color.greenLine,
-  },
-  tierBadge: {
-    flexShrink: 0,
     borderRadius: radius.tierBadge,
     borderWidth: border.chip,
     paddingHorizontal: space.tierBadge.x,
     paddingVertical: space.tierBadge.y,
+    backgroundColor: color.greenWash,
+    borderColor: color.greenLine,
   },
 
-  section: { marginTop: space.detail.sectionY },
-  sectionHeading: { color: color.ink, marginBottom: space.detail.headingToBody },
-  bodyText: { color: color.inkSecondary },
-  postCaption: { color: color.inkSecondary, lineHeight: 22, marginTop: 10 },
+  askRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: size.detail.dangerRow,
+    alignSelf: "flex-start",
+  },
 
-  /* The preview map above the hub list. 16:10 — wide enough to hold two hubs
-     on opposite sides of the channel without the pins meeting in the middle,
+  section: { marginTop: space.detail.sectionY - 4 },
+  sectionHeading: { color: color.ink, marginBottom: space.detail.headingToBody },
+
+  /* 16:10 — wide enough to hold two hubs on opposite sides of the channel,
      short enough that the landmark text under it stays on screen with it. */
   mapPreview: {
     aspectRatio: 16 / 10,
@@ -1152,7 +1215,7 @@ const s = StyleSheet.create({
   hubs: { gap: space.detail.hubGap },
   hub: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: space.detail.hubIconToText,
     padding: space.browse.tileBody,
     borderRadius: radius.hubRow,
@@ -1172,45 +1235,49 @@ const s = StyleSheet.create({
   hubText: { flex: 1 },
   hubLandmark: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
   struck: { textDecorationLine: "line-through" },
+  directions: { alignSelf: "flex-start", paddingVertical: 8, marginBottom: -4 },
 
-  danger: {
-    marginTop: space.detail.sectionY,
-    paddingTop: space.detail.dangerY,
-    borderTopWidth: border.hairline,
-    borderTopColor: color.divider,
-    gap: space.detail.dangerGap,
-  },
-  dangerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.card.ownerGap,
-    height: size.detail.dangerRow,
-  },
-  dangerPressed: { opacity: 0.6 },
-  dangerDisabled: { opacity: 0.45 },
-
-  actionBar: {
+  bar: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: 2,
     paddingHorizontal: space.detail.x,
-    paddingVertical: space.detail.actionBarY,
+    paddingTop: space.detail.actionBarY,
     backgroundColor: color.surface,
     borderTopWidth: border.hairline,
     borderTopColor: color.divider,
   },
-  action: {
+  barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  heart: {
+    width: size.detail.actionButton,
     height: size.detail.actionButton,
+    borderRadius: radius.primaryButton,
+    borderWidth: border.chip,
+    borderColor: color.controlLine,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  action: {
+    flex: 1,
+    minHeight: size.detail.actionButton,
+    paddingHorizontal: 12,
     borderRadius: radius.primaryButton,
     backgroundColor: color.green,
     alignItems: "center",
     justifyContent: "center",
   },
+  actionOutline: {
+    backgroundColor: color.greenWash,
+    borderWidth: border.chip,
+    borderColor: color.forest,
+  },
   actionInert: { backgroundColor: color.control },
-  actionPressed: { opacity: 0.85 },
   actionLocked: { flexDirection: "row", gap: 8 },
+  // Wraps to a second line at large text sizes rather than truncating beside
+  // the heart; the bar measures itself, so the scroll padding follows.
+  barLabel: { textAlign: "center", paddingVertical: 6 },
   lockedBody: { color: color.inkMuted, marginTop: 8 },
   lockedLink: { color: color.forest, fontFamily: font.sansSemi },
 
@@ -1221,63 +1288,3 @@ const s = StyleSheet.create({
   },
   skeletonLine: { borderRadius: 4, backgroundColor: color.skeletonSoft },
 });
-
-
-/** "1.5 KG", "2 L" — or null when the owner gave no amount. */
-function perishableAmount(p: NonNullable<Item["perishable"]>): string | null {
-  return p.quantity != null && p.quantityUnit
-    ? `${p.quantity} ${p.quantityUnit === "LITERS" ? "L" : p.quantityUnit}`
-    : null;
-}
-
-/**
- * The perishable clock above the title: how long is left — as a live clock.
- *
- * ── LIVE HERE, AND ONLY HERE ────────────────────────────────────────────────
- *
- * List surfaces show hours (see lib/perishable) because a 1 s timer per card
- * is a re-render per card per second. This screen shows ONE listing, so one
- * timer is cheap, and the person deciding whether to travel for it gets the
- * real number. It reuses the post flow's rate-limit hook.
- *
- * The clock runs only while the screen is FOCUSED. Unmounting (back) clears
- * the interval inside useCountdown; pushing another screen on top keeps this
- * one mounted, so `until` goes null on blur, which clears it there too. On
- * refocus the clock restarts from `expiresAt`, so it never drifts.
- *
- * At zero it asks for a refetch: the server's lazy sweep is what turns the
- * window into `expired`, and the "closed" wording comes from that flag, not
- * from this clock — the two are different facts.
- */
-function PerishableClock({
-  perishable: p,
-  onElapsed,
-}: {
-  perishable: NonNullable<Item["perishable"]>;
-  onElapsed: () => void;
-}) {
-  const focused = useIsFocused();
-  const seconds = useCountdown(
-    focused && !p.expired ? Date.parse(p.expiresAt) : null,
-    onElapsed,
-  );
-  // While blurred the hook holds 0; on refocus there is one render before its
-  // effect ticks. Computing from `expiresAt` for that frame avoids a 00:00:00
-  // flash. When the window has really elapsed both are 0.
-  const shown =
-    seconds || Math.max(0, Math.ceil((Date.parse(p.expiresAt) - Date.now()) / 1000));
-
-  // The bolt and the urgent colour are the Exclusive badge's; a closed
-  // window is a plain statement in the same place.
-  return (
-    <View style={s.clockRow}>
-      <BoltIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.urgent} />
-      <Text
-        style={[textStyle(type.detailLeaves), { color: color.urgent }]}
-        accessibilityRole="timer"
-      >
-        {p.expired ? "Trade window closed" : `${formatClock(shown)} left`}
-      </Text>
-    </View>
-  );
-}

@@ -184,3 +184,11 @@ export const FIT_PADDING = { top: 48, right: 40, bottom: 96, left: 40 };
  * street, far enough to recognise the block.
  */
 export const SINGLE_HUB_ZOOM = 16;
+
+/**
+ * How many levels wider the listing screen's small preview opens than the
+ * full map would (1 Oct 2026). At the full map's fit the pin filled the 16:10
+ * frame and showed no neighbourhood; two levels out shows the streets around
+ * it. One tap still opens the full map at its own zoom.
+ */
+export const LISTING_PREVIEW_ZOOM_OUT = 2;

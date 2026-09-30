@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Keyboard, type KeyboardEvent, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Tappable } from "../Tappable";
 import { ApiError } from "../../api/client";
@@ -18,6 +19,8 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const { comments, isPending, isError, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useComments(item?.id ?? null, item !== null);
   const add = useAddComment(item?.id ?? null);
+  const insets = useSafeAreaInsets();
+  const { rootRef, onRootLayout, overlap } = useKeyboardOverlap(item !== null);
   useEffect(() => { setDraft(""); setReplyTo(null); }, [item?.id]);
   if (!item) return null;
   const send = () => {
@@ -25,10 +28,13 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
     if (!content || add.isPending) return;
     add.mutate({ content, parentId: replyTo?.id }, { onSuccess: () => { setDraft(""); setReplyTo(null); }, onError: (e) => showDialog("Could not post that", e instanceof ApiError ? e.message : "Something went wrong. Please try again.") });
   };
-  return <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+  return <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+    <View ref={rootRef} onLayout={onRootLayout} style={s.root}>
     <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close comments" />
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={s.sheet}>
+      {/* To the bottom of the SCREEN, over the listing's sticky bar: the modal
+          is translucent under both system bars, so the sheet pads for the
+          home indicator itself -- or, with the keyboard up, for the keyboard. */}
+      <View style={[s.sheet, { paddingBottom: overlap > 0 ? overlap + KEYBOARD_GAP : space.sheet.bottom + insets.bottom }]}>
         <View style={s.handle} />
         <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>{item.stats.comments === 1 ? "1 comment" : `${item.stats.comments} comments`}</Text>
         <View style={s.list}>{isPending ? <View style={s.state}><ActivityIndicator color={color.green} /></View> : isError ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>{error instanceof ApiError && error.code === "NOT_FOUND" ? "This listing is no longer available." : "Could not load the comments."}</Text><Tappable onPress={() => refetch()} accessibilityRole="button" style={s.retry}><Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Try again</Text></Tappable></View> : comments.length === 0 ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>No comments yet. Ask the owner anything you need to know before offering.</Text></View> : <FlatList data={comments} keyExtractor={(comment) => comment.id} renderItem={({ item: comment }) => <CommentRow comment={comment} onReply={(id, name) => setReplyTo({ id, name })} onAuthor={(id) => router.push({ pathname: "/user", params: { id } })} />} onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage(); }} onEndReachedThreshold={0.5} keyboardShouldPersistTaps="handled" ListFooterComponent={isFetchingNextPage ? <View style={s.more}><ActivityIndicator color={color.green} /></View> : null} />}</View>
@@ -38,8 +44,61 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
           <Tappable onPress={send} disabled={!draft.trim() || add.isPending} accessibilityRole="button" accessibilityLabel="Post comment" style={[s.send, (!draft.trim() || add.isPending) && s.sendDisabled]}><Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>{add.isPending ? "..." : "Post"}</Text></Tappable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   </Modal>;
+}
+
+/** Between the composer and the top of the keyboard. */
+const KEYBOARD_GAP = 8;
+
+/**
+ * How far the keyboard reaches up into this sheet's window, in px.
+ *
+ * MEASURED, NOT ASSUMED. Whether Android resizes a modal's window for the
+ * keyboard depends on the edge-to-edge mode (RN 0.86 is always edge-to-edge,
+ * where `adjustResize` no longer resizes), and KeyboardAvoidingView's
+ * Android behaviour relies on exactly that resize -- which is how the
+ * composer used to end up hidden or floating. So this compares the window's
+ * bottom edge with the keyboard's top edge: 0 if the window did shrink, the
+ * keyboard's height if it did not. Re-measured on layout, so a late resize
+ * settles to the right answer either way.
+ */
+function useKeyboardOverlap(active: boolean) {
+  const rootRef = useRef<View>(null);
+  const keyboardTop = useRef<number | null>(null);
+  const [overlap, setOverlap] = useState(0);
+
+  const measure = useCallback(() => {
+    const top = keyboardTop.current;
+    if (top === null) {
+      setOverlap(0);
+      return;
+    }
+    rootRef.current?.measureInWindow((_x, y, _w, h) => setOverlap(Math.max(0, Math.round(y + h - top))));
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e: KeyboardEvent) => {
+        keyboardTop.current = e.endCoordinates.screenY;
+        measure();
+      },
+    );
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
+      keyboardTop.current = null;
+      setOverlap(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+      keyboardTop.current = null;
+      setOverlap(0);
+    };
+  }, [active, measure]);
+
+  return { rootRef, onRootLayout: measure, overlap };
 }
 
 function CommentRow({ comment, onReply, onAuthor }: { comment: ItemComment; onReply: (id: string, name: string) => void; onAuthor: (id: string) => void }) {
@@ -48,5 +107,5 @@ function CommentRow({ comment, onReply, onAuthor }: { comment: ItemComment; onRe
 function AuthorButton({ user, onPress }: { user: ItemComment["user"]; onPress: () => void }) { return <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={`View ${user.name}'s profile`}>{user.avatar ? <Image source={{ uri: user.avatar }} contentFit="cover" style={s.avatar} /> : <View style={[s.avatar, s.avatarFallback]}><Text style={[textStyle(type.avatarInitials40), { color: color.forest }]}>{user.name.trim().charAt(0).toUpperCase() || "?"}</Text></View>}</Tappable>; }
 
 const s = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: color.captionFill }, sheet: { backgroundColor: color.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingTop: space.sheet.top, paddingBottom: space.sheet.bottom, height: "78%" }, handle: { alignSelf: "center", width: size.sheet.handleW, height: size.sheet.handleH, borderRadius: size.sheet.handleH / 2, backgroundColor: color.controlLineStrong }, title: { marginTop: space.sheet.top, paddingHorizontal: space.sheet.x, color: color.ink }, list: { flex: 1, marginTop: space.sheet.titleToBody, paddingHorizontal: space.sheet.x }, state: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sheet.actionGap }, stateText: { textAlign: "center", color: color.inkMuted }, retry: { padding: 12 }, more: { paddingVertical: 16 }, row: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: space.sheet.labelToOptions }, replyRow: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: 6, paddingLeft: 36 }, avatar: { width: size.avatar.owner, height: size.avatar.owner, borderRadius: radius.ownerAvatar, backgroundColor: color.greenWash }, avatarFallback: { alignItems: "center", justifyContent: "center" }, rowText: { flex: 1 }, rowHead: { flexDirection: "row", alignItems: "baseline", gap: space.card.nameToBadge }, name: { flexShrink: 1, color: color.ink }, body: { marginTop: space.card.nameToMeta, marginBottom: 5, color: color.inkSecondary }, composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sheet.actionGap, paddingHorizontal: space.sheet.x, paddingTop: space.sheet.labelToOptions, borderTopWidth: border.hairline, borderTopColor: color.divider }, input: { flex: 1, minHeight: size.sheet.rangeInput, maxHeight: 120, padding: 10, borderRadius: radius.rangeInput, borderWidth: border.chip, borderColor: color.controlLine, backgroundColor: color.control, color: color.ink }, send: { height: size.sheet.rangeInput, paddingHorizontal: 18, borderRadius: radius.rangeInput, backgroundColor: color.green, alignItems: "center", justifyContent: "center" }, sendDisabled: { opacity: 0.45 },
+  root: { flex: 1 }, scrim: { flex: 1, backgroundColor: color.captionFill }, sheet: { backgroundColor: color.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingTop: space.sheet.top, paddingBottom: space.sheet.bottom, height: "78%" }, handle: { alignSelf: "center", width: size.sheet.handleW, height: size.sheet.handleH, borderRadius: size.sheet.handleH / 2, backgroundColor: color.controlLineStrong }, title: { marginTop: space.sheet.top, paddingHorizontal: space.sheet.x, color: color.ink }, list: { flex: 1, marginTop: space.sheet.titleToBody, paddingHorizontal: space.sheet.x }, state: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sheet.actionGap }, stateText: { textAlign: "center", color: color.inkMuted }, retry: { padding: 12 }, more: { paddingVertical: 16 }, row: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: space.sheet.labelToOptions }, replyRow: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: 6, paddingLeft: 36 }, avatar: { width: size.avatar.owner, height: size.avatar.owner, borderRadius: radius.ownerAvatar, backgroundColor: color.greenWash }, avatarFallback: { alignItems: "center", justifyContent: "center" }, rowText: { flex: 1 }, rowHead: { flexDirection: "row", alignItems: "baseline", gap: space.card.nameToBadge }, name: { flexShrink: 1, color: color.ink }, body: { marginTop: space.card.nameToMeta, marginBottom: 5, color: color.inkSecondary }, composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sheet.actionGap, paddingHorizontal: space.sheet.x, paddingTop: space.sheet.labelToOptions, borderTopWidth: border.hairline, borderTopColor: color.divider }, input: { flex: 1, minHeight: size.sheet.rangeInput, maxHeight: 120, padding: 10, borderRadius: radius.rangeInput, borderWidth: border.chip, borderColor: color.controlLine, backgroundColor: color.control, color: color.ink }, send: { height: size.sheet.rangeInput, paddingHorizontal: 18, borderRadius: radius.rangeInput, backgroundColor: color.green, alignItems: "center", justifyContent: "center" }, sendDisabled: { opacity: 0.45 },
 });

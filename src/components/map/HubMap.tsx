@@ -62,6 +62,8 @@ export interface HubMapProps {
    * how the item-detail preview opens the full screen with one tap anywhere.
    */
   interactive?: boolean;
+  /** Levels wider than the fitted opening view. The item-detail preview uses it. */
+  zoomOut?: number;
   /** Open centred on this hub instead of fitted to all of them. */
   focusHubId?: string;
   /** The pin drawn as selected. Controlled — the sheet above owns it. */
@@ -76,6 +78,7 @@ export function HubMap({
   hubs,
   userLocation = null,
   interactive = true,
+  zoomOut = 0,
   focusHubId,
   selectedHubId = null,
   onSelectHub,
@@ -104,7 +107,7 @@ export function HubMap({
    * rather than rebuilt to be different.
    */
   const html = useMemo(
-    () => buildMapHtml({ hubs, userLocation, focusHubId, interactive }),
+    () => buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoomOut }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       hubs.map((h) => `${h.id}:${h.isActive}:${h.nearby ? 1 : 0}`).join("|"),
@@ -112,6 +115,7 @@ export function HubMap({
       userLocation?.longitude,
       focusHubId,
       interactive,
+      zoomOut,
     ],
   );
 

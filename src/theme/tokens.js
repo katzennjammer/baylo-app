@@ -720,6 +720,8 @@ const size = {
     dangerRow: 44,
     actionButton: 50,
     backButton: 44,
+    /** The circular back / share / more buttons drawn over the photo. */
+    overlayButton: 40,
     /** The large countdown pill under the photo. */
     countdownPill: 34,
     countdownPillX: 14,
@@ -889,6 +891,8 @@ const icon = {
   /** The flame in the live countdown pill, card and listing sizes. */
   countdown: { size: 12, stroke: 1.2 },
   countdownLarge: { size: 16, stroke: 1.2 },
+  /** Back / share / more over the listing photo. */
+  photoOverlay: { size: 20, stroke: 1.9 },
 
   /* MSME storefront. */
   storefrontBadge: { size: 13, stroke: 1.9 },

@@ -28,7 +28,19 @@ import { border, color, icon, radius, size, space, textStyle, type } from "../..
  * the frame rather than collapsing it, so the content below does not jump while
  * someone is reading it. Same rule as the feed card's photo.
  */
-export function PhotoCarousel({ images, title }: { images: string[]; title: string }) {
+export function PhotoCarousel({
+  images,
+  title,
+  counter = true,
+}: {
+  images: string[];
+  title: string;
+  /**
+   * The "2 / 5" chip, top-right. Off on the listing screen, whose share and
+   * more buttons sit in that corner; the dots alone carry the position.
+   */
+  counter?: boolean;
+}) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [boxWidth, setBoxWidth] = useState(0);
@@ -94,11 +106,13 @@ export function PhotoCarousel({ images, title }: { images: string[]; title: stri
 
       {images.length > 1 ? (
         <>
-          <View style={s.counter}>
-            <Text style={[textStyle(type.carouselCount), { color: color.surface }]}>
-              {index + 1} / {images.length}
-            </Text>
-          </View>
+          {counter ? (
+            <View style={s.counter}>
+              <Text style={[textStyle(type.carouselCount), { color: color.surface }]}>
+                {index + 1} / {images.length}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={s.dots} pointerEvents="none">
             {images.map((_, i) => (
