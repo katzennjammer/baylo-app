@@ -720,6 +720,11 @@ const size = {
     exclusiveCardPerScreen: 1.2,
     /** The Exclusive card's photo, width over height. Wide, like the reference. */
     exclusiveCardPhotoAspect: 1.5,
+    /**
+     * Recommended cards visible at once: the same card, narrower than
+     * Exclusive's, so the two rows do not read as one repeated section.
+     */
+    recommendedPerScreen: 1.6,
     /** Shop Spotlight cards visible at once; the part-card says it scrolls. */
     spotlightPerScreen: 1.6,
     /** Width over height: tall, a promo card rather than a tile. */

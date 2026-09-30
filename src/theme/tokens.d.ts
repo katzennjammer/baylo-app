@@ -440,6 +440,7 @@ export declare const size: Readonly<{
     exclusiveTileAspect: number;
     exclusiveCardPerScreen: number;
     exclusiveCardPhotoAspect: number;
+    recommendedPerScreen: number;
     spotlightPerScreen: number;
     spotlightAspect: number;
     spotlightHeroFraction: number;

@@ -52,6 +52,13 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  * the pill's own urgent-on-urgentWash every time.
  *
  * No bolt badge for the same reason: the section already says perishable.
+ *
+ * ── ALSO RECOMMENDED'S CARD ──────────────────────────────────────────────
+ *
+ * "Recommended for you" draws this too, narrower, with no expiry and a
+ * `note`: the server's one line on why the listing is there ("For your
+ * interest in Books"). Forest, like the value line -- it is Baylo speaking,
+ * not the poster -- and on its own line, under the poster.
  */
 export const ExclusiveCard = memo(function ExclusiveCard({
   item,
@@ -59,6 +66,7 @@ export const ExclusiveCard = memo(function ExclusiveCard({
   onPress,
   viewerId = null,
   expiryLabel,
+  note,
 }: {
   item: Item;
   width: number;
@@ -66,6 +74,8 @@ export const ExclusiveCard = memo(function ExclusiveCard({
   viewerId?: string | null;
   /** This listing's own window, e.g. "~4h left". A string so the memo holds. */
   expiryLabel?: string;
+  /** Why this card is here -- Recommended's reason line. */
+  note?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const cover = item.images[0];
@@ -83,6 +93,7 @@ export const ExclusiveCard = memo(function ExclusiveCard({
         `${item.title}, from ${poster}.` +
         (verified ? ` ${ORG_BADGE_LABEL.full}.` : "") +
         (expiryLabel ? ` ${expiryLabel}.` : "") +
+        (note ? ` ${note}.` : "") +
         (item.valueLeaves === null
           ? ""
           : own
@@ -124,6 +135,15 @@ export const ExclusiveCard = memo(function ExclusiveCard({
             {poster}
           </Text>
         </View>
+
+        {note ? (
+          <Text
+            style={[textStyle(type.gridMeta), { color: color.forest, marginTop: space.home.tileTitleToMeta }]}
+            numberOfLines={1}
+          >
+            {note}
+          </Text>
+        ) : null}
 
         <View style={s.valueRow}>
           {item.valueLeaves === null ? (

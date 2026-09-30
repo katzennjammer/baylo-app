@@ -13,6 +13,7 @@ import {
 import { useBrowse } from "../../src/api/browse";
 import { useFeatured } from "../../src/api/featured";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
+import { useRecommended } from "../../src/api/recommended";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
@@ -56,13 +57,28 @@ import {
  *                  server owns. Not a ranking -- "Verified shops", ranked by
  *                  trade volume, is deliberately deferred until there are
  *                  enough shops for it to differ from this.
- *   Featured    → paid boosts across EVERY category: GET /api/v1/featured
+ *   Recommended  → GET /api/v1/recommended: the viewer's category interest
+ *                  (trades, offers, likes, own listings) + 14-day popularity
+ *                  + a little recency. Titled "Popular on Baylo" when the
+ *                  viewer has no history, because then that is all it is.
+ *   Featured     → paid boosts across EVERY category: GET /api/v1/featured
  *                  with no category. The server's cap (eight) and hourly
  *                  rotation, unchanged; this renders what it is given.
  *
- * Exclusive and Featured are disjoint by construction: a perishable can't be
- * boosted (the boost route refuses it, /featured filters isPerishable, and
- * isPerishable is fixed at creation), so no listing appears in both.
+ * WHY THIS ORDER (30 Sep 2026). It follows the Food Panda mapping the
+ * redesign started from -- "order again" (Exclusive), "featured highlights"
+ * (Spotlights), "recommended for you" (Recommended) -- with the paid Featured
+ * grid last. Spotlights sits BETWEEN the two listing rows, so Exclusive's big
+ * cards and Recommended's narrower ones never stack back to back and read as
+ * one repeated section. Featured goes last because it is the only vertical
+ * grid: a grid can run long, and a horizontal row under a long grid is a row
+ * nobody scrolls to.
+ *
+ * NO LISTING IS ON SCREEN TWICE. Exclusive and Featured are disjoint by
+ * construction: a perishable can't be boosted (the boost route refuses it,
+ * /featured filters isPerishable, and isPerishable is fixed at creation).
+ * Recommended excludes perishables on the server, and drops anything in the
+ * Featured eight here -- Featured keeps the listing, because it was paid for.
  *
  * THE LEAVES BALANCE IS NOT ON THIS SCREEN. It is in AppHeader, once, as it is
  * on every other tab. It was briefly in the search row as well, which put the
@@ -81,6 +97,9 @@ import {
  * and insets its own contents. `space.home.top` is the gap under it.
  */
 type PerishableItem = Item & { perishable: NonNullable<Item["perishable"]> };
+
+/** Cards on the Recommended shelf, after Featured's are taken out. */
+const RECOMMENDED_SHOWN = 10;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -118,16 +137,27 @@ export default function HomeScreen() {
   const spotlightQuery = useShopSpotlight();
   const spotlights = spotlightQuery.data ?? [];
 
+  const recommendedQuery = useRecommended();
+  const personalized = recommendedQuery.data?.personalized ?? false;
+  // Minus the Featured eight: the same listing twice on one screen reads as a
+  // bug, and Featured is the one that was paid for. See the note up top.
+  const recommended = useMemo(() => {
+    const inFeatured = new Set((featuredQuery.data ?? []).map((i) => i.id));
+    return (recommendedQuery.data?.items ?? []).filter((i) => !inFeatured.has(i.id)).slice(0, RECOMMENDED_SHOWN);
+  }, [recommendedQuery.data, featuredQuery.data]);
+
   const { refetch: refetchBrowse } = browse;
   const { refetch: refetchExclusive } = exclusiveQuery;
   const { refetch: refetchFeatured } = featuredQuery;
   const { refetch: refetchSpotlight } = spotlightQuery;
+  const { refetch: refetchRecommended } = recommendedQuery;
   const refetch = useCallback(() => {
     void refetchBrowse();
     void refetchExclusive();
     void refetchFeatured();
     void refetchSpotlight();
-  }, [refetchBrowse, refetchExclusive, refetchFeatured, refetchSpotlight]);
+    void refetchRecommended();
+  }, [refetchBrowse, refetchExclusive, refetchFeatured, refetchSpotlight, refetchRecommended]);
 
   // The existing countdown hook, pointed at the soonest window. When it hits
   // zero that item has expired, so refetch and the next one takes over. Its
@@ -159,6 +189,14 @@ export default function HomeScreen() {
       Math.floor(
         (width - space.screenX - space.browse.gridGap * Math.floor(size.home.spotlightPerScreen)) /
           size.home.spotlightPerScreen,
+      ),
+    [width],
+  );
+  const recommendedWidth = useMemo(
+    () =>
+      Math.floor(
+        (width - space.screenX - space.browse.gridGap * Math.floor(size.home.recommendedPerScreen)) /
+          size.home.recommendedPerScreen,
       ),
     [width],
   );
@@ -205,7 +243,8 @@ export default function HomeScreen() {
               isRefetching ||
               exclusiveQuery.isRefetching ||
               featuredQuery.isRefetching ||
-              spotlightQuery.isRefetching
+              spotlightQuery.isRefetching ||
+              recommendedQuery.isRefetching
             }
             onRefresh={refetch}
             tintColor={color.green}
@@ -326,7 +365,32 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-            {/* 6. Featured: every category's boosts, the server's eight.
+            {/* 6. Recommended. Hidden when empty or failed, like Spotlights:
+                pull-to-refresh retries it, and an apology row here would sit
+                between two sections that did load. */}
+            {recommended.length > 0 ? (
+              <>
+                <SectionHeading title={personalized ? "Recommended for you" : "Popular on Baylo"} />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.rail}
+                >
+                  {recommended.map((item) => (
+                    <ExclusiveCard
+                      key={item.id}
+                      item={item}
+                      width={recommendedWidth}
+                      onPress={openItem}
+                      viewerId={viewerId}
+                      note={item.recommendation.reasonLabel}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+
+            {/* 7. Featured: every category's boosts, the server's eight.
                 Left out entirely when there are none -- an empty paid section
                 is noise, not information. An error still says so. */}
             {featured.length > 0 ? (
