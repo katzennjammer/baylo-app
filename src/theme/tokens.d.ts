@@ -274,6 +274,8 @@ export declare const space: Readonly<{
     tileMetaToLeaves: number;
     tileBadgeInset: number;
     tileBadgeGap: number;
+    spotlightBody: number;
+    spotlightLogoOverlap: number;
     bottom: number;
   }>;
   matches: Readonly<{
@@ -327,6 +329,7 @@ export type RadiusName =
   | "heroCta"
   | "categoryCircle"
   | "exclusiveTile"
+  | "spotlightLogo"
   | "tileBadge"
   | "countdownPill"
   | "storefrontLogo"
@@ -435,6 +438,12 @@ export declare const size: Readonly<{
     categoryCircle: number;
     categoryItem: number;
     exclusiveTileAspect: number;
+    exclusiveCardPerScreen: number;
+    exclusiveCardPhotoAspect: number;
+    spotlightPerScreen: number;
+    spotlightAspect: number;
+    spotlightHeroFraction: number;
+    spotlightLogo: number;
     tileBadge: number;
     countdownPill: number;
     countdownPillX: number;
@@ -505,6 +514,9 @@ export type IconName =
   // perishable / org badges in an Exclusive tile's corner.
   | "category"
   | "tileBadge"
+  | "spotlightLogo"
+  | "spotlightHero"
+  | "spotlightBadge"
   // MSME storefront.
   | "storefrontBadge"
   | "storefrontShare"
@@ -538,6 +550,15 @@ export declare const motion: Readonly<{
   skeletonTo: number;
   photoFadeMs: number;
 }>;
+
+export type CategoryToneName = "green" | "clay" | "sand" | "sky" | "lilac" | "teal";
+export interface CategoryTone {
+  bg: string;
+  tint: string;
+  ink: string;
+}
+/** Home's two-tone category circles. See the note in tokens.js. */
+export declare const categoryTone: Readonly<Record<CategoryToneName, Readonly<CategoryTone>>>;
 
 export declare const breakpoint: Readonly<{ tight: number }>;
 

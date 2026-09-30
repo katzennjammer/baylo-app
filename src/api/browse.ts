@@ -23,7 +23,9 @@ import type { BrowsePayload } from "./types";
  *   businessCategory  comma-separated shop categories; ONLY with orgsOnly.
  *   minLeaves  / maxLeaves — inclusive bounds; min may not exceed max.
  *   perishable "true" (perishables only) or "false" (standard only), or absent.
- *   cursor, limit, lat, lng, radiusKm, sort
+ *   sort       "recent" (default), "nearest" (needs lat/lng), or "expiring"
+ *              (needs perishable=true).
+ *   cursor, limit, lat, lng, radiusKm
  *
  * ANYTHING ELSE IS A 400, not an ignored parameter: the route parses with
  * `z.strictObject`, so an unknown key is rejected outright. Do not add a filter
@@ -75,6 +77,12 @@ export interface BrowseFilters {
    * 67d5e8e); an older one 400s on it, so only send it when it is set.
    */
   perishable?: boolean | null;
+  /**
+   * "expiring": soonest trade window first. The server REQUIRES perishable
+   * true with it and 400s otherwise. Absent is the server's default, newest
+   * first. Home's Exclusive rail is the one caller.
+   */
+  sort?: "expiring";
 }
 
 /** Mirrors MAX_CATEGORIES in the server's browse route. */
@@ -148,6 +156,7 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
   // Tri-state: "false" is a real filter here (standard listings only), unlike
   // orgsOnly, so it is sent. Absent is both.
   if (filters.perishable != null) p.set("perishable", String(filters.perishable));
+  if (filters.sort) p.set("sort", filters.sort);
 
   if (cursor) p.set("cursor", cursor);
 
@@ -194,6 +203,7 @@ function browseKey(f: BrowseFilters) {
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,
       perishable: f.perishable ?? undefined,
+      sort: f.sort,
     },
   ] as const;
 }

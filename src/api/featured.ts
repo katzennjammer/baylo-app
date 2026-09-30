@@ -16,20 +16,21 @@ export const BOOST_COST_LEAVES = 2;
 export const BOOST_HOURS = 24;
 export const FEATURED_VISIBLE_CAP = 8;
 
-export const featuredKey = (category: string) => ["featured", category] as const;
+export const featuredKey = (category: string | null) => ["featured", category ?? "*"] as const;
 
 /**
- * One category's Featured section: at most FEATURED_VISIBLE_CAP items, newest
- * boost first. The cap and the order are the server's; this renders what it
- * gets. Disabled for a null category (Exclusive mode), so the hook can sit
- * unconditionally at the top of the screen.
+ * A Featured section: at most FEATURED_VISIBLE_CAP boosts, in the server's
+ * hourly rotation. `null` is EVERY category (Home's standalone section; the
+ * server treats an absent `category` as all of them), a value is that one.
+ * The cap and the order are the server's; this renders what it gets.
  */
 export function useFeatured(category: string | null) {
   return useQuery({
-    queryKey: featuredKey(category ?? ""),
+    queryKey: featuredKey(category),
     queryFn: () =>
-      apiV1<{ items: Item[] }>(`/api/v1/featured?category=${encodeURIComponent(category!)}`),
-    enabled: !!category,
+      apiV1<{ items: Item[] }>(
+        category ? `/api/v1/featured?category=${encodeURIComponent(category)}` : "/api/v1/featured",
+      ),
     select: (r) => r.data.items,
   });
 }

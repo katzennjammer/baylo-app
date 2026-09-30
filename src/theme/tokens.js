@@ -454,6 +454,9 @@ const space = {
     tileMetaToLeaves: 6,
     tileBadgeInset: 8,
     tileBadgeGap: 6,
+    /** Shop Spotlight card: body padding, and how far the logo rides up into the hero. */
+    spotlightBody: 12,
+    spotlightLogoOverlap: 22,
     bottom: 28,
   },
 
@@ -548,6 +551,8 @@ const radius = {
   heroCta: 18,
   categoryCircle: 28,
   exclusiveTile: 14,
+  /** The Spotlight card's logo square. Square-ish, never round: see StoreIcon. */
+  spotlightLogo: 10,
   tileBadge: 14,
   countdownPill: 12,
 
@@ -708,6 +713,21 @@ const size = {
     categoryItem: 64,
     /** Exclusive tiles are slightly taller than wide, like the reference. */
     exclusiveTileAspect: 0.86,
+    /**
+     * Exclusive cards visible at once in the single row. Not a whole number
+     * on purpose: the sliver of the next card is what says the row scrolls.
+     */
+    exclusiveCardPerScreen: 1.2,
+    /** The Exclusive card's photo, width over height. Wide, like the reference. */
+    exclusiveCardPhotoAspect: 1.5,
+    /** Shop Spotlight cards visible at once; the part-card says it scrolls. */
+    spotlightPerScreen: 1.6,
+    /** Width over height: tall, a promo card rather than a tile. */
+    spotlightAspect: 0.68,
+    /** Share of the card's height the hero image takes. */
+    spotlightHeroFraction: 0.52,
+    /** The square logo, or the shop-front placeholder in its place. */
+    spotlightLogo: 44,
     tileBadge: 28,
     countdownPill: 26,
     countdownPillX: 10,
@@ -811,6 +831,10 @@ const icon = {
   /* Home redesign (preview). */
   category: { size: 23, stroke: 1.6 },
   tileBadge: { size: 14, stroke: 1.9 },
+  /** Shop Spotlight: the placeholder in the logo square, and in an imageless hero. */
+  spotlightLogo: { size: 22, stroke: 1.6 },
+  spotlightHero: { size: 40, stroke: 1.4 },
+  spotlightBadge: { size: 13, stroke: 1.9 },
 
   /* MSME storefront. */
   storefrontBadge: { size: 13, stroke: 1.9 },
@@ -855,6 +879,29 @@ const motion = {
   photoFadeMs: 160,
 };
 
+/**
+ * Home's category circles, two-tone (30 Sep 2026).
+ *
+ * Each circle is a soft `bg` disc; the glyph's outline is `ink` and one of its
+ * shapes is filled with `tint`, a step between the two. Six muted families
+ * rather than twenty colours: enough that neighbours in the row differ, few
+ * enough that the row still reads as one set. All light-only, like the rest
+ * of Home. `ink` on `bg` clears 7:1 in every family.
+ *
+ * A LIT circle (forest disc, light glyph) must NOT take the tint -- that is
+ * the one state where the glyph flips colour, and a fill chosen for the pale
+ * disc would sit wrong on forest. The tint is an opt-in prop on the glyph for
+ * exactly that reason; omit it and the glyph is the plain single-stroke mark.
+ */
+const categoryTone = {
+  green: { bg: "#EAF6EC", tint: "#C9E8D1", ink: "#1B4D2B" },
+  clay: { bg: "#FBEEE9", tint: "#F1D2C4", ink: "#80391F" },
+  sand: { bg: "#F7F0E0", tint: "#EBDAB1", ink: "#6E5114" },
+  sky: { bg: "#EAF1F7", tint: "#CBDCEB", ink: "#23445F" },
+  lilac: { bg: "#F1EDF6", tint: "#DCD1EA", ink: "#4D3A66" },
+  teal: { bg: "#E6F3F1", tint: "#C3E2DC", ink: "#1C5148" },
+};
+
 /** The single breakpoint. At or below this width, the header tightens. */
 const breakpoint = { tight: 360 };
 
@@ -883,6 +930,7 @@ module.exports = {
   border,
   shadow,
   motion,
+  categoryTone,
   breakpoint,
   textStyle,
 };

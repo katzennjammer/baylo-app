@@ -5,19 +5,37 @@ import {
   BagIcon,
   BallIcon,
   BikeIcon,
-  BoltIcon,
   BlocksIcon,
   BookIcon,
+  BriefcaseIcon,
   GamepadIcon,
+  GemIcon,
   GridIcon,
+  HammerIcon,
+  LipstickIcon,
   MonitorIcon,
+  MoreIcon,
+  MusicIcon,
+  PaletteIcon,
+  PawIcon,
   ShirtIcon,
   SofaIcon,
   SproutIcon,
-  type IconProps,
+  WatchIcon,
+  type CategoryIconProps,
 } from "../icons";
 import { Tappable } from "../Tappable";
-import { border, color, icon, radius, size, space, textStyle, type } from "../../theme/tokens";
+import {
+  categoryTone,
+  icon,
+  radius,
+  size,
+  space,
+  textStyle,
+  type,
+  color,
+  type CategoryToneName,
+} from "../../theme/tokens";
 
 /**
  * The Home category row: circular icon buttons over a label.
@@ -26,75 +44,57 @@ import { border, color, icon, radius, size, space, textStyle, type } from "../..
  * computes unfiltered — so a category with nothing in it never shows, and the
  * row does not reflow as it is used. Labels are the server's.
  *
- * SINGLE-SELECT here, unlike the rail's multi-select, and a MODE SWITCH for
- * the section below rather than a filter on it:
+ * ── A SHORTCUT, NOT A MODE (30 Sep 2026) ─────────────────────────────────
  *
- *   Exclusive lit        → the section is Exclusive: perishables, every
- *                          category. The default, and `selected === null`.
- *   a circle lit         → the section is Featured: paid boosts in that
- *                          category only.
+ * Tapping a circle opens Marketplace filtered to that category, the way a
+ * food-delivery app's category row does. It used to switch Home's one section
+ * between Exclusive and that category's boosts, which is why this row had a
+ * lit state and an Exclusive circle at its head. Exclusive and Featured are
+ * each their own section now, always on screen, so there is nothing for the
+ * row to switch and neither the lit state nor the Exclusive circle is drawn.
  *
- * Exactly one of the two is lit at any moment. Lighting a circle unlights
- * Exclusive; tapping Exclusive, or the lit circle again, returns to it.
+ * ── TWO-TONE ─────────────────────────────────────────────────────────────
  *
- * ── EXCLUSIVE IS A CIRCLE TOO ─────────────────────────────────────────────
+ * Each circle is its tone's pale disc, with the glyph outlined in the tone's
+ * ink and one shape filled with its tint. See categoryTone in tokens.js for
+ * the families and why the tint is opt-in on the glyph.
  *
- * First in the row, and drawn exactly as a category is — same circle, same
- * lit treatment, a label under it — with the bolt the perishable badge wears
- * on Exclusive tiles as its glyph. It was a chip once, like Marketplace's
- * Organizations pill; beside a row of circles that read as a separate control
- * rather than the first of the options, which is what it is. It is drawn
- * even when there are no facets: Exclusive is the default mode and must stay
- * reachable. Unlike a category, tapping it while lit does nothing — there is
- * no mode "under" Exclusive to return to.
- *
- * ── THE LIT CIRCLE IS A WHOLE STYLE, NOT A STYLE PLUS AN OVERRIDE ────────
- *
- * `s.circle` and `s.circleOn` are each COMPLETE: same box, different fill and
- * border, built from one shared `box` constant so the two can never drift.
- * The array form — `[s.circle, on && s.circleOn]` — expresses the lit state
- * as a patch that has to survive being merged over the base, and on this app
- * that merge is not React Native's. NativeWind's interop owns the `style` prop
- * of every element (see the note at the top of Tappable.tsx) and folds arrays
- * itself. It does merge correctly today; what it does not do is make the merge
- * obvious, and a fill that only exists as the second half of an array is a fill
- * that fails silently and invisibly. One name, one object, one truth.
- *
- * Three things move together, per the reference: the fill goes solid forest,
- * the glyph flips to the on-forest ink, and the label takes the fill's colour.
- * A lit circle whose icon stayed dark would be the least legible of the three.
- *
- * Categories with no glyph yet fall back to GridIcon rather than being hidden.
+ * Categories with no glyph yet fall back to GridIcon in the neutral tone
+ * rather than being hidden.
  */
-type Glyph = (props: IconProps) => React.JSX.Element;
+type Glyph = (props: CategoryIconProps) => React.JSX.Element;
 
-const GLYPHS: Record<string, Glyph> = {
-  ELECTRONICS: MonitorIcon,
-  CLOTHING: ShirtIcon,
-  BAGS: BagIcon,
-  FURNITURE: SofaIcon,
-  BOOKS: BookIcon,
-  GAMING: GamepadIcon,
-  SPORTS: BallIcon,
-  BIKES: BikeIcon,
-  TOYS: BlocksIcon,
-  PLANTS: SproutIcon,
-  FOOD: AppleIcon,
+const GLYPHS: Record<string, { glyph: Glyph; tone: CategoryToneName }> = {
+  ELECTRONICS: { glyph: MonitorIcon, tone: "sky" },
+  CLOTHING: { glyph: ShirtIcon, tone: "clay" },
+  BAGS: { glyph: BagIcon, tone: "sand" },
+  BEAUTY: { glyph: LipstickIcon, tone: "clay" },
+  ACCESSORIES: { glyph: WatchIcon, tone: "lilac" },
+  FURNITURE: { glyph: SofaIcon, tone: "sand" },
+  BOOKS: { glyph: BookIcon, tone: "sky" },
+  GAMING: { glyph: GamepadIcon, tone: "lilac" },
+  SPORTS: { glyph: BallIcon, tone: "teal" },
+  BIKES: { glyph: BikeIcon, tone: "teal" },
+  TOYS: { glyph: BlocksIcon, tone: "clay" },
+  TOOLS: { glyph: HammerIcon, tone: "sand" },
+  MUSIC: { glyph: MusicIcon, tone: "sky" },
+  ART: { glyph: PaletteIcon, tone: "lilac" },
+  COLLECTIBLES: { glyph: GemIcon, tone: "lilac" },
+  PETS: { glyph: PawIcon, tone: "teal" },
+  PLANTS: { glyph: SproutIcon, tone: "green" },
+  FOOD: { glyph: AppleIcon, tone: "green" },
+  SERVICES: { glyph: BriefcaseIcon, tone: "sky" },
+  OTHER: { glyph: MoreIcon, tone: "sand" },
 };
 
 export function CategoryCircles({
   facets,
-  selected,
   onSelect,
 }: {
   facets: { category: string; label: string; count: number }[];
-  /** The lit circle, or null for Exclusive mode. */
-  selected: string | null;
-  /** A category enters Featured mode; null returns to Exclusive. */
-  onSelect: (category: string | null) => void;
+  /** Opens Marketplace filtered to `category`. */
+  onSelect: (category: string) => void;
 }) {
-  const exclusiveOn = selected === null;
-
   return (
     <ScrollView
       horizontal
@@ -102,62 +102,35 @@ export function CategoryCircles({
       contentContainerStyle={s.row}
       style={s.outer}
     >
-      <Tappable
-        onPress={() => onSelect(null)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: exclusiveOn }}
-        accessibilityLabel="Exclusive: perishable listings in every category"
-        style={s.item}
-        pressedStyle={s.itemPressed}
-      >
-        <View style={exclusiveOn ? s.circleOn : s.circle}>
-          <BoltIcon
-            size={icon.category.size}
-            stroke={icon.category.stroke}
-            color={exclusiveOn ? color.onGreen : color.inkSecondary}
-          />
-        </View>
-        <Text
-          style={[
-            textStyle(type.categoryLabel),
-            {
-              color: exclusiveOn ? color.forest : color.inkSecondary,
-              marginTop: space.home.circleToLabel,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          Exclusive
-        </Text>
-      </Tappable>
-
       {facets.map((f) => {
-        const on = selected === f.category;
-        const G = GLYPHS[f.category] ?? GridIcon;
+        const entry = GLYPHS[f.category];
+        const G = entry?.glyph ?? GridIcon;
+        const tone = entry ? categoryTone[entry.tone] : null;
         return (
           <Tappable
             key={f.category}
-            onPress={() => onSelect(on ? null : f.category)}
+            onPress={() => onSelect(f.category)}
             accessibilityRole="button"
-            accessibilityState={{ selected: on }}
-            accessibilityLabel={`${f.label}, ${f.count} items`}
+            accessibilityLabel={`${f.label}, ${f.count} items. Opens Marketplace.`}
             style={s.item}
             pressedStyle={s.itemPressed}
           >
-            <View style={on ? s.circleOn : s.circle}>
+            {/* ONE object, not [s.circle, {backgroundColor}]: NativeWind's
+                interop folds style arrays itself, and a fill that only exists
+                as the second half of an array fails silently if that ever
+                breaks. The old lit circle had the same rule. */}
+            <View style={{ ...circleBox, backgroundColor: tone?.bg ?? color.control }}>
               <G
                 size={icon.category.size}
                 stroke={icon.category.stroke}
-                color={on ? color.onGreen : color.inkSecondary}
+                color={tone?.ink ?? color.inkSecondary}
+                tint={tone?.tint}
               />
             </View>
             <Text
               style={[
                 textStyle(type.categoryLabel),
-                {
-                  color: on ? color.forest : color.inkSecondary,
-                  marginTop: space.home.circleToLabel,
-                },
+                { color: color.inkSecondary, marginTop: space.home.circleToLabel },
               ]}
               numberOfLines={1}
             >
@@ -170,12 +143,15 @@ export function CategoryCircles({
   );
 }
 
-/** The box both states share, so only the colours are ever written twice. */
-const box = {
+/**
+ * The disc, minus its fill. No border: the tone's disc is the whole shape. The
+ * old outlined circle was a neutral control on the canvas; a tinted disc needs
+ * no edge to read.
+ */
+const circleBox = {
   width: size.home.categoryCircle,
   height: size.home.categoryCircle,
   borderRadius: radius.categoryCircle,
-  borderWidth: border.chip,
   alignItems: "center",
   justifyContent: "center",
 } as const;
@@ -185,17 +161,4 @@ const s = StyleSheet.create({
   row: { paddingHorizontal: space.screenX, gap: space.home.categoryGap },
   item: { width: size.home.categoryItem, alignItems: "center" },
   itemPressed: { opacity: 0.75 },
-  circle: {
-    ...box,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
-  },
-  // Forest, not green: the lit circle carries a light glyph, and the reference
-  // lights it dark. Green stays the CTA colour. The border matches the fill so
-  // the circle reads as one solid disc rather than a filled outline.
-  circleOn: {
-    ...box,
-    borderColor: color.forest,
-    backgroundColor: color.forest,
-  },
 });

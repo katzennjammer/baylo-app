@@ -486,16 +486,27 @@ export function QuestIcon(props: IconProps) {
 
 /*
  * Category glyphs, for the Home category circles. One per category enum value
- * (src/api/post.ts CATEGORIES) that the circles map; anything unmapped falls
- * back to GridIcon in CategoryCircles. Same 24 box, same round caps and joins,
- * same scale() conversion — they are Glyphs like everything above.
+ * (src/api/post.ts CATEGORIES) -- all twenty since 30 Sep 2026; GridIcon is
+ * only the fallback for a value added to the server before it gets a mark
+ * here. Same 24 box, same round caps and joins, same scale() conversion --
+ * they are Glyphs like everything above.
+ *
+ * TWO-TONE, OPT-IN. Each takes an optional `tint`: one closed shape of the
+ * mark (the screen, the shirt, the paw pad) is filled with it, under the same
+ * outline. Omitted, the fill is `none` and the glyph is exactly the plain
+ * single-stroke mark it was -- which is what a lit circle wants, since its
+ * glyph flips to a light colour on forest and a pale tint would sit wrong
+ * there. See categoryTone in tokens.js.
  */
+export type CategoryIconProps = IconProps & { tint?: string };
+
+const tinted = (tint: string | undefined) => tint ?? "none";
 
 /** ELECTRONICS */
-export function MonitorIcon(props: IconProps) {
+export function MonitorIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Rect x="3" y="4" width="18" height="12.5" rx="2" />
+      <Rect x="3" y="4" width="18" height="12.5" rx="2" fill={tinted(tint)} />
       <Path d="M8.5 20.5h7" />
       <Path d="M12 16.5v4" />
     </Glyph>
@@ -503,30 +514,56 @@ export function MonitorIcon(props: IconProps) {
 }
 
 /** CLOTHING ("Fashion") */
-export function ShirtIcon(props: IconProps) {
+export function ShirtIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Path d="M8.5 3.5 3 6.6l2 4.4 2.5-1.2v10.7h9V9.8L19 11l2-4.4-5.5-3.1a3.5 3.5 0 0 1-7 0Z" />
+      <Path
+        d="M8.5 3.5 3 6.6l2 4.4 2.5-1.2v10.7h9V9.8L19 11l2-4.4-5.5-3.1a3.5 3.5 0 0 1-7 0Z"
+        fill={tinted(tint)}
+      />
     </Glyph>
   );
 }
 
 /** BAGS */
-export function BagIcon(props: IconProps) {
+export function BagIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Path d="M5 8h14l-1 12.5H6Z" />
+      <Path d="M5 8h14l-1 12.5H6Z" fill={tinted(tint)} />
       <Path d="M9 10V6.5a3 3 0 0 1 6 0V10" />
     </Glyph>
   );
 }
 
+/** BEAUTY -- a lipstick. */
+export function LipstickIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="7.5" y="12" width="9" height="9" rx="1.5" fill={tinted(tint)} />
+      <Path d="M9 12V8.5h6V12" />
+      <Path d="M10 8.5V5.3l4-2.1v5.3" />
+    </Glyph>
+  );
+}
+
+/** ACCESSORIES -- a wristwatch. */
+export function WatchIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="5" fill={tinted(tint)} />
+      <Path d="M9 7.9 9.7 3h4.6l.7 4.9" />
+      <Path d="m9 16.1.7 4.9h4.6l.7-4.9" />
+      <Path d="M12 10v2l1.3 1.3" />
+    </Glyph>
+  );
+}
+
 /** FURNITURE ("Home & Garden") */
-export function SofaIcon(props: IconProps) {
+export function SofaIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
       <Path d="M5 11V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3" />
-      <Path d="M3.5 11a1.5 1.5 0 0 1 3 0v2h11v-2a1.5 1.5 0 0 1 3 0v5.5h-17Z" />
+      <Path d="M3.5 11a1.5 1.5 0 0 1 3 0v2h11v-2a1.5 1.5 0 0 1 3 0v5.5h-17Z" fill={tinted(tint)} />
       <Path d="M5.5 16.5V19" />
       <Path d="M18.5 16.5V19" />
     </Glyph>
@@ -534,20 +571,23 @@ export function SofaIcon(props: IconProps) {
 }
 
 /** BOOKS ("Books & Media") */
-export function BookIcon(props: IconProps) {
+export function BookIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Path d="M4 5.5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2Z" />
+      <Path d="M4 5.5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2Z" fill={tinted(tint)} />
       <Path d="M4 19.5a2 2 0 0 0 2 2h13v-4" />
     </Glyph>
   );
 }
 
 /** GAMING */
-export function GamepadIcon(props: IconProps) {
+export function GamepadIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Path d="M7 7.5h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.4a2.2 2.2 0 0 1-3.8 1l-2.2-2.8h-5l-2.2 2.8a2.2 2.2 0 0 1-3.8-1l-.9-4.4A4.5 4.5 0 0 1 7 7.5Z" />
+      <Path
+        d="M7 7.5h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.4a2.2 2.2 0 0 1-3.8 1l-2.2-2.8h-5l-2.2 2.8a2.2 2.2 0 0 1-3.8-1l-.9-4.4A4.5 4.5 0 0 1 7 7.5Z"
+        fill={tinted(tint)}
+      />
       <Path d="M8 10.5v3" />
       <Path d="M6.5 12h3" />
       <Path d="M15.5 11h.01" />
@@ -557,10 +597,10 @@ export function GamepadIcon(props: IconProps) {
 }
 
 /** SPORTS */
-export function BallIcon(props: IconProps) {
+export function BallIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Circle cx="12" cy="12" r="8.5" />
+      <Circle cx="12" cy="12" r="8.5" fill={tinted(tint)} />
       <Path d="M3.5 12h17" />
       <Path d="M12 3.5v17" />
       <Path d="M6 6a8.5 8.5 0 0 1 0 12" />
@@ -570,11 +610,11 @@ export function BallIcon(props: IconProps) {
 }
 
 /** BIKES */
-export function BikeIcon(props: IconProps) {
+export function BikeIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Circle cx="5.5" cy="16" r="3.5" />
-      <Circle cx="18.5" cy="16" r="3.5" />
+      <Circle cx="5.5" cy="16" r="3.5" fill={tinted(tint)} />
+      <Circle cx="18.5" cy="16" r="3.5" fill={tinted(tint)} />
       <Path d="M5.5 16 9.5 8.5h5l4 7.5" />
       <Path d="M9.5 8.5 12 16h-6.5" />
       <Path d="M8 5.5h3" />
@@ -583,33 +623,126 @@ export function BikeIcon(props: IconProps) {
 }
 
 /** TOYS ("Kids & Toys") */
-export function BlocksIcon(props: IconProps) {
+export function BlocksIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
       <Rect x="3.5" y="12.5" width="7.5" height="7.5" rx="1.5" />
       <Rect x="13" y="12.5" width="7.5" height="7.5" rx="1.5" />
-      <Rect x="8.25" y="4" width="7.5" height="7.5" rx="1.5" />
+      <Rect x="8.25" y="4" width="7.5" height="7.5" rx="1.5" fill={tinted(tint)} />
+    </Glyph>
+  );
+}
+
+/** TOOLS -- a hammer: head across the top right, handle down to the left. */
+export function HammerIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M11 6.5 14.5 3 21 9.5 17.5 13Z" fill={tinted(tint)} />
+      <Path d="M14.25 9.75 4.5 19.5" />
+    </Glyph>
+  );
+}
+
+/** MUSIC -- a pair of beamed notes. */
+export function MusicIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M9 18V5.5l11-2V16" />
+      <Circle cx="6.5" cy="18" r="2.5" fill={tinted(tint)} />
+      <Circle cx="17.5" cy="16" r="2.5" fill={tinted(tint)} />
+    </Glyph>
+  );
+}
+
+/** ART -- a painter's palette. */
+export function PaletteIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 1.6-2.1-.5-1.3.4-2.4 1.8-2.4h2.1a3 3 0 0 0 3-3C20.5 7.2 16.7 3.5 12 3.5Z"
+        fill={tinted(tint)}
+      />
+      <Circle cx="7.5" cy="11.5" r="1" />
+      <Circle cx="10" cy="7.5" r="1" />
+      <Circle cx="14.5" cy="7.5" r="1" />
+    </Glyph>
+  );
+}
+
+/** COLLECTIBLES -- a cut gem. */
+export function GemIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M6.5 4h11L21 9l-9 11.5L3 9Z" fill={tinted(tint)} />
+      <Path d="M3 9h18" />
+      <Path d="M9.5 4 8 9l4 11.5L16 9l-1.5-5" />
+    </Glyph>
+  );
+}
+
+/** PETS -- a paw print. */
+export function PawIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M8 17.2c0-2.6 1.8-4.7 4-4.7s4 2.1 4 4.7c0 1.8-1.5 2.8-4 2.8s-4-1-4-2.8Z"
+        fill={tinted(tint)}
+      />
+      <Circle cx="5" cy="11" r="1.8" />
+      <Circle cx="9" cy="6.8" r="1.8" />
+      <Circle cx="15" cy="6.8" r="1.8" />
+      <Circle cx="19" cy="11" r="1.8" />
     </Glyph>
   );
 }
 
 /** PLANTS */
-export function SproutIcon(props: IconProps) {
+export function SproutIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
       <Path d="M12 21v-9" />
-      <Path d="M12 12C12 8 9.5 5.5 5 5.5c0 4.5 2.5 6.5 7 6.5Z" />
-      <Path d="M12 14c0-3.5 2.2-5.5 7-5.5 0 3.8-2.4 5.5-7 5.5Z" />
+      <Path d="M12 12C12 8 9.5 5.5 5 5.5c0 4.5 2.5 6.5 7 6.5Z" fill={tinted(tint)} />
+      <Path d="M12 14c0-3.5 2.2-5.5 7-5.5 0 3.8-2.4 5.5-7 5.5Z" fill={tinted(tint)} />
     </Glyph>
   );
 }
 
 /** FOOD */
-export function AppleIcon(props: IconProps) {
+export function AppleIcon({ tint, ...props }: CategoryIconProps) {
   return (
     <Glyph {...props}>
-      <Path d="M12 7.5c-1.6-1.2-4.6-1.4-6.3.6-2 2.4-1.2 6.9 1 9.7 1.5 1.9 3 2.4 5.3 1.3 2.3 1.1 3.8.6 5.3-1.3 2.2-2.8 3-7.3 1-9.7-1.7-2-4.7-1.8-6.3-.6Z" />
+      <Path
+        d="M12 7.5c-1.6-1.2-4.6-1.4-6.3.6-2 2.4-1.2 6.9 1 9.7 1.5 1.9 3 2.4 5.3 1.3 2.3 1.1 3.8.6 5.3-1.3 2.2-2.8 3-7.3 1-9.7-1.7-2-4.7-1.8-6.3-.6Z"
+        fill={tinted(tint)}
+      />
       <Path d="M12 7.5c0-2 .8-3.5 2.5-4.5" />
+    </Glyph>
+  );
+}
+
+/** SERVICES -- a briefcase. */
+export function BriefcaseIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="3" y="7.5" width="18" height="12.5" rx="2" fill={tinted(tint)} />
+      <Path d="M9 7.5v-2A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5v2" />
+      <Path d="M3 13h18" />
+    </Glyph>
+  );
+}
+
+/**
+ * OTHER -- a ring with three dots, "more". The dots are filled in the stroke
+ * colour: a round-capped zero-length path at 1.6 px is too small to read as a
+ * dot at 23 px.
+ */
+export function MoreIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" fill={tinted(tint)} />
+      <Circle cx="8" cy="12" r="1.1" fill={props.color} stroke="none" />
+      <Circle cx="12" cy="12" r="1.1" fill={props.color} stroke="none" />
+      <Circle cx="16" cy="12" r="1.1" fill={props.color} stroke="none" />
     </Glyph>
   );
 }
