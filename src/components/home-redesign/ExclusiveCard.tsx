@@ -4,6 +4,8 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { ImageIcon, LeafIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { CountdownPill } from "../CountdownPill";
+import { useCountdownA11y } from "../../lib/live-clock";
 import {
   border,
   color,
@@ -37,9 +39,8 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  * 18:1 on the panel); the poster line in `color.inkSecondary` (#5C5B52, about
  * 6.5:1). NOT `color.inkMuted`: GridTile uses it for the condition line, but
  * at about 3.3:1 it is the washed-out grey this card is meant to avoid for
- * information someone needs. The expiry pill is the existing urgent pill,
- * unchanged: #B0553A on #FBEEE9 is about 4.4:1, a hair under WCAG AA's 4.5
- * for 12 px text -- see the note where it is drawn.
+ * information someone needs. The expiry is the live CountdownPill: white on
+ * solid urgent red, 4.99:1.
  *
  * ── THE EXPIRY LIVES IN THE PANEL, NOT ON THE PHOTO ──────────────────────
  *
@@ -48,14 +49,18 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  * so a corner badge on each photo says nothing the section title does not;
  * what differs per card is HOW LONG, and that is a fact to read beside the
  * value, the way a delivery app puts its time in the panel. And a pill on a
- * photo has whatever contrast the photo gives it, where on the panel it is
- * the pill's own urgent-on-urgentWash every time.
+ * photo has whatever contrast the photo gives it, where on the panel it sits
+ * on the same light surface every time.
  *
  * No bolt badge for the same reason: the section already says perishable.
  *
+ * THE CARD DRAWS IT ITSELF from `item.perishable` (1 Oct 2026), so any
+ * perishable that lands in either row ticks, and "Ended" at zero -- the card
+ * stays in the row until the next fetch.
+ *
  * ── ALSO RECOMMENDED'S CARD ──────────────────────────────────────────────
  *
- * "Recommended for you" draws this too, narrower, with no expiry and a
+ * "Recommended for you" draws this too, narrower, with a
  * `note`: the server's one line on why the listing is there ("For your
  * interest in Books"). Forest, like the value line -- it is Baylo speaking,
  * not the poster -- and on its own line, under the poster.
@@ -65,15 +70,12 @@ export const ExclusiveCard = memo(function ExclusiveCard({
   width,
   onPress,
   viewerId = null,
-  expiryLabel,
   note,
 }: {
   item: Item;
   width: number;
   onPress: (item: Item) => void;
   viewerId?: string | null;
-  /** This listing's own window, e.g. "~4h left". A string so the memo holds. */
-  expiryLabel?: string;
   /** Why this card is here -- Recommended's reason line. */
   note?: string;
 }) {
@@ -84,6 +86,9 @@ export const ExclusiveCard = memo(function ExclusiveCard({
   const org = item.owner.org ?? null;
   const verified = org?.verified === true;
   const poster = org?.name ?? item.owner.name;
+  const perishable = item.perishable ?? null;
+  // Minute resolution, so the card re-renders once a minute; the pill ticks alone.
+  const expiryLabel = useCountdownA11y(perishable);
 
   return (
     <Tappable
@@ -157,19 +162,11 @@ export const ExclusiveCard = memo(function ExclusiveCard({
               </Text>
             </View>
           )}
-          {/* The urgent pill: 4.4:1, just under AA for 12 px. Left as the
-              token pair it is; darkening it is a change to color.urgent,
-              app-wide, and not this card's to make.
-
-              BODY FONT, NOT MONOSPACE (30 Sep 2026). The label is a phrase
-              ("Ends tomorrow"), never ticking digits, so the monospace it had
-              (type.countdownPill) bought nothing and read as a timer that
-              wasn't there. Monospace is for digits that change in place. */}
-          {expiryLabel ? (
-            <View style={s.expiry}>
-              <Text style={[textStyle(type.urgencyChip), { color: color.urgent }]} numberOfLines={1}>
-                {expiryLabel}
-              </Text>
+          {/* The live pill. Hidden from the screen reader: the card's own
+              label already says "Ends in ...". */}
+          {perishable ? (
+            <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+              <CountdownPill expiresAt={perishable.expiresAt} expired={perishable.expired} />
             </View>
           ) : null}
         </View>
@@ -211,13 +208,4 @@ const s = StyleSheet.create({
     marginTop: space.home.tileMetaToLeaves,
   },
   leaves: { flexDirection: "row", alignItems: "center", gap: size.leaves.gap },
-  expiry: {
-    height: size.home.countdownPill,
-    paddingHorizontal: size.home.countdownPillX,
-    borderRadius: radius.countdownPill,
-    backgroundColor: color.urgentWash,
-    borderWidth: border.chip,
-    borderColor: color.urgentLine,
-    justifyContent: "center",
-  },
 });

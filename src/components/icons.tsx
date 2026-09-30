@@ -463,6 +463,15 @@ export function BoltIcon(props: IconProps) {
  * beside it: the two can share a Home grid, and a user has to tell them apart
  * without tapping in.
  */
+/** The live countdown's mark. Filled, like the liked heart: it sits on a solid red pill. */
+export function FlameIcon(props: IconProps) {
+  return (
+    <Glyph {...props} fill={props.color}>
+      <Path d="M12 22c-4 0-7-2.8-7-6.6 0-3.1 2-5.2 3.6-7 .5 1.5 1.4 2.6 2.6 3.1C11 7.6 12.3 4.6 15 2c.3 3 1.6 4.8 2.8 6.6C19 10.4 19 12.2 19 15.4 19 19.2 16 22 12 22Z" />
+    </Glyph>
+  );
+}
+
 export function StarIcon(props: IconProps) {
   return (
     <Glyph {...props}>

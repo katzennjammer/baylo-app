@@ -1,3 +1,4 @@
+import { recordServerDate } from "../lib/server-time";
 import { getApiBase } from "./config";
 import { ORG_CONTEXT_HEADER, clearActingOrg, getActingOrgId } from "./org-context";
 import {
@@ -998,6 +999,15 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
   const multipart = hasRnFileParts(init.body);
 
   const send = async (accessToken: string | null) => {
+    // Every response's Date header teaches the live countdowns the server's
+    // clock. See lib/live-clock.
+    const sentAt = Date.now();
+    const res = await transmit(accessToken);
+    recordServerDate(sentAt, Date.now(), res.headers.get("Date"));
+    return res;
+  };
+
+  const transmit = async (accessToken: string | null) => {
     if (multipart) return sendMultipart(url, init, accessToken);
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), API_REQUEST_TIMEOUT_MS);

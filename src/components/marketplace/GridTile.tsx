@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { ImageIcon, LeafIcon, LockIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { CountdownPill } from "../CountdownPill";
-import { expiryTierLabel } from "../../lib/perishable";
+import { useCountdownA11y } from "../../lib/live-clock";
 import { listingArea } from "../../lib/listing-area";
 import {
   border,
@@ -78,10 +78,10 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  *
  * ── PERISHABLES ─────────────────────────────────────────────────────────────
  *
- * A perishable that is still open carries the CountdownPill over the photo's
- * bottom-left corner ("Ends tomorrow"). The label is computed when the tile
- * renders; the grid does not tick (see lib/perishable), so a tier boundary is
- * picked up on the next refetch, focus or scroll re-render.
+ * Every perishable carries the live CountdownPill over the photo's bottom-left
+ * corner ("05:12:44"), and "Ended" once it runs out -- the tile stays where it
+ * is until the next fetch. The pill ticks by itself; this tile re-renders only
+ * when its screen-reader label changes, once a minute (useCountdownA11y).
  *
  * ── A BRACKET FOR OTHER PEOPLE'S TILES, THE NUMBER FOR YOUR OWN ─────────────
  *
@@ -129,10 +129,8 @@ export const GridTile = memo(function GridTile({
   const area = listingArea(item);
 
   // `!= null`: a server without the perishables work omits the key.
-  const expiry =
-    item.perishable != null && !item.perishable.expired
-      ? expiryTierLabel(item.perishable.expiresAt)
-      : null;
+  const perishable = item.perishable ?? null;
+  const expiry = useCountdownA11y(perishable);
 
   return (
     <Tappable
@@ -194,9 +192,14 @@ export const GridTile = memo(function GridTile({
           </View>
         ) : null}
 
-        {expiry ? (
-          <View style={s.countdown} pointerEvents="none" importantForAccessibility="no-hide-descendants">
-            <CountdownPill label={expiry} />
+        {perishable ? (
+          <View
+            style={s.countdown}
+            pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <CountdownPill expiresAt={perishable.expiresAt} expired={perishable.expired} />
           </View>
         ) : null}
       </View>

@@ -18,8 +18,6 @@ import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
 import { FilterButton, SearchField } from "../../src/components/marketplace/BrowseControls";
-import { useCountdown } from "../../src/components/post/ui";
-import { expiryTierLabel } from "../../src/lib/perishable";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
@@ -204,14 +202,10 @@ export default function HomeScreen() {
     void refetchRecommended();
   }, [refetchBrowse, refetchExclusive, refetchFeatured, refetchSpotlight, refetchRecommended]);
 
-  // The existing countdown hook, pointed at the soonest window. When it hits
-  // zero that item has expired, so refetch and the next one takes over. Its
-  // tick is also what moves the cards across a tier boundary ("Ends today" ->
-  // "A few hours left"); the seconds themselves are not shown. See
-  // expiryTierLabel(). The heading's "Next:" chip that also read this was
-  // removed on 30 Sep 2026; the hook stays for the refetch and the re-render.
-  const soonest = exclusive[0]?.perishable.expiresAt;
-  useCountdown(soonest ? Date.parse(soonest) : null, () => void refetchExclusive());
+  // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
+  // to "Ended" at zero and the card stays put; refetching here would pull it
+  // out of the row under the person's thumb. Pull-to-refresh and the next
+  // focus fetch drop it.
 
   // Two-column grid (Featured), and the single row's wide cards (Exclusive).
   const gridTileWidth = useMemo(
@@ -268,9 +262,6 @@ export default function HomeScreen() {
       }),
     [router],
   );
-
-  const expiryLabelOf = (item: Item) =>
-    item.perishable != null ? expiryTierLabel(item.perishable.expiresAt) : undefined;
 
   return (
     <View style={s.screen}>
@@ -368,9 +359,6 @@ export default function HomeScreen() {
                     width={exclusiveCardWidth}
                     onPress={openItem}
                     viewerId={viewerId}
-                    // A string, not the date: the card is memo'd, so it
-                    // re-renders when this crosses a tier, not every tick.
-                    expiryLabel={expiryLabelOf(item)}
                   />
                 ))}
               </ScrollView>

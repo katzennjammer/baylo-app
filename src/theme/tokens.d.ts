@@ -135,6 +135,8 @@ export type TypeRoleName =
   | "exclusiveTitle"
   | "exclusiveMeta"
   | "countdownPill"
+  | "countdownLive"
+  | "countdownLiveLarge"
   | "storefrontName"
   | "storefrontMeta"
   | "storefrontCategory"
@@ -336,6 +338,7 @@ export type RadiusName =
   | "spotlightLogo"
   | "tileBadge"
   | "countdownPill"
+  | "countdownPillLarge"
   | "storefrontLogo"
   | "storefrontButton"
   | "storefrontCard"
@@ -432,6 +435,8 @@ export declare const size: Readonly<{
     dangerRow: number;
     actionButton: number;
     backButton: number;
+    countdownPill: number;
+    countdownPillX: number;
   }>;
   home: Readonly<{
     heroHeight: number;
@@ -527,6 +532,8 @@ export type IconName =
   | "spotlightLogo"
   | "spotlightHero"
   | "spotlightBadge"
+  | "countdown"
+  | "countdownLarge"
   // MSME storefront.
   | "storefrontBadge"
   | "storefrontShare"

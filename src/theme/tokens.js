@@ -263,6 +263,14 @@ const type = {
   exclusiveMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
   /** The live countdown beside "Exclusive". Mono, so the digits never jitter. */
   countdownPill: { fontFamily: font.monoMedium, fontSize: 12 },
+  /**
+   * The LIVE countdown pill (1 Oct 2026): light bold figures on solid red.
+   * Tabular, so "05:12:44" keeps one width while it ticks; Public Sans
+   * carries `tnum`, as `gridLeaves` already relies on.
+   */
+  countdownLive: { fontFamily: font.sansBold, fontSize: 12, fontVariant: ["tabular-nums"] },
+  /** The same, on the listing screen under the photo. */
+  countdownLiveLarge: { fontFamily: font.sansBold, fontSize: 16, fontVariant: ["tabular-nums"] },
 
   /* ── MSME storefront (docs/design/MSME Profile 1a) ────────────────────────
      The design sets these in Figtree 800/700; Figtree is not bundled, so the
@@ -570,6 +578,7 @@ const radius = {
   spotlightLogo: 10,
   tileBadge: 14,
   countdownPill: 12,
+  countdownPillLarge: 17,
 
   /* MSME storefront. */
   storefrontLogo: 22,
@@ -711,6 +720,9 @@ const size = {
     dangerRow: 44,
     actionButton: 50,
     backButton: 44,
+    /** The large countdown pill under the photo. */
+    countdownPill: 34,
+    countdownPillX: 14,
   },
 
   /* ── Home redesign (preview) ──────────────────────────────────────────── */
@@ -874,6 +886,9 @@ const icon = {
   spotlightLogo: { size: 22, stroke: 1.6 },
   spotlightHero: { size: 40, stroke: 1.4 },
   spotlightBadge: { size: 13, stroke: 1.9 },
+  /** The flame in the live countdown pill, card and listing sizes. */
+  countdown: { size: 12, stroke: 1.2 },
+  countdownLarge: { size: 16, stroke: 1.2 },
 
   /* MSME storefront. */
   storefrontBadge: { size: 13, stroke: 1.9 },
