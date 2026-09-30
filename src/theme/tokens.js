@@ -47,6 +47,13 @@ const color = {
   greenWash: "#EAF6EC",
   greenLine: "#D2EAD8",
 
+  /* Section-title accents (30 Sep 2026). Text colours, so they are measured
+     as text on `surface` (#FAFAF7): accentGreen 4.55:1 (brand green's hue,
+     darkened until it passes; `green` itself is 2.31:1), accentGold 4.02:1.
+     Both clear WCAG's 3:1 for large text; accentGreen also clears 4.5:1. */
+  accentGreen: "#2A833E",
+  accentGold: "#A0740D",
+
   /* Warm accent. Likes and urgency only — see the spec's own note. */
   like: "#C56A4B",
   urgent: "#B0553A",
@@ -454,6 +461,14 @@ const space = {
     tileMetaToLeaves: 6,
     tileBadgeInset: 8,
     tileBadgeGap: 6,
+    /**
+     * Section header: title row -> subtitle. The squiggle starts at the
+     * bottom of the title's line box and its stroke reaches about 6.25 px
+     * below it, so 12 leaves ~5.75 px clear above the subtitle.
+     */
+    titleToSubtitle: 12,
+    /** Title text -> its trailing icon. */
+    titleToIcon: 6,
     /** Shop Spotlight card: body padding, and how far the logo rides up into the hero. */
     spotlightBody: 12,
     spotlightLogoOverlap: 22,
@@ -725,6 +740,15 @@ const size = {
      * Exclusive's, so the two rows do not read as one repeated section.
      */
     recommendedPerScreen: 1.6,
+    /** The hand-drawn squiggle under "time": its box height and stroke (real px). */
+    squiggleHeight: 8,
+    squiggleStroke: 2.5,
+    /**
+     * Largest system font scale a section heading follows. Past this the
+     * title would wrap or push "See all" off a 320 dp screen; body text below
+     * it keeps scaling.
+     */
+    headingMaxFontScale: 1.3,
     /** Shop Spotlight cards visible at once; the part-card says it scrolls. */
     spotlightPerScreen: 1.6,
     /** Width over height: tall, a promo card rather than a tile. */
@@ -836,6 +860,8 @@ const icon = {
   /* Home redesign (preview). */
   category: { size: 23, stroke: 1.6 },
   tileBadge: { size: 14, stroke: 1.9 },
+  /** The icon after a section title ("Featured" + sparkle). */
+  sectionTitle: { size: 16, stroke: 1.7 },
   /** Shop Spotlight: the placeholder in the logo square, and in an imageless hero. */
   spotlightLogo: { size: 22, stroke: 1.6 },
   spotlightHero: { size: 40, stroke: 1.4 },

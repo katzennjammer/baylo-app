@@ -24,13 +24,15 @@ import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
 import { ExclusiveTile } from "../../src/components/home-redesign/ExclusiveTile";
+import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
+import { SparkleIcon } from "../../src/components/icons";
 import { HeroBanner } from "../../src/components/home-redesign/HeroBanner";
 import { ShopSpotlightCard } from "../../src/components/home-redesign/ShopSpotlightCard";
 import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
-  border,
+  categoryTone,
   color,
-  radius,
+  icon,
   size,
   space,
   textStyle,
@@ -59,8 +61,12 @@ import {
  *                  enough shops for it to differ from this.
  *   Recommended  → GET /api/v1/recommended: the viewer's category interest
  *                  (trades, offers, likes, own listings) + 14-day popularity
- *                  + a little recency. Titled "Popular on Baylo" when the
- *                  viewer has no history, because then that is all it is.
+ *                  + a little recency. Titled "Picked for you"; the subtitle
+ *                  says "Popular on Baylo right now" when the viewer has no
+ *                  history, because then that is all the shelf is.
+ *
+ * Every section header is SectionHeader (sentence case, one accent word). See
+ * that file for the layout and accessibility rules.
  *   Featured     → paid boosts across EVERY category: GET /api/v1/featured
  *                  with no category. The server's cap (eight) and hourly
  *                  rotation, unchanged; this renders what it is given.
@@ -100,6 +106,45 @@ type PerishableItem = Item & { perishable: NonNullable<Item["perishable"]> };
 
 /** Cards on the Recommended shelf, after Featured's are taken out. */
 const RECOMMENDED_SHOWN = 10;
+
+/**
+ * Each section's accent: the accent word AND its squiggle. Contrast is against
+ * `color.surface` (#FAFAF7); titles are 20 px SemiBold, so the floor is WCAG's
+ * 3:1 for large text. Measured 30 Sep 2026.
+ *
+ *   limited      color.urgent            #B0553A  4.77:1  coral, as the expiry pills
+ *   spotlights   categoryTone.sand.ink   #6E5114  7.05:1  the amber of the cards'
+ *                                                          "Sari-sari store" label; not
+ *                                                          clay (terracotta), whose hue
+ *                                                          is within 2 deg of the coral
+ *                                                          directly above it
+ *   picked       color.accentGreen       #2A833E  4.55:1  brand green's hue, darkened;
+ *                                                          `green` itself is 2.31:1 and
+ *                                                          `forest` too dark to read as
+ *                                                          an accent
+ *   featured     color.accentGold        #A0740D  4.02:1  no gold existed; added for this
+ */
+const ACCENT = {
+  limited: color.urgent,
+  spotlights: categoryTone.sand.ink,
+  picked: color.accentGreen,
+  featured: color.accentGold,
+} as const;
+
+/** Featured's header, drawn by both the loaded and the error state. */
+function FeaturedHeader() {
+  return (
+    <SectionHeader
+      accent="Featured"
+      accentColor={ACCENT.featured}
+      squiggle
+      trailingIcon={
+        <SparkleIcon size={icon.sectionTitle.size} stroke={icon.sectionTitle.stroke} color={ACCENT.featured} />
+      }
+      subtitle="Boosted listings"
+    />
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -161,15 +206,12 @@ export default function HomeScreen() {
 
   // The existing countdown hook, pointed at the soonest window. When it hits
   // zero that item has expired, so refetch and the next one takes over. Its
-  // tick is also what moves the pill and the tiles across a tier boundary; the
-  // seconds themselves are not shown. See expiryTierLabel().
-  //
-  // The pill names ONE listing — the soonest — so it says "Next:", not a bare
-  // "Ends today", which read as if it applied to the whole row. Each card
-  // carries its own tier, from the same function.
+  // tick is also what moves the cards across a tier boundary ("Ends today" ->
+  // "A few hours left"); the seconds themselves are not shown. See
+  // expiryTierLabel(). The heading's "Next:" chip that also read this was
+  // removed on 30 Sep 2026; the hook stays for the refetch and the re-render.
   const soonest = exclusive[0]?.perishable.expiresAt;
   useCountdown(soonest ? Date.parse(soonest) : null, () => void refetchExclusive());
-  const soonestTier = soonest ? expiryTierLabel(soonest) : null;
 
   // Two-column grid (Featured), and the single row's wide cards (Exclusive).
   const gridTileWidth = useMemo(
@@ -292,31 +334,26 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {/* 3. Categories: shortcuts into Marketplace. */}
-            <SectionHeading
-              title="Categories"
-              action="See all"
-              onAction={() => browseInMarketplace(null)}
-            />
+            {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
+                a content section, so its header is plain: no accent, no
+                squiggle, no subtitle. */}
+            <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
             <CategoryCircles facets={facets} onSelect={browseInMarketplace} />
 
-            {/* 4. Exclusive: one row of large cards, soonest to expire first. */}
-            <SectionHeading
-              title="Exclusive"
-              accessory={
-                soonestTier ? (
-                  <View
-                    style={s.countdown}
-                    accessibilityLabel={`Next listing to expire: ${soonestTier}`}
-                  >
-                    <Text style={[textStyle(type.countdownPill), { color: color.urgent }]}>
-                      {`Next: ${soonestTier}`}
-                    </Text>
-                  </View>
-                ) : null
+            {/* 4. Limited time (perishables): one row of large cards, soonest
+                to expire first. No "Next:" chip -- each card carries its own
+                window, and the chip only repeated the first card's. */}
+            <SectionHeader
+              leading="Limited "
+              accent="time"
+              accentColor={ACCENT.limited}
+              squiggle
+              subtitle="Grab these before they expire"
+              onSeeAll={
+                exclusive.length > 0
+                  ? () => router.push(marketplaceWithFilters({ perishable: true }))
+                  : undefined
               }
-              action={exclusive.length > 0 ? "See all" : undefined}
-              onAction={() => router.push(marketplaceWithFilters({ perishable: true }))}
             />
             {exclusive.length > 0 ? (
               <ScrollView
@@ -352,7 +389,14 @@ export default function HomeScreen() {
                 the viewer can act on, and pull-to-refresh retries it. */}
             {spotlights.length > 0 ? (
               <>
-                <SectionHeading title="Shop Spotlights" />
+                {/* No "See all": there is no shops list screen to open. */}
+                <SectionHeader
+                  accent="Shop"
+                  trailing=" spotlights"
+                  accentColor={ACCENT.spotlights}
+                  squiggle
+                  subtitle="Verified local businesses"
+                />
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -370,7 +414,15 @@ export default function HomeScreen() {
                 between two sections that did load. */}
             {recommended.length > 0 ? (
               <>
-                <SectionHeading title={personalized ? "Recommended for you" : "Popular on Baylo"} />
+                {/* One title either way; the subtitle says which shelf it is,
+                    from the server's `personalized` flag. */}
+                <SectionHeader
+                  leading="Picked "
+                  accent="for you"
+                  accentColor={ACCENT.picked}
+                  squiggle
+                  subtitle={personalized ? "Based on your trades and offers" : "Popular on Baylo right now"}
+                />
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -395,7 +447,7 @@ export default function HomeScreen() {
                 is noise, not information. An error still says so. */}
             {featured.length > 0 ? (
               <>
-                <SectionHeading title="Featured" />
+                <FeaturedHeader />
                 <View style={s.grid}>
                   {featured.map((item) => (
                     <ExclusiveTile
@@ -410,7 +462,7 @@ export default function HomeScreen() {
               </>
             ) : featuredQuery.isError ? (
               <>
-                <SectionHeading title="Featured" />
+                <FeaturedHeader />
                 <Text style={[textStyle(type.emptyBody), s.empty]}>
                   Could not load featured listings. Pull down to try again.
                 </Text>
@@ -422,34 +474,6 @@ export default function HomeScreen() {
 
       {/* The free search helper. Over the scroll view, not in it, so it stays put. */}
       <SearchHelper />
-    </View>
-  );
-}
-
-function SectionHeading({
-  title,
-  action,
-  onAction,
-  accessory,
-}: {
-  title: string;
-  action?: string;
-  onAction?: () => void;
-  accessory?: React.ReactNode;
-}) {
-  return (
-    <View style={s.heading}>
-      <View style={s.headingLeft}>
-        <Text style={[textStyle(type.homeSection), { color: color.ink }]} accessibilityRole="header">
-          {title}
-        </Text>
-        {accessory}
-      </View>
-      {action && onAction ? (
-        <Tappable onPress={onAction} accessibilityRole="button" hitSlop={12}>
-          <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>{action}</Text>
-        </Tappable>
-      ) : null}
     </View>
   );
 }
@@ -466,24 +490,6 @@ const s = StyleSheet.create({
   sectionLoading: { marginTop: space.home.sectionTop },
   stateBox: { alignItems: "center", marginTop: space.home.sectionTop * 2, gap: 12 },
   retry: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12 },
-  heading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: space.screenX,
-    marginTop: space.home.sectionTop,
-    marginBottom: space.home.headingToContent,
-  },
-  headingLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  countdown: {
-    height: size.home.countdownPill,
-    paddingHorizontal: size.home.countdownPillX,
-    borderRadius: radius.countdownPill,
-    backgroundColor: color.urgentWash,
-    borderWidth: border.chip,
-    borderColor: color.urgentLine,
-    justifyContent: "center",
-  },
   rail: {
     paddingHorizontal: space.screenX,
     gap: space.browse.gridGap,

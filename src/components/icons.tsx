@@ -443,6 +443,21 @@ export function StarIcon(props: IconProps) {
   );
 }
 
+/**
+ * Sparkle: a four-point star with a small one beside it. Home's "Featured"
+ * heading. Not StarIcon, which is the boost badge on a tile -- the heading
+ * names the section, the star marks a listing in it.
+ */
+export function SparkleIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M10.5 3.5c.7 4.2 2.8 6.3 7 7-4.2.7-6.3 2.8-7 7-.7-4.2-2.8-6.3-7-7 4.2-.7 6.3-2.8 7-7Z" />
+      <Path d="M18.5 14.5v5" />
+      <Path d="M16 17h5" />
+    </Glyph>
+  );
+}
+
 /** The Community tab — the old Home feed. Two people, same weight as PersonIcon. */
 export function CommunityIcon(props: IconProps) {
   return (

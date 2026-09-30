@@ -43,8 +43,8 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
  *
  * ── THE EXPIRY LIVES IN THE PANEL, NOT ON THE PHOTO ──────────────────────
  *
- * On the value row, right-aligned, in the same urgent pill the section
- * heading's "Next:" uses. Two reasons. Every card in this row is perishable,
+ * On the value row, right-aligned, in the urgent pill (the section heading's
+ * "Next:" chip that shared it was removed on 30 Sep 2026). Two reasons. Every card in this row is perishable,
  * so a corner badge on each photo says nothing the section title does not;
  * what differs per card is HOW LONG, and that is a fact to read beside the
  * value, the way a delivery app puts its time in the panel. And a pill on a
@@ -157,13 +157,17 @@ export const ExclusiveCard = memo(function ExclusiveCard({
               </Text>
             </View>
           )}
-          {/* The existing urgent pill, as the section heading draws it: 4.4:1,
-              just under AA for 12 px. Left as the token pair it is so the two
-              pills on screen match; darkening it is a change to color.urgent,
-              app-wide, and not this card's to make. */}
+          {/* The urgent pill: 4.4:1, just under AA for 12 px. Left as the
+              token pair it is; darkening it is a change to color.urgent,
+              app-wide, and not this card's to make.
+
+              BODY FONT, NOT MONOSPACE (30 Sep 2026). The label is a phrase
+              ("Ends tomorrow"), never ticking digits, so the monospace it had
+              (type.countdownPill) bought nothing and read as a timer that
+              wasn't there. Monospace is for digits that change in place. */}
           {expiryLabel ? (
             <View style={s.expiry}>
-              <Text style={[textStyle(type.countdownPill), { color: color.urgent }]} numberOfLines={1}>
+              <Text style={[textStyle(type.urgencyChip), { color: color.urgent }]} numberOfLines={1}>
                 {expiryLabel}
               </Text>
             </View>

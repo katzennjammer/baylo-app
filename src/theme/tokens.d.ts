@@ -23,6 +23,8 @@ export type ColorName =
   | "onGreen"
   | "greenWash"
   | "greenLine"
+  | "accentGreen"
+  | "accentGold"
   | "like"
   | "urgent"
   | "urgentWash"
@@ -274,6 +276,8 @@ export declare const space: Readonly<{
     tileMetaToLeaves: number;
     tileBadgeInset: number;
     tileBadgeGap: number;
+    titleToSubtitle: number;
+    titleToIcon: number;
     spotlightBody: number;
     spotlightLogoOverlap: number;
     bottom: number;
@@ -441,6 +445,9 @@ export declare const size: Readonly<{
     exclusiveCardPerScreen: number;
     exclusiveCardPhotoAspect: number;
     recommendedPerScreen: number;
+    squiggleHeight: number;
+    squiggleStroke: number;
+    headingMaxFontScale: number;
     spotlightPerScreen: number;
     spotlightAspect: number;
     spotlightHeroFraction: number;
@@ -515,6 +522,7 @@ export type IconName =
   // perishable / org badges in an Exclusive tile's corner.
   | "category"
   | "tileBadge"
+  | "sectionTitle"
   | "spotlightLogo"
   | "spotlightHero"
   | "spotlightBadge"
