@@ -76,13 +76,20 @@ check("the vendored Leaflet is syntactically valid JavaScript", () => {
   new vm.Script(bundle.LEAFLET_JS, { filename: "leaflet.js" });
 });
 
+check("the vendored markercluster is syntactically valid JavaScript", () => {
+  new vm.Script(bundle.MARKERCLUSTER_JS, { filename: "leaflet.markercluster.js" });
+});
+
 check("nothing in the bundle can close its own <script>/<style> tag", () => {
   assert.ok(!/<\/script/i.test(bundle.LEAFLET_JS), "LEAFLET_JS contains </script");
   assert.ok(!/<\/style/i.test(bundle.LEAFLET_CSS), "LEAFLET_CSS contains </style");
+  assert.ok(!/<\/script/i.test(bundle.MARKERCLUSTER_JS), "MARKERCLUSTER_JS contains </script");
+  assert.ok(!/<\/style/i.test(bundle.MARKERCLUSTER_CSS), "MARKERCLUSTER_CSS contains </style");
 });
 
 check("the bundle reports the version it was cut from", () => {
   assert.equal(bundle.LEAFLET_VERSION, "1.9.4");
+  assert.equal(bundle.MARKERCLUSTER_VERSION, "1.5.3");
 });
 
 /* ── building documents ─────────────────────────────────────────────────── */
@@ -129,21 +136,25 @@ const html = buildMapHtml({ hubs: HUBS, interactive: true });
  * run against that fragment was meaningless — including the one asserting it
  * parsed, which passed on a few lines of string literal.
  *
- * The document has a known shape: Leaflet's block, then ours. So the end of the
- * FIRST `</script>` locates the boundary between them, and everything from the
- * next `<script>` to the LAST `</script>` is ours. An opening `<script>` inside
- * a string cannot confuse that, and a closing one cannot exist — `safeJson`
+ * The document has a known shape: the vendored blocks (Leaflet, then
+ * leaflet.markercluster since 1 Oct 2026), then ours. So the end of the LAST
+ * vendored `</script>` locates the boundary, and everything from the next
+ * `<script>` to the LAST `</script>` is ours. An opening `<script>` inside a
+ * string cannot confuse that, and a closing one cannot exist — `safeJson`
  * escapes it, which is what §3 checks.
  */
+const VENDORED_SCRIPTS = 2;
+
 function inlineScript(doc) {
   const CLOSE = "</script>";
-  const firstClose = doc.indexOf(CLOSE);
-  const open = doc.indexOf("<script>", firstClose + CLOSE.length);
+  let boundary = -CLOSE.length;
+  for (let i = 0; i < VENDORED_SCRIPTS; i++) {
+    boundary = doc.indexOf(CLOSE, boundary + CLOSE.length);
+    assert.ok(boundary !== -1, "could not locate the vendored script blocks");
+  }
+  const open = doc.indexOf("<script>", boundary + CLOSE.length);
   const lastClose = doc.lastIndexOf(CLOSE);
-  assert.ok(
-    firstClose !== -1 && open !== -1 && lastClose > open,
-    "could not locate the document's own script block",
-  );
+  assert.ok(open !== -1 && lastClose > open, "could not locate the document's own script block");
   return doc.slice(open + "<script>".length, lastClose);
 }
 
@@ -155,14 +166,15 @@ check("the assembled document's inline script parses as JavaScript", () => {
   new vm.Script(inlineScript(html), { filename: "map-document-inline.js" });
 });
 
-check("the document contains exactly two script CLOSINGS", () => {
+check("the document contains exactly three script CLOSINGS", () => {
   // Closings, not openings, and the distinction is the whole point. An opening
   // `<script>` inside a JS string is inert — the HTML parser's script-data
   // state only ends at `</script`. So the invariant that matters is that no
-  // payload can contribute a CLOSING tag: exactly two means Leaflet's and ours,
-  // and the hostile hub name did not manage to end a block early.
+  // payload can contribute a CLOSING tag: exactly three means Leaflet's,
+  // markercluster's and ours, and the hostile hub name did not manage to end a
+  // block early.
   const n = (html.match(/<\/script>/g) || []).length;
-  assert.equal(n, 2, `found ${n}`);
+  assert.equal(n, VENDORED_SCRIPTS + 1, `found ${n}`);
 });
 
 check("Leaflet is injected before the script that uses it", () => {
