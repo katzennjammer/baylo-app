@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError } from "../../src/api/client";
 import { useProfileMe } from "../../src/api/profile";
 import { useReach } from "../../src/api/offer";
-import { firstName, premium as premiumCopy } from "../../src/components/offer/copy";
+import { firstName, premium as premiumCopy, vip as vipCopy } from "../../src/components/offer/copy";
 import { LockIcon } from "../../src/components/offer/icons";
 import {
   WhereYouStand,
@@ -45,12 +45,14 @@ import { CommentsSheet } from "../../src/components/home/CommentsSheet";
 import { SocialRow } from "../../src/components/home/FeedCard";
 import { Tappable } from "../../src/components/Tappable";
 import { TIER_LABEL, type TrustTier } from "../../src/lib/trust";
+import { openPremium, type PremiumReason } from "../../src/lib/premium";
 import { ORG_BADGE_LABEL } from "../../src/lib/org";
 import { businessCategoryLabel } from "../../src/lib/business-category";
 import type { OrgBadge } from "../../src/api/types";
 import {
   border,
   color,
+  font,
   icon,
   radius,
   size,
@@ -228,7 +230,8 @@ export default function ItemDetailScreen() {
    * → out-of-reach, which is advisory. The server applies the same order in
    * `enforceInitiateTrade()`.
    */
-  const locked = viewer.offerLock === "premium";
+  // "vip" locks the control too (bracket 9+, which Premium does not open).
+  const locked = viewer.offerLock !== null;
   const actionBarHeight = locked && item.valueLeaves !== null
     ? size.detail.actionButton + space.detail.actionBarY * 2 + 8 + 16
     : size.detail.actionButton + space.detail.actionBarY * 2;
@@ -559,7 +562,12 @@ export default function ItemDetailScreen() {
       </ScrollView>
 
       {locked && item.valueLeaves !== null ? (
-        <PremiumLockedBar bracket={bracketOf(item.valueLeaves)} owner={firstName(item.owner.name)} />
+        <PremiumLockedBar
+          kind={viewer.offerLock ?? "premium"}
+          bracket={bracketOf(item.valueLeaves)}
+          owner={firstName(item.owner.name)}
+          onPress={() => openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!))}
+        />
       ) : (
         <ActionBar
           action={viewer.action}
@@ -927,15 +935,15 @@ function ActionBar({
 }
 
 /**
- * The offer control under a premium lock: bracket 7 and above, no subscription.
+ * The offer control under a premium lock: bracket 7 and above with no
+ * subscription (`kind` "premium"), or bracket 9 and above with no VIP ("vip").
  *
  * ── WHAT IT MUST NOT DO ─────────────────────────────────────────────────────
  *
- * It must not imply a purchase is possible today. There is no billing — Play
- * Billing needs a Console account this project does not have — so there is no
- * price, no "Upgrade" or "Subscribe" control, and no button that leads
- * nowhere. The bar is a `View`, not a `Tappable`: a control that looks like a
- * button and does nothing is worse than a sentence.
+ * It must not imply a purchase is possible today. The bar is tappable and
+ * opens the Premium screen — the ONE paywall — which shows the price and says
+ * plainly that payments are not open yet. The bar itself never says "Upgrade"
+ * or "Subscribe"; it says what is locked and where to read more.
  *
  * And it must not make the listing feel hidden. Everything above this bar —
  * the photos in full colour, the title, the bracket, the owner, the hubs, the
@@ -948,17 +956,34 @@ function ActionBar({
  * a live green "Offer Trade" would be the contradiction the server would then
  * resolve with a 403.
  */
-function PremiumLockedBar({ bracket, owner }: { bracket: number; owner: string }) {
+function PremiumLockedBar({
+  kind,
+  bracket,
+  owner,
+  onPress,
+}: {
+  kind: PremiumReason;
+  bracket: number;
+  owner: string;
+  onPress: () => void;
+}) {
+  const c = kind === "vip" ? vipCopy : premiumCopy;
   return (
-    <View style={s.actionBar} accessibilityRole="text" accessibilityLabel={premiumCopy.a11y(bracket)}>
+    <Tappable
+      onPress={onPress}
+      style={s.actionBar}
+      pressedStyle={{ opacity: 0.85 }}
+      accessibilityRole="button"
+      accessibilityLabel={c.a11y(bracket)}
+    >
       <View style={[s.action, s.actionInert, s.actionLocked]}>
         <LockIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.inkSecondary} />
-        <Text style={[textStyle(type.primaryButton), { color: color.inkSecondary }]}>
-          {premiumCopy.bar}
-        </Text>
+        <Text style={[textStyle(type.primaryButton), { color: color.inkSecondary }]}>{c.bar}</Text>
       </View>
-      <Text style={[textStyle(type.gridMeta), s.lockedBody]}>{premiumCopy.body(bracket, owner)}</Text>
-    </View>
+      <Text style={[textStyle(type.gridMeta), s.lockedBody]}>
+        {c.body(bracket, owner)} <Text style={s.lockedLink}>{c.see}</Text>
+      </Text>
+    </Tappable>
   );
 }
 
@@ -1170,6 +1195,7 @@ const s = StyleSheet.create({
   actionPressed: { opacity: 0.85 },
   actionLocked: { flexDirection: "row", gap: 8 },
   lockedBody: { color: color.inkMuted, marginTop: 8 },
+  lockedLink: { color: color.forest, fontFamily: font.sansSemi },
 
   skeletonPhoto: {
     width: "100%",

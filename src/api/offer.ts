@@ -95,11 +95,13 @@ export interface OfferContext {
   highestItemValue: number;
   reach: Bracket;
   /**
-   * `viewer.offerLock === "premium"`: the listing sits in PREMIUM_MIN_BRACKET
-   * or above and this viewer has no live subscription. The server's own
+   * `viewer.offerLock` is set: the listing sits in PREMIUM_MIN_BRACKET or
+   * above and this viewer has no live subscription that opens it. The server's own
    * verdict, mirrored by `enforcePremiumForListing()` on POST /api/offers.
    */
   premiumLocked: boolean;
+  /** Which lock, when `premiumLocked`: "vip" is bracket 9+, which Premium does not open. */
+  lockKind: "premium" | "vip" | null;
   /**
    * The tier's item cap, as a BRACKET, applied to the listing. Null when the
    * tier is unlimited. The server enforces it on POST /api/offers; this is
@@ -193,7 +195,8 @@ export function useOfferContext(itemId: string | undefined) {
       idVerification: me.idVerification,
       highestItemValue,
       reach: reachBracket(highestItemValue),
-      premiumLocked: detail.viewer.offerLock === "premium",
+      premiumLocked: detail.viewer.offerLock !== null,
+      lockKind: detail.viewer.offerLock,
       maxItemBracket: cap,
       tierItemCapExceeded: cap !== null && targetBracket !== null && targetBracket > cap,
       pendingOfferedItemIds,

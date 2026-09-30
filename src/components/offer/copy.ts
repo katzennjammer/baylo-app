@@ -28,7 +28,7 @@
  * and nowhere in the offer or trade flow.
  */
 
-import { bracketLabel, bracketsWord, PREMIUM_MIN_BRACKET } from "../../lib/brackets";
+import { bracketLabel, bracketsWord, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../../lib/brackets";
 import { grouped } from "../../lib/gap";
 import type { OfferLegality } from "../../lib/trade-rules";
 
@@ -91,8 +91,13 @@ export const footnote = {
   heldFrom: (held: number, balance: number, owner: string) =>
     `${grouped(held)} Leaves held from ${grouped(balance)} until ${owner} replies.`,
   /** The up-bridge note the spec names: `Marco will pay a 30-Leaf bridging fee to accept.` */
-  theyPay: (owner: string, fee: number) =>
-    `${owner} will pay a ${grouped(fee)}-Leaf bridging fee to accept.`,
+  /**
+   * NO FIGURE. The receiver's fee is priced by THEIR subscription (8/bracket
+   * with Premium, 10 without) and the phone is never told it, so any number
+   * here could be wrong. Their own accept screen shows the server's figure.
+   */
+  theyPay: (owner: string) =>
+    `${owner} pays the bridging fee to accept. The amount depends on their own Premium status.`,
 } as const;
 
 /* ─────────────────────── the bracket section, per case ──────────────── */
@@ -131,10 +136,11 @@ export const bracket = {
     `up the difference. It is held from your ${grouped(balance)} when you send and goes to ` +
     `${owner} when the swap completes. If ${owner} declines or the offer expires, it comes back.`,
   /** The receiver pays. `fee` is 10 × the receiver's own bracket. */
-  bridgeDown: (fee: number, owner: string) =>
-    `Your item is one bracket above ${owner}'s. ${owner} will pay a ${grouped(fee)}-Leaf ` +
-    `bridging fee to accept, which comes to you when the swap completes. Nothing is held ` +
-    `from you.`,
+  /** No figure — see `footnote.theyPay`: the owner's subscription prices it. */
+  bridgeDown: (owner: string) =>
+    `Your item is one bracket above ${owner}'s. ${owner} pays the bridging fee to accept, ` +
+    `which comes to you when the swap completes. The exact amount depends on ${owner}'s own ` +
+    `Premium status. Nothing is held from you.`,
   /** The proposer cannot cover the fee. `need` vs `have`, and no send. */
   short: (fee: number, balance: number) =>
     `This bridge needs ${grouped(fee)} Leaves and you hold ${grouped(balance)}. Complete a ` +
@@ -316,24 +322,40 @@ export const reach = {
  *
  * ── WHAT THIS STATE MUST NOT DO ─────────────────────────────────────────────
  *
- * It must not imply a purchase is possible today: no price, no "Upgrade" or
- * "Subscribe" control, no button that leads nowhere. There is no billing yet
- * and a control that pretends there is would be a promise the app cannot keep.
- * And it must not make the listing feel hidden — the photo, title, bracket,
- * owner, hubs, share, comments and likes are all untouched. The lock explains
- * the CONTROL, not the listing. `locked` is used here and nowhere else in the
- * offer area, and only because this one is a lock.
+ * It must not imply a purchase is possible today. The lock now LEADS to the
+ * Premium screen (app/premium.tsx), which shows the price and says plainly
+ * that payments are not open yet — so these strings point there and never
+ * say "Upgrade" or promise anything the screen does not. And it must not make
+ * the listing feel hidden — the photo, title, bracket, owner, hubs, share,
+ * comments and likes are all untouched. The lock explains the CONTROL, not
+ * the listing. `locked` is used here and nowhere else in the offer area, and
+ * only because this one is a lock.
+ *
+ * `vip` is bracket 9 and above: Premium does not open it, so its copy must not
+ * suggest Premium would.
  */
 export const premium = {
   bar: "Premium needed to trade here",
-  heading: "Trading at bracket 7 and above needs a premium subscription",
+  heading: "Trading at bracket 7 and above needs Premium",
   body: (bracket: number, owner: string) =>
-    `This listing is in ${bracketLabel(bracket)}. Premium is coming soon — there is nothing ` +
-    `to buy yet, and nothing here is hidden. ${owner}'s listing stays in view; only proposing ` +
-    `on it is locked until then.`,
+    `This listing is in ${bracketLabel(bracket)}. Nothing here is hidden — ${owner}'s listing ` +
+    `stays in view; only proposing on it needs Premium.`,
+  see: "See what Premium includes",
   a11y: (bracket: number) =>
-    `Offer locked. Trading at bracket ${PREMIUM_MIN_BRACKET} and above needs a premium ` +
-    `subscription, which is coming soon. This listing is in ${bracketLabel(bracket)}.`,
+    `Offer locked. Trading at bracket ${PREMIUM_MIN_BRACKET} and above needs Premium. ` +
+    `This listing is in ${bracketLabel(bracket)}. Opens the Premium screen.`,
+} as const;
+
+export const vip = {
+  bar: "VIP needed to trade here",
+  heading: `Trading at bracket ${VIP_MIN_BRACKET} and above needs VIP`,
+  body: (bracket: number, owner: string) =>
+    `This listing is in ${bracketLabel(bracket)}. VIP isn't part of Premium and isn't available ` +
+    `yet. ${owner}'s listing stays in view; only proposing on it is locked.`,
+  see: "See membership details",
+  a11y: (bracket: number) =>
+    `Offer locked. Trading at bracket ${VIP_MIN_BRACKET} and above needs VIP, which isn't ` +
+    `available yet. This listing is in ${bracketLabel(bracket)}. Opens the Premium screen.`,
 } as const;
 
 /**

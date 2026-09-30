@@ -41,6 +41,7 @@ import {
   SettlementSkeleton,
 } from "../src/components/offer/states";
 import { bracketLabel } from "../src/lib/brackets";
+import { displayedBridgeFee, hasPremiumAccess, openPremium, premiumGateReason } from "../src/lib/premium";
 import { grouped, shelfMisses } from "../src/lib/gap";
 import { offerAllowed, type OfferTerms } from "../src/lib/trade-rules";
 import {
@@ -130,7 +131,14 @@ export default function OfferScreen() {
   }, [context, chosenId]);
 
   const terms: OfferTerms | null = context && chosen ? termsFor(context, chosen) : null;
-  const proposerFee = terms?.payer === "proposer" ? terms.fee : 0;
+  // The proposer pays an up-bridge from their own balance, so their own
+  // subscription prices it — 8/bracket for Premium, as the server holds.
+  // Display only; see displayedBridgeFee().
+  const proposerFee =
+    terms?.payer === "proposer" ? displayedBridgeFee(terms, hasPremiumAccess(context?.reputation)) : 0;
+  // A receiver-pays bridge is priced by the listing owner's subscription,
+  // which the phone is never told — so this is only ever tested for > 0 and
+  // never shown as a figure. See copy.footnote.theyPay.
   const receiverFee = terms?.payer === "receiver" ? terms.fee : 0;
 
   const hub = context?.hubs.find((h) => h.id === hubId) ?? null;
@@ -160,6 +168,14 @@ export default function OfferScreen() {
       },
       onError: (e) => {
         setConsentOpen(false);
+        // The bracket gate refused (the lock was stale — a subscription lapsed,
+        // or the value moved). Nothing was sent and nothing was held, so the
+        // answer is the Premium screen, not a retry panel.
+        const gated = premiumGateReason(e);
+        if (gated) {
+          openPremium(router, gated, context?.targetBracket ?? undefined);
+          return;
+        }
         // The server's own sentence when it refused, because it carries the
         // numbers this client cannot predict — see `SendFailedPanel`.
         if (e instanceof ApiError) {
@@ -169,7 +185,7 @@ export default function OfferScreen() {
         setFailed(e instanceof Error && e.message ? e.message : null);
       },
     });
-  }, [draft, send, router]);
+  }, [draft, send, router, context?.targetBracket]);
 
   /** The bottom-bar press. A paying proposer goes through the sheet first. */
   const onPrimary = useCallback(() => {
@@ -309,8 +325,12 @@ export default function OfferScreen() {
           <ListingHeader context={context} />
           <Hairline />
           <PremiumLockedPanel
+            kind={context.lockKind ?? "premium"}
             bracket={context.targetBracket}
             owner={owner}
+            onSeePremium={() =>
+              openPremium(router, context.lockKind ?? "premium", context.targetBracket ?? undefined)
+            }
             onBack={() => router.back()}
           />
         </ScrollView>
@@ -404,7 +424,7 @@ export default function OfferScreen() {
           >
             {`${chosen.title} · ${bracketLabel(yourBracket)} → ${context.item.title} · ${bracketLabel(theirBracket)}` +
               (proposerFee > 0 ? ` · ${grouped(proposerFee)}-Leaf fee` : "") +
-              (receiverFee > 0 ? ` · ${owner} pays ${grouped(receiverFee)}` : "")}
+              (receiverFee > 0 ? ` · ${owner} pays the fee` : "")}
           </Text>
         </View>
         <Hairline />
@@ -481,7 +501,7 @@ export default function OfferScreen() {
                 ? context.balance >= proposerFee
                   ? copy.bracket.bridgeUp(proposerFee, context.balance, owner)
                   : copy.bracket.short(proposerFee, context.balance)
-                : copy.bracket.bridgeDown(receiverFee, owner)}
+                : copy.bracket.bridgeDown(owner)}
           </Text>
         </Section>
 
@@ -542,7 +562,7 @@ export default function OfferScreen() {
                 ? copy.footnote.heldFrom(proposerFee, context.balance, owner)
                 : copy.consent.shortBody(proposerFee, context.balance)
               : receiverFee > 0
-                ? copy.footnote.theyPay(owner, receiverFee)
+                ? copy.footnote.theyPay(owner)
                 : copy.footnote.threeDays(owner)
         }
       >

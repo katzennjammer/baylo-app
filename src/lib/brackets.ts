@@ -90,3 +90,11 @@ export function bracketNeedsPremium(bracket: Bracket): boolean {
 export function valueNeedsPremium(valueLeaves: number | null): boolean {
   return valueLeaves !== null && bracketNeedsPremium(bracketOf(valueLeaves));
 }
+
+/**
+ * The first bracket that needs VIP specifically. Mirrors the server's
+ * VIP_MIN_BRACKET: a live Premium subscription alone does NOT clear it, which
+ * is why the Premium screen says "Bracket 7 and 8" and never "7 and above"
+ * without the qualifier. The server's is the one enforced.
+ */
+export const VIP_MIN_BRACKET: Bracket = 9;

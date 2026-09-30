@@ -297,12 +297,16 @@ export interface ItemDetailPayload {
     canOffer: boolean;
     /**
      * Why the offer control is LOCKED, when it is. `"premium"`: the listing is
-     * in bracket 7 or above and this viewer has no live subscription. Separate
-     * from `canOffer` because the two draw different controls — an inert
-     * button versus an explanation with the listing left fully in view.
-     * Advisory; POST /api/offers re-checks and answers 403 PREMIUM_REQUIRED.
+     * in bracket 7 or above and this viewer has no live subscription. `"vip"`:
+     * the listing is in bracket 9 or above and this viewer has no live VIP
+     * (Premium alone does not clear it) — the server has sent this since VIP
+     * landed, and reading it as "no lock" left a live Offer button over a
+     * certain 403. Separate from `canOffer` because the two draw different
+     * controls — an inert button versus an explanation with the listing left
+     * fully in view. Advisory; POST /api/offers re-checks and answers 403
+     * PREMIUM_REQUIRED or VIP_REQUIRED.
      */
-    offerLock: "premium" | null;
+    offerLock: "premium" | "vip" | null;
     leaves: number;
     tradeableItems: { id: string; title: string; image: string | null }[];
     /** Non-null when this viewer already has a PENDING offer on this listing. */
@@ -395,6 +399,14 @@ export interface ViewerReputation {
    * alone. Optional for the same reason as `premium`.
    */
   vip?: boolean;
+  /**
+   * The raw `User.premiumUntil` / `User.vipUntil`, ISO or null. DISPLAY-ONLY —
+   * "active until 18 Oct 2026" on the Premium screen. Never decides access:
+   * `premium`/`vip` above are the server's verdict. Optional for the same
+   * reason as `premium`.
+   */
+  premiumUntil?: string | null;
+  vipUntil?: string | null;
   limits: {
     /**
      * The highest BRACKET this tier may ACQUIRE. `null` is unlimited. The

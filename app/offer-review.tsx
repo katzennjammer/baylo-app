@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
+import { openPremium, premiumGateReason } from "../src/lib/premium";
 import { currentConsent } from "../src/api/offer";
 import { useActiveTrades, useOfferDecision } from "../src/api/trades";
 import type { LiveOffer } from "../src/api/types";
@@ -156,6 +157,14 @@ export default function OfferReviewScreen() {
         },
         onError: (e) => {
           setConsentOpen(false);
+          // The bracket gate refused the accept: the offered item is in a
+          // bracket this person's membership does not open. The offer stays
+          // where it is; the Premium screen says what would open it.
+          const gated = premiumGateReason(e);
+          if (gated) {
+            openPremium(router, gated, offer.offeredBracket ?? undefined);
+            return;
+          }
           setFailure(
             e instanceof ApiError
               ? e.message

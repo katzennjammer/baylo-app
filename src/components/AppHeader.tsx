@@ -19,6 +19,7 @@ import { BellIcon, LeafIcon, MessageIcon, QuestIcon } from "./icons";
 import { Divider } from "./Divider";
 import { OfflineBar } from "./home/OfflineBar";
 import { formatBadge, formatLeaves } from "../lib/format";
+import { openPremium } from "../lib/premium";
 import {
   border,
   breakpoint,
@@ -298,13 +299,13 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       <Pressable
         onPress={() => {
           onClose();
-          showDialog("Premium/VIP", "Premium and VIP features are coming soon.");
+          openPremium(router);
         }}
         accessibilityRole="menuitem"
         style={s.accountMenuItem}
       >
         <Ionicons name="star-outline" size={19} color={color.ink} />
-        <Text style={s.accountMenuText}>Premium/VIP</Text>
+        <Text style={s.accountMenuText}>Premium</Text>
       </Pressable>
       <Pressable
         onPress={() => {

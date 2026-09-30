@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
+import { openPremium, premiumGateReason } from "../src/lib/premium";
 import {
   meetupState,
   useActiveTrades,
@@ -107,10 +108,18 @@ export default function TradesWaitingScreen() {
     fn();
   };
 
-  const onError = (e: unknown) =>
+  const onError = (e: unknown) => {
+    // An accept the bracket gate refused goes to the Premium screen — the one
+    // paywall — rather than a failure line. Nothing changed; the offer stays.
+    const gated = premiumGateReason(e);
+    if (gated) {
+      openPremium(router, gated);
+      return;
+    }
     setFailure(
       e instanceof ApiError ? e.message : "That did not go through. Nothing has changed.",
     );
+  };
 
   return (
     <OfferScreenHost imeInset={0} dimmed={busy}>
