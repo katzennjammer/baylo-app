@@ -463,6 +463,16 @@ export function BoltIcon(props: IconProps) {
  * beside it: the two can share a Home grid, and a user has to tell them apart
  * without tapping in.
  */
+/** "Opens elsewhere" — the Directions links hand off to the phone's maps app. */
+export function ArrowUpRightIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M7 17 17 7" />
+      <Path d="M8.5 7H17v8.5" />
+    </Glyph>
+  );
+}
+
 /** The live countdown's mark. Filled, like the liked heart: it sits on a solid red pill. */
 export function FlameIcon(props: IconProps) {
   return (

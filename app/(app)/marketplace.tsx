@@ -61,7 +61,9 @@ import { hasSeenReachExplainer, markReachExplainerSeen } from "../../src/lib/rea
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { withTimeout } from "../../src/lib/with-timeout";
-import { border, color, radius, size, space, textStyle, type } from "../../src/theme/tokens";
+import { border, color, icon, radius, size, space, textStyle, type } from "../../src/theme/tokens";
+import { ArrowUpRightIcon, ChevronRightIcon } from "../../src/components/icons";
+import { openDirections } from "../../src/components/map/directions";
 import type { Item, SafeZoneHub } from "../../src/api/types";
 import type { MapHub } from "../../src/components/map/map-html";
 
@@ -198,6 +200,12 @@ export default function MarketplaceScreen() {
   }, [applyAt]);
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
+  /**
+   * Selecting a hub. A hub in the nearby strip is shown selected IN the strip
+   * -- outlined card, ringed pin, and its own Directions / View listings --
+   * so the full hub card (HubSheet) opens only for a hub outside the strip.
+   */
+  const selectHub = useCallback((id: string | null) => setSelectedHubId(id), []);
   /** Null shows every Safe Zone; otherwise the map is narrowed to one type. */
   const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
   /**
@@ -784,6 +792,13 @@ export default function MarketplaceScreen() {
   if (view === "map") {
     const selected = visibleHubs.find((h) => h.id === selectedHubId) ?? null;
     const hubsError = hubsQuery.error instanceof ApiError ? hubsQuery.error : null;
+    const stripReady = locationState === "ready" && userLocation !== null && visibleNearbyHubs.length > 0;
+    const selectedInStrip = selected !== null && stripReady && visibleNearbyHubs.some((h) => h.id === selected.id);
+    const showCard = selected !== null && !selectedInStrip;
+    const nearest =
+      userLocation && visibleNearbyHubs.length > 0
+        ? distanceKm(userLocation.latitude, userLocation.longitude, visibleNearbyHubs[0])
+        : null;
 
     return (
       <View style={s.screen}>
@@ -796,7 +811,7 @@ export default function MarketplaceScreen() {
             value={hubSearch}
             onChange={(next) => {
               setHubSearch(next);
-              setSelectedHubId(null);
+              selectHub(null);
             }}
             onSubmit={() => Keyboard.dismiss()}
             placeholder="Search safe hubs"
@@ -810,20 +825,18 @@ export default function MarketplaceScreen() {
             selectedType={hubTypeFilter}
             onSelectType={(next) => {
               setHubTypeFilter(next);
-              setSelectedHubId(null);
+              selectHub(null);
             }}
           />
         </View>
 
         <View style={s.locationRow}>
-          {/* ABOUT THE HUBS, NOT THE GPS (1 Oct 2026). The line used to narrate
-              the location lookup ("Finding nearby Safe Zones…"), which is not
-              what the person is looking at -- the hubs are drawn whether or
-              not a position ever arrives. So: nothing until the hubs load,
-              then their count, and "Showing all safe hubs" when location is
-              denied, off or too slow (the Allow / Try again button beside it
-              says which). A lookup still in progress changes nothing on
-              screen; if it lands, the nearby strip appears. */}
+          {/* ABOUT THE HUBS, NOT THE GPS. Nothing until the hubs load, then
+              "23 safe hubs", plus " · nearest 4.7 km" once a position is
+              known. Location denied, off or too slow just leaves the count
+              (the Allow / Try again button beside it says which). A lookup
+              still in progress changes nothing; if it lands, the nearby strip
+              and the distance appear. */}
           <Text
             style={[textStyle(type.metadata), s.locationStatus]}
             accessibilityLiveRegion="polite"
@@ -831,9 +844,8 @@ export default function MarketplaceScreen() {
           >
             {!hubsQuery.isSuccess
               ? ""
-              : locationState === "unavailable"
-                ? "Showing all safe hubs"
-                : `${visibleHubs.length} ${visibleHubs.length === 1 ? "safe hub" : "safe hubs"}`}
+              : `${visibleHubs.length} ${visibleHubs.length === 1 ? "safe hub" : "safe hubs"}` +
+                (nearest !== null ? ` · nearest ${formatDistanceKm(nearest)}` : "")}
           </Text>
           {locationState === "unavailable" ? (
             <Tappable
@@ -893,7 +905,7 @@ export default function MarketplaceScreen() {
                   userLocation={userLocation}
                   interactive
                   selectedHubId={selectedHubId}
-                  onSelectHub={setSelectedHubId}
+                  onSelectHub={selectHub}
                   // The nearby strip and the hub card sit over the bottom edge.
                   attributionAt="top"
                   emptyMessage={
@@ -907,21 +919,22 @@ export default function MarketplaceScreen() {
                 />
               </MapErrorBoundary>
 
-              {locationState === "ready" && userLocation && visibleNearbyHubs.length > 0 && !selected ? (
+              {stripReady && userLocation && !showCard ? (
                 <View style={s.nearbyOverlay} pointerEvents="box-none">
                   <NearestHubsStrip
                     hubs={visibleNearbyHubs}
                     origin={userLocation}
                     selectedHubId={selectedHubId}
-                    onSelect={setSelectedHubId}
+                    onSelect={selectHub}
+                    onOpenItems={(hubId) => router.push({ pathname: "/hub", params: { id: hubId } })}
                   />
                 </View>
               ) : null}
 
-              {selected ? (
+              {showCard && selected ? (
                 <HubSheet
                   hub={selected}
-                  onClose={() => setSelectedHubId(null)}
+                  onClose={() => selectHub(null)}
                   onOpenItems={(hubId) =>
                     router.push({ pathname: "/hub", params: { id: hubId } })
                   }
@@ -1050,16 +1063,26 @@ function formatDistanceKm(km: number): string {
   return `${Math.round(km)} km`;
 }
 
+/**
+ * The nearest active hubs, as white cards over the map's bottom edge: the
+ * name, then "type icon · Type · 4.7 km". Tapping a card selects it: it is
+ * outlined in forest (its pin is ringed to match) and shows two actions,
+ * Directions and View listings (the same /hub screen the full hub card links
+ * to). The actions sit side by side and wrap onto two lines when they do not
+ * fit, which is what 2x text does on a 320 dp phone.
+ */
 function NearestHubsStrip({
   hubs,
   origin,
   selectedHubId,
   onSelect,
+  onOpenItems,
 }: {
   hubs: SafeZoneHub[];
   origin: { latitude: number; longitude: number };
   selectedHubId: string | null;
   onSelect: (hubId: string) => void;
+  onOpenItems: (hubId: string) => void;
 }) {
   return (
     <ScrollView
@@ -1071,26 +1094,54 @@ function NearestHubsStrip({
     >
       {hubs.map((hub) => {
         const selected = hub.id === selectedHubId;
+        const distance = formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub));
         return (
           <Tappable
             key={hub.id}
             onPress={() => onSelect(hub.id)}
             accessibilityRole="button"
-            accessibilityLabel={`${hub.name}, ${formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub))}`}
-            style={[s.nearbyChip, selected && s.nearbyChipSelected]}
-            pressedStyle={s.nearbyChipPressed}
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${hub.name}, ${hub.typeLabel}, ${distance}`}
+            style={[s.nearbyCard, selected && s.nearbyCardSelected]}
+            pressedStyle={s.nearbyCardPressed}
           >
-            <View style={s.nearbyWell}>
-              <HubTypeGlyph hubType={hub.type} size={13} />
-            </View>
-            <View style={s.nearbyCopy}>
-              <Text style={[textStyle(type.gridMeta), s.nearbyName]} numberOfLines={1}>
-                {hub.name}
-              </Text>
+            <Text style={[textStyle(type.hubName), s.nearbyName]} numberOfLines={1}>
+              {hub.name}
+            </Text>
+            <View style={s.nearbyMetaRow}>
+              <HubTypeGlyph hubType={hub.type} size={12} />
               <Text style={[textStyle(type.gridMeta), s.nearbyMeta]} numberOfLines={1}>
-                {formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub))}
+                {`${hub.typeLabel} · ${distance}`}
               </Text>
             </View>
+            {selected ? (
+              <View style={s.nearbyActions}>
+                <Tappable
+                  onPress={() =>
+                    void openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name })
+                  }
+                  accessibilityRole="link"
+                  accessibilityLabel={`Directions to ${hub.name}`}
+                  style={s.nearbyAction}
+                  pressedStyle={s.nearbyCardPressed}
+                  hitSlop={4}
+                >
+                  <Text style={[textStyle(type.chip), s.nearbyActionLabel]}>Directions</Text>
+                  <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+                </Tappable>
+                <Tappable
+                  onPress={() => onOpenItems(hub.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View listings at ${hub.name}`}
+                  style={s.nearbyAction}
+                  pressedStyle={s.nearbyCardPressed}
+                  hitSlop={4}
+                >
+                  <Text style={[textStyle(type.chip), s.nearbyActionLabel]}>View listings</Text>
+                  <ChevronRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+                </Tappable>
+              </View>
+            ) : null}
           </Tappable>
         );
       })}
@@ -1134,32 +1185,27 @@ const s = StyleSheet.create({
     gap: space.browse.chipGap,
     alignItems: "center",
   },
-  nearbyChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    maxWidth: 200,
-    paddingLeft: 6,
-    paddingRight: 10,
-    paddingVertical: 6,
+  // White cards with a hairline, not tinted chips. The selected one takes a
+  // 1.5 px forest border, matching the ringed pin on the map.
+  // 208, not narrower: the selected card's two actions sit side by side at
+  // 1x (about 170 of the 186 inside), and wrap at larger text.
+  nearbyCard: {
+    width: 208,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     borderRadius: radius.hubRow,
     borderWidth: border.hairline,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-  nearbyChipSelected: { borderColor: color.forest, backgroundColor: color.greenLine },
-  nearbyChipPressed: { backgroundColor: color.greenLine },
-  nearbyWell: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: color.controlLine,
     backgroundColor: color.surface,
   },
-  nearbyCopy: { flexShrink: 1 },
+  nearbyCardSelected: { borderWidth: 1.5, borderColor: color.forest },
+  nearbyCardPressed: { opacity: 0.8 },
   nearbyName: { color: color.ink },
-  nearbyMeta: { color: color.inkMuted },
+  nearbyMetaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  nearbyMeta: { flexShrink: 1, color: color.inkSecondary },
+  nearbyActions: { flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 4, marginTop: 6 },
+  nearbyAction: { flexDirection: "row", alignItems: "center", gap: 3, minHeight: 28, maxWidth: "100%" },
+  nearbyActionLabel: { flexShrink: 1, color: color.forest },
   mapWrap: {
     position: "relative",
     flex: 1,

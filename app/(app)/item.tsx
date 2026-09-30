@@ -1,7 +1,10 @@
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import Svg, { Line } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
@@ -23,7 +26,9 @@ import { canBoost } from "../../src/api/featured";
 import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useLike } from "../../src/api/social";
 import {
+  ArrowUpRightIcon,
   BlockIcon,
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CommentIcon,
@@ -31,11 +36,8 @@ import {
   HeartIcon,
   KebabIcon,
   LeafIcon,
-  PinIcon,
   ShareIcon,
-  StoreIcon,
   SwapIcon,
-  VerifiedOrgIcon,
   WarningIcon,
 } from "../../src/components/icons";
 import { CountdownPill } from "../../src/components/CountdownPill";
@@ -46,6 +48,7 @@ import { EditListingSheet } from "../../src/components/home/EditListingSheet";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
 import { LISTING_PREVIEW_ZOOM_OUT } from "../../src/components/map/osm";
+import { HubTypeGlyph } from "../../src/components/map/MapLegend";
 import { openDirections } from "../../src/components/map/directions";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
@@ -57,6 +60,7 @@ import { businessCategoryLabel } from "../../src/lib/business-category";
 import type { TrustTier } from "../../src/lib/trust";
 import {
   border,
+  categoryTone,
   color,
   font,
   icon,
@@ -185,6 +189,31 @@ export default function ItemDetailScreen() {
   const [commentsOpen, setCommentsOpen] = useState(comments === "1");
   const [barHeight, setBarHeight] = useState<number>(size.detail.actionButton + space.detail.actionBarY * 2);
   const { mutate: like } = useLike();
+
+  /*
+   * THE STATUS BAR OVER A SCROLLING PHOTO. The page draws under the status
+   * bar so the photo can run to the top edge; once the photo has scrolled
+   * away, text would slide under the clock. So a surface-coloured backdrop
+   * fades in behind the status bar over the last 48 px of the photo, and the
+   * status bar's own icons switch from light (over the photo, with a top
+   * scrim) to dark (over the page). Set only while this screen is focused:
+   * expo-status-bar keeps a stack, and a hidden tab must not hold it.
+   */
+  const { width: screenWidth } = useWindowDimensions();
+  const photoHeight = screenWidth / size.detail.photoAspect;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const fadeEnd = Math.max(1, photoHeight - insets.top);
+  const backdropOpacity = scrollY.interpolate({
+    inputRange: [Math.max(0, fadeEnd - 48), fadeEnd],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+  const [overPhoto, setOverPhoto] = useState(true);
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => setOverPhoto(value < fadeEnd - 24));
+    return () => scrollY.removeListener(id);
+  }, [scrollY, fadeEnd]);
+  const focused = useIsFocused();
 
   const apiError = error instanceof ApiError ? error : null;
 
@@ -369,9 +398,25 @@ export default function ItemDetailScreen() {
 
   return (
     <View style={s.screen}>
-      <ScrollView contentContainerStyle={{ paddingBottom: barHeight + space.detail.sectionY }}>
+      {focused ? <StatusBar style={overPhoto ? "light" : "dark"} /> : null}
+
+      <Animated.ScrollView
+        contentContainerStyle={{ paddingBottom: barHeight + space.detail.sectionY }}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+          useNativeDriver: true,
+        })}
+        scrollEventThrottle={16}
+      >
         <View>
           <PhotoCarousel images={item.images} title={item.title} counter={false} />
+
+          {/* The top of the photo darkened, so the clock and the round
+              buttons read on a white or busy photo. */}
+          <LinearGradient
+            colors={[color.captionFill, "rgba(20, 20, 15, 0)"]}
+            style={[s.photoScrim, { height: insets.top + size.detail.overlayButton + 24 }]}
+            pointerEvents="none"
+          />
 
           {/* Over the photo. The status bar is drawn over it too, so the row
               starts below the inset. */}
@@ -487,26 +532,9 @@ export default function ItemDetailScreen() {
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
 
-          {wanted || lookingFor ? (
-            <View
-              style={s.tradesFor}
-              accessible
-              accessibilityRole="text"
-              accessibilityLabel={`Trades for: ${[wanted, lookingFor].filter(Boolean).join(". ")}`}
-            >
-              <View style={s.tradesForIcon}>
-                <SwapIcon size={icon.hubPin.size} stroke={icon.hubPin.stroke} color={color.forest} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[textStyle(type.detailSection), { color: color.forest }]}>Trades for</Text>
-                <Text style={[textStyle(type.detailBody), s.tradesForMain]}>{wanted || lookingFor}</Text>
-                {wanted && lookingFor ? (
-                  <Text style={[textStyle(type.hubLandmark), s.tradesForSub]}>{lookingFor}</Text>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
+          {wanted ? <SwapTicket title={item.title} wanted={wanted} lookingFor={lookingFor} /> : null}
 
+          {/* Sections below are separated by hairlines, not boxes. */}
           <SellerRow
             owner={item.owner}
             onPress={() => router.push({ pathname: "/user", params: { id: item.owner.id } })}
@@ -519,46 +547,58 @@ export default function ItemDetailScreen() {
             pressedStyle={s.pressed}
           >
             <CommentIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.forest} />
-            <Text style={[textStyle(type.secondaryButton), { color: color.forest }]}>Ask a question</Text>
+            <Text style={[textStyle(type.secondaryButton), { color: color.forest, flexShrink: 1 }]}>
+              {own
+                ? "See questions"
+                : item.owner.org
+                  ? "Ask the shop a question"
+                  : `Ask ${firstName(item.owner.name)} a question`}
+            </Text>
           </Tappable>
 
           {!own && hubs.length > 0 ? (
             <View style={s.section}>
-              <Text style={[textStyle(type.detailSection), s.sectionHeading]}>Meet at a safe hub</Text>
-              {/* The whole preview is one target. `HubMap` with
-                  `interactive={false}` takes no touches, so this Tappable
-                  receives them. */}
-              <Tappable
-                onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +
-                  `for this listing: ${hubs.map((h) => h.name).join(", ")}.`
-                }
-                style={s.mapPreview}
-              >
-                {/* `listHubs={false}`: the hub rows are printed directly below,
-                    so the fallback shows the notice alone. */}
-                <MapErrorBoundary hubs={hubs} listHubs={false}>
-                  <HubMap
-                    hubs={hubs}
-                    interactive={false}
-                    zoomOut={LISTING_PREVIEW_ZOOM_OUT}
-                    emptyMessage="No safe hub set for this listing."
-                    style={s.mapSurface}
-                  />
-                </MapErrorBoundary>
-              </Tappable>
-
-              <View style={s.hubs}>
-                {hubs.map((h) => (
-                  <HubRow key={h.id} hub={h} />
-                ))}
-              </View>
+              <Text style={[textStyle(type.gridMeta), s.meetAt]}>Meet at</Text>
+              {hubs.map((h, i) => (
+                <HubBlock key={h.id} hub={h}>
+                  {/* The map once, under the first hub. The whole preview is
+                      one target: `HubMap` with `interactive={false}` takes no
+                      touches, so this Tappable receives them. */}
+                  {i === 0 ? (
+                    <Tappable
+                      onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +
+                        `for this listing: ${hubs.map((x) => x.name).join(", ")}.`
+                      }
+                      style={s.mapPreview}
+                    >
+                      {/* `listHubs={false}`: the hubs are printed around it,
+                          so the fallback shows the notice alone. */}
+                      <MapErrorBoundary hubs={hubs} listHubs={false}>
+                        <HubMap
+                          hubs={hubs}
+                          interactive={false}
+                          zoomOut={LISTING_PREVIEW_ZOOM_OUT}
+                          emptyMessage="No safe hub set for this listing."
+                          style={s.mapSurface}
+                        />
+                      </MapErrorBoundary>
+                    </Tappable>
+                  ) : null}
+                </HubBlock>
+              ))}
             </View>
           ) : null}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Behind the status bar once the photo has scrolled away. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[s.statusBackdrop, { height: insets.top, opacity: backdropOpacity }]}
+      />
 
       <View
         style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
@@ -734,22 +774,29 @@ function perishableAmount(p: NonNullable<Item["perishable"]>): string | null {
 }
 
 /**
- * Who is offering it, tappable through to their profile.
+ * Who is offering it, tappable through to their profile or storefront.
  *
- * A PERSON: avatar, name, "Rising Trader · Cebu · 12 trades". The tier is
- * the server's resolved one or it is left out (see the file header); there
- * is no tier badge any more, the tier is in the line. The trade count is
- * `totalTrades`, which is fine as a displayed statistic (not as a tier input).
+ * NO TINTED BOX, NO ICON CIRCLE (Oct 2026). A photo when there is one; else a
+ * monogram on the warm sand tone (`categoryTone.sand`), SQUARE for a shop and
+ * round for a person -- a round mask crops a wordmark's corners, and the
+ * profile header keeps the same rule.
  *
- * A SHOP: its square logo, its name, the verified checkmark once reviewed,
- * and its business category. The chevron opens the storefront, which is the
- * shop's backing account's profile.
+ * A PERSON: "Rising Trader · Cebu · 12 trades". The tier is the server's
+ * resolved one or it is left out (see the file header). `totalTrades` is fine
+ * as a displayed statistic, not as a tier input.
+ *
+ * A SHOP: its name with a small check once verified, and "Electronics and
+ * repair · Verified MSME" under it.
  */
 function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => void }) {
   const org: OrgBadge | null = owner.org;
   const tier: TrustTier | null = owner.trustTier;
+  const name = org ? org.name : owner.name;
+  const photo = org ? org.logoUrl : owner.avatar;
   const meta = org
-    ? businessCategoryLabel(org.businessCategory)
+    ? [businessCategoryLabel(org.businessCategory), org.verified ? ORG_BADGE_LABEL.full : null]
+        .filter(Boolean)
+        .join(" · ")
     : [
         tier,
         owner.location?.trim() || null,
@@ -762,30 +809,16 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={
-        `${org ? org.name : owner.name}` +
-        (org?.verified ? `, ${ORG_BADGE_LABEL.full}` : "") +
-        `. ${meta}. ${org ? "Open storefront." : "View profile."}`
-      }
+      accessibilityLabel={`${name}. ${meta}. ${org ? "Open storefront." : "View profile."}`}
       style={s.seller}
       pressedStyle={s.pressed}
     >
-      {/* Square for a shop, round for a person: a round mask crops the
-          corners off a wordmark. */}
-      {org ? (
-        org.logoUrl ? (
-          <Image source={{ uri: org.logoUrl }} contentFit="cover" style={[s.avatar, s.orgAvatar]} />
-        ) : (
-          <View style={[s.avatar, s.orgAvatar, s.avatarFallback]}>
-            <StoreIcon size={22} stroke={1.6} color={color.forest} />
-          </View>
-        )
-      ) : owner.avatar ? (
-        <Image source={{ uri: owner.avatar }} contentFit="cover" style={s.avatar} />
+      {photo ? (
+        <Image source={{ uri: photo }} contentFit="cover" style={[s.avatar, org && s.avatarSquare]} />
       ) : (
-        <View style={[s.avatar, s.avatarFallback]}>
-          <Text style={[textStyle(type.avatarInitials40), { color: color.forest }]}>
-            {owner.name.trim().charAt(0).toUpperCase() || "?"}
+        <View style={[s.avatar, s.monogram, org && s.avatarSquare]}>
+          <Text style={[textStyle(type.avatarInitials40), { color: categoryTone.sand.ink }]}>
+            {initials(name)}
           </Text>
         </View>
       )}
@@ -793,13 +826,10 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
       <View style={s.sellerText}>
         <View style={s.sellerNameRow}>
           <Text style={[textStyle(type.username), s.sellerName]} numberOfLines={1}>
-            {org ? org.name : owner.name}
+            {name}
           </Text>
           {org?.verified ? (
-            <View style={s.verifiedBadge}>
-              <VerifiedOrgIcon size={icon.orgBadge.size} stroke={icon.orgBadge.stroke} color={color.forest} />
-              <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>{ORG_BADGE_LABEL.compact}</Text>
-            </View>
+            <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           ) : null}
         </View>
         <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
@@ -812,49 +842,108 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
   );
 }
 
+/** "Juan dela Cruz" → "JD", "Sari-sari ni Nena" → "SN", "" → "?". */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters = (words.length > 1 ? [words[0], words[words.length - 1]] : words).map((w) =>
+    w.charAt(0).toUpperCase(),
+  );
+  return letters.join("") || "?";
+}
+
 /**
- * One Safe-Zone hub, with a way to get there.
- *
- * A DEACTIVATED HUB IS SHOWN, struck through and labelled, and gets no
- * Directions: sending someone to a place that is no longer a Safe Zone is
- * the one thing this row must not do.
+ * "You'd get" / "They want", as one ticket: a forest hairline border, split
+ * by a dashed line with the swap mark in a small forest circle. Surface fill,
+ * no tint. Drawn only when the owner wrote what they want; the categories
+ * they named ride along as the small line under it.
  */
-function HubRow({ hub }: { hub: SafeZoneHub }) {
+function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: string; lookingFor: string }) {
   return (
-    <View style={s.hub}>
-      <View style={[s.hubIcon, !hub.isActive && s.hubIconOff]}>
-        <PinIcon
-          size={icon.hubPin.size}
-          stroke={icon.hubPin.stroke}
-          color={hub.isActive ? color.forest : color.inkStale}
-        />
+    <View
+      style={s.ticket}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`You'd get ${title}. They want ${wanted}${lookingFor ? `, ${lookingFor}` : ""}.`}
+    >
+      <View style={s.ticketHalf}>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>You'd get</Text>
+        <Text style={[textStyle(type.hubName), { color: color.ink }]} numberOfLines={3}>
+          {title}
+        </Text>
       </View>
 
-      <View style={s.hubText}>
-        <Text
-          style={[
-            textStyle(type.hubName),
-            { color: hub.isActive ? color.ink : color.inkStale },
-            !hub.isActive && s.struck,
-          ]}
-          numberOfLines={2}
-        >
-          {hub.name}
-        </Text>
-        <Text style={[textStyle(type.hubLandmark), s.hubLandmark]}>
-          {hub.isActive
-            ? `${hub.typeLabel} · ${hub.landmark}`
-            : "No longer a safe hub — agree somewhere else"}
-        </Text>
+      <View style={s.ticketSeam}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+          <Line
+            x1="50%"
+            y1="0"
+            x2="50%"
+            y2="100%"
+            stroke={color.forest}
+            strokeWidth={1}
+            strokeDasharray="4 4"
+          />
+        </Svg>
+        <View style={s.ticketSwap}>
+          <SwapIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.onScrim} />
+        </View>
+      </View>
+
+      <View style={s.ticketHalf}>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>They want</Text>
+        <Text style={[textStyle(type.hubName), { color: color.forest }]}>{wanted}</Text>
+        {lookingFor ? (
+          <Text style={[textStyle(type.gridMeta), s.ticketSub]}>{lookingFor}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * One safe hub: "Meet at", the name, the note, then (for the first hub) the
+ * map, then its type and a Directions pill. No tinted box, no icon circle.
+ *
+ * A DEACTIVATED HUB IS SHOWN, struck through and labelled, and gets no
+ * Directions: sending someone to a place that is no longer a safe hub is the
+ * one thing this block must not do.
+ */
+function HubBlock({ hub, children }: { hub: SafeZoneHub; children?: React.ReactNode }) {
+  return (
+    <View style={s.hubBlock}>
+      <Text
+        style={[
+          textStyle(type.hubName),
+          s.hubName,
+          { color: hub.isActive ? color.ink : color.inkStale },
+          !hub.isActive && s.struck,
+        ]}
+      >
+        {hub.name}
+      </Text>
+      <Text style={[textStyle(type.hubLandmark), s.hubNote]}>
+        {hub.isActive ? hub.landmark : "No longer a safe hub — agree somewhere else"}
+      </Text>
+
+      {children}
+
+      <View style={s.hubFoot}>
+        <View style={s.hubType}>
+          <HubTypeGlyph hubType={hub.type} size={icon.hubPin.size} tint={hub.isActive ? color.forest : color.inkStale} />
+          <Text style={[textStyle(type.hubLandmark), { color: color.inkSecondary, flexShrink: 1 }]}>
+            {hub.typeLabel}
+          </Text>
+        </View>
         {hub.isActive ? (
           <Tappable
             onPress={() => void directionsTo(hub)}
             accessibilityRole="link"
             accessibilityLabel={`Directions to ${hub.name}`}
-            style={s.directions}
+            style={s.directionsPill}
             pressedStyle={s.pressed}
           >
-            <Text style={[textStyle(type.hubName), { color: color.forest }]}>Directions</Text>
+            <Text style={[textStyle(type.chip), { color: color.forest }]}>Directions</Text>
+            <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           </Tappable>
         ) : null}
       </View>
@@ -1131,27 +1220,27 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
   },
 
-  tradesFor: {
+  /* The swap ticket: forest hairline, surface fill, a dashed seam. */
+  ticket: {
     marginTop: space.detail.sectionY,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: space.detail.hubIconToText,
-    padding: space.browse.tileBody + 2,
     borderRadius: radius.hubRow,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-  tradesForIcon: {
-    width: size.detail.hubIcon,
-    height: size.detail.hubIcon,
-    borderRadius: size.detail.hubIcon / 2,
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: border.hairline,
+    borderColor: color.forest,
     backgroundColor: color.surface,
   },
-  tradesForMain: { color: color.ink, marginTop: 2 },
-  tradesForSub: { color: color.inkSecondary, marginTop: 2 },
+  ticketHalf: { flex: 1, padding: space.browse.tileBody + 2, gap: 3 },
+  ticketLabel: { color: color.inkSecondary },
+  ticketSub: { color: color.inkSecondary, marginTop: 1 },
+  ticketSeam: { width: size.home.countdownPill, alignItems: "center", justifyContent: "center" },
+  ticketSwap: {
+    width: size.home.countdownPill,
+    height: size.home.countdownPill,
+    borderRadius: size.home.countdownPill / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.forest,
+  },
 
   seller: {
     marginTop: space.detail.sectionY,
@@ -1167,27 +1256,18 @@ const s = StyleSheet.create({
     width: size.avatar.owner,
     height: size.avatar.owner,
     borderRadius: radius.ownerAvatar,
-    backgroundColor: color.greenWash,
   },
-  avatarFallback: { alignItems: "center", justifyContent: "center" },
-  // Square logo in the same 40 slot as the avatar; only the mask differs.
-  orgAvatar: { borderRadius: 8 },
+  // A shop's mark, photo or monogram: square, so a wordmark keeps its corners.
+  avatarSquare: { borderRadius: radius.chip },
+  monogram: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: categoryTone.sand.bg,
+  },
   sellerText: { flex: 1 },
-  sellerNameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
+  sellerNameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToMeta + 1 },
   sellerName: { flexShrink: 1, color: color.ink },
   sellerMeta: { marginTop: space.card.nameToMeta, color: color.inkSecondary },
-  verifiedBadge: {
-    flexShrink: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: radius.tierBadge,
-    borderWidth: border.chip,
-    paddingHorizontal: space.tierBadge.x,
-    paddingVertical: space.tierBadge.y,
-    backgroundColor: color.greenWash,
-    borderColor: color.greenLine,
-  },
 
   askRow: {
     flexDirection: "row",
@@ -1197,14 +1277,24 @@ const s = StyleSheet.create({
     alignSelf: "flex-start",
   },
 
-  section: { marginTop: space.detail.sectionY - 4 },
-  sectionHeading: { color: color.ink, marginBottom: space.detail.headingToBody },
+  // A hairline above, not a box around.
+  section: {
+    marginTop: space.detail.hubGap,
+    paddingTop: space.detail.sectionY - 4,
+    borderTopWidth: border.hairline,
+    borderTopColor: color.divider,
+  },
+  meetAt: { color: color.inkSecondary },
+  hubBlock: { paddingBottom: space.detail.hubGap },
+  hubName: { marginTop: space.detail.hubNameToLandmark },
+  hubNote: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
+  struck: { textDecorationLine: "line-through" },
 
   /* 16:10 — wide enough to hold two hubs on opposite sides of the channel,
-     short enough that the landmark text under it stays on screen with it. */
+     short enough that the note above it stays on screen with it. */
   mapPreview: {
     aspectRatio: 16 / 10,
-    marginBottom: space.detail.hubGap + 4,
+    marginTop: space.detail.headingToBody + 2,
     borderRadius: radius.gridPhoto,
     overflow: "hidden",
     borderWidth: border.hairline,
@@ -1212,31 +1302,37 @@ const s = StyleSheet.create({
   },
   mapSurface: { flex: 1, borderRadius: 0 },
 
-  hubs: { gap: space.detail.hubGap },
-  hub: {
+  hubFoot: {
+    marginTop: space.detail.headingToBody + 2,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: space.detail.hubIconToText,
-    padding: space.browse.tileBody,
-    borderRadius: radius.hubRow,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-  hubIcon: {
-    width: size.detail.hubIcon,
-    height: size.detail.hubIcon,
-    borderRadius: size.detail.hubIcon / 2,
+    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.surface,
+    justifyContent: "space-between",
+    gap: 8,
   },
-  hubIconOff: { backgroundColor: color.control },
-  hubText: { flex: 1 },
-  hubLandmark: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
-  struck: { textDecorationLine: "line-through" },
-  directions: { alignSelf: "flex-start", paddingVertical: 8, marginBottom: -4 },
+  hubType: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  directionsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minHeight: size.browse.chip,
+    paddingHorizontal: size.browse.chipX,
+    borderRadius: radius.trendingChip,
+    borderWidth: border.chip,
+    borderColor: color.forest,
+  },
 
+  photoScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  statusBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 3,
+    backgroundColor: color.surface,
+    borderBottomWidth: border.hairline,
+    borderBottomColor: color.divider,
+  },
   bar: {
     position: "absolute",
     left: 0,

@@ -197,16 +197,21 @@ const PIN = {
   ring: "#FAFAF7",
   selectedRing: "#3DBE5A",
   nearbyRing: "#3DBE5A",
+  /** The light halo behind a selected pin's head (color.greenLine). */
+  selectedHalo: "#D2EAD8",
 };
 
 /**
- * Cluster bubbles (1 Oct 2026), from the same hand-kept palette: the brand
- * green (`color.green`) with `color.onGreen` for the count -- the grid and map
- * chips' selected pair, 6.42:1 -- and a `color.surface` ring so a bubble
- * stands off the tiles. Replaces the plugin's default green/yellow/orange,
- * whose stylesheet is deliberately not vendored.
+ * Cluster bubbles, from the same hand-kept palette: a `color.surface` disc
+ * with a 2 px `color.forest` ring and a forest count (#1B4D2B on #FAFAF7,
+ * about 9.3:1). Quiet on purpose: the bright green fill competed with the
+ * pins, which stay dark forest. Replaces the plugin's default
+ * green/yellow/orange, whose stylesheet is deliberately not vendored.
  */
-const CLUSTER = { fill: "#3DBE5A", text: "#0B2A15", ring: "#FAFAF7" };
+const CLUSTER = { fill: "#FAFAF7", text: "#1B4D2B", ring: "#1B4D2B" };
+
+/** The viewer's position: a plain blue dot, white border, soft halo. */
+const USER_DOT = { fill: "#1167D8", border: "#FFFFFF", halo: "rgba(17, 103, 216, 0.18)" };
 
 /**
  * How close, in screen pixels, two pins must be to share a bubble. The pin is
@@ -257,7 +262,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
     height: 100%;
     border-radius: 50%;
     background: ${CLUSTER.fill};
-    border: 3px solid ${CLUSTER.ring};
+    border: 2px solid ${CLUSTER.ring};
     color: ${CLUSTER.text};
     display: flex;
     align-items: center;
@@ -286,57 +291,20 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
   /* Nearby is a glow + ring, not a second colour: type glyphs stay the legend. */
   .baylo-pin.is-nearby svg { filter: drop-shadow(0 0 7px rgba(61, 190, 90, 0.95)); }
 
-  .baylo-user-location {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 128px !important;
-    height: 72px !important;
-    margin: -72px 0 0 -24px;
-    color: #FFFFFF;
-    font: 700 12px sans-serif;
-    white-space: nowrap;
-  }
-
-  .baylo-user-location-label {
+  /* The viewer: a blue dot with a white border and a soft halo. No text
+     label -- the dot is the convention every map app uses, and a "You are
+     here" pill covered the pins around it. */
+  .baylo-user-location { background: none; border: 0; }
+  .baylo-user-dot {
     display: block;
-    padding: 5px 9px;
-    border: 2px solid #FAFAF7;
-    border-radius: 12px;
-    background: #1167D8;
-    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.3);
-  }
-
-  .baylo-user-location-badge {
-    display: block;
-    position: relative;
-    width: 40px;
-    height: 40px;
-    margin-top: 3px;
-    border: 3px solid #FAFAF7;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    margin: 9px;
     border-radius: 50%;
-    background: #1167D8;
-    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.35);
-  }
-
-  .baylo-user-location-badge::after {
-    content: '';
-    position: absolute;
-    bottom: -7px;
-    left: 12px;
-    width: 11px;
-    height: 11px;
-    border-right: 3px solid #FAFAF7;
-    border-bottom: 3px solid #FAFAF7;
-    background: #1167D8;
-    transform: rotate(45deg);
-  }
-
-  .baylo-user-location-badge svg {
-    position: relative;
-    z-index: 1;
-    display: block;
-    margin: 7px auto;
+    background: ${USER_DOT.fill};
+    border: 3px solid ${USER_DOT.border};
+    box-shadow: 0 0 0 9px ${USER_DOT.halo}, 0 1px 4px rgba(20, 20, 15, 0.3);
   }
 
   /* Kills the blue tap flash Android WebView paints over the pin. */
@@ -443,8 +411,15 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
     var c = hub.isActive ? PIN.active : PIN.inactive;
     var glyph = GLYPHS[hub.type] || FALLBACK_GLYPH;
     var ring = selected ? PIN.selectedRing : (hub.nearby ? PIN.nearbyRing : PIN.ring);
+    // Selected: a light ring around the head, so the pin visibly matches the
+    // outlined card in the strip. Drawn past the box (overflow visible), so
+    // the box and its tip anchor are unchanged.
+    var halo = selected
+      ? '<circle cx="16" cy="16" r="19" fill="none" stroke="' + PIN.selectedHalo + '" stroke-width="4"/>'
+      : '';
     return (
-      '<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">' +
+      '<svg width="32" height="42" viewBox="0 0 32 42" style="overflow:visible" xmlns="http://www.w3.org/2000/svg">' +
+        halo +
         '<path d="M16 1.6c-7.9 0-14.4 6.4-14.4 14.4 0 10.1 14.4 24 14.4 24s14.4-13.9 14.4-24c0-8-6.5-14.4-14.4-14.4z"' +
           ' fill="' + c.body + '" stroke="' + ring + '" stroke-width="2.2"/>' +
         '<circle cx="16" cy="16" r="10.4" fill="' + c.disc + '"/>' +
@@ -519,13 +494,9 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
     L.marker([USER_LOCATION.latitude, USER_LOCATION.longitude], {
       icon: L.divIcon({
         className: 'baylo-user-location',
-        html: '<span class="baylo-user-location-label">You are here</span>' +
-          '<span class="baylo-user-location-badge"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
-          '<circle cx="12" cy="7" r="3" fill="none" stroke="#FFFFFF" stroke-width="2"/>' +
-          '<path d="M6.5 20c.5-4.2 2.3-6.5 5.5-6.5s5 2.3 5.5 6.5M12 13.5v5.5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-          '</svg></span>',
-        iconSize: [128, 72],
-        iconAnchor: [24, 72]
+        html: '<span class="baylo-user-dot" role="img" aria-label="Your location"></span>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
       }),
       interactive: false,
       zIndexOffset: 2000

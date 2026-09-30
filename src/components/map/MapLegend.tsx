@@ -115,9 +115,11 @@ export function MapLegend({
           style={[s.entry, selectedType === hubType && s.entryOn]}
           pressedStyle={interactive ? s.entryPressed : undefined}
         >
-          <View style={s.well}>
-            <HubTypeGlyph hubType={hubType} size={13} />
-          </View>
+          <HubTypeGlyph
+            hubType={hubType}
+            size={13}
+            tint={selectedType === hubType ? color.onScrim : color.forest}
+          />
           <Text style={[textStyle(type.gridMeta), s.label, selectedType === hubType && s.labelOn]}>
             {label}
           </Text>
@@ -133,35 +135,26 @@ const s = StyleSheet.create({
     gap: space.browse.chipGap,
     alignItems: "center",
   },
+  // The grid chips' neutral outline (BrowseControls `chip`): control fill,
+  // controlLine border, secondary ink. No mint fill and no glyph well.
   entry: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.nameToBadge,
-    paddingLeft: 5,
-    paddingRight: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: radius.trendingChip,
-    borderWidth: border.hairline,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
+    borderWidth: border.chip,
+    borderColor: color.controlLine,
+    backgroundColor: color.control,
   },
-  // The grid chips' selected style exactly (BrowseControls `chipOn`): brand
-  // green with `color.onGreen` ink, 6.4:1. It was a FOREST fill under that
-  // same ink -- dark on dark, about 1.5:1, and the "All" chip was unreadable.
-  // Light text would not rescue green: white on #3DBE5A is only ~2.3:1.
+  // Only the selected chip is solid: forest with white ink and glyph (about
+  // 9.4:1). The old brand-green fill read as one more tinted box.
   entryOn: {
-    borderColor: "transparent",
-    backgroundColor: color.green,
+    borderColor: color.forest,
+    backgroundColor: color.forest,
   },
   entryPressed: { opacity: 0.72 },
-  well: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.surface,
-  },
   label: { color: color.inkSecondary },
-  labelOn: { color: color.onGreen },
+  labelOn: { color: color.onScrim },
 });
