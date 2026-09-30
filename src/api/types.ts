@@ -406,6 +406,12 @@ export interface ViewerReputation {
    * reason as `premium`.
    */
   premiumUntil?: string | null;
+  /**
+   * True when premiumUntil is the server's beta LIFETIME sentinel (a 9999
+   * date): say "lifetime", never show that date. Optional for the same reason
+   * as `premium`; missing reads as a dated grant.
+   */
+  premiumLifetime?: boolean;
   vipUntil?: string | null;
   limits: {
     /**

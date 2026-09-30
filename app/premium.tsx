@@ -10,8 +10,10 @@ import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/ico
 import { bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
 import {
   hasPremiumAccess,
+  PREMIUM_BETA_NOTE,
   PREMIUM_BRIDGE_FEE_PER_BRACKET,
-  PREMIUM_PRICE_LABEL,
+  PREMIUM_PRICE,
+  PREMIUM_TERM_LABEL,
   type PremiumReason,
 } from "../src/lib/premium";
 import { BRIDGE_FEE_PER_BRACKET } from "../src/lib/trade-rules";
@@ -54,7 +56,7 @@ import {
  * ── WHAT THIS SCREEN MUST NOT DO ─────────────────────────────────────────────
  *
  * Pretend a purchase exists. There is no Play Billing integration, so the
- * subscribe button is DISABLED and says why directly under it; nothing here
+ * buy button is DISABLED and says why directly under it; nothing here
  * grants Premium, and nothing here charges anyone. Status is read live from
  * `reputation` on GET /api/v1/profile/me — the server's own verdict — never
  * inferred, so this screen cannot say "Active" to someone the gate refuses.
@@ -238,17 +240,28 @@ export default function PremiumScreen() {
               paddingHorizontal: 20,
               alignItems: "center",
             }}
-            accessibilityLabel={`Premium costs ${PREMIUM_PRICE_LABEL.replace("/", " per ")}`}
+            accessibilityLabel={`Premium costs ${PREMIUM_PRICE}, ${PREMIUM_TERM_LABEL.replace(" · ", ", ")}. ${PREMIUM_BETA_NOTE}`}
           >
-            <SectionLabel>One plan</SectionLabel>
-            <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 8 }}>
-              <Text style={[textStyle(offerType.detailTitle), { color: offerColor.ink, fontSize: 36, lineHeight: 42 }]}>
-                {PREMIUM_PRICE_LABEL.split("/")[0]}
-              </Text>
-              <Text style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary, marginLeft: 4 }]}>
-                /{PREMIUM_PRICE_LABEL.split("/")[1]}
-              </Text>
-            </View>
+            <SectionLabel>Beta price</SectionLabel>
+            <Text
+              style={[
+                textStyle(offerType.detailTitle),
+                { color: offerColor.ink, fontSize: 36, lineHeight: 42, marginTop: 8 },
+              ]}
+            >
+              {PREMIUM_PRICE}
+            </Text>
+            <Text style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary, marginTop: 2 }]}>
+              {PREMIUM_TERM_LABEL}
+            </Text>
+            <Text
+              style={[
+                textStyle(offerType.helper),
+                { color: offerColor.inkTertiary, marginTop: 8, textAlign: "center" },
+              ]}
+            >
+              {PREMIUM_BETA_NOTE}
+            </Text>
           </View>
         ) : null}
       </ScrollView>
@@ -262,7 +275,7 @@ export default function PremiumScreen() {
         ) : (
           <>
             <PrimaryButton
-              label={`Subscribe · ${PREMIUM_PRICE_LABEL}`}
+              label={`Get Premium · ${PREMIUM_PRICE} one-time`}
               onPress={() => {}}
               disabled
               disabledHint="Payments open in a future update. You will not be charged today."
@@ -288,19 +301,20 @@ function StatusPill({
   rep,
 }: {
   active: boolean;
-  rep: { vip?: boolean; premiumUntil?: string | null; vipUntil?: string | null };
+  rep: { vip?: boolean; premiumUntil?: string | null; premiumLifetime?: boolean; vipUntil?: string | null };
 }) {
   const viaVip = rep.vip === true;
   const until = viaVip ? rep.vipUntil : rep.premiumUntil;
-  const label = active
-    ? until
-      ? `${viaVip ? "Active through VIP" : "Active"} · until ${formatDate(until)}`
-      : viaVip
-        ? "Active through VIP"
-        : "Active"
-    : rep.premiumUntil
-      ? `Not active · expired ${formatDate(rep.premiumUntil)}`
-      : "Not active";
+  const base = viaVip ? "Active through VIP" : "Active";
+  let label: string;
+  if (!active) {
+    label = rep.premiumUntil ? `Not active · expired ${formatDate(rep.premiumUntil)}` : "Not active";
+  } else if (!viaVip && rep.premiumLifetime) {
+    // A beta lifetime grant holds a 9999 sentinel date; never print it.
+    label = "Active · lifetime";
+  } else {
+    label = until ? `${base} · until ${formatDate(until)}` : base;
+  }
 
   return (
     <View

@@ -19,11 +19,20 @@ export function hasPremiumAccess(
 }
 
 /**
- * The advertised price, as one string so the screen and any caller that
- * mentions it cannot disagree. A PRICE, not a peg: it is what Premium will
+ * PROVISIONAL -- BETA PRICING ONLY (30 Sep 2026). During the beta Premium is a
+ * ONE-TIME ₱199 purchase that lasts for life, not a yearly subscription. The
+ * real price and term are undecided and WILL change; this is not the permanent
+ * model. The server stores a lifetime grant as a sentinel premiumUntil and
+ * flags it `premiumLifetime` (see baylo/src/lib/premium.ts).
+ *
+ * The advertised price and term, kept here so the screen and any caller that
+ * mentions them cannot disagree. A PRICE, not a peg: it is what Premium will
  * cost in pesos once Play Billing exists, and has nothing to do with Leaves.
  */
-export const PREMIUM_PRICE_LABEL = "₱199/year";
+export const PREMIUM_PRICE = "₱199";
+export const PREMIUM_TERM_LABEL = "one-time · lifetime";
+/** Shown beside the price so nobody reads the beta figure as final. */
+export const PREMIUM_BETA_NOTE = "Beta pricing. The price and terms may change after the beta.";
 
 /**
  * Mirrors `PREMIUM_BRIDGE_FEE_PER_BRACKET` in baylo/src/lib/trade-rules.ts
