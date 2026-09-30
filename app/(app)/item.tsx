@@ -524,7 +524,7 @@ export default function ItemDetailScreen() {
 
           {!own && hubs.length > 0 ? (
             <View style={s.section}>
-              <Text style={[textStyle(type.detailSection), s.sectionHeading]}>Meet at a Safe Zone</Text>
+              <Text style={[textStyle(type.detailSection), s.sectionHeading]}>Meet at a safe hub</Text>
               {/* The whole preview is one target. `HubMap` with
                   `interactive={false}` takes no touches, so this Tappable
                   receives them. */}
@@ -532,7 +532,7 @@ export default function ItemDetailScreen() {
                 onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  `Open the map. ${hubs.length} Safe ${hubs.length === 1 ? "Zone" : "Zones"} ` +
+                  `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +
                   `for this listing: ${hubs.map((h) => h.name).join(", ")}.`
                 }
                 style={s.mapPreview}
@@ -544,7 +544,7 @@ export default function ItemDetailScreen() {
                     hubs={hubs}
                     interactive={false}
                     zoomOut={LISTING_PREVIEW_ZOOM_OUT}
-                    emptyMessage="No Safe Zone set for this listing."
+                    emptyMessage="No safe hub set for this listing."
                     style={s.mapSurface}
                   />
                 </MapErrorBoundary>
@@ -844,7 +844,7 @@ function HubRow({ hub }: { hub: SafeZoneHub }) {
         <Text style={[textStyle(type.hubLandmark), s.hubLandmark]}>
           {hub.isActive
             ? `${hub.typeLabel} · ${hub.landmark}`
-            : "No longer a Safe Zone — agree somewhere else"}
+            : "No longer a safe hub — agree somewhere else"}
         </Text>
         {hub.isActive ? (
           <Tappable

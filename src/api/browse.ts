@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { apiV1 } from "./client";
 import type { BrowsePayload } from "./types";
@@ -247,6 +247,46 @@ export function useBrowse(filters: BrowseFilters) {
      */
     orgMatches: pages[0]?.payload.organizations ?? [],
   };
+}
+
+/**
+ * Whether the rail's current scope — its categories and "Shops only" (with
+ * its shop kinds) — has ANY perishable listed right now. The Marketplace sort
+ * control ("Newest / Ending soon") shows only when it does.
+ *
+ * DATA, NOT A CATEGORY LIST (1 Oct 2026). The post flow lets every category be
+ * perishable (the toggle is not gated, and the server's create schema checks
+ * the perishable fields, never the category), so there is no list of
+ * "perishable categories" to hide the control by. What is actually listed is
+ * the only honest answer.
+ *
+ * ONE ROW. The same /browse the grid reads, with `perishable=true&limit=1`:
+ * a listing or none. Keyed on the rail's scope ONLY, so typing a search or
+ * opening the filter sheet does not re-ask; the question is "can this category
+ * have an Ending soon order", not "does this exact result set".
+ *
+ * `placeholderData` keeps the previous answer while a new scope loads, so the
+ * control never blinks out and back on a category tap. `undefined` means no
+ * answer has ever arrived.
+ */
+export function usePerishablesInScope(filters: BrowseFilters, enabled: boolean) {
+  const scope: BrowseFilters = {
+    categories: filters.categories,
+    orgsOnly: filters.orgsOnly,
+    businessCategories: filters.businessCategories,
+    perishable: true,
+  };
+  return useQuery({
+    queryKey: ["browse-perishable-probe", browseKey(scope)[1]],
+    queryFn: async () => {
+      const qs = toQueryString(scope, null);
+      const { data } = await apiV1<BrowsePayload>(`/api/v1/browse${qs}&limit=1`);
+      return data.items.length > 0;
+    },
+    enabled,
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
 }
 
 /**

@@ -29,10 +29,15 @@ export function SearchField({
   value,
   onChange,
   onSubmit,
+  placeholder = "Search",
+  accessibilityLabel = "Search items by title or description",
 }: {
   value: string;
   onChange: (next: string) => void;
   onSubmit: () => void;
+  /** Map mode searches hubs, not listings, and says so. */
+  placeholder?: string;
+  accessibilityLabel?: string;
 }) {
   return (
     <View style={s.field}>
@@ -47,14 +52,14 @@ export function SearchField({
         returnKeyType="search"
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="Search"
+        placeholder={placeholder}
         placeholderTextColor={color.inkMuted}
         // The field shares its row with the Grid/Map toggle and the filter
         // button, so it is narrower than it was; uncapped, 2x text clips the
         // placeholder hard at 320 dp.
         maxFontSizeMultiplier={size.home.headingMaxFontScale}
         style={[textStyle(type.searchInput), s.input]}
-        accessibilityLabel="Search items by title or description"
+        accessibilityLabel={accessibilityLabel}
       />
 
       {value.length > 0 ? (

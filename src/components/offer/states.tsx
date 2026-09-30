@@ -180,7 +180,7 @@ export function PendingOfferState({
           <Section pad={offerSpace.section.settle}>
             <SectionLabel>{copy.label.meet}</SectionLabel>
             <View style={{ marginTop: offerSpace.labelToContent }}>
-              <ItemRow image={null} title={hubName} meta="Safe-Zone Hub" photoSize={44} />
+              <ItemRow image={null} title={hubName} meta="Safe hub" photoSize={44} />
             </View>
           </Section>
         </>

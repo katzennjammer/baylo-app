@@ -49,7 +49,7 @@ export const chrome = {
   itemRowAction: "Change",
   messagePlaceholder: "Add a message (optional)",
   messageOptional: "Optional",
-  hubSubtitle: "Safe-Zone Hub",
+  hubSubtitle: "Safe hub",
 } as const;
 
 /** §10.1's section labels. */

@@ -367,7 +367,7 @@ export function HubRow({
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={active ? `${name}, Safe-Zone Hub` : `${name}, no longer a Safe Zone`}
+      accessibilityLabel={active ? `${name}, safe hub` : `${name}, no longer a safe hub`}
       style={{
         minHeight: offerSize.settleRow.minHeight,
         borderRadius: offerRadius.row,
@@ -403,7 +403,7 @@ export function HubRow({
         <Text
           style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 2 }]}
         >
-          Safe-Zone Hub
+          Safe hub
         </Text>
       </View>
       <Radio selected={selected} />

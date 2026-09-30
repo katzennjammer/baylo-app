@@ -172,7 +172,7 @@ export default function EditHubsScreen() {
           </Text>
           <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
             Pick up to five public places. Traders will choose from these when they arrange to
-            meet, and a meeting at a hub you both offer earns the Safe-Zone reward.
+            meet, and a meeting at a hub you both offer earns the safe hub reward.
           </Text>
           {atLimit ? (
             <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
@@ -192,7 +192,7 @@ export default function EditHubsScreen() {
         {rows.length === 0 ? (
           <Gutter>
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              No Safe-Zone hubs to choose from right now.
+              No safe hubs to choose from right now.
             </Text>
           </Gutter>
         ) : (

@@ -88,14 +88,14 @@ export function MapLegend({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={s.row}
       accessibilityRole={interactive ? "tablist" : "summary"}
-      accessibilityLabel={interactive ? "Filter Safe Zones by type" : "Map key: pin shapes by Safe Zone type"}
+      accessibilityLabel={interactive ? "Filter safe hubs by type" : "Map key: pin shapes by safe hub type"}
     >
       {interactive ? (
         <Tappable
           onPress={() => onSelectType?.(null)}
           accessibilityRole="tab"
           accessibilityState={{ selected: selectedType === null }}
-          accessibilityLabel="All Safe Zones"
+          accessibilityLabel="All safe hubs"
           style={[s.entry, selectedType === null && s.entryOn]}
           pressedStyle={s.entryPressed}
         >
@@ -111,7 +111,7 @@ export function MapLegend({
           disabled={!interactive}
           accessibilityRole={interactive ? "tab" : undefined}
           accessibilityState={interactive ? { selected: selectedType === hubType } : undefined}
-          accessibilityLabel={interactive ? `Show ${label} Safe Zones` : label}
+          accessibilityLabel={interactive ? `Show ${label} safe hubs` : label}
           style={[s.entry, selectedType === hubType && s.entryOn]}
           pressedStyle={interactive ? s.entryPressed : undefined}
         >

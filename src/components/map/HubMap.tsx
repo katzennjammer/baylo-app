@@ -64,6 +64,13 @@ export interface HubMapProps {
   interactive?: boolean;
   /** Levels wider than the fitted opening view. The item-detail preview uses it. */
   zoomOut?: number;
+  /**
+   * Which corner the "© OpenStreetMap contributors" credit sits in. "top"
+   * where the screen lays cards over the map's bottom edge (the Marketplace
+   * map's nearby strip and hub card): the credit is a licence condition and
+   * must never be covered.
+   */
+  attributionAt?: "top" | "bottom";
   /** Open centred on this hub instead of fitted to all of them. */
   focusHubId?: string;
   /** The pin drawn as selected. Controlled — the sheet above owns it. */
@@ -79,10 +86,11 @@ export function HubMap({
   userLocation = null,
   interactive = true,
   zoomOut = 0,
+  attributionAt = "bottom",
   focusHubId,
   selectedHubId = null,
   onSelectHub,
-  emptyMessage = "No Safe Zones have been set up yet.",
+  emptyMessage = "No safe hubs have been set up yet.",
   style,
 }: HubMapProps) {
   const webRef = useRef<WebView>(null);
@@ -290,7 +298,7 @@ export function HubMap({
         </View>
       ) : null}
 
-      <MapAttribution />
+      <MapAttribution at={attributionAt} />
     </View>
   );
 }
@@ -315,9 +323,9 @@ export function HubMap({
  * rest of the app. It is also the only element of the map that is deliberately
  * NOT conditional on any state.
  */
-function MapAttribution() {
+function MapAttribution({ at }: { at: "top" | "bottom" }) {
   return (
-    <View style={s.attribution} pointerEvents="box-none">
+    <View style={[s.attribution, at === "top" ? s.attributionTop : s.attributionBottom]} pointerEvents="box-none">
       <Tappable
         onPress={() => {
           void Linking.openURL(ATTRIBUTION_URL).catch(() => {
@@ -404,8 +412,9 @@ const s = StyleSheet.create({
   attribution: {
     position: "absolute",
     right: 6,
-    bottom: 6,
   },
+  attributionBottom: { bottom: 6 },
+  attributionTop: { top: 6 },
   attributionPill: {
     paddingHorizontal: space.photoCaption.x,
     paddingVertical: 3,

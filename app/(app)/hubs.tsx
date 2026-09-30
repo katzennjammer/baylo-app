@@ -101,7 +101,7 @@ export default function HubsMapScreen() {
 
         <View style={s.headerText}>
           <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>
-            Safe Zones
+            Safe hubs
           </Text>
           <Text style={[textStyle(type.hubLandmark), s.subtitle]} numberOfLines={1}>
             {scoped
@@ -128,7 +128,7 @@ export default function HubsMapScreen() {
           </View>
         ) : isError ? (
           <BrowseError
-            headline="Could not load the Safe Zones"
+            headline="Could not load the safe hubs"
             message={
               apiError?.message ??
               "Check your mobile data or Wi-Fi and try again."
@@ -150,12 +150,14 @@ export default function HubsMapScreen() {
                 focusHubId={focus}
                 selectedHubId={selectedId}
                 onSelectHub={setSelectedId}
+                // The hub card sits over the bottom edge.
+                attributionAt="top"
                 emptyMessage={
                   hubTypeFilter
-                    ? "No Safe Zones of this type are available yet."
+                    ? "No safe hubs of this type are available yet."
                     : scoped
-                    ? "This listing has no Safe Zone set. Agree on a public place in your messages."
-                    : "No Safe Zones have been set up yet. They are added city by city."
+                    ? "This listing has no safe hub set. Agree on a public place in your messages."
+                    : "No safe hubs have been set up yet. They are added city by city."
                 }
                 style={s.map}
               />

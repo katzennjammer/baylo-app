@@ -92,7 +92,7 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
           the same building; this sentence gets them to the same spot inside it,
           and a mall has six entrances. It is never truncated. */}
       <Text style={[textStyle(type.hubLandmark), s.landmark]}>
-        {hub.isActive ? hub.landmark : "No longer a Safe Zone — agree somewhere else"}
+        {hub.isActive ? hub.landmark : "No longer a safe hub — agree somewhere else"}
       </Text>
 
       <View style={s.actions}>

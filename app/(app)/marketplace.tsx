@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   AppState,
   FlatList,
+  Keyboard,
   Linking,
   RefreshControl,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   isFiltered,
   MAX_CATEGORIES,
   useBrowse,
+  usePerishablesInScope,
   type BrowseFilters,
 } from "../../src/api/browse";
 import {
@@ -198,6 +200,12 @@ export default function MarketplaceScreen() {
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
   /** Null shows every Safe Zone; otherwise the map is narrowed to one type. */
   const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
+  /**
+   * Map mode's search: a name filter over the hubs ALREADY LOADED, on the
+   * phone. /api/v1/hubs returns the whole curated table (22 rows), so a
+   * server search would be a round trip to filter what is in memory.
+   */
+  const [hubSearch, setHubSearch] = useState("");
   const [userLocation, setUserLocation] = useState<Location.LocationObjectCoords | null>(null);
   const [locationState, setLocationState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const [locationDenied, setLocationDenied] = useState(false);
@@ -427,10 +435,14 @@ export default function MarketplaceScreen() {
     return orderedHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT);
   }, [orderedHubs, userLocation]);
 
-  const visibleHubs = useMemo(
-    () => hubTypeFilter ? orderedHubs.filter((hub) => hub.type === hubTypeFilter) : orderedHubs,
-    [hubTypeFilter, orderedHubs],
-  );
+  const visibleHubs = useMemo(() => {
+    const needle = hubSearch.trim().toLowerCase();
+    return orderedHubs.filter(
+      (hub) =>
+        (!hubTypeFilter || hub.type === hubTypeFilter) &&
+        (!needle || hub.name.toLowerCase().includes(needle)),
+    );
+  }, [hubTypeFilter, hubSearch, orderedHubs]);
 
   const visibleNearbyHubs = useMemo(
     () => visibleHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT),
@@ -654,6 +666,28 @@ export default function MarketplaceScreen() {
   }, []);
 
   /**
+   * Whether the sort control is offered at all: only when the rail's scope
+   * (categories, Shops only) has a perishable listed right now -- one
+   * `limit=1` probe per scope, see usePerishablesInScope. While a new scope's
+   * answer loads, the previous one stands, so the control does not flicker.
+   */
+  const perishableProbe = usePerishablesInScope(filters, view === "grid");
+  const sortAvailable = perishableProbe.data === true;
+
+  // "Ending soon" on a scope with nothing perishable is an empty grid with no
+  // way to see why. Back to Newest -- and the perishables filter goes with it,
+  // because Ending soon is what turned that filter on (see setSort), and
+  // leaving it would keep the grid empty. Only on a SETTLED answer for this
+  // scope, never on the previous scope's placeholder.
+  const probeEmpty =
+    perishableProbe.data === false && !perishableProbe.isPlaceholderData && !perishableProbe.isFetching;
+  useEffect(() => {
+    if (probeEmpty && sort === "endingSoon") {
+      setFilters((f) => ({ ...f, sort: undefined, perishable: null }));
+    }
+  }, [probeEmpty, sort]);
+
+  /**
    * "20+ items": /browse returns pages and a cursor, never a total, so the
    * count is what has loaded plus a "+" while more pages exist. Not
    * monospace: it is a phrase, not a column of figures.
@@ -721,7 +755,7 @@ export default function MarketplaceScreen() {
           >
             {items.length > 0 ? countLabel : ""}
           </Text>
-          <SortToggle sort={sort} onChange={setSort} />
+          {sortAvailable ? <SortToggle sort={sort} onChange={setSort} /> : null}
         </View>
       ) : null}
     </View>
@@ -753,18 +787,21 @@ export default function MarketplaceScreen() {
 
     return (
       <View style={s.screen}>
-        {/* The toolbar row, titled for what is on screen. The item controls
-            stay out (they narrow listings; the map shows hubs -- see
-            ViewToggle), and the title fills the space they left. */}
-        <View style={[s.searchRow, s.searchRowMap]}>
-          <Text
-            style={[textStyle(type.homeSection), s.mapTitle]}
-            accessibilityRole="header"
-            numberOfLines={1}
-            maxFontSizeMultiplier={size.home.headingMaxFontScale}
-          >
-            Safe zones
-          </Text>
+        {/* The same toolbar as the grid: search, then the toggle on the
+            right. The field searches HUBS here, by name, on the phone; the
+            filter button stays out (it narrows listings, and the map shows
+            hubs -- see ViewToggle). */}
+        <View style={s.searchRow}>
+          <SearchField
+            value={hubSearch}
+            onChange={(next) => {
+              setHubSearch(next);
+              setSelectedHubId(null);
+            }}
+            onSubmit={() => Keyboard.dismiss()}
+            placeholder="Search safe hubs"
+            accessibilityLabel="Search safe hubs by name"
+          />
           <ViewToggle view={view} onChange={setView} />
         </View>
 
@@ -783,7 +820,7 @@ export default function MarketplaceScreen() {
               the location lookup ("Finding nearby Safe Zones…"), which is not
               what the person is looking at -- the hubs are drawn whether or
               not a position ever arrives. So: nothing until the hubs load,
-              then their count, and "Showing all safe zones" when location is
+              then their count, and "Showing all safe hubs" when location is
               denied, off or too slow (the Allow / Try again button beside it
               says which). A lookup still in progress changes nothing on
               screen; if it lands, the nearby strip appears. */}
@@ -795,8 +832,8 @@ export default function MarketplaceScreen() {
             {!hubsQuery.isSuccess
               ? ""
               : locationState === "unavailable"
-                ? "Showing all safe zones"
-                : `${visibleHubs.length} ${visibleHubs.length === 1 ? "safe zone" : "safe zones"}`}
+                ? "Showing all safe hubs"
+                : `${visibleHubs.length} ${visibleHubs.length === 1 ? "safe hub" : "safe hubs"}`}
           </Text>
           {locationState === "unavailable" ? (
             <Tappable
@@ -857,10 +894,14 @@ export default function MarketplaceScreen() {
                   interactive
                   selectedHubId={selectedHubId}
                   onSelectHub={setSelectedHubId}
+                  // The nearby strip and the hub card sit over the bottom edge.
+                  attributionAt="top"
                   emptyMessage={
-                    hubTypeFilter
-                      ? "No Safe Zones of this type are available yet."
-                      : "No Safe Zones have been set up yet. They are added city by city."
+                    hubSearch.trim()
+                      ? `No safe hubs match "${hubSearch.trim()}".`
+                      : hubTypeFilter
+                        ? "No safe hubs of this type are available yet."
+                        : "No safe hubs have been set up yet. They are added city by city."
                   }
                   style={s.map}
                 />
@@ -1026,7 +1067,7 @@ function NearestHubsStrip({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={s.nearbyRow}
       accessibilityRole="summary"
-      accessibilityLabel="Nearest Safe Zones, listed first"
+      accessibilityLabel="Nearest safe hubs, listed first"
     >
       {hubs.map((hub) => {
         const selected = hub.id === selectedHubId;
@@ -1046,7 +1087,7 @@ function NearestHubsStrip({
               <Text style={[textStyle(type.gridMeta), s.nearbyName]} numberOfLines={1}>
                 {hub.name}
               </Text>
-              <Text style={[textStyle(type.photoCaption), s.nearbyMeta]} numberOfLines={1}>
+              <Text style={[textStyle(type.gridMeta), s.nearbyMeta]} numberOfLines={1}>
                 {formatDistanceKm(distanceKm(origin.latitude, origin.longitude, hub))}
               </Text>
             </View>
@@ -1066,10 +1107,6 @@ const s = StyleSheet.create({
     paddingHorizontal: space.screenX,
     paddingTop: space.browse.searchY,
   },
-  // Map mode: the same row at the field's height, so the toggle sits at the
-  // same vertical centre as in grid mode.
-  searchRowMap: { minHeight: size.browse.searchField + space.browse.searchY },
-  mapTitle: { flex: 1, color: color.ink },
   rail: { paddingVertical: space.browse.chipsY },
   subRail: { paddingTop: space.browse.chipsY },
   legend: { paddingVertical: space.browse.chipsY },

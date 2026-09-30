@@ -34,7 +34,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Baylo uses your location to show nearby Safe-Zone hubs."
+          "locationWhenInUsePermission": "Baylo uses your location to show nearby safe hubs."
         }
       ],
       "expo-secure-store",

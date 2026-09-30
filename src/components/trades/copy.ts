@@ -235,23 +235,23 @@ export const meetup = {
   /** A hub only the other listing names: fine for them, not on yours. */
   theyOffer: (partner: string) => `${partner} offers this hub`,
   /** Said once, above the rows, when the shared ones are not the whole list. */
-  sharedEarns: "Meeting at a hub you both offer earns the Safe-Zone reward.",
+  sharedEarns: "Meeting at a hub you both offer earns the safe hub reward.",
 
   /* ── The empty intersection. NOT A DEAD END — the picker is still below. ── */
   noSharedTitle: "You have no hub in common yet",
   noSharedBody: (partner: string) =>
-    `Your listing and ${partner}'s do not name the same Safe-Zone hub. You can still ` +
+    `Your listing and ${partner}'s do not name the same safe hub. You can still ` +
     `suggest any hub below — but only a meeting at one you both offer earns the ` +
-    `Safe-Zone reward. Either of you can fix that by adding one to your own listing.`,
+    `safe hub reward. Either of you can fix that by adding one to your own listing.`,
   /** The other listing's hubs — the shortlist worth adding from. */
   theyAlreadyOffer: (partner: string) => `${partner} already offers`,
   addToMine: "Add a hub to my listing",
   /** When even the other listing names none. */
   neitherHasHubs: (partner: string) =>
-    `Neither listing names a Safe-Zone hub yet. Add one to yours and ask ${partner} to ` +
+    `Neither listing names a safe hub yet. Add one to yours and ask ${partner} to ` +
     `add the same one to theirs.`,
   /** When there is no hub anywhere — the server's list came back empty. */
-  noHubsAtAll: "There are no Safe-Zone hubs to choose from right now. Agree a place in chat.",
+  noHubsAtAll: "There are no safe hubs to choose from right now. Agree a place in chat.",
 
   /* ── Failures the client branches on, by `meta.rule`. ─────────────────── */
   hubClosed: "That hub is closed at the moment. Pick another one.",

@@ -98,8 +98,8 @@ export default function HubScreen() {
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
         <BrowseError
-          headline="Could not open this Safe Zone"
-          message="No Safe Zone was named in that link."
+          headline="Could not open this safe hub"
+          message="No safe hub was named in that link."
           onRetry={() => router.back()}
         />
       </View>
@@ -138,7 +138,7 @@ export default function HubScreen() {
             color={color.urgent}
           />
           <Text style={[textStyle(type.offlineText), s.bannerText]}>
-            This is no longer a Safe Zone. These listings are still active — agree
+            This is no longer a safe hub. These listings are still active — agree
             somewhere else to meet.
           </Text>
         </View>
@@ -211,12 +211,12 @@ export default function HubScreen() {
             <BrowseError
               headline={
                 apiError?.code === "NOT_FOUND"
-                  ? "Safe Zone unavailable"
-                  : "Could not load this Safe Zone"
+                  ? "Safe hub unavailable"
+                  : "Could not load this safe hub"
               }
               message={
                 apiError?.code === "NOT_FOUND"
-                  ? "That Safe Zone no longer exists."
+                  ? "That safe hub no longer exists."
                   : (apiError?.message ??
                     "Check your mobile data or Wi-Fi and try again.")
               }
@@ -226,7 +226,7 @@ export default function HubScreen() {
             <View style={s.empty}>
               <Text style={[textStyle(type.emptyBody), s.emptyText]}>
                 Nothing is being offered here yet. Listings appear when their
-                owners choose this Safe Zone.
+                owners choose this safe hub.
               </Text>
             </View>
           )

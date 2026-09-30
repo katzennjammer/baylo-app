@@ -487,7 +487,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
           var d = n < 10 ? 38 : n < 100 ? 44 : 50;
           return L.divIcon({
             className: 'baylo-cluster-wrap',
-            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe zones">' + n + '</div>',
+            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe hubs">' + n + '</div>',
             iconSize: [d, d]
           });
         }
