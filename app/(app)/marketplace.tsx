@@ -39,6 +39,9 @@ import { HubSheet } from "../../src/components/map/HubSheet";
 import { HubTypeGlyph, MapLegend } from "../../src/components/map/MapLegend";
 import { Tappable } from "../../src/components/Tappable";
 import { FilterSheet } from "../../src/components/marketplace/FilterSheet";
+import { RemovableChip } from "../../src/components/RemovableChip";
+import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
+import { MARKETPLACE_FILTERS_PARAM, parseMarketplaceFilters } from "../../src/lib/marketplace-link";
 import {
   BrowseEmpty,
   BrowseError,
@@ -156,19 +159,37 @@ export default function MarketplaceScreen() {
   //
   // Home's search box sends `q` the same way, so what was typed there is what
   // gets searched here -- including the shop-name matches above the grid.
-  const { category: arrivingCategory, q: arrivingQuery, applyAt } = useLocalSearchParams<{
+  //
+  // The search helper sends `filters`: a WHOLE filter set as one JSON param
+  // (several categories, bracket range, condition, shops, perishable). It wins
+  // over category/q when present, and is parsed like any input from outside --
+  // see src/lib/marketplace-link.ts. Same nonce, same replace-not-merge rule.
+  const {
+    category: arrivingCategory,
+    q: arrivingQuery,
+    [MARKETPLACE_FILTERS_PARAM]: arrivingFilters,
+    applyAt,
+  } = useLocalSearchParams<{
     category?: string;
     q?: string;
+    filters?: string;
     applyAt?: string;
   }>();
   useEffect(() => {
     if (!applyAt) return;
+    const whole = parseMarketplaceFilters(arrivingFilters);
+    if (whole) {
+      setFilters(whole);
+      setDraftQuery(whole.q ?? "");
+      setView("grid");
+      return;
+    }
     const known = (CATEGORIES as readonly string[]).includes(arrivingCategory ?? "");
     const q = arrivingQuery?.trim().slice(0, 100) || undefined;
     setFilters({ ...(known ? { categories: [arrivingCategory!] } : {}), ...(q ? { q } : {}) });
     setDraftQuery(q ?? "");
     setView("grid");
-    // arrivingCategory is read with the nonce it came with, never on its own.
+    // The arriving params are read with the nonce they came with, never on their own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyAt]);
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
@@ -623,6 +644,17 @@ export default function MarketplaceScreen() {
         ) : null}
       </View>
 
+      {/* Perishable has no control on the rail -- it only arrives from outside
+          (the search helper). Shown so it is never on invisibly. */}
+      {filters.perishable != null ? (
+        <View style={s.activeRow}>
+          <RemovableChip
+            label={filters.perishable ? "Perishables only" : "No perishables"}
+            onRemove={() => setFilters((f) => ({ ...f, perishable: null }))}
+          />
+        </View>
+      ) : null}
+
       <OrgMatches
         orgs={orgMatches}
         onOpen={(org) => router.push({ pathname: "/user", params: { id: org.orgUserId } })}
@@ -858,6 +890,15 @@ export default function MarketplaceScreen() {
         onClose={() => setSheetOpen(false)}
       />
 
+      {/* The free search helper. "See all" sets this grid's filters in place
+          rather than navigating to the screen that is already open. */}
+      <SearchHelper
+        onSeeAll={(next) => {
+          setFilters(next);
+          setDraftQuery(next.q ?? "");
+        }}
+      />
+
       {/* Mounted last so it sits over the grid and the filter button. It renders
           nothing until both conditions above hold; the Modal inside it is
           created and destroyed with the prompt rather than kept alive behind the
@@ -1039,13 +1080,19 @@ const s = StyleSheet.create({
     zIndex: 2,
   },
   map: { flex: 1 },
+  activeRow: {
+    flexDirection: "row",
+    paddingHorizontal: space.browse.gridX,
+    paddingBottom: space.browse.countY,
+  },
   mapCentre: { flex: 1, alignItems: "center", justifyContent: "center" },
   count: {
     paddingHorizontal: space.browse.gridX,
     paddingBottom: space.browse.countY,
     color: color.inkMuted,
   },
-  content: { paddingBottom: space.trending.y },
+  // The extra room keeps the last row clear of the search helper button.
+  content: { paddingBottom: space.trending.y + SEARCH_HELPER_CLEARANCE },
   // `gap` on the wrapper spaces the columns; the row spacing is the same value
   // so the grid reads as a grid rather than as rows of pairs.
   column: {

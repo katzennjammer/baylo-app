@@ -21,6 +21,7 @@ import { expiryTierLabel } from "../../src/lib/perishable";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveTile } from "../../src/components/home-redesign/ExclusiveTile";
 import { HeroBanner } from "../../src/components/home-redesign/HeroBanner";
+import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
   border,
   color,
@@ -208,119 +209,126 @@ export default function HomeScreen() {
   );
 
   return (
-    <ScrollView
-      style={s.screen}
-      contentContainerStyle={{ paddingTop: space.home.top, paddingBottom: space.home.bottom }}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching || (featuredMode && featuredQuery.isRefetching)}
-          onRefresh={refetch}
-          tintColor={color.green}
-        />
-      }
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* 1. Search + filter + Leaves, BELOW AppHeader's wordmark row. */}
-      <View style={s.searchRow}>
-        <SearchField
-          value={draftQuery}
-          onChange={setDraftQuery}
-          // Carried over as `q`, with the same nonce the category links use,
-          // so Marketplace searches it (shop names included) rather than
-          // opening blank. An empty box just opens Marketplace.
-          onSubmit={() =>
-            draftQuery.trim()
-              ? router.push({
-                  pathname: "/(app)/marketplace",
-                  params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
-                })
-              : openMarketplace()
-          }
-        />
-        <FilterButton count={0} onPress={openMarketplace} />
-      </View>
-
-      {isPending && items.length === 0 ? (
-        <ActivityIndicator color={color.green} style={s.loading} />
-      ) : isError && items.length === 0 ? (
-        <View style={s.stateBox}>
-          <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
-            Could not load listings.
-          </Text>
-          <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
-            <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
-          </Tappable>
-        </View>
-      ) : (
-        <>
-          {/* 2. Hero */}
-          {hero ? (
-            <View style={{ marginTop: space.home.headerToHero }}>
-              {/* The category the hero's own headline names ("Explore Food").
-                  That is the lit circle's whenever it has a photo listing;
-                  the headline is what was read, so it is what is opened. */}
-              <HeroBanner item={hero} onPress={() => browseInMarketplace(hero.category)} />
-            </View>
-          ) : null}
-
-          {/* 3. Categories */}
-          <SectionHeading
-            title="Categories"
-            action="See all"
-            onAction={() => browseInMarketplace(null)}
+    <View style={s.screen}>
+      <ScrollView
+        style={s.screen}
+        // The extra bottom room keeps the last row of tiles clear of the search
+        // helper button, which floats over this corner.
+        contentContainerStyle={{ paddingTop: space.home.top, paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching || (featuredMode && featuredQuery.isRefetching)}
+            onRefresh={refetch}
+            tintColor={color.green}
           />
-          <CategoryCircles facets={facets} selected={category} onSelect={setCategory} />
-
-          {/* 4. Exclusive, or the lit circle's category */}
-          <SectionHeading
-            title={featuredMode ? (categoryLabel ?? "Listings") : "Exclusive"}
-            accessory={
-              soonestTier ? (
-                <View
-                  style={s.countdown}
-                  accessibilityLabel={`Next listing to expire: ${soonestTier}`}
-                >
-                  <Text style={[textStyle(type.countdownPill), { color: color.urgent }]}>
-                    {`Next: ${soonestTier}`}
-                  </Text>
-                </View>
-              ) : null
+        }
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* 1. Search + filter + Leaves, BELOW AppHeader's wordmark row. */}
+        <View style={s.searchRow}>
+          <SearchField
+            value={draftQuery}
+            onChange={setDraftQuery}
+            // Carried over as `q`, with the same nonce the category links use,
+            // so Marketplace searches it (shop names included) rather than
+            // opening blank. An empty box just opens Marketplace.
+            onSubmit={() =>
+              draftQuery.trim()
+                ? router.push({
+                    pathname: "/(app)/marketplace",
+                    params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
+                  })
+                : openMarketplace()
             }
           />
+          <FilterButton count={0} onPress={openMarketplace} />
+        </View>
 
-          {sectionItems.length > 0 ? (
-            <View style={s.grid}>
-              {sectionItems.map((item) => (
-                <ExclusiveTile
-                  key={item.id}
-                  item={item}
-                  width={tileWidth}
-                  onPress={openItem}
-                  viewerId={viewerId}
-                  // A string, not the date: the tile is memo'd, so it re-renders
-                  // when this crosses a tier, not on every tick of the clock.
-                  expiryLabel={
-                    item.perishable != null ? expiryTierLabel(item.perishable.expiresAt) : undefined
-                  }
-                />
-              ))}
-            </View>
-          ) : featuredMode && (featuredQuery.isPending || heroBrowse.isPending) ? (
-            <ActivityIndicator color={color.green} style={s.sectionLoading} />
-          ) : featuredMode && featuredQuery.isError ? (
-            <Text style={[textStyle(type.emptyBody), s.empty]}>
-              Could not load listings. Pull down to try again.
+        {isPending && items.length === 0 ? (
+          <ActivityIndicator color={color.green} style={s.loading} />
+        ) : isError && items.length === 0 ? (
+          <View style={s.stateBox}>
+            <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
+              Could not load listings.
             </Text>
-          ) : (
-            <Text style={[textStyle(type.emptyBody), s.empty]}>
-              {featuredMode
-                ? `No listings in ${categoryLabel ?? "this category"} right now.`
-                : "No perishable listings right now."}
-            </Text>
-          )}
-        </>
-      )}
-    </ScrollView>
+            <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
+              <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
+            </Tappable>
+          </View>
+        ) : (
+          <>
+            {/* 2. Hero */}
+            {hero ? (
+              <View style={{ marginTop: space.home.headerToHero }}>
+                {/* The category the hero's own headline names ("Explore Food").
+                    That is the lit circle's whenever it has a photo listing;
+                    the headline is what was read, so it is what is opened. */}
+                <HeroBanner item={hero} onPress={() => browseInMarketplace(hero.category)} />
+              </View>
+            ) : null}
+
+            {/* 3. Categories */}
+            <SectionHeading
+              title="Categories"
+              action="See all"
+              onAction={() => browseInMarketplace(null)}
+            />
+            <CategoryCircles facets={facets} selected={category} onSelect={setCategory} />
+
+            {/* 4. Exclusive, or the lit circle's category */}
+            <SectionHeading
+              title={featuredMode ? (categoryLabel ?? "Listings") : "Exclusive"}
+              accessory={
+                soonestTier ? (
+                  <View
+                    style={s.countdown}
+                    accessibilityLabel={`Next listing to expire: ${soonestTier}`}
+                  >
+                    <Text style={[textStyle(type.countdownPill), { color: color.urgent }]}>
+                      {`Next: ${soonestTier}`}
+                    </Text>
+                  </View>
+                ) : null
+              }
+            />
+
+            {sectionItems.length > 0 ? (
+              <View style={s.grid}>
+                {sectionItems.map((item) => (
+                  <ExclusiveTile
+                    key={item.id}
+                    item={item}
+                    width={tileWidth}
+                    onPress={openItem}
+                    viewerId={viewerId}
+                    // A string, not the date: the tile is memo'd, so it re-renders
+                    // when this crosses a tier, not on every tick of the clock.
+                    expiryLabel={
+                      item.perishable != null ? expiryTierLabel(item.perishable.expiresAt) : undefined
+                    }
+                  />
+                ))}
+              </View>
+            ) : featuredMode && (featuredQuery.isPending || heroBrowse.isPending) ? (
+              <ActivityIndicator color={color.green} style={s.sectionLoading} />
+            ) : featuredMode && featuredQuery.isError ? (
+              <Text style={[textStyle(type.emptyBody), s.empty]}>
+                Could not load listings. Pull down to try again.
+              </Text>
+            ) : (
+              <Text style={[textStyle(type.emptyBody), s.empty]}>
+                {featuredMode
+                  ? `No listings in ${categoryLabel ?? "this category"} right now.`
+                  : "No perishable listings right now."}
+              </Text>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* The free search helper. Over the scroll view, not in it, so it stays put. */}
+      <SearchHelper />
+    </View>
   );
 }
 

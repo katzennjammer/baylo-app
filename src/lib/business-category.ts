@@ -50,3 +50,12 @@ export function businessCategoryLabel(value: string): string {
     .map((word, i) => (i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(" ");
 }
+
+/**
+ * The shop types this build knows, for code that must refuse an unknown one
+ * rather than label it -- a filter arriving from outside the Marketplace
+ * (src/lib/marketplace-link.ts). An unknown value sent to /browse is a 400.
+ */
+export function isKnownBusinessCategory(value: string): boolean {
+  return Object.prototype.hasOwnProperty.call(LABELS, value);
+}

@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { threadQueryKey, useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
@@ -74,10 +75,13 @@ export default function MessagesThreadScreen() {
   const block = useBlockUser();
   const deleteConversation = useDeleteConversation();
   const sortedMessages = useMemo(
-    () => Array.from(
-      new Map((thread.data?.messages ?? []).map((message) => [message.id, message])).values(),
-    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-    [thread.data],
+    () => collapseSystemPairs(
+      Array.from(
+        new Map((thread.data?.messages ?? []).map((message) => [message.id, message])).values(),
+      ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+      partner ?? null,
+    ),
+    [thread.data, partner],
   );
   const offerStatuses = useMemo(() => {
     const statuses = new Map<string, string>();

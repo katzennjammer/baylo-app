@@ -388,6 +388,13 @@ export interface ViewerReputation {
    * subscribed", never as a crash. Advisory: enforced on POST /api/offers.
    */
   premium?: boolean;
+  /**
+   * isVip(User.vipUntil) on the server. VIP is a SUPERSET of Premium: a VIP
+   * passes every Premium gate without premiumUntil being set. So "does this
+   * person have Premium access" is `hasPremiumAccess()` in src/lib/premium.ts, never `premium`
+   * alone. Optional for the same reason as `premium`.
+   */
+  vip?: boolean;
   limits: {
     /**
      * The highest BRACKET this tier may ACQUIRE. `null` is unlimited. The

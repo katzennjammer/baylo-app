@@ -80,3 +80,21 @@ function dedupeById<T extends { id: string }>(rows: T[]): T[] {
   }
   return out;
 }
+
+/**
+ * The acting shop's backing account id, or null — off the SAME home query the
+ * header reads (deduped by key), so it agrees with the pill about which shop
+ * the server answered as. `enabled` exists because the (app) layout calls this
+ * before it knows there is a session, and an unauthenticated /home is a 401
+ * that would trip the refresh interceptor for nothing.
+ */
+export function useActingShopUserId(enabled: boolean): string | null {
+  const query = useInfiniteQuery({
+    queryKey: HOME_KEY,
+    queryFn: ({ pageParam }) => fetchHomePage(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled,
+  });
+  return query.data?.pages[0]?.payload.acting?.orgUserId ?? null;
+}

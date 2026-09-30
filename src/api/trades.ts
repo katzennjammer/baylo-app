@@ -469,7 +469,15 @@ export function useOfferDecision() {
       }
       return (await res.json()) as OfferDecided;
     },
-    onSuccess: () => invalidateTrades(qc),
+    onSuccess: () => {
+      invalidateTrades(qc);
+      // The thread draws the offer card's status and the "You accepted" row
+      // from its messages, and nothing else refreshes it: without a live
+      // socket it sat on a 30-second-fresh cache and needed reloads. Prefix
+      // keys, so every identity's thread and list are marked stale.
+      void qc.invalidateQueries({ queryKey: ["messages", "thread"] });
+      void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    },
   });
 }
 

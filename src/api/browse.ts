@@ -22,6 +22,7 @@ import type { BrowsePayload } from "./types";
  *   orgsOnly   "true", or absent.
  *   businessCategory  comma-separated shop categories; ONLY with orgsOnly.
  *   minLeaves  / maxLeaves — inclusive bounds; min may not exceed max.
+ *   perishable "true" (perishables only) or "false" (standard only), or absent.
  *   cursor, limit, lat, lng, radiusKm, sort
  *
  * ANYTHING ELSE IS A 400, not an ignored parameter: the route parses with
@@ -66,6 +67,14 @@ export interface BrowseFilters {
    * pill's toggle clears it and `toQueryString` never sends it by itself.
    */
   businessCategories?: readonly string[];
+  /**
+   * Perishables only (true), standard listings only (false), or both (null /
+   * absent). Item.isPerishable, a fact the POSTER sets -- NOT the Food
+   * category: a jar of honey is Food and standard, a bouquet is perishable
+   * and Plants. Needs a server with the parameter (orgs-and-perishables,
+   * 67d5e8e); an older one 400s on it, so only send it when it is set.
+   */
+  perishable?: boolean | null;
 }
 
 /** Mirrors MAX_CATEGORIES in the server's browse route. */
@@ -96,6 +105,7 @@ export function isFiltered(f: BrowseFilters): boolean {
     (f.categories?.length ?? 0) > 0 ||
     f.orgsOnly === true ||
     !!f.condition ||
+    f.perishable != null ||
     f.minLeaves != null ||
     f.maxLeaves != null
   );
@@ -134,6 +144,10 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
   // (min)` would silently drop it, which reads as "the filter did nothing".
   if (filters.minLeaves != null) p.set("minLeaves", String(filters.minLeaves));
   if (filters.maxLeaves != null) p.set("maxLeaves", String(filters.maxLeaves));
+
+  // Tri-state: "false" is a real filter here (standard listings only), unlike
+  // orgsOnly, so it is sent. Absent is both.
+  if (filters.perishable != null) p.set("perishable", String(filters.perishable));
 
   if (cursor) p.set("cursor", cursor);
 
@@ -179,6 +193,7 @@ function browseKey(f: BrowseFilters) {
       condition: f.condition || undefined,
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,
+      perishable: f.perishable ?? undefined,
     },
   ] as const;
 }

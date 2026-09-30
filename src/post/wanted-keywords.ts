@@ -130,7 +130,7 @@ export const WANTED_KEYWORDS: Record<Category, readonly string[]> = {
 };
 
 /** Lowercase, accents off, every non-alphanumeric run to one space, padded. */
-function normalise(text: string): string {
+export function normalise(text: string): string {
   const flat = text
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -140,17 +140,31 @@ function normalise(text: string): string {
   return ` ${flat} `;
 }
 
+/** A keyword table, normalised, longest phrase first. */
+export type KeywordTable = readonly { phrase: string; category: Category }[];
+
+/**
+ * Normalises and orders a keyword table the way the scanner needs it.
+ *
+ * Exported for the search helper (src/search-helper/match.ts), which scans this
+ * SAME table plus a few search-only words. One scanner for both, so "longer
+ * phrases win" and "whole words only" cannot drift apart between them.
+ */
+export function buildKeywordTable(
+  entries: Partial<Record<Category, readonly string[]>>,
+): KeywordTable {
+  return (Object.entries(entries) as [Category, readonly string[]][])
+    .flatMap(([category, words]) =>
+      words.map((w) => ({ phrase: normalise(w).trim(), category })),
+    )
+    .sort(
+      (a, b) =>
+        b.phrase.split(" ").length - a.phrase.split(" ").length || b.phrase.length - a.phrase.length,
+    );
+}
+
 /** Every keyword once, normalised, longest phrase first. Built once at import. */
-const TABLE: readonly { phrase: string; category: Category }[] = (
-  Object.entries(WANTED_KEYWORDS) as [Category, readonly string[]][]
-)
-  .flatMap(([category, words]) =>
-    words.map((w) => ({ phrase: normalise(w).trim(), category })),
-  )
-  .sort(
-    (a, b) =>
-      b.phrase.split(" ").length - a.phrase.split(" ").length || b.phrase.length - a.phrase.length,
-  );
+const TABLE: KeywordTable = buildKeywordTable(WANTED_KEYWORDS);
 
 /**
  * The categories the free text names, in the order they first appear in it.
@@ -160,11 +174,25 @@ const TABLE: readonly { phrase: string; category: Category }[] = (
  * thing most likely to be what they meant.
  */
 export function categoriesFromWanted(text: string): Category[] {
+  return scanCategories(text, TABLE).categories;
+}
+
+/**
+ * The scanner behind categoriesFromWanted(): the categories `text` names, AND
+ * what is left of it once the matched words are blanked out. The post wizard
+ * uses only the categories; the search helper also reads the leftovers.
+ *
+ * `rest` is in normalise()'s padded form, matched words replaced by spaces.
+ */
+export function scanCategories(
+  text: string,
+  table: KeywordTable,
+): { categories: Category[]; rest: string } {
   let rest = normalise(text);
-  if (rest.trim() === "") return [];
+  if (rest.trim() === "") return { categories: [], rest };
 
   const hits: { at: number; category: Category }[] = [];
-  for (const { phrase, category } of TABLE) {
+  for (const { phrase, category } of table) {
     for (const form of [phrase, `${phrase}s`, `${phrase}es`]) {
       const needle = ` ${form} `;
       let at = rest.indexOf(needle);
@@ -177,11 +205,11 @@ export function categoriesFromWanted(text: string): Category[] {
     }
   }
 
-  const out: Category[] = [];
+  const categories: Category[] = [];
   for (const h of hits.sort((a, b) => a.at - b.at)) {
-    if (!out.includes(h.category)) out.push(h.category);
+    if (!categories.includes(h.category)) categories.push(h.category);
   }
-  return out;
+  return { categories, rest };
 }
 
 /**

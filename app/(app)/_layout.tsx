@@ -1,6 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 
 import { useTradeRealtime } from "../../src/api/trade-realtime";
+import { useActingShopUserId } from "../../src/api/home";
 import { AppHeader } from "../../src/components/AppHeader";
 import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
@@ -68,6 +69,11 @@ export default function AppLayout() {
   // The partner's phone. Held here, for exactly as long as there is a session,
   // and released — socket and all — when there is not. See trade-realtime.ts.
   useTradeRealtime(session?.user.id);
+  // And the SHOP's, while acting as one (27 Sep 2026). A shop's trade events
+  // are published to its backing row's channel, which the person's channel
+  // never hears -- owner and staff alike. /api/pusher/auth grants any ACTIVE
+  // member; null when not acting, and the hook holds nothing.
+  useTradeRealtime(useActingShopUserId(!!session) ?? undefined);
 
   if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
   if (!session) return <Redirect href="/(auth)/login" />;
