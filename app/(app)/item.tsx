@@ -396,6 +396,16 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
+          {/* Condition and category, in this screen's `Chip` — the same outline
+              chip pair the feed card draws.
+              The category is what the Home/Marketplace filters match on, so
+              showing it is how an owner finds their own listing again. Both
+              labels arrive resolved from the server — never the raw enum. */}
+          <View style={s.metaChips}>
+            <Chip label={item.conditionLabel} />
+            <Chip label={item.categoryLabel} />
+          </View>
+
           <SocialRow
             likes={item.stats.likes}
             liked={item.stats.liked}
@@ -1053,6 +1063,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
+  },
+  metaChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: space.card.chipGap,
+    marginTop: space.card.titleToChips,
   },
   leavesRow: {
     marginTop: space.detail.titleToLeaves,
