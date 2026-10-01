@@ -66,6 +66,7 @@ import { ArrowUpRightIcon, ChevronRightIcon } from "../../src/components/icons";
 import { openDirections } from "../../src/components/map/directions";
 import type { Item, SafeZoneHub } from "../../src/api/types";
 import type { MapHub } from "../../src/components/map/map-html";
+import { distanceKm, formatDistanceKm } from "../../src/lib/hub-distance";
 
 /** How many nearest active hubs get the map glow and the strip under the status. */
 const NEARBY_HUB_LIMIT = 3;
@@ -1044,24 +1045,6 @@ export default function MarketplaceScreen() {
 }
 
 const keyOf = (item: Item) => item.id;
-
-function distanceKm(latitude: number, longitude: number, hub: SafeZoneHub): number {
-  const earthRadiusKm = 6371;
-  const latDelta = ((hub.latitude - latitude) * Math.PI) / 180;
-  const lngDelta = ((hub.longitude - longitude) * Math.PI) / 180;
-  const originLatitude = (latitude * Math.PI) / 180;
-  const hubLatitude = (hub.latitude * Math.PI) / 180;
-  const a =
-    Math.sin(latDelta / 2) ** 2 +
-    Math.sin(lngDelta / 2) ** 2 * Math.cos(originLatitude) * Math.cos(hubLatitude);
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDistanceKm(km: number): string {
-  if (km < 0.1) return "Nearby";
-  if (km < 10) return `${km.toFixed(1)} km`;
-  return `${Math.round(km)} km`;
-}
 
 /**
  * The nearest active hubs, as white cards over the map's bottom edge: the

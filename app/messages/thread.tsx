@@ -30,6 +30,7 @@ import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
+import { offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle, type } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 
@@ -83,13 +84,17 @@ export default function MessagesThreadScreen() {
     ),
     [thread.data, partner],
   );
+  // The newest offer_update per offer: its status, and the trade it became.
   const offerStatuses = useMemo(() => {
-    const statuses = new Map<string, string>();
+    const statuses = new Map<string, { status: string; tradeId: string | null }>();
     for (const message of sortedMessages) {
       try {
-        const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown; status?: unknown };
+        const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown; status?: unknown; tradeId?: unknown };
         if (payload.type === "offer_update" && typeof payload.offerId === "string" && typeof payload.status === "string") {
-          statuses.set(payload.offerId, payload.status);
+          statuses.set(payload.offerId, {
+            status: payload.status,
+            tradeId: typeof payload.tradeId === "string" ? payload.tradeId : null,
+          });
         }
       } catch {
         // Plain-text messages are not offer payloads.
@@ -297,11 +302,17 @@ export default function MessagesThreadScreen() {
             {sortedMessages.map((message) => {
               const mine = message.senderId === currentUserId;
               let displayContent = message.content;
+              let offerTradeId: string | null = null;
+              let isOffer = false;
               try {
                 const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown };
                 if (payload.type === "offer" && typeof payload.offerId === "string") {
-                  const status = offerStatuses.get(payload.offerId);
-                  if (status) displayContent = JSON.stringify({ ...payload, status });
+                  isOffer = true;
+                  const update = offerStatuses.get(payload.offerId);
+                  if (update) {
+                    displayContent = JSON.stringify({ ...payload, status: update.status });
+                    offerTradeId = update.tradeId;
+                  }
                 }
               } catch {
                 // Plain-text messages are rendered unchanged.
@@ -326,23 +337,20 @@ export default function MessagesThreadScreen() {
                       )}
                     </View>
                   ) : null}
-                  <View style={styles.messageContent}>
-                    <View style={[styles.bubble, isOfferUpdate ? styles.statusBubble : mine ? styles.bubbleMine : styles.bubbleTheir]}>
+                  <View style={[styles.messageContent, isOffer && styles.offerContent]}>
+                    <View style={[styles.bubble, isOfferUpdate || isOffer ? styles.statusBubble : mine ? styles.bubbleMine : styles.bubbleTheir]}>
                       {renderMessageBody({
                         content: displayContent,
                         mine,
                         onImagePress: setLightboxUrl,
+                        // An offer opens its trade screen; an offer_update's
+                        // "Open trade" passes the trade id it carries.
                         onOfferPress: (id) => {
-                          try {
-                            const payload = JSON.parse(message.content) as { type?: string; tradeId?: unknown };
-                            if (__DEV__) console.log("[messages/offer_update_lookup]", { payload, trade: activeTrades.data?.trades.find((trade) => trade.id === payload.tradeId) ?? null });
-                            router.push(payload.type === "offer_update" && typeof payload.tradeId === "string"
-                              ? `/trade-code?id=${encodeURIComponent(payload.tradeId)}&returnTo=trades`
-                              : `/offer-review?id=${encodeURIComponent(id)}`);
-                          } catch {
-                            router.push(`/offer-review?id=${encodeURIComponent(id)}`);
-                          }
+                          router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
                         },
+                        onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
+                        offerTradeId,
+                        partnerName: otherName,
                         onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
                         offerDetails: (() => {
                           try {
@@ -591,6 +599,10 @@ const styles = StyleSheet.create({
   bubbleTheir: {
     backgroundColor: color.control,
     borderColor: color.divider,
+  },
+  offerContent: {
+    width: "88%",
+    maxWidth: 360,
   },
   statusBubble: {
     maxWidth: "100%",

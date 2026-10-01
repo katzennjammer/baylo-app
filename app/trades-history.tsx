@@ -107,7 +107,7 @@ export default function TradesHistoryScreen() {
                 key={trade.id}
                 trade={trade}
                 onPress={() =>
-                  router.push(`/trade-summary?id=${encodeURIComponent(trade.id)}`)
+                  router.push(present.tradeHref(trade.id) as never)
                 }
                 onRate={() => router.push(`/rate-trade?id=${encodeURIComponent(trade.id)}`)}
               />

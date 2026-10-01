@@ -59,7 +59,8 @@ export function useNotifications() {
  *     note warns against: a message opens a thread WITH someone, not a page
  *     ABOUT them.
  *
- *   trade          → /trade-code?id=<tradeId>, or /trades with no id
+ *   trade          → /trade?id=<tradeId>&handoff=1 (the code panel; this was
+ *                    /trade-code before Round 2), or /trades with no id
  *
  *     THE ID IS NO LONGER DROPPED. What stood here said `/trade-code` "is valid
  *     only for a CONFIRMING trade", and that was not true of the screen even
@@ -75,7 +76,8 @@ export function useNotifications() {
  *     tapping a notification about it. An id-less row still falls back to the
  *     list, which is what a pre-v1 row without an entityId can support.
  *
- *   meetup         → /trade-meetup?id=<tradeId>
+ *   meetup         → /trade?id=<tradeId> (the hub step, with Agree; this was
+ *                    /trade-meetup before Round 2)
  *
  *     ITS OWN TOKEN, NOT "trade", and the distinction is the reason it exists.
  *     A meetup notification is "can you do Saturday?" — routing it to the code
@@ -132,9 +134,12 @@ export function notificationTarget(n: NotificationItem): string | null {
       if (n.type === "TRADE_COMPLETED") {
         return id ? `/rate-trade?id=${encodeURIComponent(id)}` : "/trades-history";
       }
-      return id ? `/trade-code?id=${encodeURIComponent(id)}` : "/(app)/trades";
+      // `handoff=1` opens the trade screen on its code panel, which is what
+      // the old /trade-code landing did — issuing the codes included.
+      return id ? `/trade?id=${encodeURIComponent(id)}&handoff=1` : "/(app)/trades";
     case "meetup":
-      return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";
+      // The trade screen's hub step, where "Agree" lives since Round 2.
+      return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "user":
       return id ? `/user?id=${encodeURIComponent(id)}` : null;
     /*

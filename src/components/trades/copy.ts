@@ -434,6 +434,96 @@ export const code = {
     `${partner}'s ${grouped(fee)}-Leaf bridging fee came to you`,
 } as const;
 
+/* ───────────────────── the one trade screen (Round 2) ───────────────── */
+
+/**
+ * `app/trade.tsx`: one screen per trade, one panel for the step it is on.
+ * Sentence case throughout; nothing congratulates.
+ */
+export const tradeScreen = {
+  title: (partner: string) => `Trade with ${partner}`,
+  moreLabel: "More actions",
+  /* The offer / accept step. */
+  offerFrom: (partner: string) => `${partner} sent you an offer`,
+  requestFrom: (partner: string) => `${partner} sent you a swap request`,
+  replyBy: (by: string) => `Reply by ${by}. It expires on its own after that.`,
+  accepted: "Accepted",
+  acceptedHeld: (n: number) => `Accepted · ${grouped(n)} Leaves held`,
+  declined: "Declined",
+  /* The hub step. */
+  hubStepTitle: (partner: string) => `Where will you meet ${partner}?`,
+  hubStepBody: "Pick a safe hub and a time. They can agree or suggest another.",
+  chooseHub: "Choose a hub",
+  theySuggested: (partner: string) => `${partner} suggested`,
+  agree: "Agree",
+  suggestAnother: "Suggest another",
+  /* Waiting. */
+  waitingOnSuggestion: (partner: string) => `Waiting for ${partner} to agree to your suggestion`,
+  waitingOnOffer: (partner: string) => `Waiting for ${partner} to answer your offer`,
+  waitingOnRequest: (partner: string) => `Waiting for ${partner} to answer your swap request`,
+  waitingOnCode: (partner: string) => `You entered ${partner}'s code. Waiting for ${partner} to enter yours.`,
+  changeSuggestion: "Change suggestion",
+  withdraw: "Withdraw",
+  /* The menu. */
+  getCodesNow: "Meet now and get codes",
+  changePlace: "Change place or time",
+  viewProfile: (partner: string) => `View ${partner}'s profile`,
+  message: (partner: string) => `Message ${partner}`,
+  /* Done / ended. */
+  completedOn: (date: string, clock: string) => `Completed ${date} · codes matched ${clock}`,
+  calledOff: "This trade was called off",
+  declinedBy: (partner: string) => `${partner} declined this trade`,
+  /* Fee, display only. */
+  feeLabel: "Bridging fee",
+  offerGone:
+    "That offer is not open any more. It may have been withdrawn, or it may have expired on its own.",
+  tradeGone: "That trade is not open any more. It may already be in your finished trades.",
+} as const;
+
+/** The handoff panel: reading and typing the two codes. */
+export const handoff = {
+  step1: (partner: string) => `Read your code to ${partner}`,
+  step1Body: "It's in the email Baylo sent when the meetup started.",
+  openEmail: "Open email",
+  openEmailFailed: "Could not open a mail app. Open your inbox and look for the email from Baylo.",
+  alsoInEmail: "It's also in the email Baylo sent",
+  show: "Show my code",
+  hide: "Hide",
+  hiddenNote: "Hidden so others nearby can't see",
+  step2: (partner: string) => `Type ${partner}'s code`,
+  refresh: "Codes refresh every 15 minutes.",
+  refreshAtHub: "Codes refresh every 15 minutes, and if either of you leaves the hub.",
+  theyTypedYours: (partner: string) => `${partner} has typed yours in.`,
+  readAgain: (partner: string) => `Ask ${partner} to read it again.`,
+  somethingWrong: "Something went wrong at the meetup?",
+} as const;
+
+/** The hub picker (`app/trade-meetup.tsx`). */
+export const picker = {
+  noShared: "No hub is on both your listings yet, so no safe hub reward this time.",
+  addHub: "Add a hub to my listing",
+  rewardChip: "Safe hub reward",
+  suggestedChip: (partner: string) => `${partner} suggested`,
+  when: "When",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  pickDate: "Pick a date",
+  pickTime: "Pick a time",
+  submit: (partner: string) => `Suggest to ${partner}`,
+  needBoth: "Pick a hub, a day and a time first",
+} as const;
+
+/** The trade offer card in a chat thread. */
+export const chatOffer = {
+  from: (partner: string) => `Trade offer from ${partner}`,
+  fromYou: "Your trade offer",
+  yourMove: "Your move",
+  accepted: "Accepted",
+  declined: "Declined",
+  waitingFor: (partner: string) => `Waiting for ${partner}`,
+  openTrade: "Open trade",
+} as const;
+
 /* ─────────────────── §10.4 / frame 9i — the incoming offer ──────────── */
 
 /** Frame 9i's strings — the incoming-offer review screen. */

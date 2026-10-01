@@ -50,8 +50,8 @@ import { offerBorder, offerColor, offerSize } from "../../src/theme/offer-tokens
  * action. ONLY THE TOP "Your move" CARD gets the solid button and the 1.5
  * forest border — a screen with three solid buttons on it has no priority.
  *
- * Display only. No status logic changed; the bridging fee lives on the detail
- * screens (trade-code, trade-summary, offer-review, trades-waiting), not here.
+ * Display only. No status logic changed; the bridging fee lives on the trade
+ * screen (`app/trade.tsx`), which every card opens, not here.
  * No monospace on this screen.
  *
  * WHEN `Your move` IS EMPTY ITS HEADER GOES. An empty container labelled "Your
@@ -147,15 +147,11 @@ export default function TradesScreen() {
           count={waiting.length}
           top={yourMove.length > 0 ? undefined : firstTop}
           subtitle={yourMove.length > 0 || failed ? undefined : copy.nothingPending}
+          onSeeAll={openWaitingList}
         />
         <View style={s.cards}>
           {waiting.map((item) => (
-            <TradeCard
-              key={item.key}
-              words={present.waitingCard(item)}
-              dim={failed}
-              onPress={openWaitingList}
-            />
+            <TradeCard key={item.key} words={present.waitingCard(item)} dim={failed} />
           ))}
         </View>
       </>

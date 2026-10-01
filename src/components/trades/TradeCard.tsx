@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Circle, Line } from "react-native-svg";
 
 import * as copy from "./copy";
@@ -14,7 +14,8 @@ import { color, font, radius, size, space, textStyle, type } from "../../theme/t
 import { offerBorder, offerColor, offerSize } from "../../theme/offer-tokens";
 
 /**
- * One trade on the Trades tab (1 Oct 2026 redesign).
+ * One trade on the Trades tab (1 Oct 2026 redesign). The card body opens the
+ * trade screen (`/trade`); the button goes straight to its own step.
  *
  *   With Aj                                   since 10 Sep
  *   You give  [photo] Vans    ┆⇄┆  You get  [photo] Air Max
@@ -49,7 +50,7 @@ export function TradeCard({
   children?: ReactNode;
 }) {
   const action = words.action;
-  const open = onPress ?? (action ? () => router.push(action.href as never) : undefined);
+  const open = onPress ?? (() => router.push(words.open as never));
 
   const label = [
     copy.tradeCard.withPartner(words.partner),
@@ -87,11 +88,7 @@ export function TradeCard({
       </View>
 
       {/* The split: give ┆⇄┆ get. */}
-      <View style={s.split}>
-        <Half label={copy.tradeCard.youGive} side={words.give} toward="right" />
-        <SwapSeam />
-        <Half label={copy.tradeCard.youGet} side={words.get} toward="left" />
-      </View>
+      <SwapSplit give={words.give} get={words.get} style={s.split} />
 
       {words.progress ? <ProgressTrack {...words.progress} /> : null}
 
@@ -171,6 +168,28 @@ export function CardLink({
 /* ───────────────────────────── the halves ───────────────────────────── */
 
 /**
+ * "You give ┆⇄┆ You get" — the card's split row, on its own so the trade
+ * screen and the chat offer card draw the same object rather than a copy.
+ */
+export function SwapSplit({
+  give,
+  get,
+  style,
+}: {
+  give: CardSide;
+  get: CardSide;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[{ flexDirection: "row" }, style]}>
+      <Half label={copy.tradeCard.youGive} side={give} toward="right" />
+      <SwapSeam />
+      <Half label={copy.tradeCard.youGet} side={get} toward="left" />
+    </View>
+  );
+}
+
+/**
  * One side of the split. `toward` is the side the seam is on: both halves keep
  * the same `SEAM_GAP` from it, so "You get"'s photo no longer touches the disc.
  *
@@ -222,14 +241,16 @@ function Half({
  * was — that step's node and the line into it are drawn DASHED, labelled
  * "Hub skipped" in secondary ink.
  */
-function ProgressTrack({
+export function ProgressTrack({
   current,
   done,
   tone,
+  style,
 }: {
   current: StepIndex;
   done: [boolean, boolean, boolean, boolean];
   tone: "forest" | "amber";
+  style?: StyleProp<ViewStyle>;
 }) {
   const ink = tone === "amber" ? color.accentGold : color.forest;
   const steps = copy.tradeCard.steps;
@@ -242,7 +263,7 @@ function ProgressTrack({
 
   return (
     <View
-      style={s.track}
+      style={[s.track, style]}
       accessible
       accessibilityLabel={`Step ${current + 1} of ${steps.length}: ${steps[current]}${
         skippedAt >= 0 ? `. ${copy.tradeCard.stepSkipped(skippedAt)}` : ""
@@ -402,7 +423,6 @@ const s = StyleSheet.create({
   partner: { flex: 1, minWidth: 0, color: color.ink },
   since: { flexShrink: 0, color: color.inkSecondary },
   split: {
-    flexDirection: "row",
     marginTop: space.home.tileBody,
     paddingHorizontal: space.home.tileBody,
   },

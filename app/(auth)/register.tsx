@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BackHandler, Linking, Platform, TextInput, View } from "react-native";
+import { BackHandler, TextInput, View } from "react-native";
 import { router } from "expo-router";
 
 import {
@@ -37,6 +37,7 @@ import {
   useKeyboardState,
 } from "../../src/components/auth-sheet";
 import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
+import { openMailApp } from "../../src/lib/open-mail";
 import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
 import { OrgDetailsStep } from "../../src/components/auth-org-details";
 
@@ -732,10 +733,7 @@ function CheckYourEmail({ state }: { state: PendingSignup }) {
 
   async function onOpenMail() {
     setError(null);
-    const url = Platform.OS === "ios" ? "message:" : "mailto:";
-    try {
-      await Linking.openURL(url);
-    } catch {
+    if (!(await openMailApp())) {
       setError("Could not open a mail app. Open your inbox and tap the link in the email from Baylo.");
     }
   }

@@ -187,34 +187,6 @@ export function RowAction({
   );
 }
 
-/**
- * Frame 9c's decision pair: two flex:1 at 44, 8 apart, EQUAL WEIGHT.
- *
- * `Decline` first. Not a style choice — putting accept on the right keeps the
- * affirming control under the thumb that is already there, and putting decline
- * first means the eye reads the reversible option before the irreversible one.
- * §4's `Split buttons (accept/decline)` names the geometry and this is it at row
- * scale rather than the 52 the bottom bar uses.
- */
-export function SplitActions({
-  onDecline,
-  onAccept,
-  declineLabel,
-  acceptLabel,
-}: {
-  onDecline: () => void;
-  onAccept: () => void;
-  declineLabel: string;
-  acceptLabel: string;
-}) {
-  return (
-    <View style={{ flexDirection: "row", gap: offerSize.button.splitGap }}>
-      <RowAction label={declineLabel} onPress={onDecline} tone="outline" fill />
-      <RowAction label={acceptLabel} onPress={onAccept} tone="affirm" fill />
-    </View>
-  );
-}
-
 /* ───────────────────── §3.5 the "Needs you today" card ──────────────── */
 
 /**

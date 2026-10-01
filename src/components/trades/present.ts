@@ -299,6 +299,8 @@ export interface CardWords {
   action: { label: string; tone: "forest" | "amber"; href: string; a11y: string } | null;
   /** "Waiting on them" cards only: "Aj to confirm". */
   waitingOn: string | null;
+  /** Where the card body goes: the one trade screen. */
+  open: string;
 }
 
 function sideOf(
@@ -319,7 +321,7 @@ function sideOf(
  * `offeredLeaves`); the receiver put up `requestedItem`. On a Leaves-only trade
  * the wire sends `offeredItem: null`, so the sender's side is the leaf tile.
  */
-function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
+export function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
   const senderSide = sideOf(trade.offeredItem, trade.offeredLeaves);
   const receiverSide = sideOf(trade.requestedItem, null);
   return trade.direction === "sent"
@@ -327,7 +329,7 @@ function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
     : { give: receiverSide, get: senderSide };
 }
 
-function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } {
+export function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } {
   const [first, ...rest] = offer.offeredItems;
   const offered = sideOf(first ?? null, offer.offeredLeaves);
   const offeredSide =
@@ -352,6 +354,50 @@ function namedHub(trade: ActiveTrade): string | null {
 
 const enc = encodeURIComponent;
 
+/** The one trade screen, for a trade row or for an offer that is not a trade yet. */
+export const tradeHref = (tradeId: string) => `/trade?id=${enc(tradeId)}`;
+export const offerHref = (offerId: string) => `/trade?offer=${enc(offerId)}`;
+
+/**
+ * The four-step track for ANY trade, not only a "Your move" card — the trade
+ * screen draws it in every state. Same mapping as `yourMoveCard()`:
+ *
+ *   PENDING (request or offer)     Accepted is current
+ *   ACCEPTED, no agreed hub        Hub set is current, amber
+ *   ACCEPTED, hub agreed           Handoff is current
+ *   CONFIRMING                     Handoff; Hub set dashed if none was agreed
+ *   COMPLETED                      all four, Done current
+ *
+ * Null for a trade that ended without a swap: there is no step to be on.
+ */
+export function tradeProgress(trade: ActiveTrade): CardProgress | null {
+  const hubAgreed = !!trade.meetup?.agreedAt;
+  switch (trade.status) {
+    case "PENDING":
+      return { current: 0, done: [false, false, false, false], tone: "forest" };
+    case "ACCEPTED":
+      return hubAgreed
+        ? { current: 2, done: [true, true, false, false], tone: "forest" }
+        : { current: 1, done: [true, false, false, false], tone: "amber" };
+    case "CONFIRMING":
+      return { current: 2, done: [true, hubAgreed, false, false], tone: "forest" };
+    case "COMPLETED":
+      return {
+        current: 3,
+        done: [true, hubAgreed || !!trade.safeZoneHub, true, true],
+        tone: "forest",
+      };
+    default:
+      return null;
+  }
+}
+
+export const OFFER_PROGRESS: CardProgress = {
+  current: 0,
+  done: [false, false, false, false],
+  tone: "forest",
+};
+
 /** A "Your move" card. The step mapping is the one written up for review (1 Oct 2026). */
 export function yourMoveCard(item: NeedsItem): CardWords {
   if (item.kind === "offer") {
@@ -361,15 +407,16 @@ export function yourMoveCard(item: NeedsItem): CardWords {
       partner,
       since: copy.waiting.since(new Date(offer.createdAt)),
       ...offerSides(offer),
-      progress: { current: 0, done: [false, false, false, false], tone: "forest" },
+      progress: OFFER_PROGRESS,
       footer: copy.tradeCard.replyToOffer(partner, replyBy(offer.createdAt)),
       action: {
         label: copy.tradeCard.action.review,
         tone: "forest",
-        href: `/offer-review?id=${enc(offer.id)}`,
+        href: offerHref(offer.id),
         a11y: `Review the offer from ${offer.counterparty.name}`,
       },
       waitingOn: null,
+      open: offerHref(offer.id),
     };
   }
 
@@ -380,6 +427,7 @@ export function yourMoveCard(item: NeedsItem): CardWords {
     since: copy.waiting.since(new Date(trade.createdAt)),
     ...tradeSides(trade),
     waitingOn: null,
+    open: tradeHref(trade.id),
   };
 
   if (item.kind === "trade-request") {
@@ -390,7 +438,7 @@ export function yourMoveCard(item: NeedsItem): CardWords {
       action: {
         label: copy.tradeCard.action.review,
         tone: "forest",
-        href: `/trades-waiting?answer=${enc(trade.id)}`,
+        href: tradeHref(trade.id),
         a11y: `Review the swap request from ${trade.counterparty.name}`,
       },
     };
@@ -399,7 +447,7 @@ export function yourMoveCard(item: NeedsItem): CardWords {
   const codeAction = {
     label: copy.tradeCard.action.showCode,
     tone: "forest" as const,
-    href: `/trade-code?id=${enc(trade.id)}`,
+    href: tradeHref(trade.id),
     a11y: `Open the confirmation code for ${trade.counterparty.name}`,
   };
 
@@ -436,7 +484,8 @@ export function yourMoveCard(item: NeedsItem): CardWords {
       action: {
         label: copy.tradeCard.action.answer,
         tone: "amber",
-        href: meetupHref,
+        // Agree / Suggest another live on the trade screen's hub step.
+        href: tradeHref(trade.id),
         a11y: `Answer ${trade.counterparty.name}'s suggested meeting`,
       },
     };
@@ -468,6 +517,7 @@ export function waitingCard(item: WaitingItem): CardWords {
       footer: copy.tradeCard.noHub,
       action: null,
       waitingOn: copy.tradeCard.toConfirm(partner),
+      open: offerHref(offer.id),
     };
   }
 
@@ -487,6 +537,7 @@ export function waitingCard(item: WaitingItem): CardWords {
     footer,
     action: null,
     waitingOn: copy.tradeCard.toConfirm(partner),
+    open: tradeHref(trade.id),
   };
 }
 

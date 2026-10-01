@@ -207,7 +207,7 @@ export const MAX_CODE_ATTEMPTS = 5;
  *
  * Five ways to get one, and the screen renders all five the same: a deployment
  * with no SWAP_CODE_KEY, a row issued before sealing existed, a rotated key, an
- * expired code, a code burned by MAX_CODE_ATTEMPTS. `CodeDisplay` takes
+ * expired code, a code burned by MAX_CODE_ATTEMPTS. The handoff panel takes
  * `string | null` and names the email when it is null, exactly as it did when
  * this function was a stub — which is why turning the field on needed no change
  * to any of §6.1's four states.

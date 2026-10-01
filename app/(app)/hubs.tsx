@@ -1,9 +1,9 @@
-import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { useLastKnownLocation } from "../../src/lib/hub-distance";
 import { Splash } from "../../src/components/Splash";
 import { useHubs } from "../../src/api/hubs";
 import { useItem } from "../../src/api/item";
@@ -68,23 +68,7 @@ export default function HubsMapScreen() {
    * waits on a fresh fix, and says nothing when there is none. The
    * marketplace map is where the full lookup (and its retry) lives.
    */
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const permission = await Location.getForegroundPermissionsAsync();
-        if (!permission.granted) return;
-        const last = await Location.getLastKnownPositionAsync({ maxAge: 15 * 60 * 1000, requiredAccuracy: 2000 });
-        if (last && !cancelled) setUserLocation({ latitude: last.coords.latitude, longitude: last.coords.longitude });
-      } catch {
-        // No dot. The map is complete without it.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const userLocation = useLastKnownLocation();
 
   const scoped = !!itemId;
 

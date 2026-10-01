@@ -4,6 +4,7 @@ import { Animated, Text, TextInput, View, useWindowDimensions } from "react-nati
 import * as copy from "./copy";
 import { CODE_LENGTH } from "../../api/trades";
 import { useReducedMotion } from "../offer/chrome";
+import { textStyle as baseTextStyle, type } from "../../theme/tokens";
 import {
   offerBoard,
   offerBorder,
@@ -88,126 +89,6 @@ function useCodeBoard() {
   return width <= offerBoard.breakpoint ? offerBoard.tight : offerBoard.wide;
 }
 
-/* ──────────────────────── §6.1 the display block ────────────────────── */
-
-/**
- * The viewer's OWN code, at 40px mono in `#EDEBE3` cells.
- *
- * ── `code` IS NULL, ALWAYS, AND THAT IS NOT A BUG IN THIS COMPONENT ─────────
- *
- * The plaintext of a confirmation code exists in exactly two places: the email
- * `confirm/start` sends, and a bcrypt hash in `SwapConfirmationCode`. No route
- * returns it and none could — the hash is one-way, deliberately, for the reason
- * `swap-code.ts` gives about a participant with partial observation of the
- * stream that produced their partner's code.
- *
- * So this component takes `string | null` rather than `string`. Given digits it
- * draws §6.1 exactly. Given null it says where the code actually is, in one
- * sentence written to §10's rules — no apology, no `unfortunately`, states the
- * fact and hands over the route. Four invented digits would be worse than any
- * sentence: somebody would read them out across a table and the trade would
- * fail on the other person's phone.
- *
- * `ownCode()` in `src/api/trades.ts` reads it off `confirm/status`, which does
- * return it now — the caller's own row only, never the partner's. THIS COMPONENT
- * DID NOT CHANGE WHEN THAT LANDED, which was the point of taking `string | null`
- * from the start: every one of §6.1's four states was already drawn for both
- * branches, so turning the field on was one function body.
- */
-export function CodeDisplay({
-  code,
-  partner,
-  spent,
-}: {
-  code: string | null;
-  partner: string;
-  /** True once the partner has typed this code in. Frame 9g's second block. */
-  spent?: boolean;
-}) {
-  const board = useCodeBoard();
-  const track = useTrackWidth();
-  const gap = offerSize.codeDisplay.gap;
-  const w = cellWidth(track, CODE_LENGTH, gap, board.codeDisplay.w);
-  const h = board.codeDisplay.h;
-
-  if (!code) {
-    return (
-      <View style={{ gap: 10 }}>
-        <Text style={[textStyle(offerType.body), { color: offerColor.ink }]}>
-          {copy.code.whereYourCodeIs(partner)}
-        </Text>
-        {spent ? (
-          <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
-            {copy.code.alreadyTyped(partner)}
-          </Text>
-        ) : null}
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ gap: 10 }}>
-      <View
-        style={{ flexDirection: "row", gap }}
-        // Read as one number, not as six separate cells. A screen reader walking
-        // "4, 1, 8, 2, 6, 0" as six labels is unusable in the situation this
-        // screen exists for.
-        accessible
-        accessibilityLabel={`Your code is ${code.split("").join(" ")}`}
-      >
-        {code.split("").map((digit, i) => (
-          <View
-            key={i}
-            style={{
-              width: w,
-              height: h,
-              borderRadius: offerRadius.codeCell,
-              backgroundColor: offerColor.quiet,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={[
-                textStyle(offerType.codeDigits),
-                {
-                  color: offerColor.ink,
-                  // The tracking is trailing space on the last glyph as well as
-                  // between them, so the digit sits 2px right of centre in its
-                  // own box. Pulling it back is what centres the FIGURE rather
-                  // than centring the figure-plus-its-tracking.
-                  marginLeft: offerType.codeDigits.letterSpacing,
-                },
-              ]}
-            >
-              {digit}
-            </Text>
-          </View>
-        ))}
-      </View>
-      {spent ? (
-        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
-          {copy.code.alreadyTyped(partner)}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-/**
- * §6.1's collapsed form: `Your code is 4182` as one 15px line, not a block.
- *
- * §6.1's "They're waiting for you" state drops the display block to this, so the
- * entry cells get the top of the screen. Same null case as `CodeDisplay`.
- */
-export function CodeDisplayLine({ code }: { code: string | null }) {
-  return (
-    <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-      {code ? `Your code is ${code}` : copy.code.whereYourCodeIsShort}
-    </Text>
-  );
-}
-
 /* ───────────────────────── §6.1 the entry block ─────────────────────── */
 
 /** What `useCodeEntry` hands the screen. */
@@ -278,6 +159,7 @@ export function CodeEntry({
   rejected,
   onSubmit,
   label,
+  compact = false,
 }: {
   entry: CodeEntryState;
   /** §6.1's wrong-code treatment: the rule goes terracotta, nothing else moves. */
@@ -285,12 +167,21 @@ export function CodeEntry({
   onSubmit?: () => void;
   /** The accessible name for the whole field. */
   label: string;
+  /**
+   * The trade screen's handoff panel (Round 2): 44-tall cells that share the
+   * row's width, smaller digits, and the long-press menu left ON so a code
+   * copied out of the email can be pasted. The field still strips non-digits.
+   */
+  compact?: boolean;
 }) {
   const board = useCodeBoard();
   const track = useTrackWidth();
-  const gap = 12;
+  const gap = compact ? offerSpace.rowGap - 2 : 12;
   const w = cellWidth(track, CODE_LENGTH, gap, board.codeEntry.w);
-  const h = board.codeEntry.h;
+  const h = compact ? offerSize.tapTarget : board.codeEntry.h;
+  const digitStyle = compact
+    ? baseTextStyle(type.storefrontStat)
+    : [textStyle(offerType.codeEntry), { marginLeft: offerType.codeEntry.letterSpacing }];
 
   // The cell the next digit lands in. Clamped so a full value keeps the caret in
   // the last cell rather than pointing past the end of the row.
@@ -306,7 +197,7 @@ export function CodeEntry({
             <View
               key={i}
               style={{
-                width: w,
+                ...(compact ? { flex: 1, minWidth: 0 } : { width: w }),
                 height: h,
                 borderRadius: offerRadius.codeCell,
                 borderWidth: rejected
@@ -325,15 +216,13 @@ export function CodeEntry({
             >
               {digit ? (
                 <Text
-                  style={[
-                    textStyle(offerType.codeEntry),
-                    { color: offerColor.ink, marginLeft: offerType.codeEntry.letterSpacing },
-                  ]}
+                  style={[digitStyle, { color: offerColor.ink }]}
+                  maxFontSizeMultiplier={compact ? 1.3 : undefined}
                 >
                   {digit}
                 </Text>
               ) : isActive ? (
-                <Caret />
+                <Caret height={compact ? h / 2 : undefined} />
               ) : null}
             </View>
           );
@@ -363,7 +252,7 @@ export function CodeEntry({
         inputMode="numeric"
         maxLength={CODE_LENGTH}
         caretHidden
-        contextMenuHidden
+        contextMenuHidden={!compact}
         accessibilityLabel={label}
         accessibilityHint={`${CODE_LENGTH} digits`}
         style={{
@@ -393,7 +282,7 @@ export function CodeEntry({
  * `useNativeDriver: true` — opacity is one of the two properties the native
  * driver carries, and this loop runs for as long as somebody has the field open.
  */
-function Caret() {
+function Caret({ height }: { height?: number }) {
   const reduced = useReducedMotion();
   const blink = useRef(new Animated.Value(1)).current;
 
@@ -416,7 +305,7 @@ function Caret() {
     <Animated.View
       style={{
         width: offerSize.amountField.caretW,
-        height: offerSize.amountField.caretH,
+        height: height ?? offerSize.amountField.caretH,
         backgroundColor: offerColor.green,
         opacity: blink,
       }}

@@ -3,8 +3,9 @@ import { Image } from "expo-image";
 import { StyleSheet, Text, View } from "react-native";
 import { Tappable } from "../Tappable";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
-import { ArrowsIcon } from "../offer/icons";
-import { bracketLabel } from "../../lib/brackets";
+import * as copy from "../trades/copy";
+import type { CardSide } from "../trades/present";
+import { ChatOfferCard } from "./ChatOfferCard";
 
 import { color, font, radius, textStyle, type } from "../../theme/tokens";
 
@@ -54,6 +55,9 @@ export function renderMessageBody({
   onRatePress,
   offerDetails,
   tradeDetails,
+  partnerName = "them",
+  offerTradeId = null,
+  onOpenTrade,
 }: {
   content: string;
   mine: boolean;
@@ -62,6 +66,11 @@ export function renderMessageBody({
   onRatePress?: (tradeId: string) => void;
   offerDetails?: LiveOffer;
   tradeDetails?: ActiveTrade;
+  /** The other person in the thread — the offer card's "from" when it is theirs. */
+  partnerName?: string;
+  /** For an offer: the trade it became, from the thread's offer_update rows. */
+  offerTradeId?: string | null;
+  onOpenTrade?: (tradeId: string) => void;
 }) {
   const parsed = asJsonObject(content);
 
@@ -72,51 +81,48 @@ export function renderMessageBody({
   switch (parsed.type) {
     case "offer": {
       const offeredItems = Array.isArray(parsed.offeredItems) ? parsed.offeredItems : [];
-      const offered = offeredItems
-        .map((item: unknown) => (typeof item === "object" && item && "title" in item && typeof item.title === "string" ? item.title : ""))
-        .filter(Boolean)
-        .join(", ") || "Item";
-      const offeredLeaves = typeof parsed.offeredLeaves === "number" && parsed.offeredLeaves > 0 ? ` + ${parsed.offeredLeaves} Leaves` : "";
-      const itemTitle = typeof parsed.postItem === "string"
+      const firstOffered = offeredItems.find(
+        (item: unknown): item is { title: string; imageUrl?: unknown } =>
+          typeof item === "object" && !!item && "title" in item && typeof item.title === "string",
+      );
+      const offeredLeaves = typeof parsed.offeredLeaves === "number" ? parsed.offeredLeaves : 0;
+      const postTitle = typeof parsed.postItem === "string"
         ? parsed.postItem
         : typeof parsed.postItem === "object" && parsed.postItem && "title" in parsed.postItem && typeof parsed.postItem.title === "string"
           ? parsed.postItem.title
-          : "item";
-      const userMessage = typeof parsed.userMessage === "string" ? parsed.userMessage : null;
-      const senderName = typeof parsed.senderName === "string" ? parsed.senderName : "They";
-      const status = typeof parsed.status === "string" ? parsed.status : "PENDING";
+          : copy.tradeCard.unnamed;
+      const postImage = typeof parsed.postItem === "object" && parsed.postItem && "imageUrl" in parsed.postItem && typeof parsed.postItem.imageUrl === "string"
+        ? parsed.postItem.imageUrl
+        : null;
+      const offeredSide: CardSide = firstOffered
+        ? {
+            image: typeof firstOffered.imageUrl === "string" ? firstOffered.imageUrl : null,
+            title: offeredLeaves > 0
+              ? copy.tradeCard.itemPlusLeaves(firstOffered.title, offeredLeaves)
+              : offeredItems.length > 1
+                ? copy.tradeCard.itemPlusMore(firstOffered.title, offeredItems.length - 1)
+                : firstOffered.title,
+            leaves: false,
+          }
+        : offeredLeaves > 0
+          ? { image: null, title: copy.tradeCard.leaves(offeredLeaves), leaves: true }
+          : { image: null, title: copy.tradeCard.unnamed, leaves: false };
+      const postSide: CardSide = { image: postImage, title: postTitle, leaves: false };
       const offerId = typeof parsed.offerId === "string" ? parsed.offerId : null;
-      const offeredImage = offerDetails?.offeredItems[0]?.image
-        ?? (typeof offeredItems[0] === "object" && offeredItems[0] && "imageUrl" in offeredItems[0] && typeof offeredItems[0].imageUrl === "string" ? offeredItems[0].imageUrl : null);
-      const targetImage = offerDetails?.post.image
-        ?? (typeof parsed.postItem === "object" && parsed.postItem && "imageUrl" in parsed.postItem && typeof parsed.postItem.imageUrl === "string" ? parsed.postItem.imageUrl : null);
-      const offeredBracket = offerDetails?.offeredBracket
-        ?? (typeof parsed.offeredBracket === "number" ? parsed.offeredBracket : null);
-      const targetBracket = offerDetails?.targetBracket
-        ?? (typeof parsed.targetBracket === "number" ? parsed.targetBracket : null);
 
-      const card = (
-        <View style={[styles.offerCard, mine ? styles.mineCard : styles.theirCard]}>
-          <View style={styles.offerImages}>
-            {offeredImage ? <Image source={{ uri: offeredImage }} style={styles.offerThumb} contentFit="cover" /> : <View style={styles.offerThumbFallback} />}
-            <ArrowsIcon size={16} stroke={1.6} color={mine ? color.surface : color.inkSecondary} />
-            {targetImage ? <Image source={{ uri: targetImage }} style={styles.offerThumb} contentFit="cover" /> : <View style={styles.offerThumbFallback} />}
-          </View>
-          <Text style={[styles.offerLabel, !mine && styles.theirOfferText]}>Trade offer</Text>
-          <Text style={[styles.offerLine, !mine && styles.theirOfferText]}>{mine ? "You offer" : `${senderName} offers`} {offered} for {itemTitle}</Text>
-          {offeredBracket !== null && targetBracket !== null ? (
-            <Text style={[styles.offerBrackets, !mine && styles.theirOfferMuted]}>{bracketLabel(offeredBracket)} for {bracketLabel(targetBracket)}</Text>
-          ) : null}
-          {userMessage ? <Text style={[styles.offerMessage, !mine && styles.theirOfferText]}>{userMessage}</Text> : null}
-          <Text style={[styles.offerStatus, !mine && styles.theirOfferMuted]}>{sentenceCase(status)}</Text>
-        </View>
+      return (
+        <ChatOfferCard
+          mine={mine}
+          partnerName={partnerName}
+          status={typeof parsed.status === "string" ? parsed.status : "PENDING"}
+          live={offerDetails}
+          fallback={mine ? { give: offeredSide, get: postSide } : { give: postSide, get: offeredSide }}
+          message={typeof parsed.userMessage === "string" && parsed.userMessage.trim() ? parsed.userMessage : null}
+          tradeId={offerTradeId}
+          onOpen={() => (offerId ? onOfferPress?.(offerId) : undefined)}
+          onOpenTrade={(id) => onOpenTrade?.(id)}
+        />
       );
-
-      return offerId && onOfferPress ? (
-        <Tappable onPress={() => onOfferPress(offerId)} accessibilityRole="button" accessibilityLabel="Open trade offer">
-          {card}
-        </Tappable>
-      ) : card;
     }
     case "offer_update": {
       const status = typeof parsed.status === "string" ? parsed.status : "updated";
@@ -251,33 +257,6 @@ const styles = StyleSheet.create({
   theirText: {
     color: color.ink,
   },
-  offerCard: {
-    maxWidth: 280,
-    borderRadius: radius.card,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-  offerImages: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  offerThumb: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: "#E6E4DA",
-  },
-  offerThumbFallback: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: "#E6E4DA",
-  },
   mineCard: {
     backgroundColor: color.forest,
     borderColor: color.forest,
@@ -285,44 +264,6 @@ const styles = StyleSheet.create({
   theirCard: {
     backgroundColor: color.control,
     borderColor: color.divider,
-  },
-  offerLabel: {
-    ...type.sectionHeading,
-    color: color.surface, // Changed offer label color for better contrast
-    marginBottom: 6,
-  },
-  offerLine: {
-    fontFamily: font.sansSemi,
-    fontSize: 14,
-    color: color.surface, // Changed offer line color for better contrast
-    marginBottom: 4,
-  },
-  offerFor: {
-    fontFamily: font.sans,
-    fontSize: 13,
-    color: color.surface, // Changed offer for color for better contrast
-    marginBottom: 6,
-  },
-  offerBrackets: {
-    ...type.gridMeta,
-    color: color.inkSecondary,
-    marginTop: 4,
-  },
-  offerMessage: {
-    fontFamily: font.sans,
-    fontSize: 13,
-    color: color.surface, // Changed offer message color for better contrast
-    marginBottom: 6,
-  },
-  offerStatus: {
-    ...type.gridMeta,
-    color: color.surface, // Changed offer status color for better contrast
-  },
-  theirOfferText: {
-    color: color.ink,
-  },
-  theirOfferMuted: {
-    color: color.inkSecondary,
   },
   statusPill: {
     alignSelf: "center",
@@ -405,9 +346,3 @@ const styles = StyleSheet.create({
     ...type.gridMeta,
   },
 });
-
-/** "PENDING" → "Pending". The wire's enum, shown as a word rather than a code. */
-function sentenceCase(raw: string): string {
-  const lower = raw.toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
-}

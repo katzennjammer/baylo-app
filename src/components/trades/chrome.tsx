@@ -148,20 +148,6 @@ export function TradesBackTitle({
   );
 }
 
-/** A short trailing note on a nav bar ("Expires in 2 days"). 12 of right padding. */
-export function NavNote({ children }: { children: string }) {
-  return (
-    <Text
-      style={[
-        textStyle(offerType.helper),
-        { color: offerColor.inkTertiary, paddingRight: offerSpace.navX },
-      ]}
-    >
-      {children}
-    </Text>
-  );
-}
-
 /* ────────────────────────── the block header ────────────────────────── */
 
 /**
