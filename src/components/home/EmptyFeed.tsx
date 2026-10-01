@@ -22,11 +22,8 @@ const VERIFY_CREDIT_LEAVES = 30;
 /**
  * Nothing in the feed, one thing to do about it.
  *
- * The screen still teaches what the app trades in even with zero rows — the
- * suggested-traders row above it and the trending strip below it both render,
- * so this is never a lone piece of text on an empty canvas. That is why the
- * strip is not hidden when the feed is empty: it is the only content a brand
- * new account has, and it is what makes the ask specific rather than abstract.
+ * The suggested-traders row above it still renders with zero rows, so this is
+ * never a lone piece of text on an empty canvas.
  *
  * One primary action, one secondary. Widening the search is the second thing
  * someone tries when their own area is quiet, and it goes to Marketplace rather
@@ -50,7 +47,7 @@ export function EmptyFeed({ location }: { location: string | null }) {
         Post something you no longer use. We&apos;ll estimate its worth in Leaves and show it to
         {/* `location` is the viewer's OWN stated location — their claim about
             themselves, not a claim about who is in the feed — so naming it here
-            is safe where naming it over the trending counts would not be. It is
+            is safe where naming it over a nationwide count would not be. It is
             also nullable, and the sentence has to end cleanly without it. */}
         {place ? ` traders near you in ${place}.` : " traders near you."}
       </Text>

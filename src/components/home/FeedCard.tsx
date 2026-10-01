@@ -4,13 +4,14 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
 import { Tappable } from "../Tappable";
-import { clampAspect, relativeShort, wasCropped } from "../../lib/format";
-import { resolveTier, TIER_LABEL, type TrustTier } from "../../lib/trust";
+import { CountdownPill } from "../CountdownPill";
+import { clampAspect, relativeShort } from "../../lib/format";
+import { listingArea } from "../../lib/listing-area";
 import { ORG_BADGE_LABEL, ownerBadge } from "../../lib/org";
-import { VerifiedOrgIcon } from "../icons";
 import {
   border,
   color,
+  font,
   icon,
   lines,
   motion,
@@ -32,35 +33,34 @@ import type { Item } from "../../api/types";
  * the web disagreeing about whether CLOTHING reads "Clothing" or "Fashion".
  * (They already disagree in three places on the web. See v1/taxonomy.ts.)
  *
- * THREE SLOTS IN THE ARTBOARD ARE FILLED WITH SOMETHING ELSE, deliberately:
+ * THE CARD AS RESTYLED (1 Oct 2026):
  *
- *   - The pill beside the name is the TRUST TIER — New / Rising / Trusted / Top
- *     Trader — which /home resolves server-side as `owner.trustTier`, with DPA
- *     defaults already charged against it. It is NOT `owner.rank`, which is the
- *     Leaf ladder and answers a different question: how much someone has
- *     EARNED, not whether their counterparties came away satisfied. The
- *     artboard's four visual treatments map onto the four tiers in order. See
- *     `src/lib/trust.ts` for the fallback that covers endpoints sending null.
+ *   header   avatar, name, then "Rising trader · Lapu-Lapu · 20h ago". The
+ *            standing is the TRUST TIER — New / Rising / Trusted / Top trader —
+ *            which /home resolves server-side as `owner.trustTier`, with DPA
+ *            defaults already charged against it. It is NOT `owner.rank`, the
+ *            Leaf ladder, which says how much someone has EARNED rather than
+ *            whether their counterparties came away satisfied. A verified shop
+ *            reads "Verified MSME" in the same slot; an unverified one, nothing.
+ *            It was a pill beside the name ("NEW") and is plain text now.
  *
- *   - The line under the name is drawn as "2.4 km away". Nothing can produce a
- *     distance yet: `Item.pickupLat/Lng` are the only coordinates in the schema
- *     and there is no viewer coordinate at all, so the line renders
- *     `owner.location` as what it is — a place name, and in practice nothing,
- *     since that column is null for every user so far.
+ *            The place is listingArea(), the marketplace cards' function: the
+ *            hub city, else the seller's city. /home sends `safeZones: null`
+ *            today, so in practice it is the seller's city.
  *
- *     DEFERRED, NOT MISSING. The design is written up in README under
- *     "Distance, and why it is not built yet". The one thing to carry in your
- *     head before touching this: it has to be computed CLIENT-SIDE from the
- *     already-coarsened `pickup`, and rendered in buckets. A server-side
- *     distance measured against the precise stored point is trilaterable — three
- *     readings from three positions recover the seller's front door, which is
- *     exactly what the coarsening exists to stop.
+ *            NO DISTANCE, DEFERRED. See README, "Distance, and why it is not
+ *            built yet": it has to be computed CLIENT-SIDE from the coarsened
+ *            `pickup` and rendered in buckets, because a server-side distance
+ *            against the precise point is trilaterable.
  *
- *   - The urgency chip ("Moving out Sunday") has no field behind it. `wanted`
- *     is what the owner will take in return, which is a different thing said in
- *     the same shape, and rendering it in the urgency treatment would turn a
- *     wish list into a deadline. The chip is built and takes a prop; nothing on
- *     this screen passes one yet.
+ *   photo    clamped to the aspect band; a perishable carries the live
+ *            CountdownPill bottom-left, exactly as GridTile does.
+ *
+ *   body     title + bracket on one row, "Condition · Category", then
+ *            "Wants: …" with a swap glyph when the owner said what they want.
+ *
+ *   actions  like, comment, share as icons with a count only above zero, and
+ *            an outlined "Offer trade" pill, absent on your own listing.
  *
  * THE SOCIAL ROW IS LIVE. It was a row of facts — three glyphs with no press
  * handler — because the only like endpoint was /api/posts/[id]/like, outside
@@ -97,14 +97,14 @@ import type { Item } from "../../api/types";
  *             its own — more separation, less compression — at the cost of the
  *             row.
  *
- * NEITHER SHRINKS IT INTO INVISIBILITY, and that was the constraint. Both keep
- * the solid `color.green` fill, which nothing else on the card has: the Leaves
- * chip is the pale wash, the tier badge is grey unless someone is a Top Trader,
- * and every other control is a hairline outline. Both keep the full 15 px bold
- * label rather than dropping to the 14 px semibold `secondaryButton` role. Both
- * gain a swap glyph the full-width bar never had — the mark buys back at a
- * glance what the width gave up, and it is the app's own SwapIcon, so the
- * control now says what it does in two ways instead of one.
+ * OUTLINED, NOT SOLID (1 Oct 2026). A forest outline and forest label on the
+ * card's own fill: the photo is the loudest thing on a card again, and the
+ * pill still reads as the action because it is the only forest-outlined
+ * capsule in the card and the only control with a word in it. Both layouts
+ * keep the full 15 px bold label and the app's SwapIcon on the leading edge.
+ *
+ * The inline row WRAPS rather than overflowing: at 2x text on a 320 dp screen
+ * the pill drops under the social icons instead of pushing past the gutter.
  *
  * The two differ by a constant so they can be compared on a device in one
  * reload. Flip this line.
@@ -115,7 +115,6 @@ export const OFFER_LAYOUT: OfferLayout = "inline";
 
 export const FeedCard = memo(function FeedCard({
   item,
-  urgency = null,
   onOffer,
   onLike,
   onComment,
@@ -126,8 +125,6 @@ export const FeedCard = memo(function FeedCard({
   viewerId = null,
 }: {
   item: Item;
-  /** The urgency chip's copy. See the note above — nothing supplies it today. */
-  urgency?: string | null;
   onOffer?: (item: Item) => void;
   /** `next` is the state being asked for, never "toggle" — see useLike(). */
   onLike?: (item: Item, next: boolean) => void;
@@ -141,12 +138,18 @@ export const FeedCard = memo(function FeedCard({
   /** Own listings suppress the offer action even when the item is still listed. */
   viewerId?: string | null;
 }) {
-  const place = item.owner.location?.trim();
+  // "Rising trader · Lapu-Lapu · 20h ago". The tier moved here from the badge
+  // beside the name (1 Oct 2026); the place is the marketplace cards' own
+  // listingArea(), so a listing reads the same city on both screens.
+  const standing = ownerStanding(item.owner);
+  const area = listingArea(item);
   const when = relativeShort(item.createdAt);
-  // Either half can be absent — location is nullable, and clock skew can leave
-  // `when` empty — so the separator is joined in rather than typed between
-  // them, which would strand a " · " on its own.
-  const meta = [place, when].filter(Boolean).join(" · ");
+  // Any part can be absent — an unverified shop has no standing, the area is
+  // nullable, clock skew can leave `when` empty — so the separators are joined
+  // in rather than typed between them, which would strand a " · " on its own.
+  const meta = [standing, area, when].filter(Boolean).join(" · ");
+  const wanted = item.wanted?.trim();
+  const perishable = item.perishable ?? null;
   const isOwnListing = viewerId !== null && item.owner.id === viewerId;
   const offerAction = isOwnListing ? undefined : () => onOffer?.(item);
 
@@ -158,12 +161,7 @@ export const FeedCard = memo(function FeedCard({
           <Avatar uri={item.owner.avatar} name={item.owner.name} />
           <View style={s.ownerText}>
           <View style={s.nameRow}>
-            {/*
-              The name yields and the tier badge does not. A long handle beside
-              a short rank should cost the handle its tail, not push the rank
-              off the row — the badge is a fixed, meaningful token, and half of
-              one is worse than an elided name.
-            */}
+            {/* The name yields and the achievement mark does not. */}
             <Text
               style={[textStyle(type.username), s.name]}
               numberOfLines={lines.username}
@@ -183,7 +181,6 @@ export const FeedCard = memo(function FeedCard({
                 )}
               </View>
             ) : null}
-            <OwnerBadgeMark owner={item.owner} />
           </View>
 
           {meta ? (
@@ -201,7 +198,7 @@ export const FeedCard = memo(function FeedCard({
       </View>
 
       {/* ── photo ── */}
-      <Photo images={item.images} title={item.title} />
+      <Photo images={item.images} title={item.title} perishable={perishable} />
 
       {/* ── title + value ── */}
       <View style={s.titleRow}>
@@ -219,12 +216,21 @@ export const FeedCard = memo(function FeedCard({
         ) : null}
       </View>
 
-      {/* ── chips ── */}
-      <View style={s.chipRow}>
-        <Chip label={item.conditionLabel} />
-        <Chip label={item.categoryLabel} />
-        {urgency ? <Chip label={urgency} urgent /> : null}
-      </View>
+      {/* ── condition · category ── */}
+      <Text style={[textStyle(type.metadata), s.facts]} numberOfLines={1}>
+        {`${item.conditionLabel} · ${item.categoryLabel}`}
+      </Text>
+
+      {/* ── what the owner will take; absent when they did not say ── */}
+      {wanted ? (
+        <View style={s.wantsRow} accessible accessibilityLabel={`Wants: ${wanted}`}>
+          <SwapIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
+          <Text style={[textStyle(type.metadata), s.wantsText]} numberOfLines={2}>
+            <Text style={s.wantsLabel}>Wants: </Text>
+            {wanted}
+          </Text>
+        </View>
+      ) : null}
 
       {/* ── social + action ── */}
       <CardActions
@@ -258,9 +264,16 @@ export const FeedCard = memo(function FeedCard({
  * middle of the feed does not shorten the card and jerk the scroll position of
  * everything below it. That is the spec's stated reason for the state existing.
  */
-function Photo({ images, title }: { images: string[]; title: string }) {
+function Photo({
+  images,
+  title,
+  perishable,
+}: {
+  images: string[];
+  title: string;
+  perishable: Item["perishable"];
+}) {
   const [aspect, setAspect] = useState(size.photo.aspectDefault);
-  const [cropped, setCropped] = useState(false);
   const [failed, setFailed] = useState(false);
   // Bumped to retry. It is the Image's key, so incrementing it remounts the
   // component — expo-image has no "try that URL again" call, and re-rendering
@@ -271,8 +284,15 @@ function Photo({ images, title }: { images: string[]; title: string }) {
 
   const onLoad = useCallback((e: ImageLoadEventData) => {
     setAspect(clampAspect(e.source.width, e.source.height));
-    setCropped(wasCropped(e.source.width, e.source.height));
   }, []);
+
+  // Rides the photo, or the failed box in its place, so a perishable whose
+  // photo 404s still says how long it has left. Same corner as GridTile.
+  const countdown = perishable ? (
+    <View style={s.countdown} pointerEvents="none">
+      <CountdownPill expiresAt={perishable.expiresAt} expired={perishable.expired} />
+    </View>
+  ) : null;
 
   const retry = useCallback(() => {
     setFailed(false);
@@ -307,6 +327,7 @@ function Photo({ images, title }: { images: string[]; title: string }) {
         ) : (
           <Text style={[textStyle(type.metadata), s.noPhoto]}>No photo</Text>
         )}
+        {countdown}
       </View>
     );
   }
@@ -324,24 +345,11 @@ function Photo({ images, title }: { images: string[]; title: string }) {
         style={s.photo}
       />
       {/*
-        Only on a photo the clamp actually cropped. It is an admission that what
-        is on screen is not the whole frame, so it appears when that is true and
-        not merely when the ratio is off square — a 5:4 upload sits inside the
-        band untouched and gets no label.
-
-        THE SPEC CALLS THIS AN "EXPAND AFFORDANCE" AND THE WORD IS "CROPPED".
-        There is no item detail screen yet — /api/v1/items/[id] has no route in
-        the app — so a label reading "tap to expand" would promise a gesture
-        that does nothing, on the one element whose whole job is to be honest
-        about what is being withheld. It states the fact instead, in the
-        specified position, type and scrim. The word changes to the invitation
-        on the day the screen behind it exists.
+        No "Cropped" label (removed 1 Oct 2026). It marked photos the aspect
+        clamp had cut, which is a fact about the layout, not about the listing;
+        the full frame is one tap away on the listing screen.
       */}
-      {cropped ? (
-        <View style={s.caption} pointerEvents="none">
-          <Text style={[textStyle(type.gridMeta), { color: color.surface }]}>Cropped</Text>
-        </View>
-      ) : null}
+      {countdown}
     </View>
   );
 }
@@ -349,82 +357,21 @@ function Photo({ images, title }: { images: string[]; title: string }) {
 /* ───────────────────────────── parts ────────────────────────────────── */
 
 /**
- * The four trust tiers, in the artboard's four treatments.
+ * The owner's standing, as the first part of the header's meta line.
  *
- * KEYED BY TIER, NOT BY POSITION, so the mapping is readable as a table and a
- * tier that later earns its own treatment is one line rather than an index
- * shift. The escalation is the design's: quiet grey while someone is unproven,
- * the green wash once their counterparties have vouched for them, solid green
- * at the top. New and Rising deliberately share the grey — the spec draws four
- * rungs but only three treatments, and inventing a fourth fill would mean
- * reaching for the terracotta, which this palette reserves for likes and
- * urgency.
+ * ownerBadge() decides it, which matters: the server sends `trustTier: null`
+ * for an organisation, and resolveTier() would read that as "not resolved" and
+ * compute a rung from the shop's trade count — "Trusted trader" on a sari-sari
+ * store. A verified shop reads "Verified MSME"; an unverified one, nothing.
+ *
+ * Sentence case from the tier name ("Rising Trader" -> "Rising trader") rather
+ * than TIER_LABEL, which is the all-caps badge copy other screens still use.
  */
-const TIER_TREATMENT: Record<TrustTier, { backgroundColor: string; borderColor: string; color: string }> = {
-  "New Trader":     { backgroundColor: color.control,   borderColor: color.controlLine, color: color.inkMuted },
-  "Rising Trader":  { backgroundColor: color.control,   borderColor: color.controlLine, color: color.inkMuted },
-  "Trusted Trader": { backgroundColor: color.greenWash, borderColor: color.greenLine,   color: color.forest },
-  "Top Trader":     { backgroundColor: color.green,     borderColor: "transparent",     color: color.onGreen },
-};
-
-/**
- * The badge shows the SHORT label and says the whole tier out loud.
- *
- * "TOP TRADER" is the widest thing this row can carry beside a name, so the
- * other three are cut to one word rather than every one of them keeping a
- * "TRADER" that adds nothing at a glance. A screen reader gets the full name,
- * where there is no width to run out of and "TOP" on its own is meaningless.
- */
-/**
- * The ONE badge beside the poster's name: a verified-org mark, or a trust tier.
- *
- * SAME SLOT, SAME SIZE, NEVER BOTH. The spec asks for the org badge to sit
- * where RISING/NEW already sits, and `ownerBadge()` is what decides which of
- * them this owner gets. It reads `owner.org` BEFORE falling back to
- * resolveTier(), which matters: the server sends `trustTier: null` for an
- * organisation, and resolveTier() reads null as "this endpoint did not resolve
- * it" and computes a rung from the shop's trade count. Calling it directly
- * here would put "Trusted Trader" on a sari-sari store.
- *
- * An UNVERIFIED organisation gets nothing rather than a greyed badge. See the
- * note on ownerBadge().
- */
-function OwnerBadgeMark({ owner }: { owner: Item["owner"] }) {
+function ownerStanding(owner: Item["owner"]): string | null {
   const badge = ownerBadge(owner);
   if (badge.kind === "none") return null;
-  if (badge.kind === "tier") return <TierBadge tier={badge.tier} />;
-
-  return (
-    <View
-      style={[s.tierBadge, s.orgBadge]}
-      accessibilityRole="text"
-      accessibilityLabel={ORG_BADGE_LABEL.full}
-    >
-      <VerifiedOrgIcon size={icon.orgBadge.size} stroke={icon.orgBadge.stroke} color={color.forest} />
-      <Text style={[textStyle(type.tierBadge), { color: color.forest }]}>
-        {ORG_BADGE_LABEL.compact}
-      </Text>
-    </View>
-  );
-}
-
-function TierBadge({ tier }: { tier: TrustTier }) {
-  const treatment = TIER_TREATMENT[tier];
-
-  return (
-    <View
-      style={[
-        s.tierBadge,
-        { backgroundColor: treatment.backgroundColor, borderColor: treatment.borderColor },
-      ]}
-      accessibilityRole="text"
-      accessibilityLabel={tier}
-    >
-      <Text style={[textStyle(type.tierBadge), { color: treatment.color }]}>
-        {TIER_LABEL[tier]}
-      </Text>
-    </View>
-  );
+  if (badge.kind === "org") return ORG_BADGE_LABEL.compact;
+  return badge.tier.charAt(0) + badge.tier.slice(1).toLowerCase();
 }
 
 /**
@@ -447,22 +394,6 @@ function LeavesChip({ value, own }: { value: number; own: boolean }) {
     >
       <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
       <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>{shown}</Text>
-    </View>
-  );
-}
-
-/** Condition, category — and, in the warm treatment, urgency. */
-function Chip({ label, urgent = false }: { label: string; urgent?: boolean }) {
-  return (
-    <View style={[s.chip, urgent && s.chipUrgent]}>
-      <Text
-        style={[
-          textStyle(urgent ? type.urgencyChip : type.chip),
-          { color: urgent ? color.urgent : color.inkSecondary },
-        ]}
-      >
-        {label}
-      </Text>
     </View>
   );
 }
@@ -546,6 +477,9 @@ function CardActions({
  * geometry: the 44 px height and the 10 px side padding that set the row's
  * alignment are written once and are the same either way.
  *
+ * A COUNT ONLY ABOVE ZERO. A bare heart reads as "like this"; "0" beside it
+ * reads as a verdict. The screen reader still hears the number either way.
+ *
  * THE HEART DOES NOT WAIT. `onLike` writes the new count into the cache before
  * the request leaves, so this component re-renders from a prop that has already
  * moved. There is no pending state here and deliberately no spinner: a heart
@@ -581,14 +515,16 @@ export function SocialRow({
           color={liked ? color.like : color.inkSecondary}
           liked={liked}
         />
-        <Text
-          style={[
-            textStyle(type.socialCount),
-            { color: liked ? color.like : color.inkSecondary },
-          ]}
-        >
-          {likes}
-        </Text>
+        {likes > 0 ? (
+          <Text
+            style={[
+              textStyle(type.socialCount),
+              { color: liked ? color.like : color.inkSecondary },
+            ]}
+          >
+            {likes}
+          </Text>
+        ) : null}
       </SocialAction>
 
       <SocialAction
@@ -601,9 +537,11 @@ export function SocialRow({
           stroke={icon.social.stroke}
           color={color.inkSecondary}
         />
-        <Text style={[textStyle(type.socialCount), { color: color.inkSecondary }]}>
-          {comments}
-        </Text>
+        {comments > 0 ? (
+          <Text style={[textStyle(type.socialCount), { color: color.inkSecondary }]}>
+            {comments}
+          </Text>
+        ) : null}
       </SocialAction>
 
       <SocialAction onPress={onShare} label="Share this listing" readOnlyLabel={null}>
@@ -664,15 +602,11 @@ function SocialAction({
 /**
  * The point of the app, in a capsule.
  *
- * The glyph is not decoration and it is not optional. It is what stops the
- * control being read as a chip once it has an intrinsic width — the chip row
- * two lines above is also a small rounded thing with a word in it, and the only
- * differences left would be the fill and the weight. A mark on the leading edge
- * is a shape none of the chips has.
+ * Outlined in forest on the card's own fill. The swap glyph on the leading
+ * edge is what keeps an intrinsic-width capsule from reading as a tag.
  *
  * The label is NOT shortened per layout ("Offer" would fit either). "Offer
- * Trade" is the verb the whole product is built around, and the point of this
- * change was to spend less HEIGHT on it, not to say less.
+ * trade" is the verb the whole product is built around.
  */
 function OfferButton({
   layout,
@@ -693,9 +627,9 @@ function OfferButton({
       style={inline ? s.offerInline : s.offerPill}
       pressedStyle={s.offerPressed}
     >
-      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.onGreen} />
-      <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-        Offer Trade
+      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.forest} />
+      <Text style={[textStyle(type.primaryButton), { color: color.forest }]} numberOfLines={1}>
+        Offer trade
       </Text>
     </Tappable>
   );
@@ -794,25 +728,6 @@ const s = StyleSheet.create({
   },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
 
-  tierBadge: {
-    flexShrink: 0,
-    borderRadius: radius.tierBadge,
-    borderWidth: border.chip,
-    paddingHorizontal: space.tierBadge.x,
-    paddingVertical: space.tierBadge.y,
-  },
-  // The org variant adds a mark, so it needs a row and a gap. Everything else
-  // -- radius, border width, padding -- is inherited from tierBadge above, so
-  // the two badges are the same object in the same slot and a card with one
-  // does not sit a pixel differently from a card with the other.
-  orgBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.tierBadge.y,
-    backgroundColor: color.greenWash,
-    borderColor: color.forest,
-  },
-
   kebab: {
     width: size.control.kebab,
     height: size.control.kebab,
@@ -845,16 +760,6 @@ const s = StyleSheet.create({
     backgroundColor: color.surface,
   },
   reloadPressed: { backgroundColor: color.control },
-  caption: {
-    position: "absolute",
-    right: space.photoCaption.inset,
-    bottom: space.photoCaption.inset,
-    paddingHorizontal: space.photoCaption.x,
-    paddingVertical: space.photoCaption.y,
-    borderRadius: radius.photoCaption,
-    backgroundColor: color.captionFill,
-  },
-
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -878,22 +783,26 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
   },
 
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: space.card.chipGap,
+  facts: {
     paddingHorizontal: space.screenX,
     marginTop: space.card.titleToChips,
+    color: color.inkSecondary,
   },
-  chip: {
-    borderRadius: radius.chip,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    paddingHorizontal: space.chip.x,
-    paddingVertical: space.chip.y,
+  wantsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: size.leaves.gap,
+    paddingHorizontal: space.screenX,
+    marginTop: space.card.nameToMeta + 2,
   },
-  chipUrgent: { borderColor: color.urgentLine, backgroundColor: color.urgentWash },
+  wantsText: { flex: 1, color: color.inkSecondary },
+  wantsLabel: { fontFamily: font.sansSemi, color: color.forest },
+
+  countdown: {
+    position: "absolute",
+    left: space.home.tileBadgeInset,
+    bottom: space.home.tileBadgeInset,
+  },
 
   socialWrap: { paddingHorizontal: space.screenX, marginTop: space.card.chipsToSocial },
   // Only in the inline layout. In the pill layout the wrap holds one child and
@@ -902,7 +811,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: space.card.socialToOffer,
+    // Wraps at 2x text on a narrow screen: the pill drops under the icons
+    // rather than pushing past the right gutter.
+    flexWrap: "wrap",
+    columnGap: space.card.socialToOffer,
   },
   socialRow: { flexShrink: 1, flexDirection: "row", marginHorizontal: -space.card.socialInset },
   socialItem: {
@@ -923,10 +835,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.offerGap,
-    height: size.control.offerInline,
+    minHeight: size.control.offerInline,
     paddingHorizontal: size.control.offerInlineX,
     borderRadius: radius.offerInline,
-    backgroundColor: color.green,
+    borderWidth: border.chip,
+    borderColor: color.forest,
   },
 
   offerWrap: { paddingHorizontal: space.screenX, marginTop: space.card.socialToButton },
@@ -937,13 +850,14 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.offerGap,
-    height: size.control.offerPill,
+    minHeight: size.control.offerPill,
     paddingHorizontal: size.control.offerPillX,
     borderRadius: radius.offerPill,
-    backgroundColor: color.green,
+    borderWidth: border.chip,
+    borderColor: color.forest,
   },
 
-  // No second green in the palette, so pressed is the same fill at reduced
-  // opacity rather than a shade that is not in the spec.
-  offerPressed: { opacity: 0.85 },
+  // The outline fills with the green wash while held, the same pressed state
+  // the app's other outlined chips use.
+  offerPressed: { backgroundColor: color.greenWash },
 });

@@ -13,7 +13,6 @@ import { FeedError } from "../../src/components/home/FeedError";
 import { FeedSkeleton } from "../../src/components/home/FeedSkeleton";
 import { ListingMenu } from "../../src/components/home/ListingMenu";
 import { StoriesRow } from "../../src/components/home/StoriesRow";
-import { TrendingStrip } from "../../src/components/home/TrendingStrip";
 import { VerifyEmailBar } from "../../src/components/home/VerifyEmailBar";
 import { color, space } from "../../src/theme/tokens";
 import { useHome } from "../../src/api/home";
@@ -26,22 +25,19 @@ import type { Item } from "../../src/api/types";
 /**
  * Home — GET /api/v1/home, rendered as Direction 1.
  *
- * One request behind this whole screen. The stories row, the trending rail and
- * the feed all come out of the same payload; the header does too, from the same
- * cache entry.
+ * One request behind this whole screen. The stories row and the feed both come
+ * out of the same payload; the header does too, from the same cache entry.
  *
  * EVERYTHING IS IN THE LIST, not stacked around it. Putting the rails in a
  * parent View gives a feed that scrolls in its own little window between two
  * pinned blocks; as list rows the whole screen is one scroll, which is what a
- * feed is supposed to feel like. It is also the only way an interstitial can sit
- * BETWEEN cards, which is where the artboard puts it — trending appears after
- * the first listing, not above the feed.
+ * feed is supposed to feel like. It is also the only way an interstitial could
+ * sit BETWEEN cards.
  *
  * NO GAP BETWEEN CARDS. The spec is explicit: cards are the same fill as the
  * canvas and are separated by a 1 px rule, never by space or elevation. So
  * there is no ItemSeparatorComponent and no margin — every row draws its own
- * trailing divider, and the rail draws its own, which keeps exactly one rule
- * between any two things no matter what order they end up in.
+ * trailing divider, which keeps exactly one rule between any two cards.
  *
  * FOUR STATES, and which one wins matters:
  *
@@ -58,12 +54,10 @@ import type { Item } from "../../src/api/types";
  */
 
 /**
- * Where the trending interstitial lands: after the first card, which is the
- * artboard's rhythm — it interrupts early, while someone is still deciding
- * whether to keep scrolling. It is skipped when the feed is too short to reach
- * it, so a one-item feed does not end in a rail.
+ * NO TRENDING RAIL (removed 1 Oct 2026). It was the 7-day category groupBy
+ * from /api/v1/home, interleaved after the first card. The payload still
+ * carries `trending`; nothing on this screen reads it.
  */
-const TRENDING_AFTER = 1;
 
 /**
  * THE MATCHES INTERSTITIAL IS BUILT AND NOT MOUNTED, and that is a content
@@ -83,7 +77,7 @@ const TRENDING_AFTER = 1;
  * ITEMS, which is what the artboard is actually drawing.
  */
 
-type Row = { kind: "item"; item: Item } | { kind: "trending" };
+type Row = { kind: "item"; item: Item };
 
 /**
  * THE THREE SHEETS ARE MOUNTED HERE, ONE EACH, NOT ONE PER CARD.
@@ -133,7 +127,6 @@ export default function HomeScreen() {
   const { mutate: like } = useLike();
   const {
     viewer,
-    trending,
     matches,
     feed,
     isPending,
@@ -151,14 +144,7 @@ export default function HomeScreen() {
   useRefetchOnFocus(refetch);
   const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
-  const rows = useMemo<Row[]>(() => {
-    const out: Row[] = [];
-    feed.forEach((item, i) => {
-      out.push({ kind: "item", item });
-      if (i === TRENDING_AFTER - 1 && trending.length > 0) out.push({ kind: "trending" });
-    });
-    return out;
-  }, [feed, trending.length]);
+  const rows = useMemo<Row[]>(() => feed.map((item) => ({ kind: "item", item })), [feed]);
 
   /** The card's Offer Trade button and a tap on the card both land here. */
   const openItem = useCallback(
@@ -209,7 +195,6 @@ export default function HomeScreen() {
    */
   const renderItem = useCallback(
     ({ item: row }: { item: Row }) => {
-      if (row.kind === "trending") return <TrendingStrip trending={trending} />;
       return (
         <View>
           {/*
@@ -237,7 +222,7 @@ export default function HomeScreen() {
         </View>
       );
     },
-    [trending, openItem, onLike, onShare, openComments, openMenu],
+    [openItem, onLike, onShare, openComments, openMenu],
   );
 
   // Resolved fresh on every render. `?? null` because the sheets take null for
@@ -309,7 +294,6 @@ export default function HomeScreen() {
           <View>
             <EmptyFeed location={viewer?.location ?? null} />
             <Divider />
-            <TrendingStrip trending={trending} />
           </View>
         }
         ListFooterComponent={
@@ -358,7 +342,7 @@ export default function HomeScreen() {
   );
 }
 
-/** Stable keys across a refetch — the rail is a singleton, the cards are ids. */
+/** Stable keys across a refetch. */
 function keyOf(row: Row): string {
-  return row.kind === "item" ? `item:${row.item.id}` : row.kind;
+  return `item:${row.item.id}`;
 }

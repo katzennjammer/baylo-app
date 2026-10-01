@@ -146,18 +146,3 @@ export function clampAspect(width: number, height: number): number {
   if (!width || !height) return aspectDefault;
   return Math.min(aspectMax, Math.max(aspectMin, width / height));
 }
-
-/**
- * True when the photo was cropped to get inside the band.
- *
- * Drives the small "expand" label the spec puts in the bottom-right of any
- * non-square photo: it is an admission that what is on screen is not the whole
- * frame, so it has to be keyed on the crop actually having happened rather than
- * on the ratio merely differing from 1:1.
- */
-export function wasCropped(width: number, height: number): boolean {
-  const { aspectMin, aspectMax } = size.photo;
-  if (!width || !height) return false;
-  const raw = width / height;
-  return raw < aspectMin || raw > aspectMax;
-}
