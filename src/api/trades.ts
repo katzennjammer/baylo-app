@@ -740,11 +740,13 @@ function invalidateTrades(qc: ReturnType<typeof useQueryClient>) {
  * that needs doing right now is at the top of the only list there is, and
  * everything else sorts under it.
  *
- * `Needs you today` admits three kinds, IN THIS ORDER (§6):
+ * `Needs you today` (drawn as "Your move") admits, IN THIS ORDER:
  *
  *   1. a confirmation code is live
- *   2. a promise inside seven days of its deadline, or past it
- *   3. an incoming offer awaiting a reply
+ *   2. an agreed meeting that is today or already past
+ *   3. an incoming offer, then an incoming trade request, awaiting a reply
+ *   4. a hub proposal waiting on the viewer, then an accepted trade with no hub
+ *   5. an agreed meeting on a later day
  *
  * The order is the order, not a sort key — a code beats a deadline beats an
  * offer, because that is the order of how immediately the person in front of you
@@ -771,7 +773,13 @@ export type NeedsItem =
   | { kind: "code"; key: string; trade: ActiveTrade }
   | { kind: "offer"; key: string; offer: LiveOffer }
   /** A PENDING TradeRequest addressed to the viewer. See `useTradeDecision()`. */
-  | { kind: "trade-request"; key: string; trade: ActiveTrade };
+  | { kind: "trade-request"; key: string; trade: ActiveTrade }
+  /**
+   * An ACCEPTED trade whose next step is the viewer's: no hub yet (either side
+   * may propose one), a proposal waiting on the viewer, or an agreed plan where
+   * what is left is meeting and showing the code.
+   */
+  | { kind: "meetup"; key: string; trade: ActiveTrade };
 
 export type WaitingItem =
   | { kind: "sent-offer"; key: string; offer: LiveOffer }
@@ -808,14 +816,50 @@ export function buildTradesModel(input: {
     .filter((t) => t.status === "PENDING" && t.direction === "received")
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
+  /* ── An ACCEPTED trade is the viewer's move unless the hub proposal on it is
+     the viewer's own and still unanswered (1 Oct 2026). It used to sit in
+     Waiting in every state, which filed "pick a hub" — something EITHER side
+     can do — and "they suggested Saturday, answer it" under "Waiting on them".
+     `meetupState()` is the one place the whose-turn comparison lives.
+
+     Agreed plans split on the day: a meeting today or already past goes right
+     under the live codes (somebody is about to be in front of you); a later
+     one goes last, under the hub decisions that are actually blocking. ── */
+  const accepted = trades.filter((t) => t.status === "ACCEPTED");
+  const isToday = (iso: string) => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return Date.parse(iso) <= end.getTime();
+  };
+  const byMeetupTime = (a: ActiveTrade, b: ActiveTrade) =>
+    Date.parse(a.meetup!.at) - Date.parse(b.meetup!.at);
+  const oldestFirst = (a: ActiveTrade, b: ActiveTrade) =>
+    Date.parse(a.createdAt) - Date.parse(b.createdAt);
+
+  const agreed = accepted.filter((t) => meetupState(t) === "agreed");
+  const meetingToday = agreed.filter((t) => isToday(t.meetup!.at)).sort(byMeetupTime);
+  const meetingLater = agreed.filter((t) => !isToday(t.meetup!.at)).sort(byMeetupTime);
+  const hubToAnswer = accepted.filter((t) => meetupState(t) === "yours-to-answer").sort(oldestFirst);
+  const hubToPick = accepted.filter((t) => meetupState(t) === "none").sort(oldestFirst);
+
+  const meetupItem = (trade: ActiveTrade) => ({
+    kind: "meetup" as const,
+    key: `meet:${trade.id}`,
+    trade,
+  });
+
   const needsToday: NeedsItem[] = [
     ...codeTrades.map((trade) => ({ kind: "code" as const, key: `code:${trade.id}`, trade })),
+    ...meetingToday.map(meetupItem),
     ...incoming.map((offer) => ({ kind: "offer" as const, key: `offer:${offer.id}`, offer })),
     ...incomingTrades.map((trade) => ({
       kind: "trade-request" as const,
       key: `req:${trade.id}`,
       trade,
     })),
+    ...hubToAnswer.map(meetupItem),
+    ...hubToPick.map(meetupItem),
+    ...meetingLater.map(meetupItem),
   ];
 
   /* ── Waiting ── everything with a clock on it that is not yours to move.
@@ -825,13 +869,14 @@ export function buildTradesModel(input: {
     .filter((o) => o.direction === "sent")
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
-  // Everything mid-flight that is not in `Needs you today`: an ACCEPTED trade
-  // with no meeting, a CONFIRMING one the viewer has already done their half of,
-  // and a PENDING request the viewer SENT and cannot answer themselves.
+  // Everything mid-flight that is genuinely the other person's move: a hub
+  // proposal the viewer made and they have not answered, a CONFIRMING trade the
+  // viewer has already done their half of, and a PENDING request the viewer
+  // SENT and cannot answer themselves.
   const waitingTrades = trades
     .filter(
       (t) =>
-        t.status === "ACCEPTED" ||
+        (t.status === "ACCEPTED" && meetupState(t) === "waiting-on-them") ||
         (t.status === "CONFIRMING" && !t.canConfirm) ||
         (t.status === "PENDING" && t.direction === "sent"),
     )
@@ -859,7 +904,8 @@ export function buildTradesModel(input: {
  *
  * `buildTradesModel()` already decides what "needs you" means: a live
  * confirmation code, an incoming offer, a PENDING trade request addressed to
- * you. The badge is `needsToday.length` and
+ * you, an accepted trade whose hub or handoff is yours to move. The badge is
+ * `needsToday.length` and
  * nothing else. A separate count — "unanswered offers", say — would be a second
  * definition of urgency that drifts from the first, and the failure mode is the
  * one a badge must never have: a number that does not match what is behind it.

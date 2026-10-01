@@ -4,7 +4,6 @@ import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import Svg, { Line } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
@@ -37,10 +36,10 @@ import {
   KebabIcon,
   LeafIcon,
   ShareIcon,
-  SwapIcon,
   WarningIcon,
 } from "../../src/components/icons";
 import { CountdownPill } from "../../src/components/CountdownPill";
+import { SwapSeam } from "../../src/components/SwapSeam";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportReasonRows } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -872,22 +871,7 @@ function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: stri
         </Text>
       </View>
 
-      <View style={s.ticketSeam}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-          <Line
-            x1="50%"
-            y1="0"
-            x2="50%"
-            y2="100%"
-            stroke={color.forest}
-            strokeWidth={1}
-            strokeDasharray="4 4"
-          />
-        </Svg>
-        <View style={s.ticketSwap}>
-          <SwapIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.onScrim} />
-        </View>
-      </View>
+      <SwapSeam />
 
       <View style={s.ticketHalf}>
         <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>They want</Text>
@@ -1232,15 +1216,6 @@ const s = StyleSheet.create({
   ticketHalf: { flex: 1, padding: space.browse.tileBody + 2, gap: 3 },
   ticketLabel: { color: color.inkSecondary },
   ticketSub: { color: color.inkSecondary, marginTop: 1 },
-  ticketSeam: { width: size.home.countdownPill, alignItems: "center", justifyContent: "center" },
-  ticketSwap: {
-    width: size.home.countdownPill,
-    height: size.home.countdownPill,
-    borderRadius: size.home.countdownPill / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.forest,
-  },
 
   seller: {
     marginTop: space.detail.sectionY,

@@ -261,6 +261,42 @@ export const meetup = {
 /** §10.6's `Nothing needs you right now.` — one 15px line, in place of the block. */
 export const nothingPending = "Nothing needs you right now.";
 
+/**
+ * The Trades tab's cards (1 Oct 2026 redesign). Every footer sentence names the
+ * person and, where there is one, the hub — and says plainly when there is not.
+ */
+export const tradeCard = {
+  /** SectionHeader parts: "Your " + accent "move". */
+  yourMoveLead: "Your ",
+  yourMoveAccent: "move",
+  waitingOnThem: "Waiting on them",
+  withPartner: (partner: string) => `With ${partner}`,
+  youGive: "You give",
+  youGet: "You get",
+  leaves: (n: number) => `${grouped(n)} Leaves`,
+  itemPlusLeaves: (title: string, n: number) => `${title} + ${grouped(n)} Leaves`,
+  itemPlusMore: (title: string, more: number) => `${title} + ${more} more`,
+  /** A side with nothing named on the wire (a bracket-only offer, a deleted item). */
+  unnamed: "Not named",
+  steps: ["Accepted", "Hub set", "Handoff", "Done"] as const,
+  noHub: "No hub named yet",
+  hubAndTime: (hub: string, when: string) => `${hub} · ${when}`,
+  showCodeAt: (partner: string, hub: string) => `Show your code to ${partner} at ${hub}`,
+  showCodeNoHub: (partner: string) => `Show your code to ${partner}. No hub named yet.`,
+  pickHub: (partner: string) => `Pick where you'll meet ${partner}`,
+  theySuggested: (partner: string, hub: string, when: string) =>
+    `${partner} suggested ${hub} · ${when}`,
+  replyToOffer: (partner: string, by: string) => `Reply to ${partner}'s offer by ${by}`,
+  replyToRequest: (partner: string) => `Reply to ${partner}'s swap request`,
+  toConfirm: (partner: string) => `${partner} to confirm`,
+  action: {
+    showCode: "Show code",
+    pickHub: "Pick hub",
+    answer: "Answer",
+    review: "Review",
+  },
+} as const;
+
 /* ─────────────────────────── §10.6 empty ────────────────────────────── */
 
 /**

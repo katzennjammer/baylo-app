@@ -1,5 +1,6 @@
 import * as copy from "./copy";
 import { meetupState, offerFeeLine, offerSwapLine, swapLine, tradeFeeLine } from "../../api/trades";
+import type { NeedsItem, WaitingItem } from "../../api/trades";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { OFFER_REPLY_DAYS, firstName, replyBy, sentAgo } from "../offer/copy";
 import { grouped, meetupWhen, shortDate } from "../../lib/gap";
@@ -262,6 +263,229 @@ export function groupByMonth(trades: ActiveTrade[]): { label: string; rows: Acti
     else out.push({ label, rows: [t] });
   }
   return out;
+}
+
+/* ─────────────────────── the Trades tab's cards ─────────────────────── */
+
+/** One half of a card's split row. `leaves` draws the leaf tile instead of a photo. */
+export interface CardSide {
+  image: string | null;
+  title: string;
+  leaves: boolean;
+}
+
+/** Index into `copy.tradeCard.steps`: Accepted · Hub set · Handoff · Done. */
+export type StepIndex = 0 | 1 | 2 | 3;
+
+export interface CardProgress {
+  current: StepIndex;
+  /** Per step. A step BEFORE `current` can be false: codes started with no hub agreed. */
+  done: [boolean, boolean, boolean, boolean];
+  /** Amber while the current step is choosing a hub; forest otherwise. */
+  tone: "forest" | "amber";
+}
+
+export interface CardWords {
+  partner: string;
+  since: string;
+  give: CardSide;
+  get: CardSide;
+  /** Null on a "Waiting on them" card, which carries no track. */
+  progress: CardProgress | null;
+  footer: string;
+  /** "Your move" cards only. */
+  action: { label: string; tone: "forest" | "amber"; href: string; a11y: string } | null;
+  /** "Waiting on them" cards only: "Aj to confirm". */
+  waitingOn: string | null;
+}
+
+function sideOf(
+  item: { title: string; image: string | null } | null,
+  leaves: number | null,
+): CardSide {
+  const n = leaves ?? 0;
+  if (item && n > 0) {
+    return { image: item.image, title: copy.tradeCard.itemPlusLeaves(item.title, n), leaves: false };
+  }
+  if (item) return { image: item.image, title: item.title, leaves: false };
+  if (n > 0) return { image: null, title: copy.tradeCard.leaves(n), leaves: true };
+  return { image: null, title: copy.tradeCard.unnamed, leaves: false };
+}
+
+/**
+ * Give / get, from the viewer's side. The sender put up `offeredItem` (and any
+ * `offeredLeaves`); the receiver put up `requestedItem`. On a Leaves-only trade
+ * the wire sends `offeredItem: null`, so the sender's side is the leaf tile.
+ */
+function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
+  const senderSide = sideOf(trade.offeredItem, trade.offeredLeaves);
+  const receiverSide = sideOf(trade.requestedItem, null);
+  return trade.direction === "sent"
+    ? { give: senderSide, get: receiverSide }
+    : { give: receiverSide, get: senderSide };
+}
+
+function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } {
+  const [first, ...rest] = offer.offeredItems;
+  const offered = sideOf(first ?? null, offer.offeredLeaves);
+  const offeredSide =
+    first && rest.length > 0 && !(offer.offeredLeaves && offer.offeredLeaves > 0)
+      ? { ...offered, title: copy.tradeCard.itemPlusMore(first.title, rest.length) }
+      : offered;
+  const post = sideOf(offer.post, null);
+  return offer.direction === "sent"
+    ? { give: offeredSide, get: post }
+    : { give: post, get: offeredSide };
+}
+
+/**
+ * The hub the two of them are meeting at, if one is named: the AGREED plan
+ * first, then the claim. Never an unanswered proposal — that is one person's
+ * suggestion, not a place both have said yes to.
+ */
+function namedHub(trade: ActiveTrade): string | null {
+  if (trade.meetup?.agreedAt) return trade.meetup.hub.name;
+  return trade.safeZoneHub?.name ?? null;
+}
+
+const enc = encodeURIComponent;
+
+/** A "Your move" card. The step mapping is the one written up for review (1 Oct 2026). */
+export function yourMoveCard(item: NeedsItem): CardWords {
+  if (item.kind === "offer") {
+    const offer = item.offer;
+    const partner = firstName(offer.counterparty.name);
+    return {
+      partner,
+      since: copy.waiting.since(new Date(offer.createdAt)),
+      ...offerSides(offer),
+      progress: { current: 0, done: [false, false, false, false], tone: "forest" },
+      footer: copy.tradeCard.replyToOffer(partner, replyBy(offer.createdAt)),
+      action: {
+        label: copy.tradeCard.action.review,
+        tone: "forest",
+        href: `/offer-review?id=${enc(offer.id)}`,
+        a11y: `Review the offer from ${offer.counterparty.name}`,
+      },
+      waitingOn: null,
+    };
+  }
+
+  const trade = item.trade;
+  const partner = firstName(trade.counterparty.name);
+  const base = {
+    partner,
+    since: copy.waiting.since(new Date(trade.createdAt)),
+    ...tradeSides(trade),
+    waitingOn: null,
+  };
+
+  if (item.kind === "trade-request") {
+    return {
+      ...base,
+      progress: { current: 0, done: [false, false, false, false], tone: "forest" },
+      footer: copy.tradeCard.replyToRequest(partner),
+      action: {
+        label: copy.tradeCard.action.review,
+        tone: "forest",
+        href: "/trades-waiting",
+        a11y: `Review the swap request from ${trade.counterparty.name}`,
+      },
+    };
+  }
+
+  const codeAction = {
+    label: copy.tradeCard.action.showCode,
+    tone: "forest" as const,
+    href: `/trade-code?id=${enc(trade.id)}`,
+    a11y: `Open the confirmation code for ${trade.counterparty.name}`,
+  };
+
+  if (item.kind === "code") {
+    const hub = namedHub(trade);
+    const hubAgreed = !!trade.meetup?.agreedAt;
+    return {
+      ...base,
+      progress: { current: 2, done: [true, hubAgreed, false, false], tone: "forest" },
+      footer: hub ? copy.tradeCard.showCodeAt(partner, hub) : copy.tradeCard.showCodeNoHub(partner),
+      action: codeAction,
+    };
+  }
+
+  // kind === "meetup": an ACCEPTED trade, in one of the three states that are
+  // the viewer's move. `buildTradesModel()` never files "waiting-on-them" here.
+  const state = meetupState(trade);
+  const plan = trade.meetup;
+  if (state === "agreed" && plan) {
+    return {
+      ...base,
+      progress: { current: 2, done: [true, true, false, false], tone: "forest" },
+      footer: `${copy.tradeCard.showCodeAt(partner, plan.hub.name)} · ${meetupWhen(new Date(plan.at))}`,
+      action: codeAction,
+    };
+  }
+
+  const meetupHref = `/trade-meetup?id=${enc(trade.id)}`;
+  if (state === "yours-to-answer" && plan) {
+    return {
+      ...base,
+      progress: { current: 1, done: [true, false, false, false], tone: "amber" },
+      footer: copy.tradeCard.theySuggested(partner, plan.hub.name, meetupWhen(new Date(plan.at))),
+      action: {
+        label: copy.tradeCard.action.answer,
+        tone: "amber",
+        href: meetupHref,
+        a11y: `Answer ${trade.counterparty.name}'s suggested meeting`,
+      },
+    };
+  }
+
+  return {
+    ...base,
+    progress: { current: 1, done: [true, false, false, false], tone: "amber" },
+    footer: copy.tradeCard.pickHub(partner),
+    action: {
+      label: copy.tradeCard.action.pickHub,
+      tone: "amber",
+      href: meetupHref,
+      a11y: `Pick a hub to meet ${trade.counterparty.name}`,
+    },
+  };
+}
+
+/** A "Waiting on them" card: no track; the hub and time if set, and who it is with. */
+export function waitingCard(item: WaitingItem): CardWords {
+  if (item.kind === "sent-offer") {
+    const offer = item.offer;
+    const partner = firstName(offer.counterparty.name);
+    return {
+      partner,
+      since: copy.waiting.since(new Date(offer.createdAt)),
+      ...offerSides(offer),
+      progress: null,
+      footer: copy.tradeCard.noHub,
+      action: null,
+      waitingOn: copy.tradeCard.toConfirm(partner),
+    };
+  }
+
+  const trade = item.trade;
+  const partner = firstName(trade.counterparty.name);
+  // An unanswered proposal the VIEWER made still names a place and time — it is
+  // the thing the other person is being asked to confirm.
+  const plan = trade.meetup;
+  const footer = plan
+    ? copy.tradeCard.hubAndTime(plan.hub.name, meetupWhen(new Date(plan.at)))
+    : (namedHub(trade) ?? copy.tradeCard.noHub);
+  return {
+    partner,
+    since: copy.waiting.since(new Date(trade.createdAt)),
+    ...tradeSides(trade),
+    progress: null,
+    footer,
+    action: null,
+    waitingOn: copy.tradeCard.toConfirm(partner),
+  };
 }
 
 /* ───────────────────────── re-exports for the screens ───────────────── */

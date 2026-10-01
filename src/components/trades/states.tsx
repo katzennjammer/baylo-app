@@ -1,8 +1,10 @@
 import { Text, View } from "react-native";
 
 import * as copy from "./copy";
-import { BlockHeader, Gutter, TradesSectionLabel } from "./chrome";
+import { Gutter } from "./chrome";
+import { SectionHeader } from "../home-redesign/SectionHeader";
 import { Hairline, PrimaryButton } from "../offer/chrome";
+import { color, radius, space, type } from "../../theme/tokens";
 import { WarningTriangleIcon } from "../offer/icons";
 import { NumberedStep } from "../offer/rows";
 import { RowAction } from "./rows";
@@ -124,27 +126,28 @@ export function NothingPending() {
  * The feed's `FeedSkeleton` pulses because a feed is entertainment; this is not.
  */
 export function TradesSkeleton() {
+  // Card-shaped blocks under the real headers (1 Oct 2026 redesign): a
+  // "Your move" card carries the track and is taller than a waiting one.
   return (
     <View>
-      <BlockHeader label={copy.label.needsToday} top={14} />
-      <Gutter style={{ gap: 8 }}>
-        <SkeletonBlock height={offerSize.tradeCard.height} radius={offerRadius.tile} />
-        <SkeletonBlock height={offerSize.tradeCard.height} radius={offerRadius.tile} />
+      <SectionHeader
+        leading={copy.tradeCard.yourMoveLead}
+        accent={copy.tradeCard.yourMoveAccent}
+        accentColor={color.forest}
+        squiggle
+        top={TRADES_FIRST_HEADER_TOP}
+      />
+      <Gutter style={{ gap: 10 }}>
+        <SkeletonBlock height={196} radius={radius.hubRow} />
+        <SkeletonBlock height={196} radius={radius.hubRow} />
       </Gutter>
 
-      <View style={{ height: 18 }} />
-      <Hairline />
+      <SectionHeader accent={copy.tradeCard.waitingOnThem} />
+      <Gutter style={{ gap: 10 }}>
+        <SkeletonBlock height={150} radius={radius.hubRow} />
+      </Gutter>
 
-      <BlockHeader label={copy.label.waiting} top={18} />
-      <View>
-        <SkeletonRow widths={["64%", "44%"]} />
-        <Hairline />
-        <SkeletonRow widths={["52%", "60%"]} />
-        <Hairline />
-        <SkeletonRow widths={["58%", "38%"]} />
-      </View>
-
-      <View style={{ height: 16 }} />
+      <View style={{ height: 24 }} />
       <Hairline />
       <SkeletonBlock height={offerSize.historyRow.height} radius={0} />
       <Hairline />
@@ -152,51 +155,16 @@ export function TradesSkeleton() {
   );
 }
 
+/**
+ * The first section header's top margin on the Trades tab. There is no screen
+ * title, and `TradesHost` already pads past the status bar, so the header needs
+ * only the gap a heading keeps from what is above it — not a whole section's.
+ */
+export const TRADES_FIRST_HEADER_TOP = space.home.headingToContent;
+
 function SkeletonBlock({ height, radius }: { height: number; radius: number }) {
   return (
     <View style={{ height, borderRadius: radius, backgroundColor: offerColor.sunk }} />
-  );
-}
-
-/** A 72px waiting row's shape: the 44 square and two lines of unequal width. */
-function SkeletonRow({ widths }: { widths: [string, string] }) {
-  return (
-    <View
-      style={{
-        height: offerSize.tradeRow.height,
-        paddingHorizontal: offerSpace.screenX,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: offerSize.tradeRow.gap,
-      }}
-    >
-      <View
-        style={{
-          width: offerSize.tradeRow.thumb,
-          height: offerSize.tradeRow.thumb,
-          borderRadius: offerRadius.thumbnail,
-          backgroundColor: offerColor.quiet,
-        }}
-      />
-      <View style={{ flex: 1, gap: 7 }}>
-        <View
-          style={{
-            height: 12,
-            width: widths[0] as `${number}%`,
-            borderRadius: offerRadius.track,
-            backgroundColor: offerColor.quiet,
-          }}
-        />
-        <View
-          style={{
-            height: 10,
-            width: widths[1] as `${number}%`,
-            borderRadius: offerRadius.track,
-            backgroundColor: offerColor.sunk,
-          }}
-        />
-      </View>
-    </View>
   );
 }
 
@@ -272,9 +240,12 @@ export function TradesErrorPanel({
  * refresh failed would take away the one thing they opened the app for.
  */
 export function CachedLabel({ clock }: { clock: string }) {
+  // Body family, not mono: the Trades tab carries no monospace (1 Oct 2026).
   return (
     <Gutter style={{ paddingTop: 18, paddingBottom: 10 }}>
-      <TradesSectionLabel>{copy.label.lastLoaded(clock)}</TradesSectionLabel>
+      <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
+        {copy.label.lastLoaded(clock)}
+      </Text>
     </Gutter>
   );
 }

@@ -1,39 +1,30 @@
-import { router, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
-import {
-  buildTradesModel,
-  useActiveTrades,
-  useTradeHistory,
-  type NeedsItem,
-  type WaitingItem,
-} from "../../src/api/trades";
+import { buildTradesModel, useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import { Splash } from "../../src/components/Splash";
-import { Hairline } from "../../src/components/offer/chrome";
-import { BlockHeader, Gutter, TradesHost } from "../../src/components/trades/chrome";
+import { Tappable } from "../../src/components/Tappable";
+import { ChevronRightIcon } from "../../src/components/icons";
+import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
+import { TradesHost } from "../../src/components/trades/chrome";
 import * as copy from "../../src/components/trades/copy";
-import {
-  HistoryCollapsedRow,
-  NeedsCard,
-  RowAction,
-  RowChevron,
-  Thumb,
-  WaitingRow,
-} from "../../src/components/trades/rows";
+import * as present from "../../src/components/trades/present";
+import { TradeCard } from "../../src/components/trades/TradeCard";
 import {
   CachedLabel,
   NothingPending,
+  TRADES_FIRST_HEADER_TOP,
   TradesEmpty,
   TradesErrorPanel,
   TradesSkeleton,
 } from "../../src/components/trades/states";
-import * as present from "../../src/components/trades/present";
 import { clockTime } from "../../src/lib/format";
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useTradeLiveness } from "../../src/lib/trade-liveness";
-import { offerColor, offerSize } from "../../src/theme/offer-tokens";
+import { color, icon, space, textStyle, type } from "../../src/theme/tokens";
+import { offerBorder, offerColor, offerSize } from "../../src/theme/offer-tokens";
 
 /**
  * §6 — the Trades tab. The last screen in the core loop.
@@ -43,39 +34,36 @@ import { offerColor, offerSize } from "../../src/theme/offer-tokens";
  * Decided, and the reasoning is written here so it is not quietly undone: TABS
  * WOULD PUT THE CAR-PARK CASE BEHIND A TAP. Somebody standing next to a stranger
  * about to hand over a jacket should not have to navigate to find their code. So
- * there is one list, `Needs you today` is pinned to the top of it, and everything
- * else sorts underneath.
+ * there is one list, `Your move` is pinned to the top of it, and everything else
+ * sorts underneath.
  *
- * §6's order, and what each block admits:
+ *   Your move         what is the viewer's to do, most urgent first — see
+ *                     `buildTradesModel()`, which owns the order.
+ *   Waiting on them   everything mid-flight that is the other person's move.
+ *   Finished trades   one row. Nothing about a finished trade is urgent.
  *
- *   Needs you today   a live confirmation code, then an incoming offer, then a
- *                     trade request. In that order — see `buildTradesModel()`,
- *                     which owns it.
- *   Waiting           everything with a clock on it that is not yours to move.
- *   History           one row. Nothing about a finished trade is urgent.
+ * ══ THE 1 OCT 2026 REDESIGN ═════════════════════════════════════════════════
  *
- * WHEN `Needs you today` IS EMPTY THE WHOLE BLOCK GOES, LABEL INCLUDED. §6 says
- * so and frame 9b explains why in a line: an empty container labelled "Needs you
- * today" reads as a failure to load. One 15px sentence takes its place and
- * `Waiting` moves up to y 88.
+ * Each trade is a card (`TradeCard`): who and since when, a "You give ┆⇄┆ You
+ * get" split in the listing screen's swap-ticket style, a four-step track on
+ * "Your move" cards only, and a footer with one specific sentence and the
+ * action. ONLY THE TOP "Your move" CARD gets the solid button and the 1.5
+ * forest border — a screen with three solid buttons on it has no priority.
+ *
+ * Display only. No status logic changed; the bridging fee lives on the detail
+ * screens (trade-code, trade-summary, offer-review, trades-waiting), not here.
+ * No monospace on this screen.
+ *
+ * WHEN `Your move` IS EMPTY ITS HEADER GOES. An empty container labelled "Your
+ * move" reads as a failure to load; "Waiting on them" moves up and carries
+ * "Nothing needs you right now." under it.
  *
  * ══ THIS SCREEN TURNS THE TAB HEADER OFF ════════════════════════════════════
  *
- * `(app)/_layout.tsx` gives every tab `AppHeader` — the wordmark, the Leaves
- * pill, the message and bell icons. §3.5's running y starts at 0 with a 44 status
- * bar, so the header would push every measured value in that table down by its
- * own height. `headerShown: false` on this one Tabs.Screen is the whole change.
- *
- * There is no in-screen `Trades` title either (removed 26 Sep 2026): the tab
- * bar already says where you are, so the section headers open the screen.
- *
- * ══ THE ROWS HERE DO NOT CARRY CONTROLS; THE PUSHED SCREENS DO ══════════════
- *
- * Except on a `Needs you today` card, which is the point of the block. A Waiting
- * row on this screen is a status — it opens the full list, where frame 9c gives
- * every row its Withdraw, its Accept and its Decline at full width. Putting six
- * small controls on a scanning list is how somebody declines an offer with their
- * thumb while looking for a code.
+ * `(app)/_layout.tsx` sets `headerShown: false` on this Tabs.Screen, and there
+ * is no in-screen title either: the tab bar already says where you are, so the
+ * first section header opens the screen, `TRADES_FIRST_HEADER_TOP` under the
+ * status-bar padding `TradesHost` applies.
  */
 export default function TradesScreen() {
   const router = useRouter();
@@ -109,7 +97,7 @@ export default function TradesScreen() {
     return <Splash waitingOn="Signing you back in" />;
   }
 
-  /* ── §6's loading row. Labels render immediately; only bodies are blocks. ── */
+  /* ── §6's loading row. Headers render immediately; only bodies are blocks. ── */
   if (active.isPending && !active.data) {
     return (
       <TradesHost>
@@ -119,22 +107,23 @@ export default function TradesScreen() {
   }
 
   /* ── §6's network error. The panel goes in the list position, and CACHED ROWS
-        STILL RENDER UNDER IT — frame 9m's own reasoning: the code somebody needs
-        at the hub was already on the device, and hiding it because a refresh
-        failed takes away the only thing they opened the app for. ── */
+        STILL RENDER UNDER IT: the code somebody needs at the hub was already on
+        the device, and hiding it because a refresh failed takes away the only
+        thing they opened the app for. ── */
   const failed = active.isError;
   const hasCache = !!active.data;
   const lastLoaded = active.dataUpdatedAt ? clockTime(active.dataUpdatedAt) : null;
 
   /* ── §6's two empty states, which are not the same state. `No trades yet` is
         for somebody who has never traded; `Nothing needs you right now.` is for
-        somebody with fourteen finished trades and nothing live, and showing them
-        the onboarding copy would be the app forgetting who it is talking to. ── */
+        somebody with fourteen finished trades and nothing live. ── */
+  const yourMove = model.needsToday;
+  const waiting = model.waiting;
   const nothingEverHappened =
     !failed &&
     hasCache &&
-    model.needsToday.length === 0 &&
-    model.waiting.length === 0 &&
+    yourMove.length === 0 &&
+    waiting.length === 0 &&
     (model.historyCount ?? 0) === 0;
 
   if (nothingEverHappened) {
@@ -144,6 +133,33 @@ export default function TradesScreen() {
       </TradesHost>
     );
   }
+
+  // The first header sits close under the status bar, unless the error panel
+  // is above it, in which case it keeps a normal section gap.
+  const firstTop = failed ? undefined : TRADES_FIRST_HEADER_TOP;
+  const openWaitingList = () => router.push("/trades-waiting");
+
+  const waitingSection =
+    waiting.length > 0 ? (
+      <>
+        <SectionHeader
+          accent={copy.tradeCard.waitingOnThem}
+          count={waiting.length}
+          top={yourMove.length > 0 ? undefined : firstTop}
+          subtitle={yourMove.length > 0 || failed ? undefined : copy.nothingPending}
+        />
+        <View style={s.cards}>
+          {waiting.map((item) => (
+            <TradeCard
+              key={item.key}
+              words={present.waitingCard(item)}
+              dim={failed}
+              onPress={openWaitingList}
+            />
+          ))}
+        </View>
+      </>
+    ) : null;
 
   return (
     <TradesHost>
@@ -161,172 +177,83 @@ export default function TradesScreen() {
         {failed ? (
           <>
             <TradesErrorPanel onRetry={() => void refetchAll()} />
-            {hasCache && lastLoaded ? (
-              <>
-                <Hairline />
-                <CachedLabel clock={lastLoaded} />
-              </>
-            ) : null}
+            {hasCache && lastLoaded ? <CachedLabel clock={lastLoaded} /> : null}
           </>
         ) : null}
 
-        {/* ── §6's top block. Absent entirely when empty, label and all. Under a
-              failed refresh its own label is dropped too: `Last loaded 14:20`
-              above the rows is already saying what these are. ── */}
-        {model.needsToday.length > 0 ? (
+        {yourMove.length > 0 ? (
           <>
-            {failed ? null : <BlockHeader label={copy.label.needsToday} top={14} />}
-            <Gutter style={{ gap: 8 }}>
-              {model.needsToday.map((item) => (
-                <NeedsRow key={item.key} item={item} stale={failed} />
-              ))}
-            </Gutter>
-            <View style={{ height: 18 }} />
-          </>
-        ) : failed ? null : (
-          <NothingPending />
-        )}
-
-        <Hairline />
-
-        {/* ── §6's middle block. Rows divided by hairlines with no gap. ── */}
-        {model.waiting.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.waiting} top={18} />
-            <View>
-              {model.waiting.map((item, i) => (
-                <View key={item.key}>
-                  {i > 0 ? <Hairline /> : null}
-                  <WaitingItemRow item={item} stale={failed} />
-                </View>
+            <SectionHeader
+              leading={copy.tradeCard.yourMoveLead}
+              accent={copy.tradeCard.yourMoveAccent}
+              accentColor={color.forest}
+              squiggle
+              count={yourMove.length}
+              top={firstTop}
+            />
+            <View style={s.cards}>
+              {yourMove.map((item, i) => (
+                <TradeCard key={item.key} words={present.yourMoveCard(item)} urgent={i === 0} />
               ))}
             </View>
-            <View style={{ height: 16 }} />
-            <Hairline />
           </>
         ) : null}
 
-        {/* ── §6's History. One row, whatever is behind it. ── */}
-        <HistoryCollapsedRow
-          title={copy.history.rowTitle}
+        {waitingSection}
+
+        {/* Nothing live at all, but a history: the one line, then the row. */}
+        {yourMove.length === 0 && waiting.length === 0 && !failed ? (
+          <View style={{ paddingTop: TRADES_FIRST_HEADER_TOP }}>
+            <NothingPending />
+          </View>
+        ) : null}
+
+        <FinishedRow
           count={copy.history.count(model.historyCount ?? 0, model.historyCapped)}
           onPress={() => router.push("/trades-history")}
         />
-        <Hairline />
       </ScrollView>
     </TradesHost>
   );
 }
 
-/* ─────────────────────────── the three cards ────────────────────────── */
-
 /**
- * One `Needs you today` card.
- *
- * THE LIVE-CODE CARD IS THE ONLY ONE WITH A FILLED CONTROL, and frame 9a's note
- * is the reason: it is the only one with somebody waiting in front of you. A
- * screen with three green buttons on it has no priority at all.
- *
- * MODULE SCOPE, NOT A CLOSURE INSIDE THE SCREEN. A component declared inside a
- * render body is a new function identity on every render, so React unmounts and
- * remounts the whole subtree each time — which on a list of cards means every
- * photo reloads and the scroll position jumps.
- *
- * Navigation therefore goes through expo-router's `router` singleton rather than
- * a `useRouter()` value threaded down as a prop. It is the same object the hook
- * returns and it is the documented way to navigate from outside a component's
- * own render — the hook exists for re-rendering on route changes, which a row
- * does not need to do.
+ * "Finished trades": one row between hairlines, the count and a chevron. Body
+ * family throughout — this screen carries no monospace.
  */
-function NeedsRow({ item, stale }: { item: NeedsItem; stale: boolean }) {
-  if (item.kind === "code") {
-    const words = present.codeTradeWords(item.trade);
-    return (
-      <NeedsCard
-        thumb={<Thumb image={item.trade.requestedItem.image} size={offerSize.tradeCard.thumb} />}
-        title={words.title}
-        subtitle={words.subtitle}
-        monoLines={[
-          { text: stale ? copy.card.savedOnPhone : present.swapLine(item.trade) },
-        ]}
-        action={
-          <RowAction
-            label={copy.card.codeAction}
-            tone="filled"
-            onPress={() => router.push(`/trade-code?id=${encodeURIComponent(item.trade.id)}`)}
-            accessibilityLabel={`Open the confirmation code for ${item.trade.counterparty.name}`}
-          />
-        }
-      />
-    );
-  }
-
-  if (item.kind === "trade-request") {
-    // A PENDING TradeRequest addressed to the viewer — a swap proposed directly
-    // rather than through an offer. It cannot open `/offer-review`, which reads
-    // an offer id, so the card carries the decision itself and opens the full
-    // Waiting list for anything more.
-    const words = present.tradeRequestWords(item.trade);
-    return (
-      <NeedsCard
-        compact
-        thumb={<Thumb image={item.trade.requestedItem.image} size={offerSize.tradeCard.thumb} />}
-        title={words.title}
-        subtitle={words.subtitle}
-        onPress={() => router.push("/trades-waiting")}
-        action={<RowChevron />}
-      />
-    );
-  }
-
-  const words = present.incomingOfferWords(item.offer);
+function FinishedRow({ count, onPress }: { count: string; onPress: () => void }) {
   return (
-    <NeedsCard
-      compact
-      thumb={<Thumb image={item.offer.post.image} size={offerSize.tradeCard.thumb} />}
-      title={words.title}
-      subtitle={words.subtitle}
-      onPress={() => router.push(`/offer-review?id=${encodeURIComponent(item.offer.id)}`)}
-      action={<RowChevron />}
-    />
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${copy.history.rowTitle}, ${count}`}
+      style={s.finished}
+      pressedStyle={{ backgroundColor: color.inset }}
+    >
+      <Text style={[textStyle(type.username), s.finishedTitle]} numberOfLines={1}>
+        {copy.history.rowTitle}
+      </Text>
+      <Text style={[textStyle(type.metadata), s.finishedCount]} numberOfLines={1}>
+        {count}
+      </Text>
+      <ChevronRightIcon size={icon.chevron.size} stroke={icon.chevron.stroke} color={color.inkMuted} />
+    </Tappable>
   );
 }
 
-/** One `Waiting` row. Status only — the controls live in the pushed list. */
-function WaitingItemRow({ item, stale }: { item: WaitingItem; stale: boolean }) {
-  const openList = () => router.push("/trades-waiting");
-
-  if (item.kind === "sent-offer") {
-    const words = present.sentOfferWords(item.offer);
-    return (
-      <WaitingRow
-        thumb={<Thumb image={item.offer.post.image} size={offerSize.tradeRow.thumb} />}
-        title={words.title}
-        subtitle={stale ? copy.card.mayBeStale : words.subtitle}
-        trailing={words.trailing}
-        dim={stale}
-        onPress={openList}
-      />
-    );
-  }
-
-  if (item.kind === "trade") {
-    const words =
-      item.trade.status === "PENDING"
-        ? present.tradeRequestWords(item.trade)
-        : item.trade.status === "ACCEPTED"
-          ? present.acceptedTradeWords(item.trade)
-          : present.confirmingTradeWords(item.trade);
-    return (
-      <WaitingRow
-        thumb={<Thumb image={item.trade.requestedItem.image} size={offerSize.tradeRow.thumb} />}
-        title={words.title}
-        subtitle={stale ? copy.card.mayBeStale : words.subtitle}
-        trailing={words.trailing}
-        dim={stale}
-        onPress={openList}
-      />
-    );
-  }
-  return null;
-}
+const s = StyleSheet.create({
+  cards: { gap: 10 },
+  finished: {
+    marginTop: space.home.sectionTop,
+    minHeight: offerSize.historyRow.height,
+    paddingHorizontal: space.screenX,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.browse.searchGap,
+    borderTopWidth: offerBorder.rule,
+    borderBottomWidth: offerBorder.rule,
+    borderColor: color.divider,
+  },
+  finishedTitle: { flex: 1, minWidth: 0, color: color.ink },
+  finishedCount: { flexShrink: 0, color: color.inkSecondary },
+});

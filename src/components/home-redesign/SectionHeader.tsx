@@ -63,6 +63,8 @@ export function SectionHeader({
   trailingIcon,
   subtitle,
   onSeeAll,
+  count,
+  top,
 }: {
   leading?: string;
   accent: string;
@@ -76,6 +78,10 @@ export function SectionHeader({
   subtitle?: string;
   /** "See all" appears only when this is set. */
   onSeeAll?: () => void;
+  /** A count on the title row's right ("3"), for a list section. Not with onSeeAll. */
+  count?: number;
+  /** Overrides the section's top margin, for a header that opens a screen. */
+  top?: number;
 }) {
   const titleStyle = textStyle(type.homeSection);
   const label = `${leading ?? ""}${accent}${trailing ?? ""}`.trim();
@@ -90,7 +96,7 @@ export function SectionHeader({
   );
 
   return (
-    <View style={s.block}>
+    <View style={[s.block, top !== undefined && { marginTop: top }]}>
       <View style={s.row}>
         <View style={s.title} accessible accessibilityRole="header" accessibilityLabel={label}>
           {leading ? part(leading, color.ink) : null}
@@ -128,6 +134,14 @@ export function SectionHeader({
               See all
             </Text>
           </Tappable>
+        ) : count !== undefined ? (
+          <Text
+            style={[textStyle(type.homeSeeAll), s.count]}
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+            accessibilityLabel={`${count} ${count === 1 ? "item" : "items"}`}
+          >
+            {count}
+          </Text>
         ) : null}
       </View>
 
@@ -160,5 +174,6 @@ const s = StyleSheet.create({
   },
   icon: { marginLeft: space.home.titleToIcon },
   seeAll: { flexShrink: 0 },
+  count: { flexShrink: 0, color: color.inkSecondary, fontVariant: ["tabular-nums"] },
   subtitle: { color: color.inkSecondary, marginTop: space.home.titleToSubtitle },
 });
