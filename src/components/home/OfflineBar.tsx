@@ -47,7 +47,7 @@ export function OfflineBar({ lastSyncedAt }: { lastSyncedAt: number | null }) {
         The full-screen retry is what is showing in that case anyway.
       */}
       {lastSyncedAt ? (
-        <Text style={[textStyle(type.lastSynced), s.clock]}>{clockTime(lastSyncedAt)}</Text>
+        <Text style={[textStyle(type.metadata), s.clock]}>{clockTime(lastSyncedAt)}</Text>
       ) : null}
     </View>
   );

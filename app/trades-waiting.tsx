@@ -1,116 +1,94 @@
-// Both, and for the reason `(app)/trades.tsx` imports both: the screen wants the
-// hook so it re-renders on route changes, and the module-scope rows below want
-// the singleton, which is the same object without needing it threaded as a prop.
-import { router, useRouter } from "expo-router";
-import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import { openPremium, premiumGateReason } from "../src/lib/premium";
 import {
+  buildTradesModel,
   meetupState,
   useActiveTrades,
   useCancelTrade,
-  useOfferDecision,
   useTradeDecision,
   useWithdrawFromTrades,
+  type WaitingItem,
 } from "../src/api/trades";
-import type { ActiveTrade, LiveOffer } from "../src/api/types";
-import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
-import {
-  BlockHeader,
-  Gutter,
-  TradesBackTitle,
-} from "../src/components/trades/chrome";
+import type { ActiveTrade } from "../src/api/types";
+import { showDialog } from "../src/components/dialog";
+import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
+import { OfferScreenHost } from "../src/components/offer/chrome";
+import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import * as copy from "../src/components/trades/copy";
 import * as present from "../src/components/trades/present";
-import {
-  PromiseStrip,
-  RowAction,
-  SplitActions,
-  Thumb,
-  WaitingRow,
-} from "../src/components/trades/rows";
+import { SplitActions, Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
+import { CardLink, TradeCard } from "../src/components/trades/TradeCard";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
-import {
-  offerColor,
-  offerSize,
-  offerType,
-  textStyle,
-} from "../src/theme/offer-tokens";
+import { color, space, textStyle as baseTextStyle, type } from "../src/theme/tokens";
+import { offerColor, offerSize, offerType, textStyle } from "../src/theme/offer-tokens";
 
 /**
- * Frame 9c — `Waiting`, in full. Every row that has a control, with its control.
+ * "Waiting on them", in full (1 Oct 2026 redesign).
  *
- * ══ WHY THIS IS A SEPARATE SCREEN ═══════════════════════════════════════════
+ * ══ THE SAME GROUPING AS THE TAB, OR THE TWO DISAGREE ═══════════════════════
  *
- * The tab's Waiting rows are STATUSES. This is where they become actions. Six
- * small buttons on a list somebody is scanning for a code is how an offer gets
- * declined by a thumb that was looking for something else — so the scanning list
- * shows what is true and this one shows what can be done about it.
+ * This screen used to draw its own blocks — offers to you, offers you sent,
+ * every ACCEPTED trade — so the tab could say "Waiting on them · 1" over a
+ * screen listing four. It now reads `buildTradesModel().waiting`, the exact
+ * list the tab counts, and the two cannot drift: whatever is the viewer's move
+ * is on the tab under "Your move", and only what is the other person's is here.
  *
- * ══ THREE BLOCKS, THREE KINDS OF WAITING ════════════════════════════════════
+ * ══ QUIET LINKS, NO GREEN BUTTONS ═══════════════════════════════════════════
  *
- *   Offers to you            somebody is waiting on YOU. Accept and Decline.
- *   Offers you sent          you are waiting on THEM. Withdraw, sender only.
- *   Accepted, meeting to set the trade exists and the meeting does not.
+ * Nothing here is the viewer's to do, so nothing is a filled control. A card
+ * says what the viewer did and whose move it is; under it, text links only:
+ * "Change suggestion" where a suggestion is theirs to change, "Withdraw" where
+ * they can still take back what they sent — behind a confirmation.
  *
- * ══ ACCEPT AND DECLINE SIT AT EQUAL WEIGHT ══════════════════════════════════
+ * THE CARD ITSELF STILL OPENS THE CODES on an accepted or confirming trade.
+ * Plans fall through and people meet anyway; removing "Get codes" must not
+ * remove the way to the code screen, which is how this screen once closed the
+ * only loop to a completed trade.
  *
- * Frame 9c's own note, and it is a real decision rather than a style: accept is
- * not the emphasised choice when someone else's item is at stake. `Decline` is a
- * plain outline and `Accept` carries §1.5's 1.5px `#1B4D2B` selected rule — a
- * chosen thing, not a promoted one. Neither is the green fill, which on this
- * screen belongs to nothing.
+ * ══ `?answer=` ══════════════════════════════════════════════════════════════
  *
- * ══ AN OFFER THE RECEIVER WOULD PAY FOR HAS NO ACCEPT BUTTON HERE ═══════════
- *
- * When the offered item is one bracket ABOVE the listing, accepting costs the
- * receiver a bridging fee, held from their balance in the same tap. The server
- * refuses that tap without their recorded consent — but a refusal is not the
- * protection, the consent sheet is, and the sheet lives on the review screen
- * where the fee, the balance now and the balance after are all on screen
- * before the box is ticked. So a receiver-pays offer gets one quiet control
- * that opens the review screen, and no accept control at all. An offer with
- * no fee, or one the proposer already paid, keeps the equal-weight pair.
+ * A PENDING swap request addressed to the viewer is on the tab under "Your
+ * move", and its Review lands here with `?answer=<tradeId>`: that one request
+ * is drawn above the list with the equal-weight Decline / Accept pair. It is
+ * not part of the waiting list and is not counted in it.
  */
 export default function TradesWaitingScreen() {
   const router = useRouter();
+  const { answer } = useLocalSearchParams<{ answer?: string }>();
   const active = useActiveTrades();
 
-  // Every row here draws a plan or an offer the OTHER person can move. The
-  // push channel invalidates the list on their move; this is the net under it.
+  // Every card here is a plan or an offer the OTHER person can move. The push
+  // channel invalidates the list on their move; this is the net under it.
   useTradeLiveness(active.refetch);
 
-  const decide = useOfferDecision();
   const decideTrade = useTradeDecision();
   const cancelTrade = useCancelTrade();
   const withdraw = useWithdrawFromTrades();
   const [failure, setFailure] = useState<string | null>(null);
 
-  const offers = active.data?.offers ?? [];
-  const incoming = offers.filter((o) => o.direction === "received");
-  const sent = offers.filter((o) => o.direction === "sent");
-  const toMeet = (active.data?.trades ?? []).filter((t) => t.status === "ACCEPTED");
-  const incomingRequests = (active.data?.trades ?? []).filter(
-    (t) => t.status === "PENDING" && t.direction === "received",
+  const model = useMemo(
+    () => buildTradesModel({ active: active.data, history: undefined }),
+    [active.data],
   );
-  const sentRequests = (active.data?.trades ?? []).filter(
-    (t) => t.status === "PENDING" && t.direction === "sent",
-  );
+  const waiting = model.waiting;
+  const needYou = model.needsToday.length;
 
-  const busy =
-    decide.isPending || withdraw.isPending || decideTrade.isPending || cancelTrade.isPending;
+  const toAnswer = answer
+    ? ((active.data?.trades ?? []).find(
+        (t) => t.id === answer && t.status === "PENDING" && t.direction === "received",
+      ) ?? null)
+    : null;
 
-  const run = (fn: () => void) => {
-    setFailure(null);
-    fn();
-  };
+  const busy = withdraw.isPending || decideTrade.isPending || cancelTrade.isPending;
 
   const onError = (e: unknown) => {
     // An accept the bracket gate refused goes to the Premium screen — the one
-    // paywall — rather than a failure line. Nothing changed; the offer stays.
+    // paywall — rather than a failure line. Nothing changed.
     const gated = premiumGateReason(e);
     if (gated) {
       openPremium(router, gated);
@@ -121,139 +99,109 @@ export default function TradesWaitingScreen() {
     );
   };
 
+  const run = (fn: () => void) => {
+    setFailure(null);
+    fn();
+  };
+
+  const confirmWithdraw = (item: WaitingItem) => {
+    if (item.kind === "sent-offer") {
+      const offer = item.offer;
+      const partner = present.firstName(offer.counterparty.name);
+      const held = offer.bridgeFeePayer === "proposer" ? (offer.bridgeFeeLeaves ?? 0) : 0;
+      showDialog(
+        copy.tradeCard.withdrawOfferTitle(partner),
+        held > 0
+          ? copy.tradeCard.withdrawOfferHeld(held)
+          : copy.tradeCard.withdrawOfferNothingHeld,
+        [
+          { text: copy.tradeCard.keep, style: "cancel" },
+          {
+            text: copy.tradeCard.withdraw,
+            style: "destructive",
+            onPress: () => run(() => withdraw.mutate(offer.id, { onError })),
+          },
+        ],
+      );
+      return;
+    }
+    const trade = item.trade;
+    showDialog(
+      copy.tradeCard.withdrawRequestTitle(present.firstName(trade.counterparty.name)),
+      copy.tradeCard.withdrawRequestBody,
+      [
+        { text: copy.tradeCard.keep, style: "cancel" },
+        {
+          text: copy.tradeCard.withdraw,
+          style: "destructive",
+          onPress: () => run(() => cancelTrade.mutate(trade.id, { onError })),
+        },
+      ],
+    );
+  };
+
   return (
     <OfferScreenHost imeInset={0} dimmed={busy}>
-      <TradesBackTitle title={copy.nav.waiting} onBack={() => router.back()} />
+      <TradesBackTitle title="" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+        <SectionHeader
+          accent={copy.tradeCard.waitingOnThem}
+          count={active.data ? waiting.length : undefined}
+          subtitle={copy.tradeCard.waitingSubtitle}
+          top={0}
+        />
+
         {active.isError ? <TradesErrorPanel onRetry={() => void active.refetch()} /> : null}
 
         {failure ? <FailureLine>{failure}</FailureLine> : null}
 
-        {/* ── Offers to you ─────────────────────────────────────────────── */}
-        {incoming.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.offersToYou} top={12} />
-            <Hairline />
-            {incoming.map((offer) => (
-              <View key={offer.id}>
-                <IncomingOfferBlock
-                  offer={offer}
-                  onRead={() =>
-                    router.push(`/offer-review?id=${encodeURIComponent(offer.id)}`)
-                  }
-                  onAccept={() =>
-                    run(() =>
-                      decide.mutate({ offerId: offer.id, action: "accept" }, { onError }),
-                    )
-                  }
-                  onDecline={() =>
-                    run(() =>
-                      decide.mutate({ offerId: offer.id, action: "decline" }, { onError }),
-                    )
-                  }
-                />
-                <Hairline />
-              </View>
-            ))}
-          </>
+        {toAnswer ? (
+          <View style={s.answer}>
+            <Gutter>
+              <Text style={[baseTextStyle(type.sectionHeading), { color: color.inkSecondary }]}>
+                {copy.tradeCard.requestFrom(present.firstName(toAnswer.counterparty.name))}
+              </Text>
+            </Gutter>
+            <IncomingRequestBlock
+              trade={toAnswer}
+              onAccept={() =>
+                run(() =>
+                  decideTrade.mutate({ tradeId: toAnswer.id, status: "ACCEPTED" }, { onError }),
+                )
+              }
+              onDecline={() =>
+                run(() =>
+                  decideTrade.mutate({ tradeId: toAnswer.id, status: "REJECTED" }, { onError }),
+                )
+              }
+            />
+          </View>
         ) : null}
 
-        {/* ── Swap requests to you ──────────────────────────────────────
-              A PENDING TradeRequest rather than an Offer. This app only ever
-              creates offers, so these arrive from the web — and `ACTIVE_STATES`
-              on /api/v1/trades includes PENDING, which means a row created there
-              and answerable nowhere here would be an obligation the person
-              cannot see. Same equal-weight decision pair, a different endpoint
-              behind it. ── */}
-        {incomingRequests.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.requestsToYou} top={18} />
-            <Hairline />
-            {incomingRequests.map((trade) => (
-              <View key={trade.id}>
-                <IncomingRequestBlock
-                  trade={trade}
-                  onAccept={() =>
-                    run(() =>
-                      decideTrade.mutate({ tradeId: trade.id, status: "ACCEPTED" }, { onError }),
-                    )
-                  }
-                  onDecline={() =>
-                    run(() =>
-                      decideTrade.mutate({ tradeId: trade.id, status: "REJECTED" }, { onError }),
-                    )
-                  }
-                />
-                <Hairline />
-              </View>
-            ))}
-          </>
-        ) : null}
+        <View style={s.cards}>
+          {waiting.map((item) => (
+            <WaitingCard key={item.key} item={item} onWithdraw={() => confirmWithdraw(item)} />
+          ))}
+        </View>
 
-        {/* ── Swap requests you sent ────────────────────────────────────
-              NO THREE-DAY CLOCK ON THESE. `expireStaleOffers()` sweeps `Offer`
-              rows and nothing sweeps `TradeRequest`, so the row shows the age
-              rather than a countdown — saying "2 days left" about something that
-              never expires would be inventing a deadline. The one act the sender
-              has is calling it off, which releases both items from IN_TRADE. ── */}
-        {sentRequests.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.requestsYouSent} top={18} />
-            <Hairline />
-            {sentRequests.map((trade) => (
-              <View key={trade.id}>
-                <SentRequestRow
-                  trade={trade}
-                  onCancel={() => run(() => cancelTrade.mutate(trade.id, { onError }))}
-                />
-                <Hairline />
-              </View>
-            ))}
-          </>
-        ) : null}
-
-        {/* ── Offers you sent ───────────────────────────────────────────── */}
-        {sent.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.offersYouSent} top={18} />
-            <Hairline />
-            {sent.map((offer) => (
-              <View key={offer.id}>
-                <SentOfferBlock
-                  offer={offer}
-                  onWithdraw={() => run(() => withdraw.mutate(offer.id, { onError }))}
-                />
-                <Hairline />
-              </View>
-            ))}
-          </>
-        ) : null}
-
-        {/* ── Accepted, meeting to set ──────────────────────────────────── */}
-        {toMeet.length > 0 ? (
-          <>
-            <BlockHeader label={copy.label.meetingToSet} top={18} />
-            <Hairline />
-            {toMeet.map((trade) => (
-              <View key={trade.id}>
-                <MeetingRow trade={trade} />
-                <Hairline />
-              </View>
-            ))}
-          </>
-        ) : null}
-
-        {incoming.length === 0 &&
-        sent.length === 0 &&
-        incomingRequests.length === 0 &&
-        sentRequests.length === 0 &&
-        toMeet.length === 0 &&
-        !active.isError ? (
-          <Gutter style={{ paddingTop: 18 }}>
-            <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              {copy.nothingPending}
+        {waiting.length === 0 && active.data && !active.isError ? (
+          <Gutter>
+            <Text style={[baseTextStyle(type.emptyBody), { color: color.inkSecondary }]}>
+              {copy.tradeCard.waitingEmpty}
             </Text>
+          </Gutter>
+        ) : null}
+
+        {needYou > 0 ? (
+          <Gutter style={s.needYou}>
+            <Text style={[baseTextStyle(type.heroSubhead), { color: color.inkSecondary }]}>
+              {copy.tradeCard.needYou(needYou)}{" "}
+            </Text>
+            <CardLink
+              label={copy.tradeCard.goToYourMove}
+              onPress={() => router.navigate("/(app)/trades")}
+            />
           </Gutter>
         ) : null}
       </ScrollView>
@@ -261,264 +209,58 @@ export default function TradesWaitingScreen() {
   );
 }
 
-/* ──────────────────────────── the three blocks ──────────────────────── */
-
 /**
- * One incoming offer. 14/16 of padding, 12 between the row and its controls.
+ * One waiting trade as a card. The links under it are the only controls on
+ * this screen, and each one is there only when its act is open today:
  *
- * The branch on `bridgeFeePayer` is the rule this screen exists to enforce —
- * see the header. An offer the receiver would pay for gets one quiet control
- * that opens the review screen; any other offer gets the equal-weight pair.
+ *   Change suggestion   an ACCEPTED trade whose standing hub suggestion is the
+ *                       viewer's own and still unanswered.
+ *   Withdraw offer      a PENDING offer the viewer sent. Sender only.
+ *   Withdraw            a PENDING swap request the viewer sent (calls it off).
+ *
+ * A CONFIRMING trade has neither: the viewer's half is done and there is
+ * nothing left to take back.
  */
-function IncomingOfferBlock({
-  offer,
-  onRead,
-  onAccept,
-  onDecline,
-}: {
-  offer: LiveOffer;
-  onRead: () => void;
-  onAccept: () => void;
-  onDecline: () => void;
-}) {
-  const words = present.incomingOfferWords(offer);
-  const fee = offer.bridgeFeeLeaves ?? 0;
-  const receiverPays = fee > 0 && offer.bridgeFeePayer === "receiver";
-  const proposerPaid = fee > 0 && offer.bridgeFeePayer === "proposer";
+function WaitingCard({ item, onWithdraw }: { item: WaitingItem; onWithdraw: () => void }) {
+  const router = useRouter();
+  const words = present.waitingScreenCard(item);
+  const trade: ActiveTrade | null = item.kind === "trade" ? item.trade : null;
+
+  const opensCodes = !!trade && (trade.status === "ACCEPTED" || trade.status === "CONFIRMING");
+  const canChange = !!trade && trade.status === "ACCEPTED" && meetupState(trade) === "waiting-on-them";
+  const canWithdraw = item.kind === "sent-offer" || trade?.status === "PENDING";
 
   return (
-    <Gutter style={{ paddingVertical: 14, gap: 12 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: offerSize.tradeRow.gap }}>
-        <Thumb image={offer.post.image} size={offerSize.tradeRow.thumb} />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          {/*
-            THE COUNTERPARTY'S NAME, WITHOUT A TRUST TIER.
-
-            Frame 9c writes `Renz P. · Rising`. `USER_BRIEF` on this route is
-            `{ id, name, avatar }` and carries no tier, and the fallback in
-            `src/lib/trust.ts` must not be used here: it works from
-            `totalTrades`, a denormalised counter that reads high, and it cannot
-            see DPA defaults at all. A row that labels a stranger's
-            trustworthiness from an optimistic guess is the exact place that
-            file's warning is about.
-          */}
-          <Text
-            style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]}
-            numberOfLines={1}
-          >
-            {offer.counterparty.name}
-          </Text>
-          <Text
-            style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary }]}
-            numberOfLines={2}
-          >
-            {words.subtitle}
-          </Text>
-        </View>
-        {words.trailing ? (
-          <Text
-            style={[textStyle(offerType.deadline), { color: offerColor.inkTertiary, flexShrink: 0 }]}
-          >
-            {words.trailing}
-          </Text>
-        ) : null}
-      </View>
-
-      {proposerPaid ? (
-        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
-          {copy.waiting.theyPaid(present.firstName(offer.counterparty.name), fee)}
-        </Text>
-      ) : null}
-
-      {receiverPays ? (
-        <>
-          <PromiseStrip minHeight={44}>{copy.waiting.youWouldPay(fee)}</PromiseStrip>
-
-          {/* The only way in to `accept` for an offer the receiver pays for. A
-              1px `#E2E0D6` rule and `#1B4D2B` text — quieter than either half of
-              the decision pair, because it is not yet a decision. */}
-          <ReadFirstRow label={copy.waiting.reviewFee(fee)} onPress={onRead} />
-        </>
-      ) : (
-        <SplitActions
-          onDecline={onDecline}
-          onAccept={onAccept}
-          declineLabel={copy.waiting.decline}
-          acceptLabel={copy.waiting.accept}
-        />
-      )}
-    </Gutter>
-  );
-}
-
-/**
- * Frame 9c's quiet row: 44, radius 8, 1px `#E2E0D6`, deep ink.
- *
- * `RowAction`'s `quiet` tone IS that object, so the control draws its own rule
- * rather than sitting inside a second one — a wrapper with a border round a
- * button with a border is two hairlines pretending to be one.
- */
-function ReadFirstRow({ label, onPress }: { label: string; onPress: () => void }) {
-  // The one-child row `fill` requires. See the prop's note in `rows.tsx`.
-  return (
-    <View style={{ flexDirection: "row" }}>
-      <RowAction label={label} onPress={onPress} tone="quiet" fill />
-    </View>
-  );
-}
-
-/**
- * One offer the viewer sent. Frame 9c's two-row block.
- *
- * WITHDRAW IS SENDER-ONLY AND PENDING-ONLY, and both halves are already true
- * here: this block only renders rows out of `offers.filter(direction === "sent")`
- * and the route only returns PENDING ones. The server enforces both again — an
- * ACCEPTED offer is a trade, and there is no unilateral exit from a deal the
- * other person already agreed to, so it answers 409.
- *
- * The line beside the control names what the Leaves do, because that is the
- * question somebody withdrawing actually has. A proposer-paid bridging fee was
- * HELD, not spent; withdrawing releases it. A same-bracket offer, or an
- * up-bridge the receiver would have paid for, held nothing — and saying so
- * stops the control looking like it costs something.
- */
-function SentOfferBlock({ offer, onWithdraw }: { offer: LiveOffer; onWithdraw: () => void }) {
-  const words = present.sentOfferWords(offer);
-  const partner = present.firstName(offer.counterparty.name);
-  const held = offer.bridgeFeePayer === "proposer" ? (offer.bridgeFeeLeaves ?? 0) : 0;
-
-  return (
-    <Gutter style={{ paddingVertical: 14, gap: 12 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: offerSize.tradeRow.gap }}>
-        <Thumb image={offer.post.image} size={offerSize.tradeRow.thumb} />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          <Text
-            style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]}
-            numberOfLines={2}
-          >
-            {words.title}
-          </Text>
-          <Text
-            style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary }]}
-            numberOfLines={2}
-          >
-            {words.subtitle}
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ flexDirection: "row", alignItems: "center", gap: offerSize.tradeRow.gap }}>
-        <Text
-          style={[textStyle(offerType.helper), { color: offerColor.inkTertiary, flex: 1 }]}
-        >
-          {held > 0
-            ? copy.waiting.leavesHeld(partner, held)
-            : copy.waiting.nothingHeld(partner)}
-        </Text>
-        <RowAction
-          label={copy.waiting.withdraw}
-          onPress={onWithdraw}
-          accessibilityLabel={`Withdraw your offer to ${partner}`}
-        />
-      </View>
-    </Gutter>
-  );
-}
-
-/**
- * An ACCEPTED trade with no meeting.
- *
- * ══ THIS ROW USED TO BE A DEAD END, AND IT CLOSED THE ONLY LOOP OUT ═════════
- *
- * What stood here reasoned: frame 9c draws a `Set it` control, there is no
- * endpoint that sets a hub in advance, therefore the row carries no control at
- * all. The premise was true and the conclusion did not follow. It confused
- * "there is nowhere to set a hub" with "there is nowhere to go", and dropping
- * the second one severed the confirmation path entirely:
- *
- *   `/trade-code` is pushed from exactly one place — the `Needs you today` code
- *   card — and `buildTradesModel()` only builds that card for a CONFIRMING
- *   trade. The only thing that makes a trade CONFIRMING is POST …/confirm/start,
- *   and the only caller of it is `app/trade-code.tsx` on mount. So CONFIRMING
- *   required reaching the code screen and reaching the code screen required
- *   CONFIRMING. No trade accepted in this app could ever be completed.
- *
- * BOTH ENDS WERE ALREADY BUILT FOR ACCEPTED — `trade-code.tsx` starts the
- * confirmation on `ACCEPTED || CONFIRMING`, and so does the server route. Only
- * the navigation was missing, so this is a link rather than a feature.
- *
- * The row stays in `Waiting` rather than being promoted to `Needs you today`:
- * an accepted trade is not urgent until you are standing in front of somebody,
- * and from here the code screen is one tap. The `Needs you today` card appears
- * on its own once the codes are live, which is what that block is for.
- */
-function MeetingRow({ trade }: { trade: ActiveTrade }) {
-  const words = present.acceptedTradeWords(trade);
-  const plan = present.meetupWords(trade);
-  const state = meetupState(trade);
-
-  const openCodes = () => router.push(`/trade-code?id=${encodeURIComponent(trade.id)}`);
-  const openMeetup = () => router.push(`/trade-meetup?id=${encodeURIComponent(trade.id)}`);
-
-  /*
-   * ── WHICH CONTROL LEADS ─────────────────────────────────────────────────
-   *
-   * Both are always reachable, and which one is filled follows whose move it is.
-   * A proposal sitting unanswered is the only thing on this row that somebody is
-   * actually waiting on, so it takes the filled control; in every other state
-   * the arrangement is either settled or with the other person, and the thing
-   * this row is ultimately for — the codes — leads instead.
-   *
-   * THE ROW ITSELF OPENS THE CODES IN EVERY STATE. Plans fall through and people
-   * meet anyway; a row that could only be tapped once a meeting was arranged
-   * would rebuild the dead end this row used to be, one state further along.
-   */
-  const answerFirst = state === "yours-to-answer";
-
-  return (
-    <WaitingRow
-      thumb={<Thumb image={trade.requestedItem.image} size={offerSize.tradeRow.thumb} />}
-      title={words.title}
-      subtitle={plan.line}
-      trailing={words.trailing}
-      onPress={openCodes}
+    <TradeCard
+      words={words}
+      onPress={
+        trade && opensCodes
+          ? () => router.push(`/trade-code?id=${encodeURIComponent(trade.id)}`)
+          : undefined
+      }
     >
-      {plan.detail ? (
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
-          {plan.detail}
-        </Text>
+      {trade && canChange ? (
+        <CardLink
+          label={copy.tradeCard.changeSuggestion}
+          onPress={() => router.push(`/trade-meetup?id=${encodeURIComponent(trade.id)}`)}
+          accessibilityLabel={`Change your suggestion to ${words.partner}`}
+        />
       ) : null}
-
-      {/* Two neutral controls, NOT `SplitActions` — that pair is decline/accept
-          and carries its outline/affirm weighting with it. Neither of these is a
-          refusal of the other. */}
-      <View style={{ flexDirection: "row", gap: offerSize.button.splitGap }}>
-        <RowAction
+      {canWithdraw ? (
+        <CardLink
           label={
-            state === "none"
-              ? copy.meetup.setIt
-              : state === "yours-to-answer"
-                ? copy.meetup.agree
-                : copy.meetup.change
+            item.kind === "sent-offer" ? copy.tradeCard.withdrawOffer : copy.tradeCard.withdraw
           }
-          onPress={openMeetup}
-          tone={answerFirst ? "filled" : "outline"}
-          fill
+          tone="secondary"
+          onPress={onWithdraw}
           accessibilityLabel={
-            state === "none"
-              ? `Set a place and time with ${trade.counterparty.name}`
-              : `Open the meeting arrangement with ${trade.counterparty.name}`
+            item.kind === "sent-offer"
+              ? `Withdraw your offer to ${words.partner}`
+              : `Withdraw your swap request to ${words.partner}`
           }
         />
-        <RowAction
-          label={copy.waiting.getCodes}
-          onPress={openCodes}
-          tone={answerFirst ? "outline" : "filled"}
-          fill
-          accessibilityLabel={`Get the confirmation codes for the trade with ${trade.counterparty.name}`}
-        />
-      </View>
-    </WaitingRow>
+      ) : null}
+    </TradeCard>
   );
 }
 
@@ -572,7 +314,7 @@ function IncomingRequestBlock({
         {words.trailing ? (
           <Text
             style={[
-              textStyle(offerType.deadline),
+              textStyle(offerType.helper),
               { color: offerColor.inkTertiary, flexShrink: 0 },
             ]}
           >
@@ -588,38 +330,6 @@ function IncomingRequestBlock({
         acceptLabel={copy.waiting.accept}
       />
     </Gutter>
-  );
-}
-
-/**
- * One swap request the viewer sent.
- *
- * `Call it off` RATHER THAN `Withdraw`, and the two words are kept apart on
- * purpose. Withdrawing retracts a proposal nobody has agreed to and releases
- * held Leaves; calling off ends a trade row and puts both items back to
- * AVAILABLE from IN_TRADE. They are different acts on different rows, and one
- * label for both is how somebody presses the wrong one.
- */
-function SentRequestRow({ trade, onCancel }: { trade: ActiveTrade; onCancel: () => void }) {
-  const words = present.tradeRequestWords(trade);
-
-  return (
-    <WaitingRow
-      thumb={<Thumb image={trade.requestedItem.image} size={offerSize.tradeRow.thumb} />}
-      title={words.title}
-      subtitle={words.subtitle}
-      trailing={words.trailing}
-    >
-      <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-        <RowAction
-          label={copy.waiting.cancel}
-          onPress={onCancel}
-          accessibilityLabel={`Call off your swap request to ${present.firstName(
-            trade.counterparty.name,
-          )}`}
-        />
-      </View>
-    </WaitingRow>
   );
 }
 
@@ -643,3 +353,14 @@ function FailureLine({ children }: { children: string }) {
     </Gutter>
   );
 }
+
+const s = StyleSheet.create({
+  cards: { gap: 10 },
+  answer: { gap: 4, marginBottom: space.home.headingToContent },
+  needYou: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+    paddingTop: space.home.sectionTop,
+  },
+});

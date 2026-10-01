@@ -108,7 +108,7 @@ export function PhotoCarousel({
         <>
           {counter ? (
             <View style={s.counter}>
-              <Text style={[textStyle(type.carouselCount), { color: color.surface }]}>
+              <Text style={[textStyle(type.metadata), { color: color.surface }]}>
                 {index + 1} / {images.length}
               </Text>
             </View>

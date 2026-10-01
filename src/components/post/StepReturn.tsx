@@ -129,11 +129,11 @@ export function StepReturn({
 
       <Text
         style={[
-          textStyle(postType.fieldLabel),
-          { color: postColor.inkMuted, marginTop: postSpace.ret.dividerToLabel },
+          textStyle(postType.smallTextLabel),
+          { color: postColor.inkSecondary, marginTop: postSpace.ret.dividerToLabel },
         ]}
       >
-        {`CATEGORIES YOU WOULD CONSIDER — OPTIONAL, UP TO ${rules.maxReturnCategories}`}
+        {`Categories you would consider (optional, up to ${rules.maxReturnCategories})`}
       </Text>
 
       <View

@@ -1,5 +1,7 @@
 import { router } from "expo-router";
+import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import Svg, { Circle, Line } from "react-native-svg";
 
 import * as copy from "./copy";
 import { Thumb } from "./rows";
@@ -34,6 +36,7 @@ export function TradeCard({
   urgent = false,
   dim = false,
   onPress,
+  children,
 }: {
   words: CardWords;
   /** The single most urgent "Your move" card: solid button, 1.5 forest border. */
@@ -42,6 +45,8 @@ export function TradeCard({
   dim?: boolean;
   /** Where the card body goes. Defaults to the action's own destination. */
   onPress?: () => void;
+  /** Quiet text links under the footer (the Waiting screen's "Change suggestion"). */
+  children?: ReactNode;
 }) {
   const action = words.action;
   const open = onPress ?? (action ? () => router.push(action.href as never) : undefined);
@@ -53,6 +58,7 @@ export function TradeCard({
     `${copy.tradeCard.youGet} ${words.get.title}`,
     words.progress ? `Step: ${copy.tradeCard.steps[words.progress.current]}` : null,
     words.footer,
+    words.footerDetail,
     words.waitingOn,
   ]
     .filter(Boolean)
@@ -82,16 +88,23 @@ export function TradeCard({
 
       {/* The split: give ┆⇄┆ get. */}
       <View style={s.split}>
-        <Half label={copy.tradeCard.youGive} side={words.give} />
+        <Half label={copy.tradeCard.youGive} side={words.give} toward="right" />
         <SwapSeam />
-        <Half label={copy.tradeCard.youGet} side={words.get} />
+        <Half label={copy.tradeCard.youGet} side={words.get} toward="left" />
       </View>
 
       {words.progress ? <ProgressTrack {...words.progress} /> : null}
 
       {/* Footer, above a hairline. */}
       <View style={s.footer}>
-        <Text style={[textStyle(type.heroSubhead), s.footerText]}>{words.footer}</Text>
+        <View style={s.footerText}>
+          <Text style={[textStyle(type.heroSubhead), { color: color.ink }]}>{words.footer}</Text>
+          {words.footerDetail ? (
+            <Text style={[textStyle(type.metadata), { color: color.inkSecondary, marginTop: 2 }]}>
+              {words.footerDetail}
+            </Text>
+          ) : null}
+        </View>
         {action ? (
           <CardButton
             label={action.label}
@@ -112,15 +125,70 @@ export function TradeCard({
           </View>
         ) : null}
       </View>
+
+      {children ? <View style={s.links}>{children}</View> : null}
+    </Tappable>
+  );
+}
+
+/**
+ * A quiet text link under a card's footer: forest for a step forward, secondary
+ * ink for a retreat. 44 tall through its hit slop, not through its padding, so
+ * a row of them stays one line of text.
+ */
+export function CardLink({
+  label,
+  tone = "forest",
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  tone?: "forest" | "secondary";
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+      pressedStyle={{ opacity: 0.6 }}
+    >
+      <Text
+        style={[
+          textStyle(type.homeSeeAll),
+          { color: tone === "forest" ? color.forest : color.inkSecondary },
+        ]}
+        maxFontSizeMultiplier={size.home.headingMaxFontScale}
+      >
+        {label}
+      </Text>
     </Tappable>
   );
 }
 
 /* ───────────────────────────── the halves ───────────────────────────── */
 
-function Half({ label, side }: { label: string; side: CardSide }) {
+/**
+ * One side of the split. `toward` is the side the seam is on: both halves keep
+ * the same `SEAM_GAP` from it, so "You get"'s photo no longer touches the disc.
+ *
+ * The name sits UNDER the photo, at the half's full width. Beside a 44 photo
+ * it had ~60 dp at 320 and two lines held barely a word each; under it,
+ * "Couple Keychain + 18 Leaves" fits in two.
+ */
+function Half({
+  label,
+  side,
+  toward,
+}: {
+  label: string;
+  side: CardSide;
+  toward: "left" | "right";
+}) {
   return (
-    <View style={s.half}>
+    <View style={[s.half, toward === "right" ? { paddingRight: SEAM_GAP } : { paddingLeft: SEAM_GAP }]}>
       <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]} numberOfLines={1}>
         {label}
       </Text>
@@ -149,9 +217,10 @@ function Half({ label, side }: { label: string; side: CardSide }) {
 /**
  * Accepted · Hub set · Handoff · Done. Completed steps are filled forest dots on
  * a forest line; the current one is a round leaf marker (amber while choosing a
- * hub); later ones are hollow. A step before the current one CAN be hollow:
+ * hub); later ones are hollow. A step before the current one CAN be undone:
  * codes can be started with no hub agreed, and the track does not pretend one
- * was.
+ * was — that step's node and the line into it are drawn DASHED, labelled
+ * "Hub skipped" in secondary ink.
  */
 function ProgressTrack({
   current,
@@ -164,6 +233,7 @@ function ProgressTrack({
 }) {
   const ink = tone === "amber" ? color.accentGold : color.forest;
   const steps = copy.tradeCard.steps;
+  const skippedAt = done.findIndex((d, i) => i < current && !d);
   // The line from step i to i+1 is forest once step i is done and i+1 is done or current.
   const segment = (i: number) =>
     i >= 0 && i < steps.length - 1 && done[i] && (done[i + 1] || current === i + 1)
@@ -174,20 +244,39 @@ function ProgressTrack({
     <View
       style={s.track}
       accessible
-      accessibilityLabel={`Step ${current + 1} of ${steps.length}: ${steps[current]}`}
+      accessibilityLabel={`Step ${current + 1} of ${steps.length}: ${steps[current]}${
+        skippedAt >= 0 ? `. ${copy.tradeCard.stepSkipped(skippedAt)}` : ""
+      }`}
     >
       {steps.map((name, i) => {
         const isCurrent = i === current;
+        const skipped = i < current && !done[i];
         return (
           <View key={name} style={s.step}>
             <View style={s.markerRow}>
-              <View
-                style={[s.line, { backgroundColor: i === 0 ? "transparent" : segment(i - 1) }]}
-              />
+              {skipped ? (
+                <DashedLine />
+              ) : (
+                <View
+                  style={[s.line, { backgroundColor: i === 0 ? "transparent" : segment(i - 1) }]}
+                />
+              )}
               {isCurrent ? (
                 <View style={[s.marker, { backgroundColor: ink }]}>
                   <LeafIcon size={12} stroke={2} color={color.onScrim} />
                 </View>
+              ) : skipped ? (
+                <Svg width={DOT + 2} height={DOT + 2}>
+                  <Circle
+                    cx={(DOT + 2) / 2}
+                    cy={(DOT + 2) / 2}
+                    r={DOT / 2}
+                    stroke={color.inkMuted}
+                    strokeWidth={1.5}
+                    strokeDasharray="2 2"
+                    fill={color.surface}
+                  />
+                </Svg>
               ) : done[i] ? (
                 <View style={[s.dot, { backgroundColor: color.forest }]} />
               ) : (
@@ -206,7 +295,9 @@ function ProgressTrack({
                 s.stepLabel,
                 isCurrent
                   ? { color: ink, fontFamily: font.sansBold }
-                  : { color: done[i] ? color.ink : color.inkMuted },
+                  : skipped
+                    ? { color: color.inkSecondary }
+                    : { color: done[i] ? color.ink : color.inkMuted },
               ]}
               numberOfLines={1}
               // ~65 dp a step at 320 dp; "Accepted" in bold at 1.3x is ~60.
@@ -214,11 +305,30 @@ function ProgressTrack({
               minimumFontScale={0.85}
               maxFontSizeMultiplier={size.home.headingMaxFontScale}
             >
-              {name}
+              {skipped ? copy.tradeCard.stepSkipped(i) : name}
             </Text>
           </View>
         );
       })}
+    </View>
+  );
+}
+
+/** The line into a skipped step: the track's 2 dp, dashed in muted ink. */
+function DashedLine() {
+  return (
+    <View style={s.line}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Line
+          x1="0"
+          y1="1"
+          x2="100%"
+          y2="1"
+          stroke={color.inkMuted}
+          strokeWidth={1.5}
+          strokeDasharray="3 3"
+        />
+      </Svg>
     </View>
   );
 }
@@ -267,6 +377,8 @@ function CardButton({
 /* ─────────────────────────────── styles ─────────────────────────────── */
 
 const THUMB = offerSize.tradeRow.thumb;
+/** Each half's distance from the seam. The same on both sides. */
+const SEAM_GAP = space.browse.searchGap;
 /** The current-step leaf marker, and the plain dot. */
 const MARKER = size.home.countdownPill - 4;
 const DOT = 8;
@@ -295,8 +407,8 @@ const s = StyleSheet.create({
     paddingHorizontal: space.home.tileBody,
   },
   half: { flex: 1, minWidth: 0, gap: 6, paddingVertical: 2 },
-  halfBody: { flexDirection: "row", alignItems: "center", gap: 8 },
-  itemName: { flex: 1, minWidth: 0, color: color.ink },
+  halfBody: { alignItems: "flex-start", gap: 6 },
+  itemName: { alignSelf: "stretch", color: color.ink },
   leafTile: {
     width: THUMB,
     height: THUMB,
@@ -339,6 +451,14 @@ const s = StyleSheet.create({
     borderTopColor: color.divider,
   },
   footerText: { flexGrow: 1, flexShrink: 1, flexBasis: 140, color: color.ink },
+  links: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    columnGap: space.home.tileBody * 2,
+    rowGap: space.browse.searchGap,
+    paddingHorizontal: space.home.tileBody,
+    paddingBottom: space.home.tileBody,
+  },
   waitingOn: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0, maxWidth: "100%" },
   button: {
     height: size.home.heroCta,

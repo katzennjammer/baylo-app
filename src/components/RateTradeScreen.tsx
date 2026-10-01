@@ -168,7 +168,7 @@ export default function RateTradeScreen() {
               lineHeight: 22,
             }}
           />
-          <Text style={[textStyle(offerType.deadline), { color: colors.tertiary, textAlign: "right" }]}>{comment.length}/400</Text>
+          <Text style={[textStyle(offerType.helper), { color: colors.tertiary, textAlign: "right" }]}>{comment.length}/400</Text>
         </View>
 
         {error ? (

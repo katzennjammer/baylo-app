@@ -54,6 +54,7 @@ import {
   offerType,
   textStyle,
 } from "../src/theme/offer-tokens";
+import { textStyle as baseTextStyle, type } from "../src/theme/tokens";
 
 /**
  * §6.1 — the confirmation code. All four states, and the one that matters most.
@@ -522,7 +523,7 @@ function TradeSummary({ trade }: { trade: ActiveTrade }) {
           {present.swapLine(trade)}
         </Text>
         {meta ? (
-          <Text style={[textStyle(offerType.deadline), { color: offerColor.inkSecondary }]}>
+          <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]}>
             {meta}
           </Text>
         ) : null}
@@ -597,7 +598,7 @@ function MatchedScreen({
                 <TradesSectionLabel>{copy.code.rewardLabel}</TradesSectionLabel>
                 <Text
                   accessibilityLiveRegion="polite"
-                  style={[textStyle(offerType.leavesDetail), { color: offerColor.ink }]}
+                  style={[baseTextStyle(type.detailLeaves), { color: offerColor.ink }]}
                 >
                   {(completion.reward ?? 0) > 0
                     ? copy.code.rewardLine(completion.reward ?? 0)

@@ -462,7 +462,7 @@ export function Field({
 
         <View style={{ flex: 1 }}>
           <Text style={[textStyle(postType.fieldLabel), { color: c.label }]}>
-            {label.toUpperCase()}
+            {label}
           </Text>
           <TextInput
             ref={inputRef}
@@ -560,7 +560,7 @@ export function PickerField({
       >
         <View style={{ flex: 1 }}>
           <Text style={[textStyle(postType.fieldLabel), { color: c.label }]}>
-            {label.toUpperCase()}
+            {label}
           </Text>
           <Text
             style={[
@@ -685,7 +685,7 @@ export function HelperCounterRow({
         {helper}
       </Text>
       {counter ? (
-        <Text style={[textStyle(postType.counter), { color: postColor.inkMuted }]}>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
           {counter}
         </Text>
       ) : null}
@@ -941,7 +941,7 @@ export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
 
 export function SectionLabel({ children }: { children: string }) {
   return (
-    <Text style={[textStyle(postType.sectionLabel), { color: postColor.inkMuted }]}>
+    <Text style={[textStyle(postType.smallTextLabel), { color: postColor.inkSecondary }]}>
       {children}
     </Text>
   );

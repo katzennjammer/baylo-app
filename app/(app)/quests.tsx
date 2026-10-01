@@ -113,7 +113,7 @@ function QuestRow({ quest }: { quest: Quest }) {
       <View style={s.cardTop}>
         <View style={[s.tier, { backgroundColor: tone.fill, borderColor: tone.line }]}>
           <Text style={[textStyle(type.tierBadge), { color: tone.ink }]}>
-            {TIER_LABEL[quest.tier].toUpperCase()}
+            {TIER_LABEL[quest.tier]}
           </Text>
         </View>
         <View style={s.reward}>

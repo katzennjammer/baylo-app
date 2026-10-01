@@ -441,7 +441,7 @@ export function CodeCounter({ remaining }: { remaining: number | null }) {
   return (
     <Text
       accessibilityLiveRegion="polite"
-      style={[textStyle(offerType.leavesRow), { color: offerColor.warm }]}
+      style={[textStyle(offerType.rowSubtitle), { color: offerColor.warm }]}
     >
       {remaining === null ? copy.code.notAMatchPlain : copy.code.notAMatch(remaining)}
     </Text>

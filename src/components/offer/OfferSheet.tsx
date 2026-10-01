@@ -274,7 +274,7 @@ export function ReachPromptSheet({
             <View key={i} style={{ flexDirection: "row", gap: 12 }}>
               <Text
                 style={[
-                  textStyle(offerType.footnoteMono),
+                  textStyle(offerType.helper),
                   { color: offerColor.inkTertiary, paddingTop: 2 },
                 ]}
               >
@@ -343,7 +343,7 @@ function Swatch({ label, filter }: { label: string; filter?: readonly FilterFunc
           ...(filter ? { filter } : {}),
         }}
       />
-      <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+      <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
         {label}
       </Text>
     </View>
@@ -445,7 +445,7 @@ export function PickerBody({
       </ScrollView>
 
       <View style={{ paddingHorizontal: p.x, paddingTop: p.sectionGap }}>
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {footnote}
         </Text>
 

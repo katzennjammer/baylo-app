@@ -304,7 +304,7 @@ export function ItemRow({
           {title}
         </Text>
         <Text
-          style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary, marginTop: 4 }]}
+          style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 4 }]}
         >
           {meta}
         </Text>
@@ -452,7 +452,7 @@ export function RecordRow({
       </Text>
       <Text
         style={[
-          textStyle(offerType.tableFigure),
+          textStyle(offerType.bodyDense),
           { color: tone === "warm" ? offerColor.warm : offerColor.ink },
         ]}
       >
@@ -474,7 +474,7 @@ export function RecordRow({
 export function NumberedStep({ n, children }: { n: number; children: string }) {
   return (
     <View style={{ flexDirection: "row", gap: 12 }}>
-      <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+      <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
         {String(n).padStart(2, "0")}
       </Text>
       <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>

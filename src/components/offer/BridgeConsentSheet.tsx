@@ -102,7 +102,7 @@ export function BridgeConsentSheet({
 
         <Text
           style={[
-            textStyle(offerType.leavesRow),
+            textStyle(offerType.rowSubtitle),
             { color: offerColor.inkSecondary, marginTop: p.headingToBody },
           ]}
         >

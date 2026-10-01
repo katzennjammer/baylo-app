@@ -39,7 +39,7 @@ export function OrgMatches({
   if (orgs.length === 0) return null;
   return (
     <View style={s.wrap}>
-      <Text style={[textStyle(type.resultCount), s.heading]}>
+      <Text style={[textStyle(type.metadata), s.heading]}>
         {orgs.length === 1 ? "Shop" : "Shops"}
       </Text>
       {orgs.map((org) => {

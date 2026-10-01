@@ -479,7 +479,7 @@ function GoogleDateOfBirth({
           <BandRow leading={<BandBackButton onPress={onAbandon} label="Back to sign in" />}>
             <Wordmark />
           </BandRow>
-          <BandEyebrow>step 2 of 2</BandEyebrow>
+          <BandEyebrow>Step 2 of 2</BandEyebrow>
           <GoogleAccountCard
             name={pending.session.user.name}
             email={pending.session.user.email}

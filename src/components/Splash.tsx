@@ -80,8 +80,8 @@ export function Splash({ waitingOn = "Starting up" }: SplashProps) {
 
       {diagnostics ? (
         <View style={s.panel}>
-          <Text style={[textStyle(type.sectionEyebrow), s.eyebrow]}>
-            STILL LOADING — {seconds}s
+          <Text style={[textStyle(type.sectionHeading), s.eyebrow]}>
+            Still loading · {seconds}s
           </Text>
 
           <Text style={[textStyle(type.emptyBody), s.waiting]}>{waitingOn}</Text>

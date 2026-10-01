@@ -6,7 +6,7 @@ import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { ArrowsIcon } from "../offer/icons";
 import { bracketLabel } from "../../lib/brackets";
 
-import { color, font, radius, textStyle } from "../../theme/tokens";
+import { color, font, radius, textStyle, type } from "../../theme/tokens";
 
 export type MessagePayload = Record<string, unknown> & {
   type?: string;
@@ -108,7 +108,7 @@ export function renderMessageBody({
             <Text style={[styles.offerBrackets, !mine && styles.theirOfferMuted]}>{bracketLabel(offeredBracket)} for {bracketLabel(targetBracket)}</Text>
           ) : null}
           {userMessage ? <Text style={[styles.offerMessage, !mine && styles.theirOfferText]}>{userMessage}</Text> : null}
-          <Text style={[styles.offerStatus, !mine && styles.theirOfferMuted]}>{status}</Text>
+          <Text style={[styles.offerStatus, !mine && styles.theirOfferMuted]}>{sentenceCase(status)}</Text>
         </View>
       );
 
@@ -287,11 +287,8 @@ const styles = StyleSheet.create({
     borderColor: color.divider,
   },
   offerLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
+    ...type.sectionHeading,
     color: color.surface, // Changed offer label color for better contrast
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
     marginBottom: 6,
   },
   offerLine: {
@@ -307,8 +304,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   offerBrackets: {
-    fontFamily: font.mono,
-    fontSize: 11,
+    ...type.gridMeta,
     color: color.inkSecondary,
     marginTop: 4,
   },
@@ -319,10 +315,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   offerStatus: {
-    fontFamily: font.mono,
-    fontSize: 10,
+    ...type.gridMeta,
     color: color.surface, // Changed offer status color for better contrast
-    textTransform: "uppercase",
   },
   theirOfferText: {
     color: color.ink,
@@ -408,7 +402,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   voiceTime: {
-    fontFamily: font.mono,
-    fontSize: 11,
+    ...type.gridMeta,
   },
 });
+
+/** "PENDING" → "Pending". The wire's enum, shown as a word rather than a code. */
+function sentenceCase(raw: string): string {
+  const lower = raw.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}

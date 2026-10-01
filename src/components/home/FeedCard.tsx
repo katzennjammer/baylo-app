@@ -339,7 +339,7 @@ function Photo({ images, title }: { images: string[]; title: string }) {
       */}
       {cropped ? (
         <View style={s.caption} pointerEvents="none">
-          <Text style={[textStyle(type.photoCaption), { color: color.surface }]}>CROPPED</Text>
+          <Text style={[textStyle(type.gridMeta), { color: color.surface }]}>Cropped</Text>
         </View>
       ) : null}
     </View>

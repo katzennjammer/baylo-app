@@ -293,6 +293,8 @@ export interface CardWords {
   /** Null on a "Waiting on them" card, which carries no track. */
   progress: CardProgress | null;
   footer: string;
+  /** A second, secondary line under the footer: the time of a suggestion. */
+  footerDetail?: string | null;
   /** "Your move" cards only. */
   action: { label: string; tone: "forest" | "amber"; href: string; a11y: string } | null;
   /** "Waiting on them" cards only: "Aj to confirm". */
@@ -388,7 +390,7 @@ export function yourMoveCard(item: NeedsItem): CardWords {
       action: {
         label: copy.tradeCard.action.review,
         tone: "forest",
-        href: "/trades-waiting",
+        href: `/trades-waiting?answer=${enc(trade.id)}`,
         a11y: `Review the swap request from ${trade.counterparty.name}`,
       },
     };
@@ -485,6 +487,92 @@ export function waitingCard(item: WaitingItem): CardWords {
     footer,
     action: null,
     waitingOn: copy.tradeCard.toConfirm(partner),
+  };
+}
+
+/**
+ * A card on the pushed Waiting screen. Same item, same grouping as the tab's
+ * `waitingCard()` — what changes is the footer, which says what the VIEWER did
+ * ("You suggested Marigondon Hall") and, on the right, whose move it is now.
+ */
+export function waitingScreenCard(item: WaitingItem): CardWords {
+  const card = waitingCard(item);
+  const partner = card.partner;
+
+  if (item.kind === "sent-offer") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youSentOffer,
+      footerDetail: null,
+      waitingOn: copy.tradeCard.toAnswer(partner),
+    };
+  }
+
+  const trade = item.trade;
+  if (trade.status === "PENDING") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youSentRequest,
+      footerDetail: null,
+      waitingOn: copy.tradeCard.toAnswer(partner),
+    };
+  }
+  if (trade.status === "CONFIRMING") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youEnteredCode,
+      footerDetail: namedHub(trade),
+      waitingOn: copy.tradeCard.toConfirm(partner),
+    };
+  }
+  // ACCEPTED with the viewer's own suggestion unanswered — the only ACCEPTED
+  // state `buildTradesModel()` files under Waiting.
+  const plan = trade.meetup;
+  return {
+    ...card,
+    footer: plan ? copy.tradeCard.youSuggested(plan.hub.name) : copy.tradeCard.noHub,
+    footerDetail: plan ? meetupWhen(new Date(plan.at)) : null,
+    waitingOn: copy.tradeCard.toConfirm(partner),
+  };
+}
+
+/**
+ * One row on Finished trades (1 Oct 2026 redesign): "With Aya", then
+ * `21 Sep · codes matched 21:23` for a completed trade, or
+ * `5 Jul · Your 800 Leaves ⇄ Levi's Blue Cap` for one that ended without a swap.
+ *
+ * REJECTED and CANCELLED both sit under "Called off" on the switch, but the
+ * chip keeps them apart — "Declined" is the other person saying no, "Called
+ * off" is the trade being ended. They are never collapsed into one word.
+ */
+export function finishedRowWords(
+  trade: ActiveTrade,
+  clock: (at: number) => string,
+): {
+  partner: string;
+  meta: string;
+  give: CardSide;
+  get: CardSide;
+  chip: string | null;
+} {
+  const partner = firstName(trade.counterparty.name);
+  const sides = tradeSides(trade);
+  const when = new Date(trade.updatedAt);
+
+  if (trade.status === "COMPLETED") {
+    const matched = trade.codesMatchedAt ? Date.parse(trade.codesMatchedAt) : when.getTime();
+    return {
+      partner,
+      ...sides,
+      meta: copy.history.tradedMeta(new Date(matched), clock(matched)),
+      chip: null,
+    };
+  }
+  return {
+    partner,
+    ...sides,
+    meta: `${shortDate(when)} · Your ${sides.give.title} ⇄ ${sides.get.title}`,
+    chip: trade.status === "REJECTED" ? copy.history.declinedChip : copy.history.calledOffChip,
   };
 }
 

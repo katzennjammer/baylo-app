@@ -22,7 +22,7 @@ import { RecordRow } from "../src/components/offer/rows";
 import { LoadFailedPanel } from "../src/components/offer/states";
 import {
   Gutter,
-  NavMono,
+  NavNote,
   TradesBackTitle,
   TradesSectionLabel,
 } from "../src/components/trades/chrome";
@@ -192,7 +192,7 @@ export default function OfferReviewScreen() {
         title={copy.nav.offerFrom(offer.counterparty.name)}
         onBack={() => router.back()}
         // A decided offer has no clock left to run.
-        trailing={decided ? undefined : <NavMono>{copy.review.expiresIn(days)}</NavMono>}
+        trailing={decided ? undefined : <NavNote>{copy.review.expiresIn(days)}</NavNote>}
       />
 
       <ScrollView>
@@ -213,7 +213,7 @@ export default function OfferReviewScreen() {
               >
                 {present.offerSwapLine(offer)}
               </Text>
-              <Text style={[textStyle(offerType.deadline), { color: offerColor.inkSecondary }]}>
+              <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]}>
                 {offer.offeredBracket !== null && offer.targetBracket !== null
                   ? `${bracketLabel(offer.offeredBracket)} for your ${bracketLabel(offer.targetBracket)}`
                   : copy.review.noLeaves}
@@ -316,7 +316,7 @@ export default function OfferReviewScreen() {
         {!incoming ? (
           <Text
             style={[
-              textStyle(offerType.footnoteMono),
+              textStyle(offerType.helper),
               { color: offerColor.inkSecondary, textAlign: "center" },
             ]}
           >
@@ -325,7 +325,7 @@ export default function OfferReviewScreen() {
         ) : decided ? (
           <Text
             style={[
-              textStyle(offerType.footnoteMono),
+              textStyle(offerType.helper),
               { color: offerColor.inkSecondary, textAlign: "center" },
             ]}
           >

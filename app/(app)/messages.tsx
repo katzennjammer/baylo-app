@@ -12,7 +12,7 @@ import { useSession } from "../../src/auth/session";
 import { MessageIcon, StoreIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
-import { color, font, icon, radius, textStyle } from "../../src/theme/tokens";
+import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -226,8 +226,7 @@ const styles = StyleSheet.create({
   },
   errorCode: {
     marginTop: 8,
-    fontFamily: font.mono,
-    fontSize: 11,
+    ...type.gridMeta,
     color: color.inkMuted,
     textAlign: "center",
   },
@@ -322,8 +321,7 @@ const styles = StyleSheet.create({
   },
   time: {
     marginLeft: 8,
-    fontFamily: font.mono,
-    fontSize: 10,
+    ...type.gridMeta,
     color: color.inkSecondary,
   },
   previewRow: {

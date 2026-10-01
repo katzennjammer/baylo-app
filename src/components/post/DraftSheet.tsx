@@ -157,7 +157,7 @@ export function DraftSheet({
               </Text>
               <Text
                 style={[
-                  textStyle(postType.draftRowMeta),
+                  textStyle(postType.helper),
                   { color: postColor.inkMuted, marginTop: 5 },
                 ]}
               >

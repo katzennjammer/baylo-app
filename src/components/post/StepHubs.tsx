@@ -178,11 +178,11 @@ function HubRow({
           </Text>
           <Text
             style={[
-              textStyle(postType.hubEyebrow),
+              textStyle(postType.tag),
               { color: selected ? postColor.forest : postColor.inkMuted },
             ]}
           >
-            {hub.typeLabel.toUpperCase()}
+            {hub.typeLabel}
           </Text>
         </View>
         <Text

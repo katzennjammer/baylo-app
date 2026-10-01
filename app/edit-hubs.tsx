@@ -175,7 +175,7 @@ export default function EditHubsScreen() {
             meet, and a meeting at a hub you both offer earns the safe hub reward.
           </Text>
           {atLimit ? (
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
               That is five places. Uncheck one to add another.
             </Text>
           ) : null}
@@ -276,13 +276,13 @@ function HubRow({
             {hub.name}
           </Text>
           <Text
-            style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}
+            style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}
             numberOfLines={1}
           >
             {hub.landmark}
           </Text>
           {!hub.isActive ? (
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.warm }]}>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.warm }]}>
               Closed — still on your listing until you uncheck it
             </Text>
           ) : null}

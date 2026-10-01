@@ -255,7 +255,7 @@ export default function TradeMeetupScreen() {
           <>
             <View style={{ height: 14 }} />
             <Gutter style={{ gap: 4 }}>
-              <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+              <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
                 {state === "agreed"
                   ? copy.meetup.agreed
                   : state === "yours-to-answer"
@@ -338,7 +338,7 @@ export default function TradeMeetupScreen() {
         <SectionLabel>{copy.meetup.pickHub}</SectionLabel>
         {shared.size < hubs.length ? (
           <Gutter style={{ paddingBottom: 8 }}>
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
               {copy.meetup.sharedEarns}
             </Text>
           </Gutter>
@@ -521,7 +521,7 @@ function HubRow({
             {hub.name}
           </Text>
           <Text
-            style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}
+            style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}
             numberOfLines={1}
           >
             {hub.landmark}
@@ -529,7 +529,7 @@ function HubRow({
           {selected || badgeAlways ? (
             <Text
               style={[
-                textStyle(offerType.footnoteMono),
+                textStyle(offerType.helper),
                 { color: badgeAlways ? offerColor.green : offerColor.inkTertiary },
               ]}
             >

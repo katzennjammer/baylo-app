@@ -631,7 +631,7 @@ function Wizard() {
         }}
         railTrailing={
           step === 0 && state.photos.length > 0 ? (
-            <Text style={[textStyle(postType.photoCounter), { color: postColor.inkMuted }]}>
+            <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
               {`${state.photos.length} of ${rules.maxPhotos} photos`}
             </Text>
           ) : null
@@ -707,7 +707,7 @@ function Wizard() {
                 justifyContent: "space-between",
               }}
             >
-              <Text style={[textStyle(postType.hubCounter), { color: postColor.inkMuted }]}>
+              <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
                 {`${state.hubIds.length} of ${rules.maxHubs} chosen`}
               </Text>
               <Tappable

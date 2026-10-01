@@ -286,7 +286,7 @@ export function NeedsCard({
         {monoLines?.map((line) => (
           <Text
             key={line.text}
-            style={[textStyle(offerType.deadline), { color: line.ink ?? offerColor.inkTertiary }]}
+            style={[textStyle(offerType.helper), { color: line.ink ?? offerColor.inkTertiary }]}
             numberOfLines={1}
           >
             {line.text}
@@ -400,7 +400,7 @@ export function WaitingRow({
         {trailing ? (
           <Text
             style={[
-              textStyle(offerType.deadline),
+              textStyle(offerType.helper),
               { color: trailingInk ?? offerColor.inkTertiary, flexShrink: 0 },
             ]}
           >
@@ -464,7 +464,7 @@ export function HistoryCollapsedRow({
       <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink, flex: 1 }]}>
         {title}
       </Text>
-      <Text style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary }]}>
+      <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary }]}>
         {count}
       </Text>
       <ChevronRightIcon
@@ -535,7 +535,7 @@ export function HistoryRow({
       </Text>
       <Text
         style={[
-          textStyle(offerType.deadline),
+          textStyle(offerType.helper),
           {
             color: defaulted
               ? offerColor.warm

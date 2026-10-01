@@ -374,7 +374,7 @@ function SkipHint() {
           backgroundColor: "rgba(20,20,15,0.38)",
         }}
       >
-        <Text style={[authText(authType.eyebrow), { color: sheetColor.onVideoEyebrow }]}>
+        <Text style={[authText(authType.pillLabel), { color: sheetColor.onVideoEyebrow }]}>
           Tap to skip
         </Text>
       </View>

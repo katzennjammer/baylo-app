@@ -231,7 +231,7 @@ export function PrimaryButton({
       {busy ? (
         <ActivityIndicator color="#ffffff" />
       ) : (
-        <Text className="text-white text-[15px] font-bold tracking-wider uppercase">{label}</Text>
+        <Text className="text-white text-[15px] font-bold">{label}</Text>
       )}
     </Pressable>
   );

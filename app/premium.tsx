@@ -251,7 +251,7 @@ export default function PremiumScreen() {
             >
               {PREMIUM_PRICE}
             </Text>
-            <Text style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary, marginTop: 2 }]}>
+            <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 2 }]}>
               {PREMIUM_TERM_LABEL}
             </Text>
             <Text

@@ -419,7 +419,7 @@ export default function OfferScreen() {
           }}
         >
           <Text
-            style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary }]}
+            style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary }]}
             numberOfLines={1}
           >
             {`${chosen.title} · ${bracketLabel(yourBracket)} → ${context.item.title} · ${bracketLabel(theirBracket)}` +
@@ -481,7 +481,7 @@ export default function OfferScreen() {
             </Text>
             <Text
               style={[
-                textStyle(offerType.leavesRow),
+                textStyle(offerType.rowSubtitle),
                 { color: offerColor.inkSecondary, marginTop: 6 },
               ]}
             >
@@ -755,10 +755,10 @@ function MessageField({
           justifyContent: "space-between",
         }}
       >
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {copy.chrome.messageOptional}
         </Text>
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {copy.messageCounter(value.length, MAX_OFFER_MESSAGE)}
         </Text>
       </View>

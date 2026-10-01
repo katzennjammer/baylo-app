@@ -132,6 +132,11 @@ export const isChecking = (p: Photo): boolean =>
 /** The unit a perishable's quantity is counted in. Mirrors the server enum. */
 export type QuantityUnit = "KG" | "PCS" | "LITERS";
 
+/** How a unit reads on screen: "kg", "pcs", "L" — as in "3 pcs". The wire keeps the enum. */
+export function unitLabel(unit: QuantityUnit): string {
+  return unit === "KG" ? "kg" : unit === "PCS" ? "pcs" : "L";
+}
+
 /** The windows the wizard offers. The column is an Int and takes others. */
 export type TradeWithinHours = 6 | 24;
 

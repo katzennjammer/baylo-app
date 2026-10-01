@@ -280,7 +280,7 @@ export function BusinessCategoryRail({
       style={s.railOuter}
       accessibilityLabel="Kind of shop"
     >
-      <Text style={[textStyle(type.photoCaption), { color: color.inkMuted }]}>Shop type</Text>
+      <Text style={[textStyle(type.gridMeta), { color: color.inkMuted }]}>Shop type</Text>
       {facets.map((f) => {
         const on = selected.includes(f.businessCategory);
         return (

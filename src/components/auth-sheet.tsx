@@ -527,13 +527,13 @@ export function BandBackButton({ onPress, label }: { onPress: () => void; label:
   );
 }
 
-/** "STEP 2 OF 2" — mono, over the footage. */
+/** "Step 2 of 2", over the footage. Sentence case, body family. */
 export function BandEyebrow({ children }: { children: React.ReactNode }) {
   const { board, safeTop } = useMetrics();
   return (
     <Text
       style={[
-        authText(authType.eyebrow),
+        authText(authType.pillLabel),
         {
           position: "absolute",
           left: board.bandXWithBack + board.backWidth,
@@ -575,7 +575,7 @@ export function DevChip({ children }: { children: React.ReactNode }) {
       pointerEvents="none"
     >
       <Text
-        style={[authText(authType.devChip), { color: sheetColor.onVideoMono }]}
+        style={[authText(authType.declarationCompact), { color: sheetColor.onVideoMono }]}
         numberOfLines={1}
         // The interesting end of a URL is the RIGHT one — the port, and which
         // host it is. A truncated `http://192.168.1…` says nothing.
@@ -1389,7 +1389,7 @@ export function OrDivider({ label = "or" }: { label?: string }) {
       }}
     >
       <View style={{ flex: 1, height: authSize.dividerRule, backgroundColor: sheetColor.dividerLine }} />
-      <Text style={[authText(authType.dividerLabel), { color: sheetColor.label }]}>{label}</Text>
+      <Text style={[authText(authType.subhead), { color: sheetColor.label }]}>{label}</Text>
       <View style={{ flex: 1, height: authSize.dividerRule, backgroundColor: sheetColor.dividerLine }} />
     </View>
   );
@@ -1444,7 +1444,7 @@ export function CompactHeader({
       </View>
 
       {counter ? (
-        <Text style={[authText(authType.fieldCounter), { color: sheetColor.label }]}>
+        <Text style={[authText(authType.declarationCompact), { color: sheetColor.label }]}>
           {counter}
         </Text>
       ) : null}
@@ -1493,7 +1493,7 @@ export interface PanelRow {
  */
 export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
   const { board } = useMetrics();
-  const valueRole = board.tight ? authType.panelValueTight : authType.panelValue;
+  const valueRole = board.tight ? authType.cardName : authType.cardName;
 
   return (
     <View

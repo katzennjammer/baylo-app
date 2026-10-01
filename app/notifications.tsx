@@ -192,7 +192,7 @@ function NotificationRow({
         >
           {line}
         </Text>
-        <Text style={[textStyle(offerType.deadline), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {relativeShort(item.createdAt)}
         </Text>
         {item.type === "LISTING_EXPIRED" && item.entityId ? (

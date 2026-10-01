@@ -34,7 +34,7 @@ export function TrendingStrip({ trending }: { trending: TrendingCategory[] }) {
     <View style={s.section}>
       <View style={s.header}>
         <Text style={[textStyle(type.sectionHeading), { color: color.forest }]}>Trending</Text>
-        <Text style={[textStyle(type.sectionEyebrow), { color: color.inkMuted }]}>
+        <Text style={[textStyle(type.sectionHeading), { color: color.inkMuted }]}>
           this week
         </Text>
       </View>

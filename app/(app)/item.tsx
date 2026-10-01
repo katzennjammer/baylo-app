@@ -40,6 +40,7 @@ import {
 } from "../../src/components/icons";
 import { CountdownPill } from "../../src/components/CountdownPill";
 import { SwapSeam } from "../../src/components/SwapSeam";
+import { unitLabel } from "../../src/post/state";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportReasonRows } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -767,8 +768,10 @@ function formatFeaturedUntil(iso: string): string {
 /** "1.5 kg", "3 pcs", "2 L" — or null when the owner gave no amount. */
 function perishableAmount(p: NonNullable<Item["perishable"]>): string | null {
   if (p.quantity == null || !p.quantityUnit) return null;
-  // Lowercase units, except the litre: a lowercase "l" reads as the digit 1.
-  const unit = p.quantityUnit === "LITERS" ? "L" : p.quantityUnit.toLowerCase();
+  // The post flow's formatter, so the tag and the review screen agree. The wire
+  // types the unit as a plain string; anything unknown is shown lowercased.
+  const u = p.quantityUnit;
+  const unit = u === "KG" || u === "PCS" || u === "LITERS" ? unitLabel(u) : u.toLowerCase();
   return `${p.quantity} ${unit}`;
 }
 

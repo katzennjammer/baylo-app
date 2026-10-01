@@ -156,7 +156,7 @@ export const postType = {
   hubEyebrow: { fontFamily: font.mono, fontSize: 10, letterSpacing: 0.6 },
   hubNote: { fontFamily: font.sans, fontSize: 12, lineHeight: 16.2 },
 
-  fieldLabel: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: 0.4 },
+  fieldLabel: { fontFamily: font.sansMedium, fontSize: 10 },
   fieldValue: { fontFamily: font.sansMedium, fontSize: 15 },
   fieldValueMulti: { fontFamily: font.sans, fontSize: 15, lineHeight: 23.25 },
   fieldPlaceholder: { fontFamily: font.sans, fontSize: 14 },

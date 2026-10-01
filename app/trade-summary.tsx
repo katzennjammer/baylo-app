@@ -61,7 +61,7 @@ function Photo({ item, fallback }: { item: TradeItemBrief | null; fallback: stri
   return <View style={{ alignItems: "center", width: offerSize.tradeRow.thumb + 26, gap: 6 }}>
     <Thumb image={item?.image ?? null} size={offerSize.tradeRow.thumb} />
     <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary, textAlign: "center" }]} numberOfLines={2}>{item?.title ?? fallback}</Text>
-    <Text style={[textStyle(offerType.deadline), { color: offerColor.inkTertiary }]}>{bracket ?? ""}</Text>
+    <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>{bracket ?? ""}</Text>
   </View>;
 }
 

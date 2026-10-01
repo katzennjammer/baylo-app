@@ -30,7 +30,7 @@ import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
-import { color, font, radius, textStyle } from "../../src/theme/tokens";
+import { color, font, radius, textStyle, type } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 
 function relativeTime(dateIso: string): string {
@@ -599,8 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   time: {
-    fontFamily: font.mono,
-    fontSize: 10,
+    ...type.gridMeta,
     color: color.inkSecondary,
     marginTop: 4,
   },

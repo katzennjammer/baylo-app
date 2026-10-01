@@ -10,7 +10,7 @@ import {
   type Category,
 } from "../../api/post";
 import { leadPhoto } from "../../post/photos";
-import { titleError, usePost } from "../../post/state";
+import { titleError, unitLabel, usePost } from "../../post/state";
 import {
   postColor,
   postIcon,
@@ -122,11 +122,11 @@ export function StepWhatIsIt({
           <View style={{ height: 20 }} />
           <Text
             style={[
-              textStyle(postType.fieldLabel),
-              { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
+              textStyle(postType.smallTextLabel),
+              { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
             ]}
           >
-            GIVE IT A TITLE
+            Give it a title
           </Text>
           <Field
             label="Give it a title"
@@ -266,15 +266,15 @@ export function StepWhatIsIt({
 
               <Text
                 style={[
-                  textStyle(postType.fieldLabel),
+                  textStyle(postType.smallTextLabel),
                   {
-                    color: postColor.inkMuted,
+                    color: postColor.inkSecondary,
                     marginTop: postSpace.what.dividerToLabel,
                     marginBottom: postSpace.what.labelToField,
                   },
                 ]}
               >
-                GIVE IT A TITLE
+                Give it a title
               </Text>
               <Field
                 label="Give it a title"
@@ -424,15 +424,15 @@ function ItemTypeBlock({
 
       <Text
         style={[
-          textStyle(postType.fieldLabel),
+          textStyle(postType.smallTextLabel),
           {
-            color: postColor.inkMuted,
+            color: postColor.inkSecondary,
             marginTop: postSpace.what.dividerToLabel,
             marginBottom: postSpace.what.labelToField,
           },
         ]}
       >
-        WHAT KIND OF ITEM
+        What kind of item
       </Text>
 
       <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
@@ -477,17 +477,17 @@ function ItemTypeBlock({
             <View style={{ flex: 1 }}>
               <Text
                 style={[
-                  textStyle(postType.fieldLabel),
-                  { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
+                  textStyle(postType.smallTextLabel),
+                  { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
                 ]}
               >
-                UNIT
+                Unit
               </Text>
               <View style={{ flexDirection: "row", gap: 6 }}>
                 {(["KG", "PCS", "LITERS"] as const).map((u) => (
                   <Chip
                     key={u}
-                    label={u === "LITERS" ? "L" : u}
+                    label={unitLabel(u)}
                     selected={state.quantityUnit === u}
                     onPress={() => dispatch({ type: "field/quantity-unit", value: u })}
                   />
@@ -501,15 +501,15 @@ function ItemTypeBlock({
 
           <Text
             style={[
-              textStyle(postType.fieldLabel),
+              textStyle(postType.smallTextLabel),
               {
-                color: postColor.inkMuted,
+                color: postColor.inkSecondary,
                 marginTop: postSpace.what.dividerToLabel,
                 marginBottom: postSpace.what.labelToField,
               },
             ]}
           >
-            TRADE WITHIN
+            Trade within
           </Text>
           <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
             {([6, 24] as const).map((h) => (
@@ -626,8 +626,8 @@ function ResultColumn({
           marginTop: postSpace.what.resultToEyebrow,
         }}
       >
-        <Text style={[textStyle(postType.eyebrow), { color: postColor.inkMuted }]}>
-          {(category ? categoryLabel(category) : "—").toUpperCase()}
+        <Text style={[textStyle(postType.tag), { color: postColor.inkMuted }]}>
+          {category ? categoryLabel(category) : "—"}
         </Text>
         <View
           style={{
@@ -637,8 +637,8 @@ function ResultColumn({
             backgroundColor: postColor.dashed,
           }}
         />
-        <Text style={[textStyle(postType.eyebrow), { color: postColor.inkMuted }]}>
-          {conditionLabel(condition as never).toUpperCase()}
+        <Text style={[textStyle(postType.tag), { color: postColor.inkMuted }]}>
+          {conditionLabel(condition as never)}
         </Text>
       </View>
     </View>
@@ -670,7 +670,7 @@ function CorrectionBlock({ onChangeAgain }: { onChangeAgain: () => void }) {
             gap: 12,
           }}
         >
-          <Text style={[textStyle(postType.struck), { color: postColor.inkMuted, flex: 1 }]}>
+          <Text style={[textStyle(postType.conditionDesc), { color: postColor.inkMuted, flex: 1 }]}>
             {`We thought: ${original.name.toLowerCase()}, ${conditionLabel(
               original.condition,
             ).toLowerCase()}`}
@@ -734,11 +734,11 @@ function FailedForm({
       <View style={{ height: postSpace.what.fieldToLabel }} />
       <Text
         style={[
-          textStyle(postType.fieldLabel),
-          { color: postColor.inkMuted, marginBottom: postSpace.what.labelToField },
+          textStyle(postType.smallTextLabel),
+          { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
         ]}
       >
-        GIVE IT A TITLE
+        Give it a title
       </Text>
       <Field
         label="Give it a title"

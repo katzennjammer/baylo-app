@@ -343,7 +343,7 @@ function MapAttribution({ at }: { at: "top" | "bottom" }) {
         style={s.attributionPill}
         pressedStyle={s.attributionPressed}
       >
-        <Text style={[textStyle(type.photoCaption), s.attributionText]}>{ATTRIBUTION_TEXT}</Text>
+        <Text style={[textStyle(type.gridMeta), s.attributionText]}>{ATTRIBUTION_TEXT}</Text>
       </Tappable>
     </View>
   );

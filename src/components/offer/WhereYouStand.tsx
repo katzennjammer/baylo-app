@@ -155,12 +155,12 @@ export function WhereYouStand({
           justifyContent: "space-between",
         }}
       >
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {highestItem === null
             ? copy.reach.legendStarting
             : copy.reach.legendYours(highestItem.title, bracketOf(highestItem.valueLeaves))}
         </Text>
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {copy.reach.legendTheirs(listingBracket)}
         </Text>
       </View>

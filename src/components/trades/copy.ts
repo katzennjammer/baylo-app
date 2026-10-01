@@ -84,6 +84,15 @@ export const label = {
 /** §10.6's History row. */
 export const history = {
   rowTitle: "Finished trades",
+  /** The two-option switch at the top of Finished trades. */
+  completedTab: (n: number) => `Completed · ${n}`,
+  calledOffTab: (n: number) => `Called off · ${n}`,
+  withPartner: (partner: string) => `With ${partner}`,
+  calledOffChip: "Called off",
+  declinedChip: "Declined",
+  rate: (partner: string) => `Rate ${partner}`,
+  noneCompleted: "No completed trades yet.",
+  noneCalledOff: "Nothing has been called off.",
   /** `14 trades`. Singular at one, because "1 trades" is a bug people report. */
   count: (n: number, capped = false) =>
     capped ? `${n}+ trades` : `${n} ${n === 1 ? "trade" : "trades"}`,
@@ -289,6 +298,31 @@ export const tradeCard = {
   replyToOffer: (partner: string, by: string) => `Reply to ${partner}'s offer by ${by}`,
   replyToRequest: (partner: string) => `Reply to ${partner}'s swap request`,
   toConfirm: (partner: string) => `${partner} to confirm`,
+  toAnswer: (partner: string) => `${partner} to answer`,
+  /** A step passed over on the track: codes started with no hub agreed. */
+  stepSkipped: (i: number) => (i === 1 ? "Hub skipped" : "Skipped"),
+  /* The Waiting screen's footers: what the VIEWER did, then whose move it is. */
+  youSuggested: (hub: string) => `You suggested ${hub}`,
+  youSentOffer: "You sent an offer",
+  youSentRequest: "You sent a swap request",
+  youEnteredCode: "You entered their code",
+  changeSuggestion: "Change suggestion",
+  withdraw: "Withdraw",
+  withdrawOffer: "Withdraw offer",
+  /** The pushed Waiting screen's header. */
+  waitingSubtitle: "Nothing to do here until they answer.",
+  waitingEmpty: "Nobody owes you an answer right now.",
+  /** "2 trades need you." + the link "Go to Your move". */
+  needYou: (n: number) => (n === 1 ? "1 trade needs you." : `${n} trades need you.`),
+  goToYourMove: "Go to Your move",
+  requestFrom: (partner: string) => `Swap request from ${partner}`,
+  /* The withdraw confirmations. */
+  withdrawOfferTitle: (partner: string) => `Withdraw your offer to ${partner}?`,
+  withdrawOfferHeld: (held: number) => `${grouped(held)} Leaves come back to you.`,
+  withdrawOfferNothingHeld: "Nothing was held, so nothing comes back.",
+  withdrawRequestTitle: (partner: string) => `Withdraw your swap request to ${partner}?`,
+  withdrawRequestBody: "The trade is called off and both items go back to available.",
+  keep: "Keep it",
   action: {
     showCode: "Show code",
     pickHub: "Pick hub",

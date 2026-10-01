@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Tappable } from "../Tappable";
 import { ChevronLeftIcon } from "../icons";
+import { textStyle as baseTextStyle, type } from "../../theme/tokens";
 import {
   offerColor,
   offerIcon,
@@ -147,12 +148,12 @@ export function TradesBackTitle({
   );
 }
 
-/** Frame 9d's and 9i's trailing mono on a nav bar. 12 of right padding. */
-export function NavMono({ children }: { children: string }) {
+/** A short trailing note on a nav bar ("Expires in 2 days"). 12 of right padding. */
+export function NavNote({ children }: { children: string }) {
   return (
     <Text
       style={[
-        textStyle(offerType.deadline),
+        textStyle(offerType.helper),
         { color: offerColor.inkTertiary, paddingRight: offerSpace.navX },
       ]}
     >
@@ -164,12 +165,10 @@ export function NavMono({ children }: { children: string }) {
 /* ────────────────────────── the block header ────────────────────────── */
 
 /**
- * §4's section header: "mono 11 label, 21px below label to first item".
+ * §4's section header: a small label, 21px below label to first item.
  *
  * `offerSize.sectionHeader.labelToFirst` is that 21, and §3.5's table agrees —
- * label at 102, first card at 123. `SectionLabel` from the offer flow draws the
- * label itself, including the accessible-name correction that stops a screen
- * reader spelling out an uppercased string letter by letter.
+ * label at 102, first card at 123. `TradesSectionLabel` draws the label.
  *
  * `top` differs per block and comes from §3.5 rather than from §3.1's default:
  * `Needs you today` opens at 14 below the bar and `Waiting` at 18.
@@ -204,15 +203,14 @@ export function BlockHeader({
 /**
  * §2's section label, drawn here rather than imported, for one reason: the
  * offer flow's `SectionLabel` is a bare `Text` and this one is sometimes inside
- * a row with a trailing element. Same type role, same ink, same accessible-name
- * correction — the label is already uppercase through `textTransform`, and a
- * screen reader handed an uppercased string spells it out on some engines.
+ * a row with a trailing element. Same type role and ink: sentence case in the
+ * body family since 1 Oct 2026, when the spaced mono capitals went app-wide.
  */
 export function TradesSectionLabel({ children }: { children: string }) {
   return (
     <Text
-      style={[textStyle(offerType.sectionLabel), { color: offerColor.inkTertiary }]}
-      accessibilityLabel={children}
+      style={[baseTextStyle(type.sectionHeading), { color: offerColor.inkSecondary }]}
+      accessibilityRole="header"
     >
       {children}
     </Text>

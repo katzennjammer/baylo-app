@@ -209,8 +209,8 @@ export const offerType = {
   tableFigure: { fontFamily: font.mono, fontSize: 15, lineHeight: 20, fontVariant: ["tabular-nums"] },
   trustTier: { fontFamily: font.mono, fontSize: 12 },
   deadline: { fontFamily: font.mono, fontSize: 11, fontVariant: ["tabular-nums"] },
-  codeDigits: { fontFamily: font.monoMedium, fontSize: 40, letterSpacing: 4 },
-  codeEntry: { fontFamily: font.monoMedium, fontSize: 34, letterSpacing: 3 },
+  codeDigits: { fontFamily: font.sansBold, fontSize: 40, letterSpacing: 4, fontVariant: ["tabular-nums"] },
+  codeEntry: { fontFamily: font.sansBold, fontSize: 34, letterSpacing: 3, fontVariant: ["tabular-nums"] },
   footnoteMono: { fontFamily: font.mono, fontSize: 11, lineHeight: 16 },
 } satisfies Record<string, TextStyle>;
 
