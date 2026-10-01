@@ -71,6 +71,8 @@ export interface HubMapProps {
    * must never be covered.
    */
   attributionAt?: "top" | "bottom";
+  /** Draw this hub's pin selected (ringed) from the start. For still previews. */
+  highlightHubId?: string;
   /** Open centred on this hub instead of fitted to all of them. */
   focusHubId?: string;
   /** The pin drawn as selected. Controlled — the sheet above owns it. */
@@ -87,6 +89,7 @@ export function HubMap({
   interactive = true,
   zoomOut = 0,
   attributionAt = "bottom",
+  highlightHubId,
   focusHubId,
   selectedHubId = null,
   onSelectHub,
@@ -115,7 +118,7 @@ export function HubMap({
    * rather than rebuilt to be different.
    */
   const html = useMemo(
-    () => buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoomOut }),
+    () => buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoomOut, highlightHubId }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       hubs.map((h) => `${h.id}:${h.isActive}:${h.nearby ? 1 : 0}`).join("|"),
@@ -124,6 +127,7 @@ export function HubMap({
       focusHubId,
       interactive,
       zoomOut,
+      highlightHubId,
     ],
   );
 

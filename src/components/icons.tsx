@@ -463,6 +463,18 @@ export function BoltIcon(props: IconProps) {
  * beside it: the two can share a Home grid, and a user has to tell them apart
  * without tapping in.
  */
+/** Arrows out to the corners: "see this bigger" — the hub page's map strip. */
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M14.5 3.5H20.5V9.5" />
+      <Path d="M20.5 3.5 14 10" />
+      <Path d="M9.5 20.5H3.5V14.5" />
+      <Path d="M3.5 20.5 10 14" />
+    </Glyph>
+  );
+}
+
 /** "Opens elsewhere" — the Directions links hand off to the phone's maps app. */
 export function ArrowUpRightIcon(props: IconProps) {
   return (

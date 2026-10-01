@@ -97,6 +97,7 @@ export const GridTile = memo(function GridTile({
   onPress,
   reach,
   viewerId = null,
+  showPlace = true,
 }: {
   item: Item;
   /** Computed by the screen from the real viewport — see the note there. */
@@ -111,6 +112,12 @@ export const GridTile = memo(function GridTile({
   reach?: Bracket | null;
   /** Own listings show the exact value; everyone else's show a bracket. */
   viewerId?: string | null;
+  /**
+   * The place in the meta line ("New · Lapu-Lapu"). Off on a hub's own page,
+   * where every listing meets at that hub and the place would repeat on every
+   * tile; the line is then the condition alone.
+   */
+  showPlace?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const cover = item.images[0];
@@ -126,7 +133,7 @@ export const GridTile = memo(function GridTile({
       : null;
 
   // Hub city, else the seller's city, else nothing. See lib/listing-area.
-  const area = listingArea(item);
+  const area = showPlace ? listingArea(item) : null;
 
   // `!= null`: a server without the perishables work omits the key.
   const perishable = item.perishable ?? null;

@@ -1,5 +1,6 @@
+import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
@@ -59,6 +60,31 @@ export default function HubsMapScreen() {
   /** Selection is owned here: both the map and the sheet read it. */
   const [selectedId, setSelectedId] = useState<string | null>(focus ?? null);
   const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
+
+  /**
+   * The blue "Your location" dot, the same one the marketplace map draws.
+   * PASSIVE: only when location permission is already granted, and only the
+   * last known position (15 min, 2 km) -- this screen never prompts, never
+   * waits on a fresh fix, and says nothing when there is none. The
+   * marketplace map is where the full lookup (and its retry) lives.
+   */
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (!permission.granted) return;
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 15 * 60 * 1000, requiredAccuracy: 2000 });
+        if (last && !cancelled) setUserLocation({ latitude: last.coords.latitude, longitude: last.coords.longitude });
+      } catch {
+        // No dot. The map is complete without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const scoped = !!itemId;
 
@@ -146,6 +172,7 @@ export default function HubsMapScreen() {
             >
               <HubMap
                 hubs={visibleHubs}
+                userLocation={userLocation}
                 interactive
                 focusHubId={focus}
                 selectedHubId={selectedId}

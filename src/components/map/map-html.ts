@@ -243,9 +243,21 @@ export interface MapHtmlOptions {
   interactive: boolean;
   /** Levels wider than the fitted view. The item-detail preview uses it. */
   zoomOut?: number;
+  /**
+   * A pin drawn SELECTED from the start (the light ring), for a still preview
+   * that has no selection of its own: the hub page's map strip.
+   */
+  highlightHubId?: string;
 }
 
-export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoomOut }: MapHtmlOptions): string {
+export function buildMapHtml({
+  hubs,
+  userLocation,
+  focusHubId,
+  interactive,
+  zoomOut,
+  highlightHubId,
+}: MapHtmlOptions): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -322,6 +334,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
   var FOCUS_ID = ${safeJson(focusHubId ?? null)};
   var INTERACTIVE = ${interactive ? "true" : "false"};
   var ZOOM_OUT = ${Math.max(0, Math.round(zoomOut ?? 0))};
+  var HIGHLIGHT_ID = ${safeJson(highlightHubId ?? null)};
   var GLYPHS = ${safeJson(GLYPHS)};
   var FALLBACK_GLYPH = ${safeJson(FALLBACK_GLYPH)};
   var PIN = ${safeJson(PIN)};
@@ -443,7 +456,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
   }
 
   var markers = {};
-  var selectedId = null;
+  var selectedId = HIGHLIGHT_ID;
 
   /* ── clusters ────────────────────────────────────────────────────────────
      Pins within CLUSTER_RADIUS_PX of each other merge into one numbered
@@ -471,7 +484,7 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive, zoom
 
   HUBS.forEach(function (hub) {
     var marker = L.marker([hub.latitude, hub.longitude], {
-      icon: iconFor(hub, false),
+      icon: iconFor(hub, hub.id === HIGHLIGHT_ID),
       keyboard: false,
       title: hub.name,
       alt: hub.name,

@@ -2,7 +2,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { hubItemCountLabel, useHubItems } from "../../api/hubs";
 import type { SafeZoneHub } from "../../api/types";
-import { ChevronRightIcon, CloseIcon, PinIcon } from "../icons";
+import { ArrowUpRightIcon, ChevronRightIcon, CloseIcon } from "../icons";
+import { HubTypeGlyph } from "./MapLegend";
 import { Tappable } from "../Tappable";
 import {
   border,
@@ -39,6 +40,13 @@ import { openDirections } from "./directions";
  * card links into. Loading the first page of the real query gives a number that
  * cannot drift from the destination — and warms the cache for it, so tapping
  * "listings" lands on a screen that is already populated.
+ *
+ * ── LOOK (Oct 2026) ─────────────────────────────────────────────────────────
+ *
+ * No glyph in a mint circle and no filled buttons: a small type label with
+ * the type glyph ("Mall · Lapu-Lapu City") over the name, the meeting note,
+ * then two outlined pills -- "Directions ↗" (forest) and "7 listings ›"
+ * (neutral) -- the same pills the listing and hub screens use.
  */
 
 export interface HubSheetProps {
@@ -60,20 +68,22 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
   return (
     <View style={s.sheet}>
       <View style={s.head}>
-        <View style={[s.iconWell, !hub.isActive && s.iconWellOff]}>
-          <PinIcon
-            size={icon.hubPin.size}
-            stroke={icon.hubPin.stroke}
-            color={hub.isActive ? color.forest : color.inkStale}
-          />
-        </View>
-
         <View style={s.headText}>
-          <Text style={[textStyle(type.sheetTitle), s.name]} numberOfLines={2}>
+          <View style={s.eyebrow}>
+            <HubTypeGlyph
+              hubType={hub.type}
+              size={icon.check.size}
+              tint={hub.isActive ? color.forest : color.inkStale}
+            />
+            <Text style={[textStyle(type.gridMeta), s.eyebrowText]} numberOfLines={1}>
+              {`${hub.typeLabel} · ${hub.city}`}
+            </Text>
+          </View>
+          <Text
+            style={[textStyle(type.sheetTitle), s.name, !hub.isActive && s.nameOff]}
+            numberOfLines={2}
+          >
             {hub.name}
-          </Text>
-          <Text style={[textStyle(type.hubLandmark), s.meta]} numberOfLines={1}>
-            {`${hub.typeLabel} · ${hub.city}`}
           </Text>
         </View>
 
@@ -104,14 +114,13 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
               name: hub.name,
             });
           }}
-          accessibilityRole="button"
-          accessibilityLabel={`Get directions to ${hub.name}`}
-          style={s.directions}
-          pressedStyle={s.directionsPressed}
+          accessibilityRole="link"
+          accessibilityLabel={`Directions to ${hub.name}`}
+          style={[s.pill, s.pillForest]}
+          pressedStyle={s.pillPressed}
         >
-          <Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>
-            Get directions
-          </Text>
+          <Text style={[textStyle(type.chip), s.pillLabel, { color: color.forest }]}>Directions</Text>
+          <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
         </Tappable>
 
         {onOpenItems ? (
@@ -126,21 +135,17 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
             accessibilityLabel={
               countLabel ? `${countLabel} at ${hub.name}` : `Listings at ${hub.name}`
             }
-            style={s.items}
-            pressedStyle={s.itemsPressed}
+            style={[s.pill, s.pillNeutral]}
+            pressedStyle={s.pillPressed}
           >
             {countLabel === null ? (
               <ActivityIndicator size="small" color={color.inkMuted} />
             ) : (
-              <Text style={[textStyle(type.secondaryButton), s.itemsLabel]} numberOfLines={1}>
+              <Text style={[textStyle(type.chip), s.pillLabel, { color: color.ink }]} numberOfLines={1}>
                 {countLabel}
               </Text>
             )}
-            <ChevronRightIcon
-              size={icon.chevron.size}
-              stroke={icon.chevron.stroke}
-              color={color.inkSecondary}
-            />
+            <ChevronRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.inkSecondary} />
           </Tappable>
         ) : null}
       </View>
@@ -172,18 +177,11 @@ const s = StyleSheet.create({
   },
 
   head: { flexDirection: "row", alignItems: "flex-start", gap: space.detail.hubIconToText },
-  iconWell: {
-    width: size.detail.hubIcon,
-    height: size.detail.hubIcon,
-    borderRadius: size.detail.hubIcon / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.greenWash,
-  },
-  iconWellOff: { backgroundColor: color.control },
   headText: { flex: 1 },
-  name: { color: color.ink },
-  meta: { marginTop: space.detail.hubNameToLandmark, color: color.inkMuted },
+  eyebrow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  eyebrowText: { flexShrink: 1, color: color.inkSecondary },
+  name: { marginTop: space.detail.hubNameToLandmark, color: color.ink },
+  nameOff: { color: color.inkStale, textDecorationLine: "line-through" },
 
   close: {
     width: size.control.headerIconTight,
@@ -206,32 +204,22 @@ const s = StyleSheet.create({
   actions: {
     marginTop: space.detail.sectionY - 4,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: space.sheet.actionGap,
+    gap: space.browse.chipGap,
   },
-  directions: {
-    flex: 1,
-    height: size.sheet.action,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.primaryButton,
-    backgroundColor: color.green,
-  },
-  directionsPressed: { backgroundColor: color.forest },
-
-  items: {
-    flex: 1,
+  pill: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: space.card.socialGap,
-    height: size.sheet.action,
-    paddingHorizontal: space.browse.tileBody,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.hairline,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    gap: 4,
+    maxWidth: "100%",
+    minHeight: size.browse.chip,
+    paddingHorizontal: size.browse.chipX,
+    borderRadius: radius.trendingChip,
+    borderWidth: border.chip,
   },
-  itemsPressed: { backgroundColor: color.controlLine },
-  itemsLabel: { color: color.ink, flexShrink: 1 },
+  pillForest: { borderColor: color.forest },
+  pillNeutral: { borderColor: color.controlLineStrong },
+  pillPressed: { opacity: 0.7 },
+  pillLabel: { flexShrink: 1 },
 });
