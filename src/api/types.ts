@@ -704,6 +704,21 @@ export interface ActiveTrade {
    * without a second request per trade.
    */
   canConfirm: boolean;
+  /**
+   * Whether there is a code to SHOW, as of the response: both codes issued,
+   * unexpired, and not burned by wrong guesses. `canConfirm` stays true on an
+   * expired CONFIRMING trade — it is still the viewer's move — so this is what
+   * separates "Show code" from "Start handoff". True exactly when opening the
+   * code panel would show the existing pair rather than issue a fresh one.
+   */
+  codesLive: boolean;
+  /**
+   * The earlier of the two codes' expiries, ISO, so a card can flip to "Start
+   * handoff" on its own when the window closes. Null when the pair is missing
+   * or already expired. Still set on a BURNED pair whose window is open: that
+   * is the "locked" state (`codesLive` false, this in the future).
+   */
+  codesExpireAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

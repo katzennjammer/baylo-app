@@ -398,8 +398,35 @@ export const OFFER_PROGRESS: CardProgress = {
   tone: "forest",
 };
 
-/** A "Your move" card. The step mapping is the one written up for review (1 Oct 2026). */
-export function yourMoveCard(item: NeedsItem): CardWords {
+/**
+ * Whether a CONFIRMING trade has a code to show at `nowSec` (server-corrected
+ * epoch seconds, from lib/live-clock).
+ *
+ *   live     codesLive on the wire and the window still open: "Show code".
+ *   locked   wrong guesses spent the pair but its window is open.
+ *   expired  everything else — the window closed, possibly while this screen
+ *            sat open, which is why it is a function of the clock and not
+ *            only of the response.
+ *
+ * Both non-live phases open the same trade screen, whose code panel issues a
+ * fresh pair on arrival exactly as it always has.
+ */
+export type CodePhase = "live" | "locked" | "expired";
+
+export function codePhase(trade: ActiveTrade, nowSec: number): CodePhase {
+  const until = trade.codesExpireAt ? Date.parse(trade.codesExpireAt) / 1000 : null;
+  const open = until !== null && nowSec < until;
+  if (open && trade.codesLive) return "live";
+  return open ? "locked" : "expired";
+}
+
+/**
+ * A "Your move" card. The step mapping is the one written up for review (1 Oct 2026).
+ *
+ * `phase` is the screen's live reading of `codePhase()` for a `kind: "code"`
+ * item; without one, the response's own `codesLive` decides.
+ */
+export function yourMoveCard(item: NeedsItem, phase?: CodePhase): CardWords {
   if (item.kind === "offer") {
     const offer = item.offer;
     const partner = firstName(offer.counterparty.name);
@@ -454,9 +481,27 @@ export function yourMoveCard(item: NeedsItem): CardWords {
   if (item.kind === "code") {
     const hub = namedHub(trade);
     const hubAgreed = !!trade.meetup?.agreedAt;
+    const progress: CardProgress = { current: 2, done: [true, hubAgreed, false, false], tone: "forest" };
+    const now = phase ?? (trade.codesLive ? "live" : "expired");
+    if (now !== "live") {
+      return {
+        ...base,
+        progress,
+        footer:
+          now === "locked"
+            ? copy.tradeCard.startHandoffWith(partner, hub)
+            : copy.tradeCard.codesExpired(partner, hub),
+        action: {
+          label: copy.tradeCard.action.startHandoff,
+          tone: "forest",
+          href: tradeHref(trade.id),
+          a11y: `Start the handoff with ${trade.counterparty.name}`,
+        },
+      };
+    }
     return {
       ...base,
-      progress: { current: 2, done: [true, hubAgreed, false, false], tone: "forest" },
+      progress,
       footer: hub ? copy.tradeCard.showCodeAt(partner, hub) : copy.tradeCard.showCodeNoHub(partner),
       action: codeAction,
     };

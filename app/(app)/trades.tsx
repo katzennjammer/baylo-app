@@ -21,6 +21,7 @@ import {
   TradesSkeleton,
 } from "../../src/components/trades/states";
 import { clockTime } from "../../src/lib/format";
+import { useLiveDerived } from "../../src/lib/live-clock";
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useTradeLiveness } from "../../src/lib/trade-liveness";
 import { color, icon, space, textStyle, type } from "../../src/theme/tokens";
@@ -75,6 +76,22 @@ export default function TradesScreen() {
     () => buildTradesModel({ active: active.data, history: history.data }),
     [active.data, history.data],
   );
+
+  // Codes live 15 minutes, so a "Show code" card can go stale while this screen
+  // sits open. The shared clock re-renders only when some card's phase changes,
+  // and subscribes only while the screen is focused and a code card exists.
+  const codeTrades = useMemo(
+    () => model.needsToday.flatMap((item) => (item.kind === "code" ? [item.trade] : [])),
+    [model],
+  );
+  const phaseKey = useLiveDerived(
+    (now) => codeTrades.map((t) => present.codePhase(t, now)).join(","),
+    codeTrades.length > 0,
+  );
+  const codePhases = useMemo(() => {
+    const parts = phaseKey.split(",") as present.CodePhase[];
+    return new Map(codeTrades.map((t, i) => [t.id, parts[i]]));
+  }, [phaseKey, codeTrades]);
 
   // The spinner follows the GESTURE, not `isRefetching`: the liveness hook
   // below and the push channel both refetch this list silently, and each of
@@ -189,7 +206,14 @@ export default function TradesScreen() {
             />
             <View style={s.cards}>
               {yourMove.map((item, i) => (
-                <TradeCard key={item.key} words={present.yourMoveCard(item)} urgent={i === 0} />
+                <TradeCard
+                  key={item.key}
+                  words={present.yourMoveCard(
+                    item,
+                    item.kind === "code" ? codePhases.get(item.trade.id) : undefined,
+                  )}
+                  urgent={i === 0}
+                />
               ))}
             </View>
           </>

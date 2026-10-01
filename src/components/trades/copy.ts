@@ -292,6 +292,16 @@ export const tradeCard = {
   hubAndTime: (hub: string, when: string) => `${hub} · ${when}`,
   showCodeAt: (partner: string, hub: string) => `Show your code to ${partner} at ${hub}`,
   showCodeNoHub: (partner: string) => `Show your code to ${partner}. No hub named yet.`,
+  /** A CONFIRMING trade whose codes ran out. Opening it issues a fresh pair. */
+  codesExpired: (partner: string, hub: string | null) =>
+    hub
+      ? `Codes expired. Start the handoff again when you're with ${partner} at ${hub}`
+      : `Codes expired. Start the handoff again when you're with ${partner}`,
+  /** Codes still in their window but burned by wrong guesses. */
+  startHandoffWith: (partner: string, hub: string | null) =>
+    hub
+      ? `Start the handoff when you're with ${partner} at ${hub}`
+      : `Start the handoff when you're with ${partner}`,
   pickHub: (partner: string) => `Pick where you'll meet ${partner}`,
   theySuggested: (partner: string, hub: string, when: string) =>
     `${partner} suggested ${hub} · ${when}`,
@@ -325,6 +335,7 @@ export const tradeCard = {
   keep: "Keep it",
   action: {
     showCode: "Show code",
+    startHandoff: "Start handoff",
     pickHub: "Pick hub",
     answer: "Answer",
     review: "Review",
