@@ -160,6 +160,20 @@ export default function RootLayout() {
                 contentStyle: { backgroundColor: "transparent" },
               }}
             />
+            {/*
+              Stories (2 Oct 2026). The viewer covers everything on a dark
+              ground and fades in, so nothing slides under a story; the share
+              screen rises from the bottom like the sheet it replaces.
+            */}
+            <Stack.Screen
+              name="story"
+              options={{
+                presentation: "fullScreenModal",
+                animation: "fade",
+                contentStyle: { backgroundColor: color.ink },
+              }}
+            />
+            <Stack.Screen name="share-story" options={{ animation: "slide_from_bottom" }} />
           </Stack>
           {/* The "Your listing is up." popup. Here, under every screen, because
               the wizard that triggers it has already popped by the time it

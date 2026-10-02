@@ -57,7 +57,8 @@ export const REPORT_REASONS: readonly { value: string; label: string }[] = [
  * What can be reported. The server's REPORT_TARGET_TYPES, minus "message",
  * which is reported from the conversation and not from a listing.
  */
-export type ReportTarget = "listing" | "user";
+/** "story" since 2 Oct 2026: a 24-hour listing story (see src/api/stories.ts). */
+export type ReportTarget = "listing" | "user" | "story";
 
 /**
  * POST /api/v1/reports.

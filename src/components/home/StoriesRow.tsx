@@ -8,51 +8,66 @@ import {
   border,
   color,
   icon,
+  lines,
   radius,
   size,
   space,
   textStyle,
   type,
-  lines,
 } from "../../theme/tokens";
-import type { MatchCandidate } from "../../api/types";
+import { useStories, type StoryAuthor } from "../../api/stories";
 
 /**
- * The row of ringed circles across the top of the feed.
+ * The stories row across the top of Community (2 Oct 2026).
  *
- * The artboard draws it as stories. There are no stories on this backend and
- * nothing on /api/v1/home that could become one, so what fills the row is the
- * `matches` block — the suggested traders the endpoint already returns. Same
- * geometry, same rings, real data. The alternative was to leave a specified
- * row out of the screen, or to fill it with placeholder people.
+ * It used to be the `matches` block (suggested traders) drawn as stories, with
+ * every ring permanently "unviewed" and nothing tappable. It is real stories
+ * now: GET /api/v1/stories, one circle per author, in the server's order --
+ * you first, then anyone with something unseen, then the fully seen.
  *
- * THE RING HAS TWO STATES IN THE SPEC AND ONE HERE. Unviewed is 2 px of
- * `green`, viewed is 2 px of `controlLine`, and nothing in the payload records
- * whether a viewer has looked at a given trader — there is no seen-state on
- * this endpoint or any other. Every circle therefore renders unviewed. The
- * viewed treatment is kept as a prop rather than deleted, so the day a
- * seen-state exists this is a value passed in and not a style to re-derive.
+ *   "Your story"   always first while acting as yourself. No stories yet: the
+ *                  circle opens "Share a listing". With stories: it opens the
+ *                  viewer, and the small + badge opens "Share a listing".
+ *                  Hidden while acting as a shop -- stories are personal (v1).
+ *   an author      green ring = something unseen, grey = all seen. Opens the
+ *                  viewer at that author.
  *
- * NOT TAPPABLE, deliberately not tappable-to-somewhere-wrong. Another person's
- * profile is /api/v1/profile/[id], which has no screen in the app yet, and
- * routing this to /profile would open the viewer's OWN profile — the kind of
- * near-miss that reads as a bug rather than as an unbuilt feature. Each circle
- * stays a labelled, readable element until the screen behind it exists. The
- * "+ Post" circle is the one control in the row, and it goes somewhere real.
+ * The ring is drawn as a bordered box holding a `surface`-coloured gap that
+ * holds the image: 2 px ring, 2 px gap, 54 image, 62 outer. Two nested borders
+ * rather than one border plus padding keep the gap the canvas colour, which is
+ * the difference between a ring and a halo.
  */
-export function StoriesRow({ matches }: { matches: MatchCandidate[] }) {
+export function StoriesRow({
+  viewer,
+  actingAsShop,
+}: {
+  viewer: { id: string; name: string; avatar: string | null } | undefined;
+  actingAsShop: boolean;
+}) {
   const router = useRouter();
+  const { data: authors = [] } = useStories();
+
+  const own = authors.find((a) => a.isOwn) ?? null;
+  const others = authors.filter((a) => !a.isOwn);
+  const openViewer = (authorId: string) => router.push({ pathname: "/story", params: { authorId } });
+  const openShare = () => router.push("/share-story");
+
+  // Nothing to show a shop, and no stories from anyone: no empty band.
+  if (actingAsShop && others.length === 0) return null;
 
   return (
     <View style={{ backgroundColor: color.surface }}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.rail}
-      >
-        <PostCircle onPress={() => router.push("/post")} />
-        {matches.map((m) => (
-          <StoryBubble key={m.userId} match={m} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail}>
+        {!actingAsShop && viewer ? (
+          <YourStory
+            viewer={viewer}
+            own={own}
+            onOpen={own ? () => openViewer(own.user.id) : openShare}
+            onAdd={openShare}
+          />
+        ) : null}
+        {others.map((a) => (
+          <AuthorBubble key={a.user.id} author={a} onPress={() => openViewer(a.user.id)} />
         ))}
       </ScrollView>
       <Divider />
@@ -60,72 +75,87 @@ export function StoriesRow({ matches }: { matches: MatchCandidate[] }) {
   );
 }
 
-/** The dashed-ring circle. Sized and labelled like a bubble so the row reads level. */
-function PostCircle({ onPress }: { onPress: () => void }) {
+function YourStory({
+  viewer,
+  own,
+  onOpen,
+  onAdd,
+}: {
+  viewer: { name: string; avatar: string | null };
+  own: StoryAuthor | null;
+  onOpen: () => void;
+  onAdd: () => void;
+}) {
+  const count = own?.stories.length ?? 0;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Post an item">
-      <View style={s.postRing}>
-        <PlusIcon
-          size={icon.storyPlus.size}
-          stroke={icon.storyPlus.stroke}
-          color={color.inkSecondary}
-        />
+    <View>
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={count > 0 ? `Your story, ${count} shared. Open` : "Your story. Share a listing"}
+      >
+        <View style={[s.ring, { borderColor: count > 0 ? color.controlLine : "transparent" }]}>
+          <View style={s.ringGap}>
+            <Avatar uri={viewer.avatar} name={viewer.name} />
+          </View>
+        </View>
+      </Pressable>
+      {/* Its own target: with stories already up, the circle opens them. */}
+      <Pressable
+        onPress={onAdd}
+        accessibilityRole="button"
+        accessibilityLabel="Share a listing to your story"
+        hitSlop={8}
+        style={s.addBadge}
+      >
+        <PlusIcon size={icon.storyPlus.size - 6} stroke={2.2} color={color.onGreen} />
+      </Pressable>
+      <Text style={[textStyle(type.storyPostLabel), s.label]} numberOfLines={lines.storyHandle}>
+        Your story
+      </Text>
+    </View>
+  );
+}
+
+function AuthorBubble({ author, onPress }: { author: StoryAuthor; onPress: () => void }) {
+  // A first name, not the full one: the label is capped at the circle's 62 px,
+  // and "Maria" fits whole where "Maria Josefina" truncates mid-surname.
+  const handle = author.user.name.trim().split(/\s+/)[0] || author.user.name;
+  const seen = author.allSeen;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${author.user.name}'s story${seen ? "" : ", new"}. Open`}
+    >
+      <View style={[s.ring, { borderColor: seen ? color.controlLine : color.green }]}>
+        <View style={s.ringGap}>
+          <Avatar uri={author.user.avatar} name={author.user.name} />
+        </View>
       </View>
-      <Text style={[textStyle(type.storyPostLabel), s.postLabel]} numberOfLines={1}>
-        Post
+      <Text
+        style={[textStyle(type.storyHandle), s.label, { color: seen ? color.inkMuted : color.ink }]}
+        numberOfLines={lines.storyHandle}
+      >
+        {handle}
       </Text>
     </Pressable>
   );
 }
 
-/**
- * One suggested trader.
- *
- * The ring is drawn as a bordered box holding a `surface`-coloured gap that
- * holds the image: 2 px ring, 2 px gap, 54 image, 62 outer. Doing it with two
- * nested borders rather than one border plus padding is what keeps the gap the
- * canvas colour instead of a lighter ring, which is the difference between a
- * ring and a halo.
- */
-function StoryBubble({ match, viewed = false }: { match: MatchCandidate; viewed?: boolean }) {
-  // A first name, not the full one. The label is capped at the 62 px the circle
-  // is wide, and "Maria Josefina" truncates to "Maria Jos…" where "Maria" fits
-  // whole — the handle is there to identify a face, and half a surname does not.
-  const handle = match.name.trim().split(/\s+/)[0] || match.name;
-
+function Avatar({ uri, name }: { uri: string | null; name: string }) {
+  if (uri) return <Image source={{ uri }} contentFit="cover" style={s.avatarImage} />;
   return (
-    <View
-      accessible
-      // The reason string is the server's ("Both trading Clothing"), and this is
-      // the only place it appears — the artboard has no room for it under a
-      // 62 px circle, but a screen reader has all the room in the world.
-      accessibilityLabel={`${match.name}. ${match.reason}`}
-    >
-      <View
-        style={[s.ring, { borderColor: viewed ? color.controlLine : color.green }]}
-      >
-        <View style={s.ringGap}>
-          {match.avatar ? (
-            <Image source={{ uri: match.avatar }} contentFit="cover" style={s.avatarImage} />
-          ) : (
-            <View style={[s.avatarImage, s.avatarFallback]}>
-              <Text style={[textStyle(type.avatarInitials62), { color: color.forest }]}>
-                {handle.charAt(0).toUpperCase() || "?"}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <Text
-        style={[textStyle(type.storyHandle), viewed ? s.handleViewed : s.handle]}
-        numberOfLines={lines.storyHandle}
-      >
-        {handle}
+    <View style={[s.avatarImage, s.avatarFallback]}>
+      <Text style={[textStyle(type.avatarInitials62), { color: color.forest }]}>
+        {name.trim().charAt(0).toUpperCase() || "?"}
       </Text>
     </View>
   );
 }
+
+const ADD_BADGE = 22;
 
 const s = StyleSheet.create({
   rail: {
@@ -133,24 +163,6 @@ const s = StyleSheet.create({
     paddingBottom: space.stories.bottom,
     paddingHorizontal: space.stories.x,
     gap: space.stories.gap,
-  },
-
-  postRing: {
-    width: size.avatar.story,
-    height: size.avatar.story,
-    borderRadius: radius.storyAvatar,
-    borderWidth: border.dashed,
-    borderStyle: "dashed",
-    borderColor: color.dashed,
-    backgroundColor: color.storyPost,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  postLabel: {
-    marginTop: space.stories.avatarToLabel,
-    maxWidth: size.avatar.story,
-    textAlign: "center",
-    color: color.ink,
   },
 
   ring: {
@@ -177,18 +189,24 @@ const s = StyleSheet.create({
   },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
 
-  handle: {
+  addBadge: {
+    position: "absolute",
+    right: -2,
+    top: size.avatar.story - ADD_BADGE + 2,
+    width: ADD_BADGE,
+    height: ADD_BADGE,
+    borderRadius: ADD_BADGE / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.green,
+    borderWidth: 2,
+    borderColor: color.surface,
+  },
+
+  label: {
     marginTop: space.stories.avatarToLabel,
     maxWidth: size.avatar.story,
     textAlign: "center",
     color: color.ink,
-  },
-  // The one place the viewed state still shows through: a ring the eye has
-  // stopped registering is paired with a label that has receded too.
-  handleViewed: {
-    marginTop: space.stories.avatarToLabel,
-    maxWidth: size.avatar.story,
-    textAlign: "center",
-    color: color.inkMuted,
   },
 });

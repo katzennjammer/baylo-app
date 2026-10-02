@@ -16,6 +16,7 @@ import { StoriesRow } from "../../src/components/home/StoriesRow";
 import { VerifyEmailBar } from "../../src/components/home/VerifyEmailBar";
 import { color, space } from "../../src/theme/tokens";
 import { useHome } from "../../src/api/home";
+import { useStories } from "../../src/api/stories";
 import { useLike } from "../../src/api/social";
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
@@ -60,21 +61,14 @@ import type { Item } from "../../src/api/types";
  */
 
 /**
- * THE MATCHES INTERSTITIAL IS BUILT AND NOT MOUNTED, and that is a content
- * decision rather than an unfinished one.
+ * THE MATCHES INTERSTITIAL IS BUILT AND NOT MOUNTED.
  *
- * `MatchesStrip` implements the spec's inset section exactly — see the file for
- * how its geometry survives the endpoint having people where the artboard drew
- * items. What it cannot survive is that /api/v1/home returns exactly ONE list
- * of people, `matches`, and this screen has two slots drawn for people: the
- * ringed row at the top and this rail further down. Rendering both from one
- * five-element list puts the same five faces on the screen twice, a few hundred
- * pixels apart, which reads as a bug in a way that a missing section does not.
- *
- * The row wins the list because it is the more prominent of the two and it is
- * what the top of every artboard shows. Mounting the rail is a `{ kind:
- * "matches" }` row away the day there is a second source to fill it — matched
- * ITEMS, which is what the artboard is actually drawing.
+ * `MatchesStrip` implements the spec's inset section. Until 2 Oct 2026 the
+ * ringed row at the top drew /api/v1/home's `matches` (suggested traders) as
+ * stories, so mounting the rail too would have shown the same five faces twice.
+ * The row is real stories now (GET /api/v1/stories) and `matches` is unused
+ * on this screen; mounting the rail is a `{ kind: "matches" }` row away, and
+ * is a product decision rather than a technical one.
  */
 
 type Row = { kind: "item"; item: Item };
@@ -127,7 +121,7 @@ export default function HomeScreen() {
   const { mutate: like } = useLike();
   const {
     viewer,
-    matches,
+    acting,
     feed,
     isPending,
     isError,
@@ -141,8 +135,15 @@ export default function HomeScreen() {
 
   // Another device's post shows up here when this tab is returned to. Ours is
   // already here — the post mutation invalidated this query before it closed.
-  useRefetchOnFocus(refetch);
-  const { refreshing, onRefresh } = usePullToRefresh(refetch);
+  // The stories row is its own query (GET /api/v1/stories); the pull and the
+  // return to this tab refresh both together.
+  const { refetch: refetchStories } = useStories();
+  const refetchAll = useCallback(
+    () => Promise.all([refetch(), refetchStories()]),
+    [refetch, refetchStories],
+  );
+  useRefetchOnFocus(refetchAll);
+  const { refreshing, onRefresh } = usePullToRefresh(refetchAll);
 
   const rows = useMemo<Row[]>(() => feed.map((item) => ({ kind: "item", item })), [feed]);
 
@@ -287,7 +288,7 @@ export default function HomeScreen() {
               the offline bar — see VerifyEmailBar for why.
             */}
             {viewer && !viewer.isVerified ? <VerifyEmailBar viewerId={viewer.id} /> : null}
-            <StoriesRow matches={matches} />
+            <StoriesRow viewer={viewer} actingAsShop={acting !== null} />
           </>
         }
         ListEmptyComponent={
