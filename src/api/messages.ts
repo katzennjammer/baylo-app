@@ -274,19 +274,3 @@ export function useSendMessage() {
   });
 }
 
-export function useDeleteConversation() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (partnerId: string) => {
-      const res = await request(`/api/messages?partnerId=${encodeURIComponent(partnerId)}`, { method: "DELETE" });
-      if (!res.ok) throw new ApiError(res.status, "CONVERSATION_DELETE_FAILED", "Could not delete this conversation.");
-      return (await res.json()) as { ok: true; hiddenAt: string };
-    },
-    onSuccess: (_result, partnerId) => {
-      qc.removeQueries({ queryKey: threadQueryKey(partnerId) });
-      void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
-      void qc.invalidateQueries({ queryKey: ["notifications"] });
-    },
-  });
-}

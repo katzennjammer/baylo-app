@@ -53,7 +53,7 @@ import { color, dark } from "../theme/tokens";
  *
  * An organisation is not an upgrade. It trades on exactly the same terms, holds
  * Leaves the same way and pays the same bridging fees; what it gets is a shop
- * identity that staff can post under and, after a document check, a badge. The
+ * identity to post and trade under and, after a document check, a badge. The
  * copy says that, because a card that reads as a premium tier gets picked by
  * individuals who then cannot verify a business they do not have. The same
  * goes for the badges: the two tints tell the options apart, and neither is
@@ -113,7 +113,7 @@ export function AccountTypeStep({
           selected={value === "organization"}
           onPress={() => onChange("organization")}
           title="Organization / MSME"
-          body="Trade as a shop, co-op or non-profit. Once we have checked your business document, staff can post on its behalf and it gets a verified badge."
+          body="Trade as a shop, co-op or non-profit. Once we have checked your business document, you can post and trade as your business and it gets a verified badge."
           tone="organization"
         />
       </View>

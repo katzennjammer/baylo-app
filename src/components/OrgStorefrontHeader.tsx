@@ -1,25 +1,15 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type FlatList, type ScrollView } from "react-native";
+import { useRef } from "react";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
-import { ApiError } from "../api/client";
-import {
-  orgLogoUrl,
-  useChangeMemberRole,
-  useInviteMember,
-  useOrganizations,
-  useOrgMembers,
-  useRemoveMember,
-  type OrgMember,
-} from "../api/organizations";
+import { orgLogoUrl, useOrganizations } from "../api/organizations";
 import type { PublicProfilePayload } from "../api/types";
 import { businessCategoryLabel } from "../lib/business-category";
 import { compactCount, formatFollowers } from "../lib/format";
 import { ORG_BADGE_LABEL } from "../lib/org";
 import { border, color, dark as darkTokens, icon, radius, size, space, textStyle, type } from "../theme/tokens";
 import { useKeyboardState } from "./auth-sheet";
-import { showDialog } from "./dialog";
 import { CheckIcon, PlusIcon, ShareIcon, VerifiedOrgIcon } from "./icons";
 import { Tappable } from "./Tappable";
 
@@ -77,14 +67,6 @@ import { Tappable } from "./Tappable";
 type Org = NonNullable<PublicProfilePayload["user"]["org"]>;
 type Palette = typeof lightPalette;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the header never reads the rows
-type Scroller = React.RefObject<FlatList<any> | null>;
-
-/** Space left above the invite row when it is scrolled clear of the keyboard. */
-const REVEAL_GAP = 16;
-
-/** ScrollView as it is at runtime; see the measure in StaffSection. */
-type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
-
 /**
  * The keyboard arithmetic for a screen that hosts this header, lifted from
  * post-item.tsx's `imeInset` unchanged -- read the derivation there.
@@ -115,8 +97,6 @@ export function OrgStorefrontHeader({
   onEdit,
   onShare,
   onPost,
-  scrollerRef,
-  keyboardUp = false,
 }: {
   dark: boolean;
   org: Org;
@@ -134,20 +114,13 @@ export function OrgStorefrontHeader({
    * shelf, which is exactly what the checklist must not lead them into.
    */
   onPost?: () => void;
-  /** The host screen's list, so the invite field can be scrolled clear of the keyboard. */
-  scrollerRef?: Scroller;
-  /** From the host's useStorefrontKeyboard(). */
-  keyboardUp?: boolean;
 }) {
   const palette = dark ? darkPalette : lightPalette;
   const role = org.viewerRole ?? null;
   const isOwner = role === "OWNER";
   const logo = orgLogoUrl(org.logoUrl);
   const banner = org.bannerUrl ? orgLogoUrl(org.bannerUrl) : null;
-  const staffCount = counts.staff ?? org.staffCount;
   const completedTrades = org.completedTrades ?? counts.completedTrades;
-  // Lifted out of StaffSection so the checklist's "Invite" step can open it.
-  const [inviteOpen, setInviteOpen] = useState(false);
 
   return (
     <View style={s.root}>
@@ -194,11 +167,9 @@ export function OrgStorefrontHeader({
           ) : null}
         </View>
 
-        {/* ── Category · staff count. The count is public; the names are not. ── */}
+        {/* ── Category. (The staff count went with organisation staff in schema v2.) ── */}
         <View style={s.metaRow}>
           <Text style={[textStyle(type.storefrontCategory), { color: palette.link }]}>{businessCategoryLabel(org.businessCategory)}</Text>
-          <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>·</Text>
-          <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>{staffCount} staff</Text>
         </View>
 
         {/* ── Tagline, or the owner's prompt to write one ── */}
@@ -228,8 +199,6 @@ export function OrgStorefrontHeader({
                 <ShareIcon size={icon.storefrontShare.size} stroke={icon.storefrontShare.stroke} color={palette.ink} />
               </Tappable>
             </>
-          ) : role === "STAFF" ? (
-            <ActionButton palette={palette} label="Share shop" onPress={onShare} withShareIcon />
           ) : (
             <>
               <ActionButton palette={palette} label={follow.busy ? "Updating..." : follow.label} onPress={follow.onPress} disabled={follow.disabled} primary={follow.primary} />
@@ -240,8 +209,7 @@ export function OrgStorefrontHeader({
 
         {/* ── Business numbers. All three are real counts from the server. ── */}
         <View style={[s.statsCard, { borderColor: palette.divider, backgroundColor: palette.surface }]}>
-          <Stat palette={palette} label="Staff" value={staffCount} />
-          <Stat palette={palette} label="Active listings" value={counts.listed} ruled />
+          <Stat palette={palette} label="Active listings" value={counts.listed} />
           <Stat palette={palette} label="Trades completed" value={completedTrades} ruled />
         </View>
 
@@ -250,16 +218,11 @@ export function OrgStorefrontHeader({
             palette={palette}
             org={org}
             hasListings={counts.listed > 0 || completedTrades > 0}
-            staffCount={staffCount}
             onEdit={onEdit}
             onPost={onPost}
-            onInvite={() => setInviteOpen(true)}
           />
         ) : null}
 
-        {role ? (
-          <StaffSection palette={palette} organizationId={org.id} isOwner={isOwner} viewerId={viewerId} inviteOpen={inviteOpen} setInviteOpen={setInviteOpen} scrollerRef={scrollerRef} keyboardUp={keyboardUp} />
-        ) : null}
       </View>
     </View>
   );
@@ -274,22 +237,15 @@ export function OrgStorefrontHeader({
  *   Add a shop description  org.description
  *   Post your first listing an active listing OR a completed trade, so a shop
  *                           whose only listing traded is not asked again
- *   Invite a staff member   any membership beyond the owner's own, pending
- *                           invitations included (the owner's roster sends
- *                           them); the public staff count until it loads
  */
-function SetupCard({ palette, org, hasListings, staffCount, onEdit, onPost, onInvite }: {
+function SetupCard({ palette, org, hasListings, onEdit, onPost }: {
   palette: Palette;
   org: Org;
   hasListings: boolean;
-  staffCount: number;
   onEdit: () => void;
   onPost?: () => void;
-  onInvite: () => void;
 }) {
-  // Both are shared react-query caches the Profile tab and StaffSection already
-  // read, so these are not extra requests.
-  const members = useOrgMembers(org.id).data?.data.members;
+  // A shared react-query cache the Profile tab already reads, so not an extra request.
   const verificationStatus = useOrganizations().data?.data.organizations.find((o) => o.id === org.id)?.verificationStatus;
 
   const steps: { key: string; label: string; done: boolean; cta?: { label: string; onPress: () => void }; note?: string }[] = [
@@ -307,7 +263,6 @@ function SetupCard({ palette, org, hasListings, staffCount, onEdit, onPost, onIn
       // Only a verified shop can post, and only while acting as it.
       cta: org.verified && onPost ? { label: "Post", onPress: onPost } : undefined,
     },
-    { key: "staff", label: "Invite a staff member", done: members ? members.length > 1 : staffCount > 1, cta: { label: "Invite", onPress: onInvite } },
   ];
   const doneCount = steps.filter((step) => step.done).length;
   if (doneCount === steps.length) return null;
@@ -336,173 +291,6 @@ function SetupCard({ palette, org, hasListings, staffCount, onEdit, onPost, onIn
           ) : null}
         </View>
       ))}
-    </View>
-  );
-}
-
-/**
- * The roster, for members. The OWNER also gets the three verbs the server
- * offers them: invite by email, change a role, remove. Nobody can act on their
- * own row from here — leaving is in Settings, next to the context switcher,
- * and the server refuses removing or demoting the last owner in any case.
- */
-function StaffSection({ palette, organizationId, isOwner, viewerId, inviteOpen, setInviteOpen, scrollerRef, keyboardUp }: {
-  palette: Palette;
-  organizationId: string;
-  isOwner: boolean;
-  viewerId: string | null;
-  inviteOpen: boolean;
-  setInviteOpen: (open: boolean) => void;
-  scrollerRef?: Scroller;
-  keyboardUp: boolean;
-}) {
-  const inviteRow = useRef<View>(null);
-  const [emailFocused, setEmailFocused] = useState(false);
-
-  // Bring the invite row above the keyboard once it is up. The same mechanism
-  // as the quantity row in StepWhatIsIt.tsx's ItemTypeBlock -- see the full
-  // reasoning there. Focus lands BEFORE the keyboard's height reaches the
-  // host's margin, so this waits for `keyboardUp` and a frame for layout, then
-  // measures the row against the list's content and scrolls it under the top.
-  //
-  // getInnerViewREF, not getInnerViewNode: on the new architecture
-  // measureLayout accepts only a host element, and given the Node variant's
-  // numeric handle it logs and returns without measuring.
-  useEffect(() => {
-    if (!keyboardUp || !emailFocused) return;
-    const frame = requestAnimationFrame(() => {
-      const list = scrollerRef?.current;
-      // Cast: FlatList's native scroll ref IS the ScrollView (VirtualizedList
-      // .getScrollRef), and RN 0.86 implements getInnerViewRef on it while its
-      // .d.ts still declares only getInnerViewNode.
-      const content = (list?.getNativeScrollRef() as ScrollViewWithInnerRef | null | undefined)?.getInnerViewRef();
-      if (!list || !content || !inviteRow.current) return;
-      inviteRow.current.measureLayout(content, (_x, y) => {
-        list.scrollToOffset({ offset: Math.max(0, y - REVEAL_GAP), animated: true });
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [keyboardUp, emailFocused, scrollerRef]);
-
-  const { data, isPending, isError } = useOrgMembers(organizationId);
-  const invite = useInviteMember(organizationId);
-  const changeRole = useChangeMemberRole(organizationId);
-  const remove = useRemoveMember(organizationId);
-  const [email, setEmail] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
-
-  const payload = data?.data;
-  // Staff see who they work with; pending invitations are the owner's business.
-  const members = (payload?.members ?? []).filter((m) => isOwner || m.status === "ACTIVE");
-  const value = email.trim().toLowerCase();
-  // A shape check only, to light the button; the server is the real validator.
-  const canSend = /\S+@\S+\.\S+/.test(value) && !invite.isPending;
-
-  function fail(title: string, err: unknown) {
-    showDialog(title, err instanceof ApiError ? err.message : "Check your connection and try again.");
-  }
-
-  async function sendInvite() {
-    if (!canSend) return;
-    try {
-      await invite.mutateAsync({ email: value });
-      setEmail("");
-      setInviteOpen(false);
-      setSentTo(value);
-    } catch (err) {
-      fail("Could not invite", err);
-    }
-  }
-
-  function manage(member: OrgMember) {
-    const nextRole = member.role === "OWNER" ? "STAFF" : "OWNER";
-    showDialog(member.user.name, undefined, [
-      ...(member.status === "ACTIVE"
-        ? [{
-            text: nextRole === "OWNER" ? "Make owner" : "Make staff",
-            onPress: () => { changeRole.mutateAsync({ membershipId: member.membershipId, role: nextRole }).catch((err) => fail("Could not change role", err)); },
-          }]
-        : []),
-      {
-        text: member.status === "PENDING" ? "Withdraw invitation" : "Remove from staff",
-        style: "destructive" as const,
-        onPress: () => { remove.mutateAsync(member.membershipId).catch((err) => fail("Could not remove", err)); },
-      },
-      { text: "Cancel", style: "cancel" as const },
-    ]);
-  }
-
-  return (
-    <View style={s.staff}>
-      <View style={s.staffHeading}>
-        <Text style={[textStyle(type.storefrontSection), { color: palette.ink }]}>Staff</Text>
-        {isOwner ? (
-          <Tappable
-            onPress={() => { setInviteOpen(!inviteOpen); setSentTo(null); }}
-            hitSlop={5}
-            style={[s.invitePill, { borderColor: palette.dashed }]}
-            pressedStyle={s.pressed}
-            accessibilityRole="button"
-            accessibilityLabel={inviteOpen ? "Cancel invitation" : "Invite a staff member"}
-          >
-            {inviteOpen ? null : <PlusIcon size={icon.storefrontPlus.size} stroke={icon.storefrontPlus.stroke} color={palette.ink} />}
-            <Text style={[textStyle(type.storefrontLink), { color: palette.ink }]}>{inviteOpen ? "Cancel" : "Invite"}</Text>
-          </Tappable>
-        ) : null}
-      </View>
-
-      {isOwner && inviteOpen ? (
-        <View ref={inviteRow} style={s.inviteRow}>
-          <TextInput
-            value={email}
-            onChangeText={(text) => { setEmail(text); setSentTo(null); }}
-            placeholder="Invite by email"
-            placeholderTextColor={palette.muted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-            keyboardType="email-address"
-            style={[textStyle(type.searchInput), s.inviteInput, { color: palette.ink, backgroundColor: palette.surface, borderColor: palette.border }]}
-            onSubmitEditing={() => void sendInvite()}
-            onFocus={() => setEmailFocused(true)}
-            onBlur={() => setEmailFocused(false)}
-            editable={!invite.isPending}
-          />
-          <Pressable onPress={() => void sendInvite()} disabled={!canSend} style={[s.inviteButton, { backgroundColor: canSend ? color.green : palette.inviteOff }]} accessibilityRole="button" accessibilityState={{ disabled: !canSend }}>
-            <Text style={[textStyle(type.secondaryButton), { color: canSend ? color.onGreen : palette.muted }]}>{invite.isPending ? "Sending..." : "Invite"}</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {sentTo ? <Text style={[textStyle(type.storefrontLink), s.sent, { color: palette.link }]}>Invite sent to {sentTo}</Text> : null}
-
-      {isPending ? (
-        <ActivityIndicator color={palette.green} style={s.staffSpinner} />
-      ) : isError ? (
-        <Text style={[textStyle(type.storefrontStaffRole), s.staffError, { color: palette.muted }]}>Could not load the staff list.</Text>
-      ) : (
-        members.map((m) => (
-          <View key={m.membershipId} style={s.staffRow}>
-            {m.user.avatar ? (
-              <Image source={{ uri: m.user.avatar }} contentFit="cover" style={s.staffAvatar} />
-            ) : (
-              <View style={[s.staffAvatar, s.staffAvatarFallback, { backgroundColor: palette.wash }]}>
-                <Text style={[textStyle(type.storefrontSection), { color: palette.onWash }]}>{m.user.name.trim().charAt(0).toUpperCase() || "?"}</Text>
-              </View>
-            )}
-            <View style={s.flex}>
-              <Text style={[textStyle(type.storefrontStaffName), { color: palette.ink }]} numberOfLines={1}>{m.user.name}</Text>
-              <Text style={[textStyle(type.storefrontStaffRole), { color: palette.muted }]}>
-                {m.role === "OWNER" ? "Owner" : "Staff"}{m.status === "PENDING" ? " · invited" : ""}
-              </Text>
-            </View>
-            {isOwner && m.user.id !== viewerId ? (
-              <Pressable onPress={() => manage(m)} style={s.manage} accessibilityRole="button" accessibilityLabel={`Manage ${m.user.name}`}>
-                <Text style={[textStyle(type.storefrontLink), { color: palette.link }]}>Manage</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ))
-      )}
     </View>
   );
 }

@@ -6,9 +6,7 @@ import {
   orgLogoUrl,
   switchToOrganization,
   useOrganizations,
-  useRespondToInvitation,
   type ActingOrg,
-  type OrgInvitation,
 } from "../api/organizations";
 import { getActingOrgId, hasChosenActingOrg } from "../api/org-context";
 import { LeavesPill } from "./AppHeader";
@@ -35,7 +33,7 @@ import { color, icon, radius, textStyle, type } from "../theme/tokens";
  * synchronously on every call, so it is the single source of truth about which
  * identity is live. Mirroring it into component state would create a second
  * one, and the two would disagree the moment anything else cleared it -- which
- * `useRespondToInvitation` does on leave, and the 403 handler does on a revoked
+ * the 403 handler does on a revoked
  * membership. The local `tick` exists only to force a re-render after a switch;
  * it is not the value.
  *
@@ -67,7 +65,6 @@ export function OrgSwitcher() {
 
   const payload = data?.data;
   const organizations = payload?.organizations ?? [];
-  const invitations = payload?.invitations ?? [];
 
   // Read fresh on every render. See the note above — this is not state.
   const activeId = getActingOrgId();
@@ -89,7 +86,7 @@ export function OrgSwitcher() {
   // Nothing to show until there is something to switch between. A card saying
   // "you belong to no organisations" is a card about a feature most people are
   // not using, on the screen they opened to do something else.
-  if (isPending || (organizations.length === 0 && invitations.length === 0)) return null;
+  if (isPending || organizations.length === 0) return null;
 
   return (
     <View style={{ marginTop: 16 }} key={tick}>
@@ -119,7 +116,7 @@ export function OrgSwitcher() {
         <IdentityRow
           key={org.id}
           label={org.name}
-          sub={org.role === "OWNER" ? "Owner" : "Staff"}
+          sub="Owner"
           effect={postingEffect(org)}
           verified={org.verified}
           balance={org.leaves}
@@ -138,16 +135,6 @@ export function OrgSwitcher() {
         />
       ))}
 
-      {invitations.length > 0 ? (
-        <View style={{ marginTop: 14 }}>
-          <Text style={[textStyle(type.itemTitle), { color: color.ink, marginBottom: 4 }]}>
-            Invitations
-          </Text>
-          {invitations.map((invite: OrgInvitation) => (
-            <InvitationRow key={invite.membershipId} invite={invite} />
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -228,74 +215,6 @@ function IdentityRow({
         <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
       ) : null}
     </Tappable>
-  );
-}
-
-/**
- * An invitation, with the only two answers there are: Decline, outlined, and
- * Accept, filled, so the yes is the louder of the two and under the thumb.
- * Decline asks nothing further -- it is undone by the owner inviting again,
- * which the server allows because declining leaves no tombstone.
- *
- * Accepting does NOT switch to the organisation. Somebody accepting an
- * invitation is agreeing to be staff, which is not the same statement as "post
- * my next listing as the shop" — and silently rebinding their next post to
- * somebody else's account on the strength of a Yes would be the worst possible
- * reading of it. It appears in the list above, and they choose.
- */
-function InvitationRow({ invite }: { invite: OrgInvitation }) {
-  const respond = useRespondToInvitation(invite.organization.id);
-  const busy = respond.isPending;
-  const answering = busy ? respond.variables?.action : undefined;
-
-  return (
-    <View style={rowStyles.row}>
-      {orgLogoUrl(invite.organization.logoUrl) ? (
-        <Image source={{ uri: orgLogoUrl(invite.organization.logoUrl)! }} style={rowStyles.logo} resizeMode="cover" />
-      ) : (
-        <View style={rowStyles.logoFallback}>
-          <StoreIcon size={18} stroke={1.6} color={color.forest} />
-        </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={[textStyle(type.itemTitle), { color: color.ink }]} numberOfLines={1}>
-          {invite.organization.name}
-        </Text>
-        <Text style={[textStyle(type.detailBody), { color: color.inkMuted }]}>
-          Invited you to join as staff
-        </Text>
-      </View>
-      <Tappable
-        onPress={
-          busy
-            ? undefined
-            : () => respond.mutate({ membershipId: invite.membershipId, action: "decline" })
-        }
-        accessibilityRole="button"
-        accessibilityLabel={`Decline invitation from ${invite.organization.name}`}
-        style={rowStyles.decline}
-        pressedStyle={{ opacity: 0.8 }}
-      >
-        <Text style={[textStyle(type.detailBody), { color: color.ink }]}>
-          {answering === "decline" ? "…" : "Decline"}
-        </Text>
-      </Tappable>
-      <Tappable
-        onPress={
-          busy
-            ? undefined
-            : () => respond.mutate({ membershipId: invite.membershipId, action: "accept" })
-        }
-        accessibilityRole="button"
-        accessibilityLabel={`Accept invitation from ${invite.organization.name}`}
-        style={rowStyles.accept}
-        pressedStyle={{ opacity: 0.8 }}
-      >
-        <Text style={[textStyle(type.detailBody), { color: color.onGreen }]}>
-          {answering === "accept" ? "…" : "Accept"}
-        </Text>
-      </Tappable>
-    </View>
   );
 }
 

@@ -17,7 +17,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { threadQueryKey, useDeleteConversation, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import { useBlockUser } from "../../src/api/item";
@@ -25,7 +25,7 @@ import { request } from "../../src/api/client";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon, TrashIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -74,7 +74,6 @@ export default function MessagesThreadScreen() {
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
   const block = useBlockUser();
-  const deleteConversation = useDeleteConversation();
   const sortedMessages = useMemo(
     () => collapseSystemPairs(
       Array.from(
@@ -246,23 +245,6 @@ export default function MessagesThreadScreen() {
     );
   };
 
-  const confirmDelete = () => {
-    if (!partner) return;
-    setMenuOpen(false);
-    showDialog(
-      "Hide conversation?",
-      "This removes the conversation from your view only. Messages are kept for both people and for reports.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteConversation.mutate(partner, { onSuccess: () => router.back() }),
-        },
-      ],
-    );
-  };
-
   return (
     <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View style={[styles.header, { height: insets.top + 52, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
@@ -278,9 +260,13 @@ export default function MessagesThreadScreen() {
         >
           <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
         </Tappable>
-        <Tappable onPress={() => setMenuOpen(true)} style={styles.menuButton} pressedStyle={styles.backButtonPressed} accessibilityLabel="Conversation options">
-          <KebabIcon size={20} color={palette.ink} />
-        </Tappable>
+        {/* The menu's only action is Block (hiding conversations was removed in
+            schema v2), and blocking is not offered while acting as a shop. */}
+        {getActingOrgId() ? null : (
+          <Tappable onPress={() => setMenuOpen(true)} style={styles.menuButton} pressedStyle={styles.backButtonPressed} accessibilityLabel="Conversation options">
+            <KebabIcon size={20} color={palette.ink} />
+          </Tappable>
+        )}
       </View>
 
       {thread.isPending ? (
@@ -428,7 +414,6 @@ export default function MessagesThreadScreen() {
         // it would block from their own account and leave the shop's thread
         // open. Shop-level blocking is not built.
         onBlock={getActingOrgId() ? undefined : confirmBlock}
-        onDelete={confirmDelete}
       />
       <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
         <Pressable style={styles.lightbox} onPress={() => setLightboxUrl(null)} accessibilityLabel="Close full-screen image">
@@ -443,13 +428,11 @@ function ConversationMenu({
   visible,
   onClose,
   onBlock,
-  onDelete,
   colors,
 }: {
   visible: boolean;
   onClose: () => void;
   onBlock?: () => void;
-  onDelete: () => void;
   colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
 }) {
   if (!visible) return null;
@@ -457,7 +440,6 @@ function ConversationMenu({
     <SheetShell title="Conversation" onClose={onClose} colors={colors}>
       <SheetRows>
         {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} /> : null}
-        <SheetRow glyph={<TrashIcon size={20} stroke={1.6} color={colors.urgent} />} label="Delete conversation" destructive colors={colors} onPress={onDelete} />
       </SheetRows>
     </SheetShell>
   );

@@ -35,7 +35,7 @@ export default function UserProfileScreen() {
   const reviewQuery = useProfileReviews(id, tab === "reviews");
   // The storefront's invite field needs both: see useStorefrontKeyboard.
   const list = useRef<FlatList<ProfileRow>>(null);
-  const { keyboardUp, imeInset } = useStorefrontKeyboard();
+  const { imeInset } = useStorefrontKeyboard();
 
   useEffect(() => {
     if (isOwnProfile) router.replace("/(app)/profile");
@@ -88,8 +88,6 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
       // Only while acting AS this shop -- otherwise Post lists on the viewer's
       // personal shelf. getActingOrgId() is read per render, as elsewhere.
       onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
-      scrollerRef={list}
-      keyboardUp={keyboardUp}
     />
   ) : null;
   const emptyList = org ? (

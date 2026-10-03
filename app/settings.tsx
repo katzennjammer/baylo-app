@@ -41,8 +41,8 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <Text style={[textStyle(type.itemTitle), styles.cardTitle]}>Account</Text>
         {/*
-          Renders nothing at all unless this person belongs to, or has been
-          invited to, an organisation -- which is almost everybody. See the note
+          Renders nothing at all unless this person owns an organisation --
+          which is almost everybody. See the note
           on OrgSwitcher: a card explaining a feature you are not using, on a
           screen you opened to do something else, is worse than no card.
         */}

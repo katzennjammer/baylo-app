@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, request } from "./client";
 import { getApiBase } from "./config";
-import { NOTIFICATIONS_KEY } from "./notifications";
-import { clearActingOrg, setActingOrgId } from "./org-context";
+import { setActingOrgId } from "./org-context";
 
 /**
  * Organisations / MSMEs: creating one, listing the ones you may act as, and
@@ -25,7 +24,8 @@ import { clearActingOrg, setActingOrgId } from "./org-context";
 
 export const ORGANIZATIONS_KEY = ["organizations"] as const;
 
-export type OrgMemberRole = "OWNER" | "STAFF";
+/** Always "OWNER" since schema v2 (staff were removed). */
+export type OrgMemberRole = "OWNER";
 export type OrgVerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface ActingOrg {
@@ -224,105 +224,9 @@ export function useCreateOrganization() {
   });
 }
 
-export interface OrgMember {
-  membershipId: string;
-  role: OrgMemberRole;
-  status: "PENDING" | "ACTIVE";
-  invitedAt: string;
-  joinedAt: string | null;
-  user: { id: string; name: string; avatar: string | null };
-}
-
-export interface OrgMembersPayload {
-  members: OrgMember[];
-  staffCount: number;
-  viewerRole: OrgMemberRole;
-}
-
-export function useOrgMembers(organizationId: string | null | undefined) {
-  return useQuery({
-    queryKey: ["organization-members", organizationId],
-    queryFn: () => apiV1<OrgMembersPayload>(`/api/v1/organizations/${organizationId}/members`),
-    enabled: !!organizationId,
-  });
-}
-
-/** Invite somebody by the email they signed up with. OWNER only. */
-export function useInviteMember(organizationId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { email: string; role?: OrgMemberRole }) =>
-      apiV1(`/api/v1/organizations/${organizationId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
-  });
-}
-
-/** Accept or decline an invitation, or leave. The invited person's own verbs. */
-export function useRespondToInvitation(organizationId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { membershipId: string; action: "accept" | "decline" | "leave" }) =>
-      apiV1(`/api/v1/organizations/${organizationId}/members/${input.membershipId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: input.action }),
-      }),
-    onSuccess: async (_data, input) => {
-      // Leaving the organisation you are acting as must drop the context in
-      // the same breath. Otherwise every subsequent request carries a header
-      // the server now refuses, and the app reads as broken rather than as
-      // "you left".
-      if (input.action === "leave") clearActingOrg();
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY }),
-        qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
-        // Answering deletes the invite's ORG_INVITE notification server-side.
-        qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
-        // The header's Leaves pill is the acting shop's, from /home. Leaving
-        // just dropped that context, so the pill must be re-asked as you.
-        ...(input.action === "leave" ? [qc.invalidateQueries({ queryKey: ["home"] })] : []),
-      ]);
-    },
-  });
-}
-
-/** An OWNER changing somebody's role. The server refuses demoting the last owner. */
-export function useChangeMemberRole(organizationId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { membershipId: string; role: OrgMemberRole }) =>
-      apiV1(`/api/v1/organizations/${organizationId}/members/${input.membershipId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: input.role }),
-      }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
-  });
-}
-
-/** An OWNER removing a member, or withdrawing an invitation. */
-export function useRemoveMember(organizationId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (membershipId: string) =>
-      apiV1(`/api/v1/organizations/${organizationId}/members/${membershipId}`, {
-        method: "DELETE",
-      }),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["organization-members", organizationId] }),
-        // The public Staff stat counts ACTIVE members.
-        qc.invalidateQueries({ queryKey: ["profile"] }),
-      ]);
-    },
-  });
-}
+// Organisation staff (members, invitations, roles) were removed in schema v2:
+// the owner is the only person who acts as a shop. GET .../members still answers
+// with the owner alone, and nothing here calls the retired write routes.
 
 export interface UpdateOrganizationInput {
   /** An /api/upload URL, or null to clear. Omitted = unchanged. */

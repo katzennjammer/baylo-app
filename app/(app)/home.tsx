@@ -11,7 +11,6 @@ import {
 } from "react-native";
 
 import { useBrowse } from "../../src/api/browse";
-import { useFeatured } from "../../src/api/featured";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
 import type { Item } from "../../src/api/types";
@@ -21,16 +20,13 @@ import { FilterButton, SearchField } from "../../src/components/marketplace/Brow
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
-import { ExclusiveTile } from "../../src/components/home-redesign/ExclusiveTile";
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
-import { SparkleIcon } from "../../src/components/icons";
 import { HeroBanner } from "../../src/components/home-redesign/HeroBanner";
 import { ShopSpotlightCard } from "../../src/components/home-redesign/ShopSpotlightCard";
 import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
   categoryTone,
   color,
-  icon,
   size,
   space,
   textStyle,
@@ -65,24 +61,18 @@ import {
  *
  * Every section header is SectionHeader (sentence case, one accent word). See
  * that file for the layout and accessibility rules.
- *   Featured     → paid boosts across EVERY category: GET /api/v1/featured
- *                  with no category. The server's cap (eight) and hourly
- *                  rotation, unchanged; this renders what it is given.
+ *
+ * FEATURED WAS REMOVED (schema v2): paid boosts no longer exist, so the paid
+ * grid that closed this screen is gone with them.
  *
  * WHY THIS ORDER (30 Sep 2026). It follows the Food Panda mapping the
  * redesign started from -- "order again" (Exclusive), "featured highlights"
- * (Spotlights), "recommended for you" (Recommended) -- with the paid Featured
- * grid last. Spotlights sits BETWEEN the two listing rows, so Exclusive's big
- * cards and Recommended's narrower ones never stack back to back and read as
- * one repeated section. Featured goes last because it is the only vertical
- * grid: a grid can run long, and a horizontal row under a long grid is a row
- * nobody scrolls to.
+ * (Spotlights), "recommended for you" (Recommended). Spotlights sits BETWEEN
+ * the two listing rows, so Exclusive's big cards and Recommended's narrower
+ * ones never stack back to back and read as one repeated section.
  *
- * NO LISTING IS ON SCREEN TWICE. Exclusive and Featured are disjoint by
- * construction: a perishable can't be boosted (the boost route refuses it,
- * /featured filters isPerishable, and isPerishable is fixed at creation).
- * Recommended excludes perishables on the server, and drops anything in the
- * Featured eight here -- Featured keeps the listing, because it was paid for.
+ * NO LISTING IS ON SCREEN TWICE: Recommended excludes perishables on the
+ * server, and Exclusive is perishables only.
  *
  * THE LEAVES BALANCE IS NOT ON THIS SCREEN. It is in AppHeader, once, as it is
  * on every other tab. It was briefly in the search row as well, which put the
@@ -102,7 +92,7 @@ import {
  */
 type PerishableItem = Item & { perishable: NonNullable<Item["perishable"]> };
 
-/** Cards on the Recommended shelf, after Featured's are taken out. */
+/** Cards on the Recommended shelf. */
 const RECOMMENDED_SHOWN = 10;
 
 /**
@@ -120,29 +110,13 @@ const RECOMMENDED_SHOWN = 10;
  *                                                          `green` itself is 2.31:1 and
  *                                                          `forest` too dark to read as
  *                                                          an accent
- *   featured     color.accentGold        #A0740D  4.02:1  no gold existed; added for this
  */
 const ACCENT = {
   limited: color.urgent,
   spotlights: categoryTone.sand.ink,
   picked: color.accentGreen,
-  featured: color.accentGold,
 } as const;
 
-/** Featured's header, drawn by both the loaded and the error state. */
-function FeaturedHeader() {
-  return (
-    <SectionHeader
-      accent="Featured"
-      accentColor={ACCENT.featured}
-      squiggle
-      trailingIcon={
-        <SparkleIcon size={icon.sectionTitle.size} stroke={icon.sectionTitle.stroke} color={ACCENT.featured} />
-      }
-      subtitle="Boosted listings"
-    />
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -174,44 +148,33 @@ export default function HomeScreen() {
     [exclusiveQuery.items],
   );
 
-  const featuredQuery = useFeatured(null);
-  const featured = featuredQuery.data ?? [];
-
   const spotlightQuery = useShopSpotlight();
   const spotlights = spotlightQuery.data ?? [];
 
   const recommendedQuery = useRecommended();
   const personalized = recommendedQuery.data?.personalized ?? false;
-  // Minus the Featured eight: the same listing twice on one screen reads as a
-  // bug, and Featured is the one that was paid for. See the note up top.
-  const recommended = useMemo(() => {
-    const inFeatured = new Set((featuredQuery.data ?? []).map((i) => i.id));
-    return (recommendedQuery.data?.items ?? []).filter((i) => !inFeatured.has(i.id)).slice(0, RECOMMENDED_SHOWN);
-  }, [recommendedQuery.data, featuredQuery.data]);
+  const recommended = useMemo(
+    () => (recommendedQuery.data?.items ?? []).slice(0, RECOMMENDED_SHOWN),
+    [recommendedQuery.data],
+  );
 
   const { refetch: refetchBrowse } = browse;
   const { refetch: refetchExclusive } = exclusiveQuery;
-  const { refetch: refetchFeatured } = featuredQuery;
   const { refetch: refetchSpotlight } = spotlightQuery;
   const { refetch: refetchRecommended } = recommendedQuery;
   const refetch = useCallback(() => {
     void refetchBrowse();
     void refetchExclusive();
-    void refetchFeatured();
     void refetchSpotlight();
     void refetchRecommended();
-  }, [refetchBrowse, refetchExclusive, refetchFeatured, refetchSpotlight, refetchRecommended]);
+  }, [refetchBrowse, refetchExclusive, refetchSpotlight, refetchRecommended]);
 
   // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
   // to "Ended" at zero and the card stays put; refetching here would pull it
   // out of the row under the person's thumb. Pull-to-refresh and the next
   // focus fetch drop it.
 
-  // Two-column grid (Featured), and the single row's wide cards (Exclusive).
-  const gridTileWidth = useMemo(
-    () => Math.floor((width - space.screenX * 2 - space.browse.gridGap) / 2),
-    [width],
-  );
+  // The single row's wide cards (Exclusive).
   const exclusiveCardWidth = useMemo(
     () =>
       Math.floor(
@@ -275,7 +238,6 @@ export default function HomeScreen() {
             refreshing={
               isRefetching ||
               exclusiveQuery.isRefetching ||
-              featuredQuery.isRefetching ||
               spotlightQuery.isRefetching ||
               recommendedQuery.isRefetching
             }
@@ -430,32 +392,6 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-            {/* 7. Featured: every category's boosts, the server's eight.
-                Left out entirely when there are none -- an empty paid section
-                is noise, not information. An error still says so. */}
-            {featured.length > 0 ? (
-              <>
-                <FeaturedHeader />
-                <View style={s.grid}>
-                  {featured.map((item) => (
-                    <ExclusiveTile
-                      key={item.id}
-                      item={item}
-                      width={gridTileWidth}
-                      onPress={openItem}
-                      viewerId={viewerId}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : featuredQuery.isError ? (
-              <>
-                <FeaturedHeader />
-                <Text style={[textStyle(type.emptyBody), s.empty]}>
-                  Could not load featured listings. Pull down to try again.
-                </Text>
-              </>
-            ) : null}
           </>
         )}
       </ScrollView>

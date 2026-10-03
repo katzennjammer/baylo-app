@@ -21,8 +21,6 @@ import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
-import { canBoost } from "../../src/api/featured";
-import { useConfirmBoost } from "../../src/components/useConfirmBoost";
 import { useLike } from "../../src/api/social";
 import {
   ArrowUpRightIcon,
@@ -175,7 +173,6 @@ export default function ItemDetailScreen() {
 
   const report = useReport();
   const block = useBlockUser();
-  const { confirmBoost, isBoosting } = useConfirmBoost();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
   const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
@@ -517,17 +514,6 @@ export default function ItemDetailScreen() {
             {amount ? <Tag label={amount} /> : null}
           </View>
 
-          {/* ── Owner: a live boost says when it ends. The Boost button itself
-              is in the bottom bar with Edit. */}
-          {own && item.featuredUntil ? (
-            <View style={s.featuredNote} accessibilityRole="text">
-              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-              <Text style={[textStyle(type.detailBody), { color: color.forest, flex: 1 }]}>
-                Featured until {formatFeaturedUntil(item.featuredUntil)}
-              </Text>
-            </View>
-          ) : null}
-
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
@@ -623,11 +609,6 @@ export default function ItemDetailScreen() {
           liked={item.stats.liked}
           onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
           onEdit={() => setEditing(true)}
-          boost={
-            own && !item.featuredUntil && canBoost(item)
-              ? { busy: isBoosting, onPress: () => confirmBoost(item) }
-              : null
-          }
           onOffer={() => {
             if (cannotOffer) {
               setReachDialogOpen(true);
@@ -754,15 +735,6 @@ function Tag({ label }: { label: string }) {
       <Text style={[textStyle(type.chip), { color: color.inkSecondary }]}>{label}</Text>
     </View>
   );
-}
-
-/** "Thu 3:40 PM" — a boost window is never more than a day, so no date. */
-function formatFeaturedUntil(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 /** "1.5 kg", "3 pcs", "2 L" — or null when the owner gave no amount. */
@@ -951,8 +923,8 @@ async function directionsTo(hub: SafeZoneHub) {
 /**
  * The sticky bar. Checked in this order, so each state is the first true one:
  *
- *   1. Your own listing: your actions — Edit, and Boost while it can be
- *      boosted — or the inert "In trade" / "Traded". No heart, no offer.
+ *   1. Your own listing: your action — Edit (Boost went with Featured boosts
+ *      in schema v2) — or the inert "In trade" / "Traded". No heart, no offer.
  *   2. In trade / traded: said, inert. (Unchanged.)
  *   3. A perishable that has ended: "This listing has ended", inert.
  *   4. The premium / VIP lock: the lock line and its explanation, opening the
@@ -971,7 +943,6 @@ function BottomBar({
   liked,
   onLike,
   onEdit,
-  boost,
   onOffer,
 }: {
   own: boolean;
@@ -982,7 +953,6 @@ function BottomBar({
   liked: boolean;
   onLike: () => void;
   onEdit: () => void;
-  boost: { busy: boolean; onPress: () => void } | null;
   onOffer: () => void;
 }) {
   const inert = (label: string) => (
@@ -1007,20 +977,6 @@ function BottomBar({
         >
           <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Edit listing</Text>
         </Tappable>
-        {boost ? (
-          <Tappable
-            onPress={boost.onPress}
-            disabled={boost.busy}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: boost.busy }}
-            style={s.action}
-            pressedStyle={s.pressed}
-          >
-            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-              {boost.busy ? "Boosting…" : "Boost"}
-            </Text>
-          </Tappable>
-        ) : null}
       </View>
     );
   }
@@ -1194,17 +1150,6 @@ const s = StyleSheet.create({
     borderWidth: border.chip,
     borderColor: color.controlLine,
     backgroundColor: color.control,
-  },
-
-  featuredNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: color.greenWash,
   },
 
   /* The swap ticket: forest hairline, surface fill, a dashed seam. */
