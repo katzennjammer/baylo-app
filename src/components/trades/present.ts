@@ -4,6 +4,7 @@ import type { NeedsItem, WaitingItem } from "../../api/trades";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { OFFER_REPLY_DAYS, firstName, replyBy, sentAgo } from "../offer/copy";
 import { grouped, meetupWhen, shortDate } from "../../lib/gap";
+import { giveGet, viewerIsSender } from "../../lib/trade-sides";
 
 /**
  * What each row SAYS — one place, so the list and the pushed Waiting screen
@@ -317,16 +318,16 @@ function sideOf(
 }
 
 /**
- * Give / get, from the viewer's side. The sender put up `offeredItem` (and any
+ * Give / get, from the viewer's side; which is which is `giveGet()`'s call
+ * (@/lib/trade-sides). The sender put up `offeredItem` (and any
  * `offeredLeaves`); the receiver put up `requestedItem`. On a Leaves-only trade
  * the wire sends `offeredItem: null`, so the sender's side is the leaf tile.
  */
 export function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
-  const senderSide = sideOf(trade.offeredItem, trade.offeredLeaves);
-  const receiverSide = sideOf(trade.requestedItem, null);
-  return trade.direction === "sent"
-    ? { give: senderSide, get: receiverSide }
-    : { give: receiverSide, get: senderSide };
+  return giveGet(viewerIsSender(trade.direction), {
+    offered: sideOf(trade.offeredItem, trade.offeredLeaves),
+    requested: sideOf(trade.requestedItem, null),
+  });
 }
 
 export function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } {
@@ -336,10 +337,10 @@ export function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } 
     first && rest.length > 0 && !(offer.offeredLeaves && offer.offeredLeaves > 0)
       ? { ...offered, title: copy.tradeCard.itemPlusMore(first.title, rest.length) }
       : offered;
-  const post = sideOf(offer.post, null);
-  return offer.direction === "sent"
-    ? { give: offeredSide, get: post }
-    : { give: post, get: offeredSide };
+  return giveGet(viewerIsSender(offer.direction), {
+    offered: offeredSide,
+    requested: sideOf(offer.post, null),
+  });
 }
 
 /**

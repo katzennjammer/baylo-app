@@ -5,6 +5,7 @@ import { Tappable } from "../Tappable";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import * as copy from "../trades/copy";
 import type { CardSide } from "../trades/present";
+import { giveGet } from "../../lib/trade-sides";
 import { ChatOfferCard } from "./ChatOfferCard";
 
 import { color, font, radius, textStyle, type } from "../../theme/tokens";
@@ -22,10 +23,53 @@ function asJsonObject(content: string): MessagePayload | null {
   }
 }
 
+/**
+ * Give / get for an offer card drawn from its chat payload, once the offer has
+ * left the live list. The offer message is always written by the offer's
+ * sender, so `mine` IS "the viewer is the sender"; giveGet() does the rest.
+ */
+export function offerPayloadSides(parsed: MessagePayload, mine: boolean): { give: CardSide; get: CardSide } {
+  const offeredItems = Array.isArray(parsed.offeredItems) ? parsed.offeredItems : [];
+  const firstOffered = offeredItems.find(
+    (item: unknown): item is { title: string; imageUrl?: unknown } =>
+      typeof item === "object" && !!item && "title" in item && typeof item.title === "string",
+  );
+  const offeredLeaves = typeof parsed.offeredLeaves === "number" ? parsed.offeredLeaves : 0;
+  const postTitle = typeof parsed.postItem === "string"
+    ? parsed.postItem
+    : typeof parsed.postItem === "object" && parsed.postItem && "title" in parsed.postItem && typeof parsed.postItem.title === "string"
+      ? parsed.postItem.title
+      : copy.tradeCard.unnamed;
+  const postImage = typeof parsed.postItem === "object" && parsed.postItem && "imageUrl" in parsed.postItem && typeof parsed.postItem.imageUrl === "string"
+    ? parsed.postItem.imageUrl
+    : null;
+  const offeredSide: CardSide = firstOffered
+    ? {
+        image: typeof firstOffered.imageUrl === "string" ? firstOffered.imageUrl : null,
+        title: offeredLeaves > 0
+          ? copy.tradeCard.itemPlusLeaves(firstOffered.title, offeredLeaves)
+          : offeredItems.length > 1
+            ? copy.tradeCard.itemPlusMore(firstOffered.title, offeredItems.length - 1)
+            : firstOffered.title,
+        leaves: false,
+      }
+    : offeredLeaves > 0
+      ? { image: null, title: copy.tradeCard.leaves(offeredLeaves), leaves: true }
+      : { image: null, title: copy.tradeCard.unnamed, leaves: false };
+  const postSide: CardSide = { image: postImage, title: postTitle, leaves: false };
+  return giveGet(mine, { offered: offeredSide, requested: postSide });
+}
+
+/** One line for a list row: runs of whitespace (newlines included) become one space, as the server's describeMessage() does. */
+function flatPreview(content: string): string {
+  const flat = content.replace(/\s+/g, " ").trim();
+  return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat;
+}
+
 export function previewFromContent(content: string, fromMe: boolean): string {
   const parsed = asJsonObject(content);
   if (!parsed) {
-    return content.length > 60 ? `${content.slice(0, 60)}…` : content;
+    return flatPreview(content);
   }
 
   switch (parsed.type) {
@@ -43,7 +87,7 @@ export function previewFromContent(content: string, fromMe: boolean): string {
     case "voice":
       return "Sent a voice message";
     default:
-      return content.length > 60 ? `${content.slice(0, 60)}…` : content;
+      return flatPreview(content);
   }
 }
 
@@ -58,6 +102,7 @@ export function renderMessageBody({
   partnerName = "them",
   offerTradeId = null,
   onOpenTrade,
+  contentMax = Number.POSITIVE_INFINITY,
 }: {
   content: string;
   mine: boolean;
@@ -71,6 +116,12 @@ export function renderMessageBody({
   /** For an offer: the trade it became, from the thread's offer_update rows. */
   offerTradeId?: string | null;
   onOpenTrade?: (tradeId: string) => void;
+  /**
+   * The room inside a bubble, in px (`useBubbleContentMax()`). Media below is
+   * min(its fixed width, this), so a narrow phone shrinks it rather than
+   * letting it overflow. Omitted, the fixed widths apply unchanged.
+   */
+  contentMax?: number;
 }) {
   const parsed = asJsonObject(content);
 
@@ -80,34 +131,6 @@ export function renderMessageBody({
 
   switch (parsed.type) {
     case "offer": {
-      const offeredItems = Array.isArray(parsed.offeredItems) ? parsed.offeredItems : [];
-      const firstOffered = offeredItems.find(
-        (item: unknown): item is { title: string; imageUrl?: unknown } =>
-          typeof item === "object" && !!item && "title" in item && typeof item.title === "string",
-      );
-      const offeredLeaves = typeof parsed.offeredLeaves === "number" ? parsed.offeredLeaves : 0;
-      const postTitle = typeof parsed.postItem === "string"
-        ? parsed.postItem
-        : typeof parsed.postItem === "object" && parsed.postItem && "title" in parsed.postItem && typeof parsed.postItem.title === "string"
-          ? parsed.postItem.title
-          : copy.tradeCard.unnamed;
-      const postImage = typeof parsed.postItem === "object" && parsed.postItem && "imageUrl" in parsed.postItem && typeof parsed.postItem.imageUrl === "string"
-        ? parsed.postItem.imageUrl
-        : null;
-      const offeredSide: CardSide = firstOffered
-        ? {
-            image: typeof firstOffered.imageUrl === "string" ? firstOffered.imageUrl : null,
-            title: offeredLeaves > 0
-              ? copy.tradeCard.itemPlusLeaves(firstOffered.title, offeredLeaves)
-              : offeredItems.length > 1
-                ? copy.tradeCard.itemPlusMore(firstOffered.title, offeredItems.length - 1)
-                : firstOffered.title,
-            leaves: false,
-          }
-        : offeredLeaves > 0
-          ? { image: null, title: copy.tradeCard.leaves(offeredLeaves), leaves: true }
-          : { image: null, title: copy.tradeCard.unnamed, leaves: false };
-      const postSide: CardSide = { image: postImage, title: postTitle, leaves: false };
       const offerId = typeof parsed.offerId === "string" ? parsed.offerId : null;
 
       return (
@@ -116,7 +139,7 @@ export function renderMessageBody({
           partnerName={partnerName}
           status={typeof parsed.status === "string" ? parsed.status : "PENDING"}
           live={offerDetails}
-          fallback={mine ? { give: offeredSide, get: postSide } : { give: postSide, get: offeredSide }}
+          fallback={offerPayloadSides(parsed, mine)}
           message={typeof parsed.userMessage === "string" && parsed.userMessage.trim() ? parsed.userMessage : null}
           tradeId={offerTradeId}
           onOpen={() => (offerId ? onOfferPress?.(offerId) : undefined)}
@@ -175,11 +198,17 @@ export function renderMessageBody({
       const imageUrl = typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
       const postItem = typeof parsed.postItem === "string" ? parsed.postItem : "Shared post";
       const postUser = typeof parsed.postUser === "string" ? parsed.postUser : "Baylo";
+      // A definite width, so the photo is sized in px from it, never as a % of a content-sized card.
+      const sharedWidth = Math.min(MEDIA.shared, contentMax);
 
       return (
-        <View style={[styles.sharedCard, mine ? styles.mineCard : styles.theirCard]}>
+        <View style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}>
           {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.sharedImage} resizeMode="cover" />
+            <Image
+              source={{ uri: imageUrl }}
+              style={[styles.sharedImage, { width: sharedWidth - 2 * MEDIA_BORDER }]}
+              resizeMode="cover"
+            />
           ) : null}
           <View style={styles.sharedBody}>
             <Text style={[styles.sharedTitle, mine ? styles.mineText : styles.theirText]}>{postItem}</Text>
@@ -195,9 +224,12 @@ export function renderMessageBody({
         ? parsed.url
         : typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
       const caption = typeof parsed.caption === "string" ? parsed.caption : null;
+      // The photo keeps its 4:3 frame as it shrinks; the wrap's border is inside the cap.
+      const imageWidth = Math.min(MEDIA.image, contentMax - 2 * MEDIA_BORDER);
+      const imageHeight = Math.round((imageWidth * MEDIA.imageHeight) / MEDIA.image);
 
       return (
-        <View style={[styles.imageWrap, mine ? styles.mineCard : styles.theirCard]}>
+        <View style={[styles.imageWrap, { maxWidth: Math.min(MEDIA.imageWrap, contentMax) }, mine ? styles.mineCard : styles.theirCard]}>
           {imageUrl ? (
             <Tappable
               onPress={() => onImagePress?.(imageUrl)}
@@ -207,7 +239,7 @@ export function renderMessageBody({
             >
               <Image
                 source={{ uri: imageUrl }}
-                style={styles.messageImage}
+                style={[styles.messageImage, { width: imageWidth, height: imageHeight }]}
                 contentFit="cover"
                 onLoad={() => console.log("[messages/thread] image loaded", { url: imageUrl })}
                 onError={(event) => console.log("[messages/thread] image load failed", { url: imageUrl, error: event.error })}
@@ -223,7 +255,13 @@ export function renderMessageBody({
     case "voice": {
       const duration = typeof parsed.duration === "number" ? parsed.duration : 0;
       return (
-        <View style={[styles.voiceCard, mine ? styles.mineCard : styles.theirCard]}>
+        <View
+          style={[
+            styles.voiceCard,
+            { minWidth: Math.min(MEDIA.voiceMin, contentMax), maxWidth: Math.min(MEDIA.voice, contentMax) },
+            mine ? styles.mineCard : styles.theirCard,
+          ]}
+        >
           <Text style={[styles.voiceBadge, mine ? styles.mineText : styles.theirText]}>
             {mine ? "Voice" : "Voice"}
           </Text>
@@ -237,6 +275,10 @@ export function renderMessageBody({
       return <Text style={[styles.text, mine ? styles.mineText : styles.theirText]}>{content}</Text>;
   }
 }
+
+/** Media's own widths, in px: the CEILINGS. A narrow bubble's `contentMax` wins. */
+const MEDIA = { shared: 260, imageWrap: 260, image: 240, imageHeight: 180, voice: 180, voiceMin: 120 } as const;
+const MEDIA_BORDER = 1;
 
 function formatDuration(seconds: number) {
   const total = Math.max(0, Math.floor(seconds));
@@ -283,13 +325,11 @@ const styles = StyleSheet.create({
     color: color.forest,
   },
   sharedCard: {
-    maxWidth: 260,
     borderRadius: radius.card,
     overflow: "hidden",
-    borderWidth: 1,
+    borderWidth: MEDIA_BORDER,
   },
   sharedImage: {
-    width: "100%",
     height: 120,
   },
   sharedBody: {
@@ -311,14 +351,11 @@ const styles = StyleSheet.create({
     color: color.inkSecondary,
   },
   imageWrap: {
-    maxWidth: 260,
     borderRadius: radius.card,
     overflow: "hidden",
-    borderWidth: 1,
+    borderWidth: MEDIA_BORDER,
   },
   messageImage: {
-    width: 240,
-    height: 180,
     borderRadius: radius.card,
   },
   caption: {
@@ -328,8 +365,6 @@ const styles = StyleSheet.create({
     color: color.inkSecondary,
   },
   voiceCard: {
-    minWidth: 120,
-    maxWidth: 180,
     borderRadius: 999,
     paddingVertical: 10,
     paddingHorizontal: 14,

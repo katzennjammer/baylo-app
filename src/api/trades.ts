@@ -5,6 +5,7 @@ import { apiV1, legacyFailure, request } from "./client";
 import { LIVE_OFFERS_KEY, withdrawOffer } from "./offer";
 import { grouped } from "../lib/gap";
 import { bracketLabel, bracketOf } from "../lib/brackets";
+import { giveGet, viewerIsSender } from "../lib/trade-sides";
 import type { Consent } from "./offer";
 import type {
   ActiveTrade,
@@ -973,11 +974,12 @@ export function useNeedsTodayCount(): number {
  * established by the section around it.
  */
 export function swapLine(trade: ActiveTrade): string {
-  const sent = trade.direction === "sent";
-  // On a `sent` trade the viewer offered `offeredItem` and receives
-  // `requestedItem`; on a `received` one it is the reverse.
-  const mineItem = sent ? trade.offeredItem : trade.requestedItem;
-  const theirsItem = sent ? trade.requestedItem : trade.offeredItem;
+  const sent = viewerIsSender(trade.direction);
+  // The viewer gives `mineItem` and gets `theirsItem`: giveGet() decides which.
+  const { give: mineItem, get: theirsItem } = giveGet(sent, {
+    offered: trade.offeredItem,
+    requested: trade.requestedItem,
+  });
 
   if (trade.kind === "leaves") {
     // A legacy Leaves-only trade: the listing sits in BOTH item columns as a
@@ -1001,12 +1003,12 @@ export function swapLine(trade: ActiveTrade): string {
  */
 export function offerSwapLine(offer: LiveOffer): string {
   const offered = offer.offeredItems[0] ?? null;
-  if (offer.direction === "sent") {
-    const mine = offered ? bracketed(offered) : "your item";
-    return `Your ${mine} for ${bracketed(offer.post)}`;
-  }
-  const theirs = offered ? bracketed(offered) : "their item";
-  return `Their ${theirs} for your ${bracketed(offer.post)}`;
+  const sent = viewerIsSender(offer.direction);
+  const { give, get } = giveGet(sent, {
+    offered: offered ? bracketed(offered) : sent ? "your item" : "their item",
+    requested: bracketed(offer.post),
+  });
+  return sent ? `Your ${give} for ${get}` : `Their ${get} for your ${give}`;
 }
 
 /**

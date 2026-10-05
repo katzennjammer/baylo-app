@@ -29,9 +29,10 @@ import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon } from "../../src/comp
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
+import { ChatBubble, useBubbleContentMax } from "../../src/components/messages/ChatBubble";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { offerHref, tradeHref } from "../../src/components/trades/present";
-import { color, font, radius, textStyle, type } from "../../src/theme/tokens";
+import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 
 function relativeTime(dateIso: string): string {
@@ -221,6 +222,7 @@ export default function MessagesThreadScreen() {
   const currentUserId = thread.data?.currentUserId ?? "";
   const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
   const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
+  const bubbleContentMax = useBubbleContentMax();
   const tradesById = new Map([
     ...(activeTrades.data?.trades ?? []),
     ...(tradeHistory.data?.trades ?? []),
@@ -303,66 +305,69 @@ export default function MessagesThreadScreen() {
               } catch {
                 // Plain-text messages are rendered unchanged.
               }
-                  const isOfferUpdate = (() => {
+              // System rows ("You declined the offer", "Trade completed") are
+              // centred pills belonging to neither side.
+              const payloadType = (() => {
                 try {
-                  return (JSON.parse(displayContent) as { type?: string }).type === "offer_update";
+                  return (JSON.parse(displayContent) as { type?: string }).type;
                 } catch {
-                  return false;
+                  return undefined;
                 }
               })();
+              const isOfferUpdate = payloadType === "offer_update";
+              const isSystem = isOfferUpdate || payloadType === "trade_completed";
               return (
-                <View key={message.id} style={[styles.bubbleRow, isOfferUpdate ? styles.bubbleRowStatus : mine ? styles.bubbleRowMine : styles.bubbleRowTheir]}>
-                  {!mine && !isOfferUpdate ? (
-                    <View style={styles.avatarColumn}>
-                      {otherAvatar ? (
-                        <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
-                      ) : (
-                        <View style={styles.messageAvatarFallback}>
-                          <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : null}
-                  <View style={[styles.messageContent, isOffer && styles.offerContent]}>
-                    <View style={[styles.bubble, isOfferUpdate || isOffer ? styles.statusBubble : mine ? styles.bubbleMine : styles.bubbleTheir]}>
-                      {renderMessageBody({
-                        content: displayContent,
-                        mine,
-                        onImagePress: setLightboxUrl,
-                        // An offer opens its trade screen; an offer_update's
-                        // "Open trade" passes the trade id it carries.
-                        onOfferPress: (id) => {
-                          router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
-                        },
-                        onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
-                        offerTradeId,
-                        partnerName: otherName,
-                        onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
-                        offerDetails: (() => {
-                          try {
-                            const payload = JSON.parse(message.content) as { offerId?: unknown };
-                            return typeof payload.offerId === "string"
-                              ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
-                              : undefined;
-                          } catch {
-                            return undefined;
-                          }
-                        })(),
-                        tradeDetails: (() => {
-                          try {
-                            const payload = JSON.parse(message.content) as { tradeId?: unknown };
-                            return typeof payload.tradeId === "string"
-                              ? tradesById.get(payload.tradeId)
-                              : undefined;
-                          } catch {
-                            return undefined;
-                          }
-                        })(),
-                      })}
-                    </View>
-                    <Text style={styles.time}>{relativeTime(message.createdAt)}</Text>
-                  </View>
-                </View>
+                <ChatBubble
+                  key={message.id}
+                  mine={mine}
+                  kind={isSystem ? "status" : isOffer ? "card" : "bubble"}
+                  time={relativeTime(message.createdAt)}
+                  avatar={
+                    otherAvatar ? (
+                      <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
+                    ) : (
+                      <View style={styles.messageAvatarFallback}>
+                        <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
+                      </View>
+                    )
+                  }
+                >
+                  {renderMessageBody({
+                    content: displayContent,
+                    mine,
+                    contentMax: bubbleContentMax,
+                    onImagePress: setLightboxUrl,
+                    // An offer opens its trade screen; an offer_update's
+                    // "Open trade" passes the trade id it carries.
+                    onOfferPress: (id) => {
+                      router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
+                    },
+                    onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
+                    offerTradeId,
+                    partnerName: otherName,
+                    onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
+                    offerDetails: (() => {
+                      try {
+                        const payload = JSON.parse(message.content) as { offerId?: unknown };
+                        return typeof payload.offerId === "string"
+                          ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
+                          : undefined;
+                      } catch {
+                        return undefined;
+                      }
+                    })(),
+                    tradeDetails: (() => {
+                      try {
+                        const payload = JSON.parse(message.content) as { tradeId?: unknown };
+                        return typeof payload.tradeId === "string"
+                          ? tradesById.get(payload.tradeId)
+                          : undefined;
+                      } catch {
+                        return undefined;
+                      }
+                    })(),
+                  })}
+                </ChatBubble>
               );
             })}
           </ScrollView>
@@ -527,24 +532,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
-  bubbleRow: {
-    marginBottom: 12,
-  },
-  bubbleRowMine: {
-    alignItems: "flex-end",
-  },
-  bubbleRowTheir: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    gap: 8,
-  },
-  bubbleRowStatus: {
-    alignItems: "center",
-  },
-  avatarColumn: {
-    width: 28,
-    alignSelf: "flex-end",
-  },
   messageAvatar: {
     width: 28,
     height: 28,
@@ -562,40 +549,6 @@ const styles = StyleSheet.create({
     fontFamily: font.displaySemi,
     fontSize: 12,
     color: color.surface,
-  },
-  bubble: {
-    maxWidth: "80%",
-    borderRadius: 16,
-    padding: 10,
-    borderWidth: 1,
-  },
-  messageContent: {
-    maxWidth: "80%",
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  bubbleMine: {
-    backgroundColor: color.forest,
-    borderColor: color.forest,
-  },
-  bubbleTheir: {
-    backgroundColor: color.control,
-    borderColor: color.divider,
-  },
-  offerContent: {
-    width: "88%",
-    maxWidth: 360,
-  },
-  statusBubble: {
-    maxWidth: "100%",
-    padding: 0,
-    borderWidth: 0,
-    backgroundColor: "transparent",
-  },
-  time: {
-    ...type.gridMeta,
-    color: color.inkSecondary,
-    marginTop: 4,
   },
   composer: {
     flexDirection: "row",
