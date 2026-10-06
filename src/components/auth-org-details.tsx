@@ -13,6 +13,7 @@ import { Tappable } from "./Tappable";
 import { StoreIcon } from "./icons";
 import {
   AuthScreen,
+  BandBackButton,
   BandRow,
   Banner,
   Body,
@@ -74,6 +75,7 @@ export function OrgDetailsStep({
   accessToken,
   onDone,
   onSkip,
+  inApp = false,
 }: {
   /**
    * The token the signup flow is holding but has NOT installed.
@@ -91,6 +93,15 @@ export function OrgDetailsStep({
   onDone: () => void;
   /** "Do this later" — continues as an ordinary account. Nothing is created. */
   onSkip: () => void;
+  /**
+   * True when opened from Settings by somebody already signed in (3 Oct 2026),
+   * rather than as a step of signup. Same form and same request; what changes
+   * is the frame: a back button instead of the server gear, copy that does not
+   * talk about an account that was "just created", and Cancel instead of "Do
+   * this later" -- there is no later step to continue to, only the screen they
+   * came from. `onSkip` is what both the back button and Cancel call.
+   */
+  inApp?: boolean;
 }) {
   // The token goes to the list fetch as well as to the create. During signup
   // the interceptor has nothing to attach, so without it this 401s and the
@@ -175,18 +186,24 @@ export function OrgDetailsStep({
       band={bandHeight.signIn}
       padTop={keyboardRule.sheetPadTopSignIn}
       bandContent={
-        <BandRow trailing={<ApiUrlGear variant="band" />}>
-          <Wordmark />
-        </BandRow>
+        inApp ? (
+          <BandRow leading={<BandBackButton onPress={onSkip} label="Back to settings" />}>
+            <Wordmark />
+          </BandRow>
+        ) : (
+          <BandRow trailing={<ApiUrlGear variant="band" />}>
+            <Wordmark />
+          </BandRow>
+        )
       }
     >
       <Headline variant="logIn">Tell us about the business</Headline>
 
       <View style={{ height: gap.headlineToBody }} />
       <Body>
-        Your account is already created. This adds the shop identity. Once we
-        have checked the document, you can post as the shop and it gets the
-        verified badge.
+        {inApp
+          ? "This adds a shop identity to your account. Once we have checked the document, you can post as the shop and it gets the verified badge."
+          : "Your account is already created. This adds the shop identity. Once we have checked the document, you can post as the shop and it gets the verified badge."}
       </Body>
 
       <View style={{ height: gap.bodyToControl.signIn }} />
@@ -246,11 +263,11 @@ export function OrgDetailsStep({
       <View style={{ flexGrow: 1 }} />
       <View style={{ height: gap.declarationToPrimary }} />
 
-      <PrimaryButton label="Save and continue" onPress={() => void submit()} busy={busy} disabled={busy} />
+      <PrimaryButton label={inApp ? "Register shop" : "Save and continue"} onPress={() => void submit()} busy={busy} disabled={busy} />
 
       <FooterPrompt
         prompt="Don't have the document to hand?"
-        label="Do this later"
+        label={inApp ? "Cancel" : "Do this later"}
         onPress={onSkip}
         disabled={busy}
       />

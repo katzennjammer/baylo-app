@@ -1481,6 +1481,8 @@ export function RejectionMark() {
 export interface PanelRow {
   label: string;
   value: string;
+  /** Label above value, value free to wrap. For a sentence, not a figure. */
+  stacked?: boolean;
 }
 
 /**
@@ -1509,10 +1511,10 @@ export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
         <View
           key={row.label}
           style={{
-            flexDirection: "row",
-            alignItems: "center",
+            flexDirection: row.stacked ? "column" : "row",
+            alignItems: row.stacked ? "flex-start" : "center",
             justifyContent: "space-between",
-            gap: gap.panelRow,
+            gap: row.stacked ? 6 : gap.panelRow,
             paddingVertical: board.panelY,
             borderTopWidth: i === 0 ? 0 : authSize.panelBorder,
             borderTopColor: sheetColor.panelLine,
@@ -1521,7 +1523,14 @@ export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
           <Text style={[authText(authType.panelLabel), { color: sheetColor.errorInk }]}>
             {row.label}
           </Text>
-          <Text style={[authText(valueRole), { color: sheetColor.ink }]}>{row.value}</Text>
+          <Text
+            style={[
+              authText(row.stacked ? authType.body : valueRole),
+              { color: sheetColor.ink },
+            ]}
+          >
+            {row.value}
+          </Text>
         </View>
       ))}
     </View>

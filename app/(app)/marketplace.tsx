@@ -295,6 +295,7 @@ export default function MarketplaceScreen() {
         }
         if (!permission.granted) {
           if (!cancelled) {
+            setUserLocation(null);
             setLocationDenied(true);
             setLocationState("unavailable");
           }
@@ -312,11 +313,17 @@ export default function MarketplaceScreen() {
           try {
             await withTimeout(Location.enableNetworkProviderAsync(), 8_000);
           } catch {
-            if (!cancelled) setLocationState("unavailable");
+            if (!cancelled) {
+              setUserLocation(null);
+              setLocationState("unavailable");
+            }
             return;
           }
           if (!(await Location.hasServicesEnabledAsync())) {
-            if (!cancelled) setLocationState("unavailable");
+            if (!cancelled) {
+              setUserLocation(null);
+              setLocationState("unavailable");
+            }
             return;
           }
         }
@@ -351,7 +358,10 @@ export default function MarketplaceScreen() {
           setLocationState("unavailable");
         }
       } catch {
-        if (!cancelled) setLocationState("unavailable");
+        if (!cancelled) {
+          setUserLocation(null);
+          setLocationState("unavailable");
+        }
       } finally {
         settled = true;
       }
@@ -429,20 +439,22 @@ export default function MarketplaceScreen() {
     return () => sub.remove();
   }, [view, locationState]);
 
+  const locationIsReady = locationState === "ready" && !!userLocation;
+
   const orderedHubs = useMemo(() => {
     const hubs = hubsQuery.data?.hubs ?? [];
-    if (!userLocation) return hubs;
+    if (!locationIsReady || !userLocation) return hubs;
     return [...hubs].sort(
       (a, b) =>
         distanceKm(userLocation.latitude, userLocation.longitude, a) -
         distanceKm(userLocation.latitude, userLocation.longitude, b),
     );
-  }, [hubsQuery.data?.hubs, userLocation]);
+  }, [hubsQuery.data?.hubs, locationIsReady, userLocation]);
 
   const nearbyHubs = useMemo(() => {
-    if (!userLocation) return [];
+    if (!locationIsReady || !userLocation) return [];
     return orderedHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT);
-  }, [orderedHubs, userLocation]);
+  }, [locationIsReady, orderedHubs, userLocation]);
 
   const visibleHubs = useMemo(() => {
     const needle = hubSearch.trim().toLowerCase();
@@ -454,8 +466,11 @@ export default function MarketplaceScreen() {
   }, [hubTypeFilter, hubSearch, orderedHubs]);
 
   const visibleNearbyHubs = useMemo(
-    () => visibleHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT),
-    [visibleHubs],
+    () => {
+      if (!locationIsReady || !userLocation) return [];
+      return visibleHubs.filter((hub) => hub.isActive).slice(0, NEARBY_HUB_LIMIT);
+    },
+    [locationIsReady, userLocation, visibleHubs],
   );
 
   const mapHubs: MapHub[] = useMemo(() => {

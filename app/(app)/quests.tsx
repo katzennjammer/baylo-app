@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -34,7 +35,29 @@ const TIER_TONE: Record<QuestTier, { fill: string; line: string; ink: string }> 
   HARD: { fill: color.urgentWash, line: color.urgentLine, ink: color.urgent },
 };
 
+/**
+ * Where "go do this" sends someone for a quest they haven't finished yet.
+ *
+ * Nothing ON THIS SCREEN completes a quest -- every one is satisfied by doing
+ * something elsewhere (posting, offering, trading) and credited on the next
+ * GET -- so tapping an unfinished card is navigation, not a claim. A quest
+ * key missing from this table (a new one the server added) renders as a
+ * plain, untappable card rather than a button that goes nowhere.
+ */
+const QUEST_ACTION: Record<string, { route: string; label: string }> = {
+  SEND_OFFER: { route: "/marketplace", label: "Browse listings" },
+  SEND_BRIDGE_OFFER: { route: "/marketplace", label: "Browse listings" },
+  FOLLOW_TRADER: { route: "/marketplace", label: "Find traders" },
+  LEAVE_REVIEW: { route: "/trades", label: "Review a trade" },
+  LIST_ITEM: { route: "/post-item", label: "List an item" },
+  RECEIVE_OFFER: { route: "/profile", label: "View your shelf" },
+  COMPLETE_TRADE: { route: "/trades", label: "View your trades" },
+  COMPLETE_BRIDGE_TRADE: { route: "/trades", label: "View your trades" },
+  COMPLETE_SAFEZONE_TRADE: { route: "/trades", label: "View your trades" },
+};
+
 export default function QuestsScreen() {
+  const router = useRouter();
   const { data, isPending, isError, isRefetching, refetch } = useQuests();
   useRefetchOnFocus(refetch);
 
@@ -90,7 +113,11 @@ export default function QuestsScreen() {
           ) : (
             <View style={s.list}>
               {data.quests.map((q) => (
-                <QuestRow key={q.quest} quest={q} />
+                <QuestRow
+                  key={q.quest}
+                  quest={q}
+                  onNavigate={(route) => router.push(route as never)}
+                />
               ))}
             </View>
           )}
@@ -100,11 +127,17 @@ export default function QuestsScreen() {
   );
 }
 
-function QuestRow({ quest }: { quest: Quest }) {
+function QuestRow({ quest, onNavigate }: { quest: Quest; onNavigate: (route: string) => void }) {
   const tone = TIER_TONE[quest.tier];
+  const action = quest.completed ? undefined : QUEST_ACTION[quest.quest];
   return (
-    <View
+    <Tappable
+      onPress={action ? () => onNavigate(action.route) : undefined}
+      disabled={!action}
+      accessibilityRole={action ? "button" : undefined}
+      accessibilityHint={action ? action.label : undefined}
       style={[s.card, quest.completed && s.cardDone]}
+      pressedStyle={action ? s.cardPressed : undefined}
       accessible
       accessibilityLabel={`${TIER_LABEL[quest.tier]} quest: ${quest.label}. ${quest.description} ${
         quest.completed ? "Done" : "Not done"
@@ -146,7 +179,11 @@ function QuestRow({ quest }: { quest: Quest }) {
           <View style={s.todoMark} />
         )}
       </View>
-    </View>
+
+      {action ? (
+        <Text style={[textStyle(type.homeSeeAll), s.action]}>{action.label} ›</Text>
+      ) : null}
+    </Tappable>
   );
 }
 
@@ -201,6 +238,8 @@ const s = StyleSheet.create({
     gap: 10,
   },
   cardDone: { backgroundColor: color.inset },
+  cardPressed: { backgroundColor: color.greenWash },
+  action: { color: color.forest },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   tier: {
     paddingHorizontal: space.tierBadge.x,

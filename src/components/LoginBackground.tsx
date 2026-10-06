@@ -55,7 +55,8 @@ import { BandVideo } from "../media/BandVideo";
  *
  * The three requirements this file used to list as future work now live in
  * `media/BandVideo.tsx`, which is where they are enforced — pause on blur and
- * on background, Reduce Motion, and the `textureView` surface the fade needs.
+ * on background, Reduce Motion, and the choice of video surface (now
+ * `surfaceView` -- see the note there for the crash that forced it).
  * One thing did NOT move, because it is a property of this layer: the scrim is
  * painted over the video, not under it, so the cream band chrome keeps its
  * measured contrast against a known surface instead of against frame 412.

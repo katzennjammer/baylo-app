@@ -230,11 +230,14 @@ function sendFailure(cause: unknown): never {
  * `{ error: string }`, sometimes with a `code` and sometimes with `issues`.
  * Nothing under /api/auth uses the v1 envelope — see the note on authenticate().
  */
-type LegacyErrorBody = { error?: string; code?: string; issues?: FieldIssue[] };
+type LegacyErrorBody = { error?: string; code?: string; issues?: FieldIssue[] } & Record<string, unknown>;
 
 /** Turns a non-2xx from an /api/auth endpoint into the one error type. */
 export async function legacyFailure(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as LegacyErrorBody;
+  // Whatever else the route said goes through as `meta`, so a screen can read
+  // it by name: a suspension's reason and dates arrive this way.
+  const { error: _error, code: _code, issues: _issues, ...extra } = body;
   const header = res.headers.get("Retry-After");
   const retryAfter = header ? Number(header) : null;
 
@@ -244,6 +247,7 @@ export async function legacyFailure(res: Response, fallback: string): Promise<ne
     body.error ?? fallback,
     Array.isArray(body.issues) ? body.issues : [],
     retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
+    extra,
   );
 }
 
@@ -694,12 +698,20 @@ async function revokeFamily(base: string, refreshToken: string): Promise<void> {
  * This is also the path a dead refresh token takes — performRefresh() calls it
  * on a terminal 401. Revoking an already-revoked family is a 200 and a no-op,
  * which is why that costs nothing and needs no special case.
+ *
+ * `revoke: false` is for the one caller that KNOWS the family is already dead
+ * server-side: account deletion, where DELETE /api/user revoked every refresh
+ * token in the same transaction. Skipping the call there means the caller's
+ * `await` is not held for up to REVOKE_TIMEOUT_MS by a request that can only
+ * be a no-op. Everything else — the local clear, publish() — is unchanged.
  */
-export async function signOut(): Promise<void> {
+export async function signOut(options: { revoke?: boolean } = {}): Promise<void> {
   const refreshToken = memory?.refreshToken;
   const base = getApiBase();
+  const shouldRevoke = options.revoke !== false;
 
-  const revoking = refreshToken && base ? revokeFamily(base, refreshToken) : null;
+  const revoking =
+    shouldRevoke && refreshToken && base ? revokeFamily(base, refreshToken) : null;
 
   memory = null;
   try {

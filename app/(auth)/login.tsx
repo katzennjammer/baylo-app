@@ -13,6 +13,10 @@ import { ApiUrlGear } from "../../src/components/ApiUrlGear";
 import { useGoogleSignIn } from "../../src/auth/google";
 import { useSession } from "../../src/auth/session";
 import { UnderAgeSheet } from "../../src/components/auth-under-age";
+import { SuspendedSheet } from "../../src/components/auth-suspended";
+import { suspensionFrom, type SuspensionNotice } from "../../src/lib/suspension";
+import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
+import { OrgDetailsStep } from "../../src/components/auth-org-details";
 import {
   AuthScreen,
   BandBackButton,
@@ -68,22 +72,84 @@ import { isAdult, isoDate, type DateParts } from "../../src/lib/dob";
  * ends the same way, through the same guard — the Google exchange included.
  */
 
-type Mode = "choose" | "email" | "dob" | "rejected";
+/**
+ * ── A NEW GOOGLE ACCOUNT CHOOSES ITS TYPE TOO (30 Sep 2026) ─────────────────
+ *
+ * Email signup starts with "Trader or MSME?" (register.tsx). Google signup used
+ * to skip straight to the date of birth, and nothing else in the app creates an
+ * organisation, so an account made with Google could never become a shop. A
+ * Google account that still owes a date of birth is a new one, so it now walks
+ * the same steps: account type → date of birth → (MSME) business details, with
+ * the pair HELD, not installed, until the last step — the same reason the
+ * register flow holds it: installing it trips the (auth) guard mid-signup.
+ *
+ * "Decide later" and "Do this later" leave an ordinary account, exactly as in
+ * email signup. A returning Google user owes nothing and sees none of this.
+ */
+type Mode = "choose" | "email" | "account-type" | "dob" | "org-details" | "rejected" | "suspended";
 
 export default function LoginScreen() {
+  const { adoptSession } = useSession();
   const [mode, setMode] = useState<Mode>("choose");
 
-  /** The Google pair being held while the date-of-birth step is on screen. */
+  /** The Google pair being held while the signup steps are on screen. */
   const [pending, setPending] = useState<GoogleExchange | null>(null);
   /** The date that was refused, so the rejection screen can show its working. */
   const [refused, setRefused] = useState<DateParts | null>(null);
+  /** Trader or MSME, for a NEW Google account. Null = "decide later". */
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
+  /** What the server said when it refused a sign-in for a suspension. */
+  const [suspension, setSuspension] = useState<SuspensionNotice | null>(null);
+
+  // One handler for both ways in, so email and Google land on the same sheet.
+  function showSuspended(notice: SuspensionNotice) {
+    setSuspension(notice);
+    setMode("suspended");
+  }
 
   const google = useGoogleSignIn({
+    onSuspended: showSuspended,
     onNeedsDateOfBirth: (exchange) => {
       setPending(exchange);
-      setMode("dob");
+      setAccountType(null);
+      setMode("account-type");
     },
   });
+
+  function abandonGoogleSignup() {
+    setPending(null);
+    setRefused(null);
+    setAccountType(null);
+    setMode("choose");
+  }
+
+  if (mode === "account-type" && pending) {
+    return (
+      <AccountTypeStep
+        value={accountType}
+        onChange={setAccountType}
+        onContinue={() => setMode("dob")}
+        onSkip={() => {
+          setAccountType(null);
+          setMode("dob");
+        }}
+        onBack={abandonGoogleSignup}
+      />
+    );
+  }
+
+  if (mode === "org-details" && pending) {
+    const finish = () => void adoptSession(pending.session);
+    return (
+      <OrgDetailsStep
+        // Held, not installed -- see the note above. Without it every call
+        // this screen makes is unauthenticated.
+        accessToken={pending.session.accessToken}
+        onDone={finish}
+        onSkip={finish}
+      />
+    );
+  }
 
   if (mode === "rejected") {
     return (
@@ -92,11 +158,7 @@ export default function LoginScreen() {
         onCorrect={() => setMode(pending ? "dob" : "choose")}
         secondary={{
           label: pending ? "Use a different account" : "Back to sign in",
-          onPress: () => {
-            setPending(null);
-            setRefused(null);
-            setMode("choose");
-          },
+          onPress: abandonGoogleSignup,
         }}
         onBack={() => setMode(pending ? "dob" : "choose")}
       />
@@ -111,20 +173,30 @@ export default function LoginScreen() {
         // my date of birth" comes back to a picker that still holds the wrong
         // year rather than to three empty columns.
         initialDob={refused}
+        step={3}
+        totalSteps={accountType === "organization" ? 4 : 3}
         onRejected={(dob) => {
           setRefused(dob);
           setMode("rejected");
         }}
-        onAbandon={() => {
-          setPending(null);
-          setMode("choose");
+        onAccepted={async () => {
+          if (accountType === "organization") {
+            setMode("org-details");
+            return;
+          }
+          await adoptSession(pending.session);
         }}
+        onAbandon={() => setMode("account-type")}
       />
     );
   }
 
+  if (mode === "suspended" && suspension) {
+    return <SuspendedSheet notice={suspension} onBack={() => setMode("choose")} />;
+  }
+
   if (mode === "email") {
-    return <EmailLogIn google={google} onBack={() => setMode("choose")} />;
+    return <EmailLogIn google={google} onSuspended={showSuspended} onBack={() => setMode("choose")} />;
   }
 
   return <ChooseHowToSignIn google={google} onEmail={() => setMode("email")} />;
@@ -170,7 +242,10 @@ function ChooseHowToSignIn({
   // hydrationError is LAST on purpose. It explains why this screen is showing
   // at all — boot could not read the stored session — which matters right up
   // until the user tries something and not one moment after.
-  const banner = google.error ?? hydrationError;
+  //
+  // unavailableReason sits between them: a greyed-out Google button cannot be
+  // tapped, so without this nothing on the screen says WHY it is grey.
+  const banner = google.error ?? google.unavailableReason ?? hydrationError;
 
   return (
     <AuthScreen
@@ -233,9 +308,11 @@ function ChooseHowToSignIn({
 
 function EmailLogIn({
   google,
+  onSuspended,
   onBack,
 }: {
   google: ReturnType<typeof useGoogleSignIn>;
+  onSuspended: (notice: SuspensionNotice) => void;
   onBack: () => void;
 }) {
   const { signIn, hydrationError } = useSession();
@@ -262,6 +339,13 @@ function EmailLogIn({
       await signIn(email.trim(), password);
       // No redirect here — see the note at the top of the file.
     } catch (err) {
+      // A suspension gets its own screen -- the reason, the dates and how to
+      // appeal do not fit in a banner.
+      const notice = suspensionFrom(err);
+      if (notice) {
+        onSuspended(notice);
+        return;
+      }
       // The server's message is shown verbatim for a reason: 401 is always the
       // deliberately vague "Invalid email or password" (telling the two apart
       // would make this endpoint an account-enumeration oracle), while 403
@@ -422,16 +506,27 @@ function EmailLogIn({
 function GoogleDateOfBirth({
   pending,
   initialDob,
+  step,
+  totalSteps,
   onRejected,
+  onAccepted,
   onAbandon,
 }: {
   pending: GoogleExchange;
   initialDob: DateParts | null;
+  /** Where this screen sits in the Google signup, for the band's counter. */
+  step: number;
+  totalSteps: number;
   onRejected: (dob: DateParts) => void;
+  /**
+   * The date was saved. The PARENT decides what comes next — the business
+   * details for an MSME, or adopting the session — because this screen does
+   * not know which kind of account is being made.
+   */
+  onAccepted: () => Promise<void> | void;
+  /** Back one step (the account type). */
   onAbandon: () => void;
 }) {
-  const { adoptSession } = useSession();
-
   const [dob, setDob] = useState<DateParts | null>(initialDob);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -455,10 +550,10 @@ function GoogleDateOfBirth({
     setError(null);
     try {
       await submitDateOfBirth(pending.session.accessToken, isoDate(dob));
-      // Only now. Adopting installs the session and the guard routes into the
-      // app; doing it before the date was accepted would leave an account in
-      // exactly the state this screen exists to fix.
-      await adoptSession(pending.session);
+      // Only now. The parent adopts the session (or moves on to the business
+      // details first); adopting before the date was accepted would leave an
+      // account in exactly the state this screen exists to fix.
+      await onAccepted();
     } catch (err) {
       if (err instanceof ApiError && err.code === "UNDER_18") {
         onRejected(dob);
@@ -476,10 +571,10 @@ function GoogleDateOfBirth({
       band={bandHeight.googleDob}
       bandContent={
         <>
-          <BandRow leading={<BandBackButton onPress={onAbandon} label="Back to sign in" />}>
+          <BandRow leading={<BandBackButton onPress={onAbandon} label="Back to account type" />}>
             <Wordmark />
           </BandRow>
-          <BandEyebrow>Step 2 of 2</BandEyebrow>
+          <BandEyebrow>{`Step ${step} of ${totalSteps}`}</BandEyebrow>
           <GoogleAccountCard
             name={pending.session.user.name}
             email={pending.session.user.email}

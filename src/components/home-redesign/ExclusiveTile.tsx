@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { memo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { BoltIcon, ImageIcon, LeafIcon, StarIcon, VerifiedOrgIcon } from "../icons";
+import { BoltIcon, ImageIcon, LeafIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
   border,
@@ -34,11 +34,10 @@ import { OrgChips } from "../OrgChips";
  * Colours come from `tokens.dark` only. The photo loads through expo-image
  * with GridTile's own 120 ms transition and the same failed-photo fallback.
  *
- * Badges: bolt = perishable, star = a live Featured boost, rosette = verified
- * MSME. An org poster's business category rides on the scrim under the poster
- * line as a chip (OrgChips, rosette suppressed -- the icon column already
- * draws it). Bolt and star never meet on one tile — the server refuses to boost a
- * perishable and /featured filters them out — but each is decided on its own.
+ * Badges: bolt = perishable, rosette = verified MSME. An org poster's business
+ * category rides on the scrim under the poster line as a chip (OrgChips,
+ * rosette suppressed -- the icon column already draws it). The star badge for a
+ * paid Featured boost went with the boosting feature (2 Oct 2026).
  *
  * Value follows GridTile's rule: the exact figure on your own listing, the
  * bracket on everyone else's.
@@ -50,7 +49,6 @@ export const ExclusiveTile = memo(function ExclusiveTile({
   viewerId = null,
   showPerishableBadge,
   showOrgBadge,
-  showFeaturedBadge,
   expiryLabel,
 }: {
   item: Item;
@@ -61,8 +59,6 @@ export const ExclusiveTile = memo(function ExclusiveTile({
   showPerishableBadge?: boolean;
   /** Defaults to a VERIFIED org owner only — see ownerBadge() in lib/org. */
   showOrgBadge?: boolean;
-  /** Defaults to a live boost (`item.featuredUntil` set). */
-  showFeaturedBadge?: boolean;
   /** This listing's own window, e.g. "~4h left". Shown on the meta line. */
   expiryLabel?: string;
 }) {
@@ -71,8 +67,6 @@ export const ExclusiveTile = memo(function ExclusiveTile({
   const own = viewerId !== null && item.owner.id === viewerId;
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
   const perishable = showPerishableBadge ?? item.perishable != null;
-  // `!= null`: a server without boosts omits the key.
-  const featured = showFeaturedBadge ?? item.featuredUntil != null;
   const org = showOrgBadge ?? item.owner.org?.verified === true;
   const poster = item.owner.org?.name ?? item.owner.name;
 
@@ -83,7 +77,6 @@ export const ExclusiveTile = memo(function ExclusiveTile({
       accessibilityLabel={
         `${item.title}, from ${poster}.` +
         (perishable ? " Perishable." : "") +
-        (featured ? " Featured." : "") +
         (expiryLabel ? ` ${expiryLabel}.` : "") +
         (org ? ` ${ORG_BADGE_LABEL.full}.` : "") +
         (item.owner.org ? ` ${businessCategoryLabel(item.owner.org.businessCategory)}.` : "") +
@@ -110,16 +103,11 @@ export const ExclusiveTile = memo(function ExclusiveTile({
         </View>
       )}
 
-      {perishable || featured || org ? (
+      {perishable || org ? (
         <View style={s.badges} pointerEvents="none">
           {perishable ? (
             <View style={[s.badge, { backgroundColor: color.urgentWash }]}>
               <BoltIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.urgent} />
-            </View>
-          ) : null}
-          {featured ? (
-            <View style={[s.badge, { backgroundColor: color.control }]}>
-              <StarIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.ink} />
             </View>
           ) : null}
           {org ? (

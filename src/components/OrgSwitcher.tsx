@@ -20,12 +20,12 @@ import { color, icon, radius, textStyle, type } from "../theme/tokens";
  *
  * ── WITHOUT THIS SCREEN THE FEATURE IS HALF-BUILT ───────────────────────────
  *
- * Creating an organisation switches to it automatically, so the founder never
- * needs a switcher. Everybody else does: a staff member who accepts an
- * invitation has an ACTIVE membership the server will honour and no way to
- * exercise it, because the context header is only ever set from here or from
- * the create flow. An invitation that cannot be acted on is an invitation that
- * did nothing.
+ * Creating an organisation switches to it automatically, but the owner still
+ * needs a way back to themselves, and back to the shop again: the context
+ * header is only ever set from here or from the create flow.
+ *
+ * OWNER ONLY (2 Oct 2026). Staff and staff invitations were removed, so every
+ * shop listed here is one this person owns, and there is no Invitations list.
  *
  * ── THE ACTIVE CONTEXT IS READ, NOT STORED IN STATE ─────────────────────────
  *
@@ -41,7 +41,7 @@ import { color, icon, radius, textStyle, type } from "../theme/tokens";
  *
  * Every cached list was fetched as somebody. After a switch, the shelf, the
  * offers and the trades all belong to a different account, and serving the
- * previous identity's cache under the new one is how a staff member sees the
+ * previous identity's cache under the new one is how an owner sees the
  * shop's listings labelled as their own. `invalidateQueries()` with no key
  * drops the lot, which is heavy-handed and correct: this is a rare action, and
  * anything cheaper means auditing every query key for identity-dependence
@@ -240,18 +240,5 @@ const rowStyles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     backgroundColor: color.control,
-  },
-  accept: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: color.green,
-  },
-  decline: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: color.controlLineStrong,
   },
 };

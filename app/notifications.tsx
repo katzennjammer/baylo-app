@@ -188,7 +188,10 @@ function NotificationRow({
             textStyle(offerType.body),
             { color: wasUnread ? offerColor.ink : offerColor.inkSecondary },
           ]}
-          numberOfLines={3}
+          // A row with nowhere to go is shown whole: this list is the only
+          // place its message exists, so cutting it at three lines loses the
+          // rest for good (a suspension notice runs to six or seven).
+          numberOfLines={target ? 3 : undefined}
         >
           {line}
         </Text>

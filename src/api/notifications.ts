@@ -184,6 +184,10 @@ export function notificationTarget(n: NotificationItem): string | null {
       return "/verify-id";
     case "listing_review":
       return id ? `/listing-review?id=${encodeURIComponent(id)}` : null;
+    // The "Welcome back" notice. The id is the Suspension's; the screen shows
+    // the full record -- reason, dates, how it ended -- behind the sentence.
+    case "suspension":
+      return id ? `/suspension?id=${encodeURIComponent(id)}` : null;
     default:
       return null;
   }

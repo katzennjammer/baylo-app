@@ -128,9 +128,7 @@ export default function HomeScreen() {
 
   // Unfiltered: the category circles (facets) and the hero come from it.
   //
-  // TODO(home-redesign): the hero is still the first listing with a photo. It
-  // is deliberately NOT drawn from the Featured boosts: that would be a second,
-  // uncapped paid placement above the section whose cap is the guardrail.
+  // TODO(home-redesign): the hero is still the first listing with a photo.
   const browse = useBrowse({ categories: [] });
   const { items, facets, isPending, isError, isRefetching } = browse;
   const hero = useMemo(() => items.find((i) => i.images.length > 0) ?? null, [items]);
@@ -417,12 +415,6 @@ const s = StyleSheet.create({
   rail: {
     paddingHorizontal: space.screenX,
     gap: space.browse.gridGap,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.browse.gridGap,
-    paddingHorizontal: space.screenX,
   },
   empty: { color: color.inkMuted, paddingHorizontal: space.screenX },
 });

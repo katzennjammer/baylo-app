@@ -309,7 +309,9 @@ function IntroPlayer({
         style={{ flex: 1 }}
         contentFit="cover"
         nativeControls={false}
-        surfaceType="textureView"
+        // Not textureView: that path crashes Android's renderer on MediaTek/Mali
+        // phones. See the note in src/media/BandVideo.tsx.
+        surfaceType="surfaceView"
         useExoShutter={false}
         onFirstFrameRender={onFirstFrame}
         accessibilityElementsHidden

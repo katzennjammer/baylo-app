@@ -68,12 +68,6 @@ export function isOrgPostingRefusal(e: unknown): e is ApiError {
   );
 }
 
-export interface OrgInvitation {
-  membershipId: string;
-  invitedAt: string;
-  organization: { id: string; name: string; logoUrl: string | null };
-}
-
 export interface BusinessCategoryOption {
   value: string;
   label: string;
@@ -81,7 +75,6 @@ export interface BusinessCategoryOption {
 
 export interface OrganizationsPayload {
   organizations: ActingOrg[];
-  invitations: OrgInvitation[];
   businessCategories: BusinessCategoryOption[];
   limits: { maxNameLength: number; maxImageBytes: number; maxDtiLength?: number };
 }

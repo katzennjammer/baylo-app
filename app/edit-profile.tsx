@@ -1,11 +1,13 @@
 import { useRouter } from "expo-router";
+
+import { goBack } from "../src/lib/go-back";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { request } from "../src/api/client";
+import { ApiError, legacyFailure, request } from "../src/api/client";
 import { useProfileMe } from "../src/api/profile";
 import { uploadPhoto } from "../src/api/post";
 import { color, font } from "../src/theme/tokens";
@@ -62,9 +64,12 @@ export default function EditProfileScreen() {
       const response = await request("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio, location, avatar }),
+        // `avatar` only when there is one. The server takes a string or no key
+        // at all, and `null` -- what an account without a photo holds -- was a
+        // 400 that made every save fail for those accounts.
+        body: JSON.stringify({ name, bio, location, ...(avatar ? { avatar } : {}) }),
       });
-      if (!response.ok) throw new Error("Could not save profile");
+      if (!response.ok) await legacyFailure(response, "Could not save profile");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["profile", "me"] }),
         queryClient.invalidateQueries({ queryKey: ["home"] }),
@@ -72,9 +77,14 @@ export default function EditProfileScreen() {
         queryClient.invalidateQueries({ queryKey: ["profile"] }),
       ]);
       await refetch();
-      router.back();
-    } catch {
-      showDialog("Could not save profile", "Check your connection and try again.");
+      goBack(router);
+    } catch (e) {
+      // A 4xx carries the server's own reason ("Name cannot be empty"); only a
+      // transport failure or a 5xx is really about the connection.
+      showDialog(
+        "Could not save profile",
+        e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -92,7 +102,7 @@ export default function EditProfileScreen() {
     <Field label="Location" value={location} onChangeText={setLocation} />
     {saving ? <ActivityIndicator color={color.green} style={s.spinner} /> : null}
     </ScrollView>
-    <View style={s.bottomActions}><Pressable onPress={() => router.back()} style={s.cancelButton} accessibilityRole="button"><Text style={s.cancelText}>Cancel</Text></Pressable><Pressable onPress={() => void save()} disabled={saving || uploadingAvatar || !name.trim()} style={[s.saveButton, (saving || uploadingAvatar || !name.trim()) && s.disabled]} accessibilityRole="button"><Text style={s.saveText}>{saving ? "Saving..." : "Save"}</Text></Pressable></View>
+    <View style={s.bottomActions}><Pressable onPress={() => goBack(router)} style={s.cancelButton} accessibilityRole="button"><Text style={s.cancelText}>Cancel</Text></Pressable><Pressable onPress={() => void save()} disabled={saving || uploadingAvatar || !name.trim()} style={[s.saveButton, (saving || uploadingAvatar || !name.trim()) && s.disabled]} accessibilityRole="button"><Text style={s.saveText}>{saving ? "Saving..." : "Save"}</Text></Pressable></View>
   </View>;
 }
 

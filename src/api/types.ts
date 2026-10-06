@@ -186,12 +186,6 @@ export interface Item {
     expiresAt: string;
     expired: boolean;
   } | null;
-  /**
-   * When this listing's paid Featured boost ends, or null when it is not
-   * featured right now (never boosted, or the window has passed). The server
-   * computes it against the clock, so null is safe to read as "can boost".
-   */
-  featuredUntil: string | null;
   /** Categories the owner will take back. `[]` means none were stated. */
   lookingFor: string[];
   lookingForLabels: string[];
@@ -230,7 +224,7 @@ export interface BrowseOrgMatch {
   follow?: FollowStatus;
   /** ACCEPTED followers of the shop. */
   followers?: number;
-  /** The viewer is an ACTIVE member (owner or staff): no Follow on their own shop. */
+  /** The viewer owns this shop: no Follow on their own shop. */
   isMember?: boolean;
 }
 
@@ -480,6 +474,12 @@ export interface ProfileMePayload {
     lifetimeLeaves: number;
     rank: { label: string; next: { label: string; toNext: number } | null };
     isVerified: boolean;
+    /**
+     * False for an account made with Google that never set a password. Optional:
+     * a server older than 3 Oct 2026 omits it, and Settings then says nothing
+     * about how the account signs in rather than guessing.
+     */
+    hasPassword?: boolean;
     createdAt: string;
   };
   counts: {
@@ -522,8 +522,7 @@ export interface PublicProfilePayload {
      *
      * THE SCREEN BRANCHES ON THIS AND NOTHING ELSE: square logo instead of a
      * round avatar, the shop-front placeholder instead of initials, the
-     * verified badge instead of the trust tier, and the staff count instead of
-     * Followers/Following. The rest of the profile -- posts grid, Follow,
+     * verified badge instead of the trust tier. The rest of the profile -- posts grid, Follow,
      * Message, tabs -- is identical, which is why this is one extra field and
      * not a second payload shape.
      *
@@ -532,7 +531,6 @@ export interface PublicProfilePayload {
      */
     org: (OrgBadge & {
       createdAt: string;
-      staffCount: number;
       /**
        * The storefront fields. OPTIONAL on the wire, not just nullable: a
        * server from before the storefront omits them, and the storefront then
@@ -542,14 +540,11 @@ export interface PublicProfilePayload {
       description?: string | null;
       /** COMPLETED trades on either side, counted from the rows. */
       completedTrades?: number;
-      /** The viewer's ACTIVE role in this org, or null for a non-member. */
-      viewerRole?: "OWNER" | "STAFF" | null;
+      /** "OWNER" when the viewer owns this shop, else null. Staff were removed (2 Oct 2026). */
+      viewerRole?: "OWNER" | null;
     }) | null;
   };
-  counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following"> & {
-    /** ACTIVE staff, or null for a person. Sent beside followers, not instead. */
-    staff: number | null;
-  };
+  counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following">;
   follow: {
     status: "NONE" | "PENDING" | "ACCEPTED";
     followsYou: boolean;
@@ -849,8 +844,8 @@ export interface NotificationItem {
   /** The lead photo for an item notification, when the event has no actor. */
   itemImage: string | null;
   /**
-   * The organisation an `org_invite` or `organization` row is about. Its logo
-   * is the row's picture, in place of the inviting owner's face. Absent from a
+   * The organisation an `organization` row is about. Its logo is the row's
+   * picture. Absent from a
    * server older than 25 Sep 2026.
    */
   org?: { id: string; name: string; logoUrl: string | null } | null;

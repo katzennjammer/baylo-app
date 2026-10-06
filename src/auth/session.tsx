@@ -66,7 +66,8 @@ interface SessionState {
    * the user away mid-sentence.
    */
   adoptSession: (session: StoredSession) => Promise<void>;
-  signOut: () => Promise<void>;
+  /** `revoke: false` only when the server already revoked the tokens (account deletion). */
+  signOut: (options?: { revoke?: boolean }) => Promise<void>;
 }
 
 const SessionContext = createContext<SessionState | null>(null);
@@ -209,9 +210,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const adoptSession = install;
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { revoke?: boolean }) => {
     try {
-      await apiSignOut();
+      await apiSignOut(options);
     } finally {
       // The acting organisation goes with the session it qualified. Leaving it
       // behind means the next person to sign in on this device starts out

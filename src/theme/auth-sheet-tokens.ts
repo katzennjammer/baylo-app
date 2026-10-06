@@ -341,7 +341,9 @@ export const authSize = {
 
   /** The rule beside the label in an "or" divider, and the row's own height. */
   dividerRule: 1,
-  dividerLabelRow: 11,
+  // 20, not the spec's 11: the label's line is 19.5 tall, and Android clips a
+  // Text to a shorter row -- "or" rendered as a sliver of its bottom edge.
+  dividerLabelRow: 20,
 
   /** Field and outline-button border weights. */
   inputBorder: 1,

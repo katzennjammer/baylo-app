@@ -49,14 +49,11 @@ import { Tappable } from "./Tappable";
  * imports nothing from a route file, so profile.tsx can render it without an
  * import cycle.
  *
- * ── THE STAFF ROSTER IS FOR MEMBERS ONLY ────────────────────────────────────
+ * ── OWNER ONLY ──────────────────────────────────────────────────────────────
  *
- * A non-member sees the Staff COUNT and nothing else. Staff are private people
- * who agreed to post for a shop, not to be listed by name to every stranger
- * who opens it; a public roster is a directory of a small business's employees
- * for anyone with a grudge against one. The server already enforces this —
- * GET .../members 404s a non-member — and `viewerRole` is what stops the
- * client asking.
+ * Staff, the staff roster and staff invitations were removed on 2 Oct 2026. A
+ * shop is its owner: `viewerRole` is "OWNER" for them and null for everybody
+ * else, and that is the only thing this header branches on.
  *
  * ── EVERY NUMBER AND EVERY CHECKMARK IS A REAL ROW ──────────────────────────
  *
@@ -73,9 +70,12 @@ type Palette = typeof lightPalette;
  *
  * In short: edge-to-edge makes `adjustResize` a no-op, so the window never
  * shrinks and the list keeps scrolling UNDER the keyboard. The host gives the
- * IME's height back as the list's `marginBottom`; without it there is no
- * scroll range to bring the invite field up into. `useKeyboardState()` is the
+ * IME's height back as the list's `marginBottom`. `useKeyboardState()` is the
  * same auth-sheet hook the post flow and the auth screens measure with.
+ *
+ * STAFF INVITES WERE REMOVED (2 Oct 2026), and the invite field was the only
+ * text input on this header. The hook and the two props it feeds stay so the
+ * host screens need no change; nothing here reads them any more.
  */
 export function useStorefrontKeyboard() {
   const { height } = useWindowDimensions();
@@ -91,7 +91,6 @@ export function OrgStorefrontHeader({
   dark,
   org,
   counts,
-  viewerId,
   follow,
   onMessage,
   onEdit,
@@ -101,9 +100,9 @@ export function OrgStorefrontHeader({
   dark: boolean;
   org: Org;
   counts: PublicProfilePayload["counts"];
-  /** The signed-in PERSON, so the owner is not offered "Remove" on their own row. */
-  viewerId: string | null;
-  /** Follow + Message are for outsiders. Members get Edit / Share instead. */
+  /** Unused since the staff roster was removed; accepted so hosts need no change. */
+  viewerId?: string | null;
+  /** Follow + Message are for outsiders. The owner gets Edit / Share instead. */
   follow: { label: string; busy: boolean; disabled: boolean; primary: boolean; onPress: () => void };
   onMessage: () => void;
   onEdit: () => void;
@@ -190,7 +189,7 @@ export function OrgStorefrontHeader({
           {counts.followers === 1 ? " follower" : " followers"}
         </Text>
 
-        {/* ── Actions: members manage and share; everyone else follows and messages. ── */}
+        {/* ── Actions: the owner manages and shares; everyone else follows and messages. ── */}
         <View style={s.actions}>
           {isOwner ? (
             <>
@@ -207,7 +206,7 @@ export function OrgStorefrontHeader({
           )}
         </View>
 
-        {/* ── Business numbers. All three are real counts from the server. ── */}
+        {/* ── Business numbers. Both are real counts from the server. ── */}
         <View style={[s.statsCard, { borderColor: palette.divider, backgroundColor: palette.surface }]}>
           <Stat palette={palette} label="Active listings" value={counts.listed} />
           <Stat palette={palette} label="Trades completed" value={completedTrades} ruled />
@@ -230,7 +229,7 @@ export function OrgStorefrontHeader({
 
 /**
  * "Finish setting up" — the OWNER's checklist. Every step is read from a real
- * field, and the card is gone once all four are done:
+ * field, and the card is gone once all three are done:
  *
  *   Get verified            org.verified (the admin's decision; no CTA, the
  *                           owner cannot do anything but wait)
@@ -463,40 +462,6 @@ const s = StyleSheet.create({
   },
   stepMarkDone: { backgroundColor: color.green, borderColor: color.green },
   stepDone: { textDecorationLine: "line-through" },
-  staff: { marginTop: space.storefront.staffTop },
-  staffHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: size.storefront.pill },
-  invitePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    height: size.storefront.pill,
-    paddingHorizontal: size.storefront.pillX,
-    borderWidth: border.dashed,
-    borderRadius: radius.storefrontPill,
-  },
-  inviteRow: { flexDirection: "row", gap: space.storefront.inviteGap, marginTop: space.storefront.inviteTop },
-  inviteInput: {
-    flex: 1,
-    minWidth: 0,
-    height: size.storefront.input,
-    borderWidth: border.hairline,
-    borderRadius: radius.storefrontInput,
-    paddingHorizontal: 12,
-  },
-  inviteButton: {
-    height: size.storefront.input,
-    paddingHorizontal: 16,
-    borderRadius: radius.storefrontInput,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sent: { marginTop: 8 },
-  staffSpinner: { marginVertical: 12 },
-  staffError: { marginTop: space.storefront.staffRowTop },
-  staffRow: { flexDirection: "row", alignItems: "center", gap: space.storefront.staffGap, marginTop: space.storefront.staffRowTop },
-  staffAvatar: { width: size.storefront.staffAvatar, height: size.storefront.staffAvatar, borderRadius: size.storefront.staffAvatar / 2 },
-  staffAvatarFallback: { alignItems: "center", justifyContent: "center" },
-  manage: { minHeight: 44, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingVertical: space.storefront.emptyY, paddingHorizontal: space.screenX, gap: space.storefront.emptyGap },
   emptyText: { textAlign: "center" },
   emptyBody: { maxWidth: 260 },
@@ -519,7 +484,6 @@ const lightPalette = {
   link: color.forest,
   wash: color.greenWash,
   onWash: color.forest,
-  inviteOff: color.greenLine,
 };
 const darkPalette: Palette = {
   surface: darkTokens.surface,
@@ -533,5 +497,4 @@ const darkPalette: Palette = {
   link: darkTokens.green,
   wash: darkTokens.greenWash,
   onWash: darkTokens.onGreenWash,
-  inviteOff: darkTokens.greenWash,
 };

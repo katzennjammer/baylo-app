@@ -13,7 +13,7 @@ import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
 import { color, font } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
-import { getActingOrgId, hasChosenActingOrg } from "../../src/api/org-context";
+import { getActingOrgId } from "../../src/api/org-context";
 import { StoreIcon } from "../../src/components/icons";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
@@ -103,13 +103,6 @@ export default function ProfileScreen() {
   const shops = (orgsData?.data.organizations ?? []).filter((o) => !!o.orgUserId);
   const shopOnly = profile?.hasPersonalActivity === false && shops.length > 0;
   const actingShop = actingOrg?.orgUserId ? actingOrg : undefined;
-  // ...UNLESS they picked "Myself" this session. The routing above is a
-  // DEFAULT for somebody who has not chosen yet; a null context alone cannot
-  // tell "never touched the switcher" from "just chose Myself in Settings",
-  // and until 26 Sep 2026 this tab treated both as the former and kept
-  // showing the storefront after an explicit switch. Acting as a shop still
-  // shows the shop either way.
-  const showShopOnly = shopOnly && (!!actingShop || !hasChosenActingOrg());
   // One shop: that one. Several: whichever this device is acting as, or the
   // picker until one is chosen.
   const shownShop = actingShop ?? (shops.length === 1 ? shops[0] : undefined);
@@ -136,14 +129,16 @@ export default function ProfileScreen() {
     }
   }, [selectShop]);
 
-  // One shop and nothing chosen yet this session: adopt the shop. Adopting is
-  // itself a choice (hasChosenActingOrg() flips), so this runs at most once per
-  // sign-in, and never after somebody deliberately picks "Myself" (from
+  // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
+  // ONCE per mount, which is once per sign-in because this tab stays mounted.
+  // Without the ref, somebody who deliberately switches to "Myself" (from
   // Settings, or "Post as myself instead" when their shop is still in review)
-  // -- including when they pick it before this tab has ever mounted.
-  const adoptShopId = showShopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
+  // would be switched straight back the next time this tab re-rendered.
+  const adoptShopId = shopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
+  const adoptedOnce = useRef(false);
   useEffect(() => {
-    if (!adoptShopId || hasChosenActingOrg()) return;
+    if (!adoptShopId || adoptedOnce.current) return;
+    adoptedOnce.current = true;
     void selectShop(adoptShopId);
   }, [adoptShopId, selectShop]);
 
@@ -166,7 +161,7 @@ export default function ProfileScreen() {
     return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
   }
 
-  if (showShopOnly) {
+  if (shopOnly) {
     if (pickingShop || !shownShop) {
       return <ShopPicker dark={dark} shops={shops} activeId={actingShop?.id ?? null} onPick={(id) => void selectShop(id)} />;
     }
@@ -276,7 +271,7 @@ function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: A
             {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
             <View style={s.shopText}>
               <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
-              <Text style={[s.shopEyebrow, { color: palette.muted }]}>{shop.role === "OWNER" ? "Owner" : "Staff"}{active ? " · Acting as" : ""}</Text>
+              <Text style={[s.shopEyebrow, { color: palette.muted }]}>{"Owner"}{active ? " · Acting as" : ""}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={palette.muted} />
           </Pressable>
@@ -456,9 +451,6 @@ export function shelfLabel(item: Item): string | null {
   if (item.status === "VALUE_REJECTED") return "Value not approved";
   if (item.status === "IN_TRADE") return "In trade";
   if (item.status === "TRADED") return "Traded";
-  // A perishable whose window ran out unsold. The tile opens /listing-review,
-  // whose expired state is where Relist lives.
-  if (item.status === "EXPIRED") return "Expired";
   return null;
 }
 
@@ -499,21 +491,19 @@ const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
  *
  * ── TAPPING AN EARNED BADGE ──────────────────────────────────────
  *
- * `displayedAchievements` (from /profile/me) only carries id/name/icon/
- * imageUrl -- enough to draw the circle, not enough to explain it. Rather
- * than widen that payload, this reuses the SAME ["achievements"] query the
- * Achievements screen already runs (fetchAchievements, same query key), so
- * a user who has opened that screen this session gets the popup instantly
- * from cache; one who hasn't pays one extra request, on tap, not on load.
+ * `displayedAchievements` only carries id/name/icon/imageUrl -- enough to draw
+ * the circle, not to explain it. Rather than widen that payload, a tap reuses
+ * the SAME ["achievements"] query the Achievements screen runs, so the popup
+ * is instant from cache for anyone who opened that screen this session, and
+ * costs one request on tap (never on load) for anyone who has not.
  *
- * That query is the VIEWER's achievements. The description is the same for
- * everybody, but the unlock date is the viewer's, so on somebody else's
- * profile (user.tsx) `showEarnedDate` is false and the date is left out
- * rather than showing the viewer's date under another person's badge.
+ * That list is the whole catalogue, so a badge on SOMEONE ELSE's profile
+ * (user.tsx, `own={false}`) resolves too. Its `unlockedAt` is the VIEWER's,
+ * though, so the "Earned" date is only shown on your own profile.
  */
 const SHELF_CAP = 4;
 
-export function Badges({ dark, achievements, showMore = true, showEarnedDate = true, onMore }: { dark: boolean; achievements: DisplayedAchievements; showMore?: boolean; showEarnedDate?: boolean; onMore: () => void }) {
+export function Badges({ dark, achievements, showMore = true, own = true, onMore }: { dark: boolean; achievements: DisplayedAchievements; showMore?: boolean; own?: boolean; onMore: () => void }) {
   const palette = dark ? darkColors : lightColors;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detail = useQuery({
@@ -523,20 +513,23 @@ export function Badges({ dark, achievements, showMore = true, showEarnedDate = t
     enabled: selectedId !== null,
   });
   const selected = detail.data?.achievements.find((a) => a.id === selectedId) ?? null;
+  // Until the catalogue answers, the popup still opens with what the circle
+  // already knows, so a tap is never met with nothing.
+  const tapped = achievements.find((a) => a.id === selectedId) ?? null;
+  const dialogBadge = selected ?? tapped;
+  const dialogBody = selected
+    ? own && selected.unlockedAt
+      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
+      : selected.description
+    : detail.isError
+      ? "Could not load this badge's details."
+      : "Loading…";
   const shown = achievements.slice(0, SHELF_CAP);
   const hasRoom = showMore && shown.length < SHELF_CAP;
   const data: { key: string; icon: keyof typeof Ionicons.glyphMap; imageUrl: string | null; label: string; more?: boolean }[] = [
     ...shown.map((a) => ({ key: a.id, icon: badgeIcons[a.icon] ?? "trophy-outline", imageUrl: a.imageUrl, label: a.name })),
     ...(hasRoom ? [{ key: "more", icon: "add-outline" as const, imageUrl: null, label: "More", more: true }] : []),
   ];
-
-  const selectedIcon = selected ? badgeIcons[selected.icon] ?? "trophy-outline" : "trophy-outline";
-  const selectedBody = selected
-    ? showEarnedDate && selected.unlockedAt
-      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
-      : selected.description
-    : "";
-
   return (
     <View style={s.badges}>
       <FlatList
@@ -559,16 +552,16 @@ export function Badges({ dark, achievements, showMore = true, showEarnedDate = t
           </Pressable>
         )}
       />
-      {selected ? (
+      {dialogBadge ? (
         <NoticeDialog
           visible
-          title={selected.name}
-          body={selectedBody}
+          title={dialogBadge.name}
+          body={dialogBody}
           icon={
-            selected.imageUrl ? (
-              <Image source={{ uri: selected.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+            dialogBadge.imageUrl ? (
+              <Image source={{ uri: dialogBadge.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
             ) : (
-              <Ionicons name={selectedIcon} size={24} color={color.green} />
+              <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
           }
           onDismiss={() => setSelectedId(null)}
