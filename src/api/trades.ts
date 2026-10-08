@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiV1, legacyFailure, request } from "./client";
+import { ApiError, apiV1, legacyFailure, request } from "./client";
 import { LIVE_OFFERS_KEY, withdrawOffer } from "./offer";
 import { grouped } from "../lib/gap";
 import { bracketLabel, bracketOf } from "../lib/brackets";
@@ -625,16 +625,30 @@ export function useMeetupOptions(tradeId: string | undefined) {
       return data;
     },
     enabled: !!tradeId,
+    // Always stale, so every mount refetches. The hub step and the picker both
+    // read the plan from here, and the app-wide 60 s meant the picker opened on
+    // the copy the hub step had just shown — a copy that could predate the
+    // partner's suggestion (8 Oct 2026 two-phone test).
+    staleTime: 0,
   });
+}
+
+/** The standing plan a counter names. Read from the plan this screen drew. */
+export type MeetupReplaces = { hubId: string; at: string; proposedBy: "sender" | "receiver" };
+
+export function replacesOf(plan: MeetupPlan): MeetupReplaces {
+  return { hubId: plan.hub.id, at: plan.at, proposedBy: plan.proposedBy };
 }
 
 /**
  * POST …/meetup — propose a place and time, or counter one.
  *
- * A COUNTER IS THE SAME CALL. There is no decline: sending a different hub or
- * time overwrites the plan and clears the agreement, which leaves the other side
- * something to answer instead of an empty table. The server is what enforces
- * that; this hook just posts.
+ * A COUNTER NAMES WHAT IT REPLACES. Without `replaces` this is a fresh pick,
+ * which the server takes only on an empty table or over the viewer's own
+ * unanswered suggestion. With it, it lands only if that plan is still the one
+ * standing. Anything else is a 409 whose `meta.rule` says why
+ * (MEETUP_PENDING_FROM_PARTNER, MEETUP_ALREADY_AGREED, MEETUP_CHANGED) and
+ * whose `meta.plan` is the plan that IS standing — see `planConflictOf()`.
  *
  * `at` goes over the wire as an ISO instant with an offset, never as typed text.
  */
@@ -642,7 +656,7 @@ export function useProposeMeetup(tradeId: string | undefined) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { hubId: string; at: Date; note?: string }) => {
+    mutationFn: async (input: { hubId: string; at: Date; note?: string; replaces?: MeetupReplaces }) => {
       const { data } = await apiV1<{ plan: MeetupPlan }>(
         `/api/v1/trades/${encodeURIComponent(tradeId!)}/meetup`,
         {
@@ -652,6 +666,7 @@ export function useProposeMeetup(tradeId: string | undefined) {
             hubId: input.hubId,
             at: input.at.toISOString(),
             ...(input.note && input.note.trim().length > 0 ? { note: input.note.trim() } : {}),
+            ...(input.replaces ? { replaces: input.replaces } : {}),
           }),
         },
       );
@@ -661,7 +676,30 @@ export function useProposeMeetup(tradeId: string | undefined) {
       if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
       invalidateTrades(qc);
     },
+    onError: (e) => {
+      // A plan conflict means this phone's copy is stale; fetch the real one.
+      if (planConflictOf(e) && tradeId) {
+        void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+        invalidateTrades(qc);
+      }
+    },
   });
+}
+
+export type PlanConflictRule = "MEETUP_PENDING_FROM_PARTNER" | "MEETUP_ALREADY_AGREED" | "MEETUP_CHANGED";
+
+/**
+ * A 409 from either meetup route that says "that is not the plan standing",
+ * with the plan that is. Null for every other failure, including the plain
+ * 409 for a trade that has moved past ACCEPTED (it carries no rule).
+ */
+export function planConflictOf(e: unknown): { rule: PlanConflictRule; plan: MeetupPlan | null } | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const rule = e.meta.rule;
+  if (rule !== "MEETUP_PENDING_FROM_PARTNER" && rule !== "MEETUP_ALREADY_AGREED" && rule !== "MEETUP_CHANGED") {
+    return null;
+  }
+  return { rule, plan: (e.meta.plan as MeetupPlan | null | undefined) ?? null };
 }
 
 /**
@@ -691,6 +729,12 @@ export function useAcceptMeetup(tradeId: string | undefined) {
     onSuccess: () => {
       if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
       invalidateTrades(qc);
+    },
+    onError: (e) => {
+      if (planConflictOf(e) && tradeId) {
+        void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+        invalidateTrades(qc);
+      }
     },
   });
 }

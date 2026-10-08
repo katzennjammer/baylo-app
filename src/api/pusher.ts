@@ -102,7 +102,14 @@ const userChannel = (userId: string) => `private-user-${userId}`;
  * a reconnect in progress — should not sit stale until the next foregrounding.
  */
 export function isRealtimeConnected(): boolean {
-  return client?.connection.state === "connected";
+  if (client?.connection.state !== "connected") return false;
+  // A connected socket is not a listening phone. A private channel whose
+  // authorisation was refused (or is still pending after a reconnect) gets no
+  // events while the socket reads "connected" — and before 8 Oct 2026 that
+  // also switched the poll off, so the hub step sat on "Choose a hub" after
+  // the partner had suggested one. Every held channel must be subscribed.
+  const names = [...holders.keys()];
+  return names.length > 0 && names.every((name) => client?.channel(name)?.subscribed === true);
 }
 
 /** Drops the socket and forgets the client. */

@@ -3,11 +3,12 @@ import { useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { meetupStateOf, useAcceptMeetup, useMeetupOptions, type OfferDecided } from "../../api/trades";
-import type { ActiveTrade, LiveOffer } from "../../api/types";
+import type { ActiveTrade, LiveOffer, MeetupPlan } from "../../api/types";
 import { clockTime } from "../../lib/format";
 import { grouped, meetupWhen, shortDate } from "../../lib/gap";
 import { bracketLabel } from "../../lib/brackets";
 import { ApiError } from "../../api/client";
+import { useTradeLiveness } from "../../lib/trade-liveness";
 import { CardLink } from "./TradeCard";
 import * as copy from "./copy";
 import * as present from "./present";
@@ -23,7 +24,8 @@ import { offerBorder } from "../../theme/offer-tokens";
  *
  *   OfferPanel     app/offer-review.tsx    (an incoming offer)
  *   RequestPanel   trades-waiting ?answer= (an incoming swap request)
- *   HubStepPanel   app/trade-meetup.tsx's "Agree" half
+ *   HubStepPanel   app/trade-meetup.tsx's "Agree" half (SuggestionCard, also
+ *                  drawn by the picker on a 409)
  *   WaitingPanel   app/trades-waiting.tsx's card links
  *   DonePanel      app/trade-summary.tsx
  *
@@ -193,12 +195,18 @@ export function RequestPanel({
  * An ACCEPTED trade with no agreed hub. The plan is read from GET …/meetup,
  * fresh on mount, exactly as the old picker read it: the list row can be 30 s
  * old, and this is where a "Renz suggested a place" tap lands.
+ *
+ * KEPT FRESH WHILE OPEN, NOT ONLY ON MOUNT. The trade screen's own liveness
+ * refetches the trade list, and this panel prefers the `…/meetup` copy over
+ * the list's, so before 8 Oct 2026 a phone whose socket was not delivering
+ * sat on "Choose a hub" after the partner had suggested one — the two-phone
+ * test that ended with two independent picks. The panel now runs the same
+ * focus refetch + no-socket poll on its own query.
  */
 export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
   const router = useRouter();
   const options = useMeetupOptions(trade.id);
-  const accept = useAcceptMeetup(trade.id);
-  const [failure, setFailure] = useState<string | null>(null);
+  useTradeLiveness(options.refetch);
 
   const partner = present.firstName(trade.counterparty.name);
   const plan = options.data ? options.data.plan : trade.meetup;
@@ -217,49 +225,7 @@ export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
   }
 
   if (state === "yours-to-answer" && plan) {
-    const agree = () => {
-      setFailure(null);
-      accept.mutate(
-        { confirmHubId: plan.hub.id, confirmAt: plan.at },
-        {
-          onError: (e) =>
-            setFailure(e instanceof ApiError ? e.message : "That did not go through. Nothing has changed."),
-        },
-      );
-    };
-    return (
-      <View style={s.panel}>
-        <Text style={[textStyle(type.sectionHeading), { color: color.inkSecondary }]}>
-          {copy.tradeScreen.theySuggested(partner)}
-        </Text>
-        <View style={s.suggestion}>
-          <Text style={[textStyle(type.username), { color: color.ink }]}>{plan.hub.name}</Text>
-          <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
-            {[plan.hub.typeLabel, plan.hub.city].filter(Boolean).join(" · ")}
-          </Text>
-          <Text style={[textStyle(type.detailBody), { color: color.ink, marginTop: 4 }]}>
-            {meetupWhen(new Date(plan.at))}
-          </Text>
-          {plan.note ? <Body>{plan.note}</Body> : null}
-        </View>
-        <Failure>{failure}</Failure>
-        <View style={s.pair}>
-          <TradeButton
-            label={copy.tradeScreen.suggestAnother}
-            tone="outline"
-            onPress={openPicker}
-            style={{ flex: 1 }}
-          />
-          <TradeButton
-            label={copy.tradeScreen.agree}
-            onPress={agree}
-            disabled={accept.isPending}
-            accessibilityLabel={`Agree to meet at ${plan.hub.name}`}
-            style={{ flex: 1 }}
-          />
-        </View>
-      </View>
-    );
+    return <SuggestionCard tradeId={trade.id} plan={plan} partner={partner} onSuggestAnother={openPicker} />;
   }
 
   return (
@@ -267,6 +233,77 @@ export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
       <Title>{copy.tradeScreen.hubStepTitle(partner)}</Title>
       <Body>{copy.tradeScreen.hubStepBody}</Body>
       <TradeButton label={copy.tradeScreen.chooseHub} onPress={openPicker} />
+    </View>
+  );
+}
+
+/**
+ * The partner's standing suggestion with Agree / Suggest another. The hub
+ * step draws it, and so does the picker when the server answers a pick with
+ * MEETUP_PENDING_FROM_PARTNER — `notice` is that screen's
+ * "<name> already suggested a hub" line.
+ */
+export function SuggestionCard({
+  tradeId,
+  plan,
+  partner,
+  notice,
+  onSuggestAnother,
+  onAgreed,
+}: {
+  tradeId: string;
+  plan: MeetupPlan;
+  partner: string;
+  notice?: string | null;
+  onSuggestAnother: () => void;
+  onAgreed?: () => void;
+}) {
+  const accept = useAcceptMeetup(tradeId);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const agree = () => {
+    setFailure(null);
+    accept.mutate(
+      { confirmHubId: plan.hub.id, confirmAt: plan.at },
+      {
+        onSuccess: () => onAgreed?.(),
+        onError: (e) =>
+          setFailure(e instanceof ApiError ? e.message : "That did not go through. Nothing has changed."),
+      },
+    );
+  };
+  return (
+    <View style={s.panel}>
+      {notice ? <Body tone="ink">{notice}</Body> : null}
+      <Text style={[textStyle(type.sectionHeading), { color: color.inkSecondary }]}>
+        {copy.tradeScreen.theySuggested(partner)}
+      </Text>
+      <View style={s.suggestion}>
+        <Text style={[textStyle(type.username), { color: color.ink }]}>{plan.hub.name}</Text>
+        <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
+          {[plan.hub.typeLabel, plan.hub.city].filter(Boolean).join(" · ")}
+        </Text>
+        <Text style={[textStyle(type.detailBody), { color: color.ink, marginTop: 4 }]}>
+          {meetupWhen(new Date(plan.at))}
+        </Text>
+        {plan.note ? <Body>{plan.note}</Body> : null}
+      </View>
+      <Failure>{failure}</Failure>
+      <View style={s.pair}>
+        <TradeButton
+          label={copy.tradeScreen.suggestAnother}
+          tone="outline"
+          onPress={onSuggestAnother}
+          style={{ flex: 1 }}
+        />
+        <TradeButton
+          label={copy.tradeScreen.agree}
+          onPress={agree}
+          disabled={accept.isPending}
+          accessibilityLabel={`Agree to meet at ${plan.hub.name}`}
+          style={{ flex: 1 }}
+        />
+      </View>
     </View>
   );
 }

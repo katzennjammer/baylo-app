@@ -522,6 +522,11 @@ export const picker = {
   pickTime: "Pick a time",
   submit: (partner: string) => `Suggest to ${partner}`,
   needBoth: "Pick a hub, a day and a time first",
+  /** The picker's 409s (8 Oct 2026): the server refused a pick over another plan. */
+  alreadySuggested: (partner: string) => `${partner} already suggested a hub`,
+  alreadyAgreed: (partner: string, where: string) =>
+    `You and ${partner} already agreed on ${where}. Send again to change it.`,
+  planChanged: "The plan changed while you were picking. Check it, then send again.",
 } as const;
 
 /** The trade offer card in a chat thread. */

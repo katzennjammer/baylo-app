@@ -1,11 +1,17 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
-import { useActiveTrades, useMeetupOptions, useProposeMeetup } from "../src/api/trades";
-import type { SafeZoneHub } from "../src/api/types";
+import {
+  planConflictOf,
+  replacesOf,
+  useActiveTrades,
+  useMeetupOptions,
+  useProposeMeetup,
+} from "../src/api/trades";
+import type { MeetupPlan, SafeZoneHub } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
 import { Tappable } from "../src/components/Tappable";
 import { LeafIcon } from "../src/components/icons";
@@ -13,11 +19,12 @@ import { OfferBottomBar, OfferScreenHost } from "../src/components/offer/chrome"
 import { firstName } from "../src/components/offer/copy";
 import { InfoIcon } from "../src/components/post/post-icons";
 import { CardLink } from "../src/components/trades/TradeCard";
+import { SuggestionCard } from "../src/components/trades/TradePanels";
 import { Gutter, TradesBackTitle, TradesSectionLabel } from "../src/components/trades/chrome";
 import * as copy from "../src/components/trades/copy";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { NoticeRow, TradeButton } from "../src/components/trades/trade-ui";
-import { shortDate } from "../src/lib/gap";
+import { meetupWhen, shortDate } from "../src/lib/gap";
 import { distanceKm, formatDistanceKm, useLastKnownLocation } from "../src/lib/hub-distance";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
@@ -49,6 +56,17 @@ import { offerBorder } from "../src/theme/offer-tokens";
  *     alphabetical when it does not.
  *   - The other person's standing suggestion is marked on its row.
  *   - "When" is Today / Tomorrow / Pick a date, and a time chip.
+ *
+ * ══ A PICK OVER SOMEBODY ELSE'S PLAN IS A COUNTER, AND SAYS SO ══════════════
+ *
+ * Since 8 Oct 2026 the server refuses a fresh pick while the partner's
+ * suggestion stands, and takes a counter only when it names the plan it
+ * replaces. `basis` is that plan: the one standing when this screen first
+ * read fresh data, not whatever a later refetch brought in, so a suggestion
+ * that lands while somebody is picking is SHOWN to them (a 409) rather than
+ * silently countered. On MEETUP_PENDING_FROM_PARTNER the screen swaps to the
+ * partner's suggestion with Agree / Suggest another; "Suggest another" makes
+ * that suggestion the basis and keeps every choice already made here.
  */
 export default function TradeMeetupScreen() {
   const router = useRouter();
@@ -77,6 +95,16 @@ export default function TradeMeetupScreen() {
   const [note, setNote] = useState("");
   const [picking, setPicking] = useState<"date" | "time" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /** The plan a send counters. `undefined` until fresh data has arrived. */
+  const [basis, setBasis] = useState<MeetupPlan | null | undefined>(undefined);
+  /** The partner's suggestion a 409 handed back, while it is on screen. */
+  const [conflictPlan, setConflictPlan] = useState<MeetupPlan | null>(null);
+
+  // Fresh, not cached: staleTime 0 refetches on mount, and the cached copy
+  // shown meanwhile is exactly the one that may predate the partner's pick.
+  useEffect(() => {
+    if (basis === undefined && options.isFetchedAfterMount && options.data) setBasis(options.data.plan);
+  }, [basis, options.isFetchedAfterMount, options.data]);
 
   // Local choice wins; the standing plan fills in what was not touched.
   const planAt = plan ? new Date(plan.at) : null;
@@ -146,6 +174,24 @@ export default function TradeMeetupScreen() {
   }
 
   const onError = (e: unknown) => {
+    const planConflict = planConflictOf(e);
+    if (planConflict) {
+      const standing = planConflict.plan;
+      if (standing && !standing.agreedAt && standing.proposedBy !== you) {
+        setFailure(null);
+        setConflictPlan(standing);
+        return;
+      }
+      // Agreed, or the viewer's own (another device), or gone: say so, and
+      // make the next send name what is really standing.
+      setBasis(standing);
+      setFailure(
+        standing?.agreedAt
+          ? copy.picker.alreadyAgreed(partner, copy.meetup.where(standing.hub.name, meetupWhen(new Date(standing.at))))
+          : copy.picker.planChanged,
+      );
+      return;
+    }
     if (e instanceof ApiError) {
       const rule = (e.meta as { rule?: string } | undefined)?.rule;
       setFailure(rule === "SAFEZONE_HUB_CLOSED" ? copy.meetup.hubClosed : e.message);
@@ -159,8 +205,37 @@ export default function TradeMeetupScreen() {
   const send = () => {
     if (!chosenHubId || !chosenWhen) return;
     setFailure(null);
-    propose.mutate({ hubId: chosenHubId, at: chosenWhen, note }, { onSuccess: () => router.back(), onError });
+    const standing = basis !== undefined ? basis : plan;
+    // A fresh pick only over nothing, or over the viewer's own unanswered one.
+    const counters = !!standing && (standing.proposedBy !== you || !!standing.agreedAt);
+    propose.mutate(
+      { hubId: chosenHubId, at: chosenWhen, note, replaces: counters ? replacesOf(standing) : undefined },
+      { onSuccess: () => router.back(), onError },
+    );
   };
+
+  if (conflictPlan && id) {
+    return (
+      <OfferScreenHost imeInset={0}>
+        <TradesBackTitle title={title} onBack={() => router.back()} />
+        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          <Gutter style={{ paddingTop: space.home.tileBody }}>
+            <SuggestionCard
+              tradeId={id}
+              plan={conflictPlan}
+              partner={partner}
+              notice={copy.picker.alreadySuggested(partner)}
+              onAgreed={() => router.back()}
+              onSuggestAnother={() => {
+                setBasis(conflictPlan);
+                setConflictPlan(null);
+              }}
+            />
+          </Gutter>
+        </ScrollView>
+      </OfferScreenHost>
+    );
+  }
 
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
