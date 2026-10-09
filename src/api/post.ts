@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, apiV1, currentSession, legacyFailure, request } from "./client";
+import { ApiError, apiV1, currentSession, legacyFailure, malformedResponse, readJson, request } from "./client";
 import { getApiBase } from "./config";
 import type { SafeZoneHub } from "./types";
 
@@ -167,7 +167,7 @@ export async function uploadPhoto(
   const res = await request("/api/upload", { method: "POST", body: form, signal });
   if (!res.ok) return legacyFailure(res, "Upload failed");
 
-  return (await res.json()) as UploadResult;
+  return readJson<UploadResult>(res, "/api/upload");
 }
 
 /**
@@ -265,7 +265,7 @@ export function uploadPhotoWithProgress(
       try {
         resolve(JSON.parse(xhr.responseText) as UploadResult);
       } catch {
-        reject(new ApiError(xhr.status, "MALFORMED_RESPONSE", "/api/upload did not return JSON"));
+        reject(malformedResponse(xhr.status, "/api/upload"));
       }
     };
 
@@ -323,7 +323,7 @@ export async function identifyPhoto(
   });
   if (!res.ok) return legacyFailure(res, "Could not identify this photo");
 
-  return (await res.json()) as IdentifyResult;
+  return readJson<IdentifyResult>(res, "/api/ai/identify");
 }
 
 /** The one reading of "identify did not work". Empty name, nothing else. */
@@ -612,7 +612,7 @@ export async function createItem(input: CreateItemInput): Promise<CreatedItem> {
     body: JSON.stringify(input),
   });
   if (!res.ok) return legacyFailure(res, "We could not post this just now.");
-  return (await res.json()) as CreatedItem;
+  return readJson<CreatedItem>(res, "/api/items");
 }
 
 /**

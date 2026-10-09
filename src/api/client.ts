@@ -99,6 +99,45 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * What a person reads when the server answered with something that is not the
+ * response this client was written against — an HTML 404 from a dev server
+ * that cannot see the route, a crash page, a proxy's error page.
+ *
+ * IT DOES NOT SAY "NOTHING CHANGED". It cannot know: the write may have
+ * committed before the reply went wrong. The honest advice is to look first.
+ *
+ * The path and status go on the end in development only. They are what a
+ * developer needs and are noise to anybody else — the 9 Oct 2026 report was
+ * "/api/v1/trades/<id>/meetup/accept did not return JSON", on a phone.
+ */
+export const UNCONFIRMED_MESSAGE =
+  "We couldn't confirm that went through. Check your connection, then refresh to see if it was saved.";
+
+/**
+ * `typeof`, not a bare `__DEV__`: scripts/verify-api-client.cjs loads this module
+ * under Node, where the global does not exist and reading it would throw.
+ */
+const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+
+/** The one error for an unreadable response. See UNCONFIRMED_MESSAGE. */
+export function malformedResponse(status: number, path: string): ApiError {
+  return new ApiError(
+    status,
+    "MALFORMED_RESPONSE",
+    isDev ? `${UNCONFIRMED_MESSAGE}\n\n[dev] ${path} answered ${status} with no usable JSON` : UNCONFIRMED_MESSAGE,
+  );
+}
+
+/** `res.json()`, but a body that is not JSON throws malformedResponse() instead of a SyntaxError. */
+export async function readJson<T>(res: Response, path: string): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw malformedResponse(res.status, path);
+  }
+}
+
 export interface FieldIssue {
   field: string;
   message: string;
@@ -342,7 +381,7 @@ async function postAuthWithToken<T>(
   // become {} typed as the result and read as real data downstream.
   const parsed: unknown = await res.json().catch(() => null);
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new ApiError(res.status, "MALFORMED_RESPONSE", `${path} did not return a JSON object`);
+    throw malformedResponse(res.status, path);
   }
   return parsed as T;
 }
@@ -1095,11 +1134,12 @@ export async function apiV1<T>(
 ): Promise<{ data: T; meta: Record<string, unknown> }> {
   const res = await request(path, init);
 
-  let body: Envelope<T>;
-  try {
-    body = (await res.json()) as Envelope<T>;
-  } catch {
-    throw new ApiError(res.status, "MALFORMED_RESPONSE", `${path} did not return JSON`);
+  const body = await readJson<Envelope<T> | null>(res, path);
+  // Valid JSON that is not an envelope (`null`, an array, a legacy `{ error }`
+  // from a route outside /api/v1) is as unreadable as HTML, and reading
+  // `.error` off `null` below would be a TypeError rather than an ApiError.
+  if (body === null || typeof body !== "object" || Array.isArray(body) || !("data" in body)) {
+    throw malformedResponse(res.status, path);
   }
 
   if (!res.ok || body.error || body.data === null) {
@@ -1114,7 +1154,7 @@ export async function apiV1<T>(
     throw new ApiError(
       res.status,
       body.error?.code ?? "INTERNAL_ERROR",
-      body.error?.message ?? `Request to ${path} failed`,
+      body.error?.message ?? malformedResponse(res.status, path).message,
       [],
       retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
       // `meta` survives the throw for the same reason Retry-After does: the

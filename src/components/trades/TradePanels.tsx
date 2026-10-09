@@ -1,13 +1,21 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { meetupStateOf, useAcceptMeetup, useMeetupOptions, type OfferDecided } from "../../api/trades";
+import {
+  meetupKey,
+  meetupStateOf,
+  TRADES_ACTIVE_KEY,
+  useAcceptMeetup,
+  useMeetupOptions,
+  type OfferDecided,
+} from "../../api/trades";
 import type { ActiveTrade, LiveOffer, MeetupPlan } from "../../api/types";
 import { clockTime } from "../../lib/format";
 import { grouped, meetupWhen, shortDate } from "../../lib/gap";
 import { bracketLabel } from "../../lib/brackets";
-import { ApiError } from "../../api/client";
+import { ApiError, UNCONFIRMED_MESSAGE } from "../../api/client";
 import { useTradeLiveness } from "../../lib/trade-liveness";
 import { CardLink } from "./TradeCard";
 import * as copy from "./copy";
@@ -259,6 +267,7 @@ export function SuggestionCard({
   onAgreed?: () => void;
 }) {
   const accept = useAcceptMeetup(tradeId);
+  const qc = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
 
   const agree = () => {
@@ -267,8 +276,15 @@ export function SuggestionCard({
       { confirmHubId: plan.hub.id, confirmAt: plan.at },
       {
         onSuccess: () => onAgreed?.(),
-        onError: (e) =>
-          setFailure(e instanceof ApiError ? e.message : "That did not go through. Nothing has changed."),
+        onError: (e) => {
+          setFailure(e instanceof ApiError ? e.message : UNCONFIRMED_MESSAGE);
+          // EVERY failure refetches, not only a plan conflict. A reply that was
+          // lost or unreadable says nothing about whether the agreement was
+          // saved — the server may hold it already — so the screen re-reads
+          // the plan rather than leave the Agree button up over an agreed plan.
+          void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+          void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
+        },
       },
     );
   };
