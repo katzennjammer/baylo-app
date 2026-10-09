@@ -16,10 +16,10 @@
  *
  * A RESUME FROM BACKGROUND DOES NOT RE-RUN THIS ANYWAY. The React tree survives
  * backgrounding, so `app/index.tsx` is not remounted and never asks. What this
- * flag really defends against is the SECOND kind of return: the user backing
- * out of the auth stack to "/", or a session change re-running the fork. Both
- * re-enter index.tsx with the process still alive, and both should land on the
- * auth screen rather than replaying a seven-second film.
+ * flag really defends against is the SECOND kind of return: the intro's own
+ * exit (which navigates to "/"), the user backing out of the auth stack to "/",
+ * or a session change re-running the fork. All of them re-enter index.tsx with
+ * the process still alive, and none may replay the film.
  *
  * When Android kills the process under memory pressure and restores the task,
  * the runtime is new, the flag is false, and the intro plays. That is correct:
@@ -43,7 +43,35 @@ export function introPending(): boolean {
   return !played;
 }
 
-/** Called by the intro screen on mount. Idempotent. */
+/**
+ * Called by the intro screen on mount, and again by every exit BEFORE it
+ * navigates to "/". Idempotent. The second call is the loop guard: "/" is the
+ * fork that routes here, so the flag must already be down by the time it runs.
+ */
 export function markIntroPlayed(): void {
   played = true;
+}
+
+export type BootRoute = "/intro" | "splash" | "/(app)/home" | "/(auth)/login";
+
+/**
+ * The "/" fork, as a pure function of what it reads, so the loop guard can be
+ * checked off the device (scripts/verify-opening-tier.ts).
+ *
+ * THE INTRO IS FIRST, AHEAD OF THE SESSION READ. Since the tiered opening film
+ * (Oct 2026) it plays on every cold start, signed in or not, from a tier cached
+ * on the phone -- so it has nothing to wait for. Its exit comes back here, and
+ * by then `introPending` is false, so this can only answer "/intro" once per
+ * process.
+ */
+export function bootRoute(state: {
+  introPending: boolean;
+  videoAvailable: boolean;
+  isLoading: boolean;
+  signedIn: boolean;
+}): BootRoute {
+  if (state.introPending && state.videoAvailable) return "/intro";
+  if (state.isLoading) return "splash";
+  if (state.signedIn) return "/(app)/home";
+  return "/(auth)/login";
 }

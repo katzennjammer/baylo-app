@@ -6,6 +6,7 @@ import {
   REVEAL_AFTER_MS,
   type BootDiagnostics,
 } from "../dev/boot-diagnostics";
+import { OPENING_BACKGROUND } from "../media/opening-tier";
 import { Tappable } from "./Tappable";
 import { border, color, font, radius, space, textStyle, type } from "../theme/tokens";
 
@@ -15,7 +16,8 @@ import { border, color, font, radius, space, textStyle, type } from "../theme/to
  *
  * ── THE TWO PHASES ──────────────────────────────────────────────────────────
  *
- *   < REVEAL_AFTER_MS   A spinner on the app canvas. Unchanged from before, and
+ *   < REVEAL_AFTER_MS   A spinner on the app canvas (or, with tone="boot",
+ *                       the opening film's dark ground). Unchanged, and
  *                       deliberately so: a normal boot is under a second and
  *                       must not flash a diagnostic on its way past.
  *   ≥ REVEAL_AFTER_MS   The same spinner, plus a readout naming what is being
@@ -48,9 +50,17 @@ import { border, color, font, radius, space, textStyle, type } from "../theme/to
 export interface SplashProps {
   /** What this particular mount is blocked on. Shown verbatim in the readout. */
   waitingOn?: string;
+  /**
+   * Which ground it paints. "boot" is the opening film's dark ground, for the
+   * cold-start path only — the font load, the "/" fork, and the two guards'
+   * initial session read — so the frames either side of the intro match it.
+   * "default" is the app canvas, for every in-app wait ("Signing you back in")
+   * where a dark flash between two cream screens would be the jump instead.
+   */
+  tone?: "boot" | "default";
 }
 
-export function Splash({ waitingOn = "Starting up" }: SplashProps) {
+export function Splash({ waitingOn = "Starting up", tone = "default" }: SplashProps) {
   const [diagnostics, setDiagnostics] = useState<BootDiagnostics | null>(null);
   const [seconds, setSeconds] = useState(0);
   const startedAt = useRef(Date.now());
@@ -75,7 +85,7 @@ export function Splash({ waitingOn = "Starting up" }: SplashProps) {
   }, []);
 
   return (
-    <View style={s.screen}>
+    <View style={[s.screen, tone === "boot" && s.bootGround]}>
       <ActivityIndicator color={color.green} />
 
       {diagnostics ? (
@@ -159,6 +169,10 @@ const s = StyleSheet.create({
     padding: space.screenX,
     backgroundColor: color.surface,
   },
+  // tone="boot" (Oct 2026): the frame either side of the intro on a cold start,
+  // where a cream screen between dark ones is the jump. The readout panel keeps
+  // its own light inset, so it stays legible on it.
+  bootGround: { backgroundColor: OPENING_BACKGROUND },
 
   panel: {
     alignSelf: "stretch",

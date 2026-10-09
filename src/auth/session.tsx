@@ -12,6 +12,7 @@ import {
 } from "../api/client";
 import { clearActingOrg, restoreActingOrg } from "../api/org-context";
 import { hydrateApiBase } from "../api/config";
+import { resetOpeningTier } from "../media/opening-tier-store";
 import { TimeoutError, withTimeout } from "../api/timeout";
 import { registerClearSessionDevItem } from "../dev/dev-menu";
 import type { StoredSession } from "./storage";
@@ -220,6 +221,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // would refuse it, but the app would be asking, and the first thing they
       // would see is a 403 they cannot explain.
       clearActingOrg();
+      // And the opening film goes back to the normal one. AFTER the clear, which
+      // re-resolves the tier itself; the store serialises the two writes, so
+      // "normal" is the one that lands.
+      resetOpeningTier();
       // In the finally rather than after the await. apiSignOut() drops the
       // session before anything that can throw, so a failure past that point
       // would otherwise leave a signed-out app still holding the previous

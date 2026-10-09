@@ -57,6 +57,30 @@ export function getActingOrgId(): string | null {
   return actingOrgId;
 }
 
+// Told after every switch and every clear, AFTER the module variable moves, so
+// a listener that reads getActingOrgId() sees the new value. Restoring at boot
+// is not a change and does not notify. Today's one listener keeps the opening
+// film's cached tier in step (src/media/opening-tier-store).
+const changeListeners = new Set<() => void>();
+
+/** Subscribes to switches and clears of the acting org. Returns its unsubscribe. */
+export function onActingOrgChange(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => {
+    changeListeners.delete(listener);
+  };
+}
+
+function notifyChange(): void {
+  for (const listener of changeListeners) {
+    try {
+      listener();
+    } catch {
+      // A listener's failure must not break a switch or a sign-out.
+    }
+  }
+}
+
 /** True once the acting context has been deliberately set this session. */
 export function hasChosenActingOrg(): boolean {
   return chosenThisSession;
@@ -74,6 +98,7 @@ export function hasChosenActingOrg(): boolean {
 export async function setActingOrgId(id: string | null): Promise<void> {
   actingOrgId = id;
   chosenThisSession = true;
+  notifyChange();
   try {
     if (id) await SecureStore.setItemAsync(ORG_KEY, id);
     else await SecureStore.deleteItemAsync(ORG_KEY);
@@ -105,5 +130,6 @@ export function clearActingOrg(): void {
   // Not a choice: sign-out, or the server refusing the header. The next
   // session (or this one, after a revoked membership) starts from the default.
   chosenThisSession = false;
+  notifyChange();
   void SecureStore.deleteItemAsync(ORG_KEY).catch(() => {});
 }
