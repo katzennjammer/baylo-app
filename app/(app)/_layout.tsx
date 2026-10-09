@@ -6,6 +6,7 @@ import { AppHeader } from "../../src/components/AppHeader";
 import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
 import { useSession } from "../../src/auth/session";
+import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
 
 /**
  * The (app) group: everything behind the session gate.
@@ -74,8 +75,12 @@ export default function AppLayout() {
   // never hears -- owner and staff alike. /api/pusher/auth grants any ACTIVE
   // member; null when not acting, and the hook holds nothing.
   useTradeRealtime(useActingShopUserId(!!session) ?? undefined);
+  // The opening film's cached tier, for the NEXT launch. Background only: by
+  // the time this layout mounts the film has already played. See the hook.
+  useOpeningTierSync(!!session);
 
-  if (isLoading) return <Splash waitingOn="Reading your saved session from secure storage" />;
+  // tone="boot": this is the initial session read, on the cold-start path.
+  if (isLoading) return <Splash tone="boot" waitingOn="Reading your saved session from secure storage" />;
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (

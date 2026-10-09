@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect } from "react";
 import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Path, Rect } from "react-native-svg";
 
@@ -17,6 +18,7 @@ import {
   type PremiumReason,
 } from "../src/lib/premium";
 import { BRIDGE_FEE_PER_BRACKET } from "../src/lib/trade-rules";
+import { noteOpeningReputation } from "../src/media/opening-tier-store";
 import {
   offerBorder,
   offerColor,
@@ -120,6 +122,15 @@ export default function PremiumScreen() {
 
   const rep = data?.reputation;
   const active = hasPremiumAccess(rep);
+
+  // The opening film's cached tier follows the paywall's own read of the
+  // server's verdict. There is no purchase callback to hang this on — the buy
+  // button is disabled until Play Billing exists — so this is the success path:
+  // a grant (today by hand, later a purchase that invalidates profile/me)
+  // reaches here as `active`, and the next launch plays the Premium film.
+  useEffect(() => {
+    if (rep) noteOpeningReputation({ premium: rep.premium, vip: rep.vip });
+  }, [rep?.premium, rep?.vip]); // eslint-disable-line react-hooks/exhaustive-deps
   const p = offerSpace.prompt;
   // `How trading works`'s sizing: its height, clamped to the window; the body scrolls.
   const height = Math.min(p.height, Math.round(windowHeight * 0.88));

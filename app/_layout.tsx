@@ -1,7 +1,7 @@
 import "../global.css";
 
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -11,6 +11,8 @@ import { DialogHost } from "../src/components/dialog";
 import { PostedDialog } from "../src/components/PostedDialog";
 import { Splash } from "../src/components/Splash";
 import { SessionProvider, useSession } from "../src/auth/session";
+import { OPENING_BACKGROUND } from "../src/media/opening-tier";
+import { readOpeningTier } from "../src/media/opening-tier-store";
 import { sheetColor } from "../src/theme/auth-sheet-tokens";
 import { color } from "../src/theme/tokens";
 
@@ -22,6 +24,11 @@ import { color } from "../src/theme/tokens";
  * on any state change anywhere above it.
  */
 const queryClient = createQueryClient();
+
+// The opening film's cached tier, read now so the one SecureStore round-trip
+// overlaps the font load instead of starting when the intro mounts. Memoised
+// and never rejects; app/intro.tsx awaits the same promise.
+void readOpeningTier();
 
 /**
  * Every face the type scale names, keyed by the string `tokens.font` asks for.
@@ -85,7 +92,7 @@ export default function RootLayout() {
   // app; a permanent spinner is no app. `fontError` is the only thing standing
   // between a corrupt asset and a boot that never finishes, so it releases the
   // gate rather than being swallowed.
-  if (!fontsLoaded && !fontError) return <Splash waitingOn="Loading the app’s fonts" />;
+  if (!fontsLoaded && !fontError) return <Splash tone="boot" waitingOn="Loading the app’s fonts" />;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -138,9 +145,16 @@ export default function RootLayout() {
               Declaring these does not opt the other routes out of file-based
               discovery; they keep the defaults above.
             */}
+            {/* "/" too, since the intro exits to it: the fork renders a
+                Redirect or the session <Splash>, and its navigator ground
+                shows for the frame in between. */}
+            <Stack.Screen
+              name="index"
+              options={{ contentStyle: { backgroundColor: OPENING_BACKGROUND } }}
+            />
             <Stack.Screen
               name="intro"
-              options={{ animation: "fade", contentStyle: { backgroundColor: sheetColor.frame } }}
+              options={{ animation: "fade", contentStyle: { backgroundColor: OPENING_BACKGROUND } }}
             />
             <Stack.Screen
               name="(auth)"
@@ -199,10 +213,17 @@ export default function RootLayout() {
  * whichever style unmounted last — it is derived here from the one fact that
  * decides which tree is mounted at all.
  *
- * `isLoading` counts as signed-in for this purpose: what is on screen during
- * the SecureStore read is <Splash>, which paints the app canvas.
+ * The opening routes count as the dark half whatever the session says: the
+ * intro now plays for signed-in people too, and it, the "/" fork and the
+ * <Splash> shown during the SecureStore read are all on OPENING_BACKGROUND.
  */
 function ThemedStatusBar() {
   const { session, isLoading } = useSession();
-  return <StatusBar style={isLoading || session ? "dark" : "light"} />;
+  // Segments, not the pathname: (app)/index — the Community tab — is ALSO "/"
+  // as a path, and it is a light screen, but its first segment is "(app)". The
+  // root fork has no segments (or a bare "index"); the typed-routes tuple does
+  // not admit the empty case, hence the widening.
+  const first = (useSegments() as string[])[0];
+  const onOpeningGround = isLoading || first === undefined || first === "index" || first === "intro";
+  return <StatusBar style={onOpeningGround || !session ? "light" : "dark"} />;
 }
