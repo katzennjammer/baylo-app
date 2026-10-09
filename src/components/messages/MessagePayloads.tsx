@@ -101,6 +101,7 @@ export function renderMessageBody({
   tradeDetails,
   partnerName = "them",
   offerTradeId = null,
+  offerTrade = null,
   onOpenTrade,
   contentMax = Number.POSITIVE_INFINITY,
 }: {
@@ -115,6 +116,8 @@ export function renderMessageBody({
   partnerName?: string;
   /** For an offer: the trade it became, from the thread's offer_update rows. */
   offerTradeId?: string | null;
+  /** For an offer: that trade's current row, when the thread holds it (`chatTradeFor()`). */
+  offerTrade?: ActiveTrade | null;
   onOpenTrade?: (tradeId: string) => void;
   /**
    * The room inside a bubble, in px (`useBubbleContentMax()`). Media below is
@@ -142,6 +145,7 @@ export function renderMessageBody({
           fallback={offerPayloadSides(parsed, mine)}
           message={typeof parsed.userMessage === "string" && parsed.userMessage.trim() ? parsed.userMessage : null}
           tradeId={offerTradeId}
+          trade={offerTrade}
           onOpen={() => (offerId ? onOfferPress?.(offerId) : undefined)}
           onOpenTrade={(id) => onOpenTrade?.(id)}
         />

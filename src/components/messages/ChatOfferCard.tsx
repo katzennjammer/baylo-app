@@ -1,15 +1,16 @@
 import { Text, View, StyleSheet } from "react-native";
 
-import type { LiveOffer } from "../../api/types";
+import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { Tappable } from "../Tappable";
-import { SwapSplit, CardLink } from "../trades/TradeCard";
+import { ChevronRightIcon } from "../icons";
+import { SwapSplit } from "../trades/TradeCard";
 import * as copy from "../trades/copy";
 import * as present from "../trades/present";
 import type { CardSide } from "../trades/present";
 import { StatusChip, TradeButton } from "../trades/trade-ui";
 import { useOfferDecisionFlow } from "../trades/useOfferDecisionFlow";
 import { grouped } from "../../lib/gap";
-import { color, radius, space, textStyle, type } from "../../theme/tokens";
+import { color, radius, size, space, textStyle, type } from "../../theme/tokens";
 import { offerBorder } from "../../theme/offer-tokens";
 
 /**
@@ -26,6 +27,17 @@ import { offerBorder } from "../../theme/offer-tokens";
  * what says it is pending and addressed to whoever the viewer is acting as.
  *
  * Once answered, the card says how and links to the trade.
+ *
+ * ── THE CHIP IS THE TRADE'S STATE NOW, NOT THE MESSAGE'S ────────────────────
+ *
+ * Since Oct 2026 the chip reads the trade itself when the thread holds it
+ * (`trade`, from the active list and recent history the thread already
+ * fetches — see `chatTradeFor()`): Accepted, Hub set, Handoff, Done, Declined,
+ * Cancelled. Without it — a trade older than history's 50 — it falls back to
+ * the status saved in the thread's `offer_update` rows, as before.
+ *
+ * Layout: chip on top, then who it is from, the "You give / You get" split,
+ * and "Open trade" as its own full-width footer row.
  */
 export function ChatOfferCard({
   mine,
@@ -35,6 +47,7 @@ export function ChatOfferCard({
   fallback,
   message,
   tradeId,
+  trade,
   onOpen,
   onOpenTrade,
 }: {
@@ -50,6 +63,8 @@ export function ChatOfferCard({
   message: string | null;
   /** The trade an accepted offer became, when the thread knows it. */
   tradeId: string | null;
+  /** That trade's current row, when the thread holds it. */
+  trade?: ActiveTrade | null;
   onOpen: () => void;
   onOpenTrade: (tradeId: string) => void;
 }) {
@@ -62,11 +77,15 @@ export function ChatOfferCard({
       ? "ACCEPTED"
       : "DECLINED"
     : status.toUpperCase();
-  const toTrade = flow.decided?.result.tradeId ?? tradeId;
+  const toTrade = flow.decided?.result.tradeId ?? tradeId ?? trade?.id ?? null;
   const sides = live ? present.offerSides(live) : fallback;
+  // The trade's current state wins over the saved one, except right after a
+  // decision on this card, which is newer than the cached trade list.
+  const tradeChip = !flow.decided && trade ? present.chatTradeChip(trade) : null;
 
-  const chip: { label: string; tone: "amber" | "green" | "grey" } =
-    effective === "PENDING"
+  const chip: { label: string; tone: "amber" | "green" | "grey" } = tradeChip
+    ? tradeChip
+    : effective === "PENDING"
       ? mine
         ? { label: copy.chatOffer.waitingFor(partner), tone: "grey" }
         : canDecide
@@ -81,6 +100,7 @@ export function ChatOfferCard({
           : { label: sentenceCase(effective), tone: "grey" };
 
   const pendingDecision = canDecide && !flow.decided;
+  const settled = !!tradeChip || effective !== "PENDING";
 
   return (
     <View style={s.card}>
@@ -92,10 +112,10 @@ export function ChatOfferCard({
         style={s.body}
       >
         <View style={s.top}>
-          <Text style={[textStyle(type.username), { color: color.ink, flex: 1 }]} numberOfLines={2}>
+          <StatusChip label={chip.label} tone={chip.tone} />
+          <Text style={[textStyle(type.username), { color: color.ink }]} numberOfLines={2}>
             {mine ? copy.chatOffer.fromYou : copy.chatOffer.from(partner)}
           </Text>
-          <StatusChip label={chip.label} tone={chip.tone} />
         </View>
         <SwapSplit give={sides.give} get={sides.get} style={{ marginTop: space.home.tileBody }} />
         {message ? (
@@ -141,10 +161,22 @@ export function ChatOfferCard({
             />
           </View>
         </View>
-      ) : effective !== "PENDING" && toTrade ? (
-        <View style={[s.footer, { alignItems: "flex-start" }]}>
-          <CardLink label={copy.chatOffer.openTrade} onPress={() => onOpenTrade(toTrade)} />
-        </View>
+      ) : settled && toTrade ? (
+        <Tappable
+          onPress={() => onOpenTrade(toTrade)}
+          accessibilityRole="button"
+          accessibilityLabel={copy.chatOffer.openTrade}
+          pressedStyle={{ backgroundColor: color.inset }}
+          style={s.openRow}
+        >
+          <Text
+            style={[textStyle(type.homeSeeAll), { color: color.forest, flex: 1 }]}
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+          >
+            {copy.chatOffer.openTrade}
+          </Text>
+          <ChevronRightIcon size={16} stroke={1.8} color={color.forest} />
+        </Tappable>
       ) : null}
 
       {flow.sheet}
@@ -166,7 +198,7 @@ const s = StyleSheet.create({
     overflow: "hidden",
   },
   body: { padding: space.home.tileBody },
-  top: { flexDirection: "row", alignItems: "flex-start", gap: space.browse.searchGap },
+  top: { alignItems: "flex-start", gap: 6 },
   footer: {
     gap: space.browse.searchGap,
     paddingHorizontal: space.home.tileBody,
@@ -175,4 +207,13 @@ const s = StyleSheet.create({
     borderTopColor: color.divider,
   },
   pair: { flexDirection: "row", gap: space.browse.searchGap },
+  openRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.browse.searchGap,
+    minHeight: 44,
+    paddingHorizontal: space.home.tileBody,
+    borderTopWidth: offerBorder.rule,
+    borderTopColor: color.divider,
+  },
 });

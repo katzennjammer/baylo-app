@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
+import type { ActiveTrade } from "../../src/api/types";
 import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
 import { getActingOrgId } from "../../src/api/org-context";
@@ -31,7 +32,7 @@ import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { ChatBubble, useBubbleContentMax } from "../../src/components/messages/ChatBubble";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
-import { offerHref, tradeHref } from "../../src/components/trades/present";
+import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 
@@ -291,6 +292,7 @@ export default function MessagesThreadScreen() {
               const mine = message.senderId === currentUserId;
               let displayContent = message.content;
               let offerTradeId: string | null = null;
+              let offerTrade: ActiveTrade | null = null;
               let isOffer = false;
               try {
                 const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown };
@@ -301,6 +303,7 @@ export default function MessagesThreadScreen() {
                     displayContent = JSON.stringify({ ...payload, status: update.status });
                     offerTradeId = update.tradeId;
                   }
+                  offerTrade = chatTradeFor(payload.offerId, update?.tradeId ?? null, tradesById);
                 }
               } catch {
                 // Plain-text messages are rendered unchanged.
@@ -344,6 +347,7 @@ export default function MessagesThreadScreen() {
                     },
                     onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
                     offerTradeId,
+                    offerTrade,
                     partnerName: otherName,
                     onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
                     offerDetails: (() => {

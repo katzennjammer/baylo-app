@@ -208,9 +208,8 @@ function Half({
 }) {
   return (
     <View style={[s.half, toward === "right" ? { paddingRight: SEAM_GAP } : { paddingLeft: SEAM_GAP }]}>
-      <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]} numberOfLines={1}>
-        {label}
-      </Text>
+      {/* Never truncated: at large text sizes "You give" wraps rather than reading "You gi…". */}
+      <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>{label}</Text>
       <View style={s.halfBody}>
         {side.leaves ? (
           <View style={s.leafTile}>

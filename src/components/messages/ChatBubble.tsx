@@ -9,7 +9,8 @@ import { color, type } from "../../theme/tokens";
  * media, follow one width rule:
  *
  *   bubble   up to 75% of the SCREEN, in pixels; short text stays on one line
- *   card     min(88% of the screen, 360) px: a trade offer needs room for its split
+ *   card     75% of the screen, at least 260 and at most 360 px, and the card
+ *            FILLS it: a trade offer needs a definite width for its split
  *   status   centred, up to 90%: "You declined the offer", "Trade completed"
  *
  * ── WHY PIXELS, NOT PERCENTAGES ─────────────────────────────────────────────
@@ -24,6 +25,15 @@ import { color, type } from "../../theme/tokens";
  *
  * The avatar sits OUTSIDE the cap: received bubbles get the same 75% as sent
  * ones rather than 75% minus a face.
+ *
+ * ── A CARD FILLS ITS COLUMN ─────────────────────────────────────────────────
+ *
+ * The column aligns its children to one side (flex-start / flex-end), and a
+ * child aligned that way is sized to its CONTENT, not to the column. So the
+ * column's pixel width alone did not reach the trade card: two short item
+ * names shrank it, and "You give" / "You get" were cut off. The card is
+ * therefore wrapped in a view that stretches to the column, which gives the
+ * card itself the definite width. Text bubbles keep their content sizing.
  */
 export type BubbleKind = "bubble" | "card" | "status";
 
@@ -60,7 +70,11 @@ export function ChatBubble({
     <View style={[s.row, mine ? s.rowMine : s.rowTheir]}>
       {!mine ? <View style={s.avatarColumn}>{avatar}</View> : null}
       <View style={[s.column, mine ? s.columnMine : s.columnTheir, size]}>
-        {kind === "card" ? children : <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheir]}>{children}</View>}
+        {kind === "card" ? (
+          <View style={s.cardFill}>{children}</View>
+        ) : (
+          <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheir]}>{children}</View>
+        )}
         <Text style={s.time}>{time}</Text>
       </View>
     </View>
@@ -71,10 +85,14 @@ export function ChatBubble({
 export function bubbleCaps(width: number): { bubble: number; card: number; status: number } {
   return {
     bubble: Math.round(width * 0.75),
-    card: Math.min(Math.round(width * 0.88), 360),
+    card: Math.min(Math.max(Math.round(width * 0.75), CARD_MIN), CARD_MAX),
     status: Math.round(width * 0.9),
   };
 }
+
+/** The card's floor and ceiling, in px. Below 260 the swap split cannot hold two photos and a seam. */
+const CARD_MIN = 260;
+const CARD_MAX = 360;
 
 export const AVATAR_SIZE = 28;
 const BUBBLE_PADDING = 10;
@@ -113,6 +131,7 @@ const s = StyleSheet.create({
   columnMine: { alignItems: "flex-end" },
   columnTheir: { alignItems: "flex-start" },
   columnCentre: { alignItems: "center" },
+  cardFill: { alignSelf: "stretch" },
   bubble: {
     borderRadius: 16,
     padding: BUBBLE_PADDING,
