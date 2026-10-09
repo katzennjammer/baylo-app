@@ -208,6 +208,11 @@ export default function SettingsScreen() {
 
         <SectionHeader accent="Privacy and safety" />
         <SettingsRow
+          label="Active sessions"
+          sub="See where you're signed in and log out other devices"
+          onPress={() => router.push("/active-sessions")}
+        />
+        <SettingsRow
           label="Blocked users"
           sub="See who you have blocked and unblock them"
           onPress={() => router.push("/blocked-users")}

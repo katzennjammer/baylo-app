@@ -777,7 +777,37 @@ export async function signOut(options: { revoke?: boolean } = {}): Promise<void>
  * mechanism here — no mutex library required, but also no room to insert an
  * `await` into that sequence later.
  */
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+
+/** How long a refresh gets before it counts as "could not refresh, try later". */
+const REFRESH_TIMEOUT_MS = 6000;
+
+/**
+ * What a refresh attempt came to. Three answers, not two, and the third is the
+ * one that used to be missing:
+ *
+ *   token        — rotated; retry the request with it.
+ *   signedOut    — the server said 401: expired, revoked, a family killed by a
+ *                  replay, a device logged out from another phone. Terminal.
+ *   unavailable  — the server did not say no. It was unreachable, slow, rate
+ *                  limiting (429), broken (5xx), or answered something that is
+ *                  not a token pair (a captive portal's 200 HTML page). The
+ *                  session is kept, the request fails with `error`, and the
+ *                  next request that hits a 401 simply tries again.
+ *
+ * Signing out on anything but a 401 made a server hiccup a logout: a 503
+ * during a deploy, or a 429 from the refresh rate limit, would send every
+ * phone that refreshed in that window back to the login screen with its
+ * session thrown away.
+ */
+type RefreshOutcome =
+  | { kind: "token"; accessToken: string }
+  | { kind: "signedOut" }
+  | { kind: "unavailable"; error: ApiError };
+
+/** The message a person reads when their sign-in could not be refreshed. */
+const REFRESH_UNAVAILABLE_MESSAGE =
+  "We couldn't refresh your sign-in just now. You're still signed in. Try again in a moment.";
 
 /**
  * Produces a fresh access token, and guarantees AT MOST ONE refresh request is
@@ -816,12 +846,12 @@ let refreshInFlight: Promise<string | null> | null = null;
  *   the current one, so a refresh has already happened and the caller should
  *   just retry with what is now in memory.
  *
- * Returns null when the session is gone for good, which is the signal to stop
- * retrying and show the login screen.
+ * `signedOut` is the signal to stop retrying and show the login screen;
+ * `unavailable` is the signal to fail this request and keep the session.
  */
-async function refreshOnce(spentAccessToken: string): Promise<string | null> {
+async function refreshOnce(spentAccessToken: string): Promise<RefreshOutcome> {
   // LATE case first: somebody already rotated past the token we used.
-  if (memory && memory.accessToken !== spentAccessToken) return memory.accessToken;
+  if (memory && memory.accessToken !== spentAccessToken) return { kind: "token", accessToken: memory.accessToken };
 
   // SIMULTANEOUS case: join the refresh that is already running.
   if (refreshInFlight) return refreshInFlight;
@@ -834,9 +864,16 @@ async function refreshOnce(spentAccessToken: string): Promise<string | null> {
   }
 }
 
-async function performRefresh(): Promise<string | null> {
+async function performRefresh(): Promise<RefreshOutcome> {
   const refreshToken = memory?.refreshToken;
-  if (!refreshToken) return null;
+  if (!refreshToken) return { kind: "signedOut" };
+
+  // Same reason revokeFamily() has one: React Native's fetch has no default
+  // timeout, and on a captive-portal Wi-Fi the request hangs until the OS gives
+  // up -- minutes on Android. Every request that 401s meanwhile is queued
+  // behind refreshInFlight, so without this the whole app looks frozen.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS);
 
   let res: Response;
   try {
@@ -848,32 +885,72 @@ async function performRefresh(): Promise<string | null> {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refreshToken }),
       credentials: "omit",
+      signal: abort.signal,
     });
-  } catch {
+  } catch (cause) {
     // The network is down, not the session. Leaving the tokens in place means
     // the next attempt works once there is signal again; signing out here would
-    // make every tunnel and lift a logout.
-    return null;
+    // make every tunnel and lift a logout. NETWORK_ERROR, so the query client
+    // retries it like any other transport failure.
+    clearTimeout(timer);
+    return {
+      kind: "unavailable",
+      error: networkError(
+        cause instanceof Error && cause.name === "AbortError"
+          ? new Error(`Refreshing the sign-in took longer than ${REFRESH_TIMEOUT_MS / 1000} seconds`)
+          : cause,
+      ),
+    };
+  }
+
+  // Read the body under the same timer: a server that sends headers and then
+  // stalls is the same hang.
+  const body = res.ok
+    ? ((await res.json().catch(() => ({}))) as Partial<TokenResponse>)
+    : null;
+  clearTimeout(timer);
+
+  if (res.status === 401) {
+    // THE ONLY TERMINAL ANSWER: expired, revoked, or a family killed by a
+    // replay or by "log out" on another device. There is no token left that
+    // will ever work, so drop the session and let the guard in
+    // app/(app)/_layout.tsx route to login.
+    await signOut();
+    return { kind: "signedOut" };
   }
 
   if (!res.ok) {
-    // 401 here is terminal: expired, revoked, or a family killed by a replay.
-    // There is no token left that will ever work, so drop the session and let
-    // the guard in app/(app)/_layout.tsx route to login.
-    await signOut();
-    return null;
+    // 429, 5xx, anything else: the server did not say this session is over.
+    // The refresh token was not spent (a refused refresh rotates nothing), so
+    // keeping it is safe, and the next 401 tries again.
+    const header = res.headers.get("Retry-After");
+    const retryAfter = header !== null && Number.isFinite(Number(header)) ? Number(header) : null;
+    return {
+      kind: "unavailable",
+      error: new ApiError(
+        res.status,
+        res.status === 429 ? "RATE_LIMITED" : "REFRESH_UNAVAILABLE",
+        REFRESH_UNAVAILABLE_MESSAGE,
+        [],
+        retryAfter,
+      ),
+    };
   }
 
-  const body = (await res.json().catch(() => ({}))) as Partial<TokenResponse>;
-  if (!body.accessToken || !body.refreshToken || !memory) {
-    await signOut();
-    return null;
+  if (!body?.accessToken || !body.refreshToken || !memory) {
+    // A 200 that is not a token pair: a captive portal's login page, a proxy.
+    // The real server never answers 200 without one, so this request most
+    // likely never reached it and the token in hand is still good. Not a
+    // logout. (`!memory`: signed out while this was in flight; nothing to keep.)
+    return memory
+      ? { kind: "unavailable", error: new ApiError(res.status, "REFRESH_UNAVAILABLE", REFRESH_UNAVAILABLE_MESSAGE) }
+      : { kind: "signedOut" };
   }
 
   memory = { ...memory, accessToken: body.accessToken, refreshToken: body.refreshToken };
   await saveTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken });
   publish();
-  return body.accessToken;
+  return { kind: "token", accessToken: body.accessToken };
 }
 
 // ── The request path ─────────────────────────────────────────────────────────
@@ -1115,10 +1192,14 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
 
   if (res.status !== 401 || !attempted) return res;
 
-  const fresh = await refreshOnce(attempted);
-  if (!fresh) return res; // Session is gone; hand the 401 back unchanged.
+  const outcome = await refreshOnce(attempted);
+  if (outcome.kind === "signedOut") return res; // Session is gone; hand the 401 back unchanged.
+  // The session is fine and the server could not be asked. Handing back the
+  // 401 would read as "Sign in to continue" on a screen the person is still
+  // signed in to; this says what actually happened.
+  if (outcome.kind === "unavailable") throw outcome.error;
 
-  return send(fresh);
+  return send(outcome.accessToken);
 }
 
 /**
