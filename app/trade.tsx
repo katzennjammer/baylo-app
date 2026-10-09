@@ -26,6 +26,7 @@ import {
 import { Hairline, NavDone, OfferScreenHost } from "../src/components/offer/chrome";
 import { SheetRow, SheetRows, SheetShell } from "../src/components/sheet-ui";
 import { HandoffPanel } from "../src/components/trades/HandoffPanel";
+import { MeetupHelpSheet } from "../src/components/trades/MeetupHelpSheet";
 import { CardLink, ProgressTrack, SwapSplit } from "../src/components/trades/TradeCard";
 import {
   DonePanel,
@@ -98,6 +99,8 @@ export default function TradeScreen() {
   useTradeLiveness(active.refetch);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  /** "What happened?" — opened from the handoff panel's link and the ⋯ menu alike. */
+  const [helpOpen, setHelpOpen] = useState(false);
   const [forceHandoff, setForceHandoff] = useState(params.handoff === "1");
   const arrivedAgreed = useRef<boolean | null>(null);
 
@@ -238,7 +241,15 @@ export default function TradeScreen() {
         />
       );
   } else if (handoff) {
-    panel = <HandoffPanel trade={trade!} partner={partner} entry={entry} keyboardUp={keyboardUp} />;
+    panel = (
+      <HandoffPanel
+        trade={trade!}
+        partner={partner}
+        entry={entry}
+        keyboardUp={keyboardUp}
+        onSomethingWrong={() => setHelpOpen(true)}
+      />
+    );
   } else if (agreedNow && trade!.meetup) {
     panel = (
       <WaitingPanel
@@ -296,9 +307,7 @@ export default function TradeScreen() {
         key="wrong"
         glyph={rowIcon(WarningIcon)}
         label={copy.code.somethingWrong}
-        onPress={close(() =>
-          router.push(`/(app)/messages?partner=${encodeURIComponent(counterparty.id)}`),
-        )}
+        onPress={close(() => setHelpOpen(true))}
       />,
     );
   }
@@ -421,6 +430,12 @@ export default function TradeScreen() {
         <SheetShell title={copy.tradeScreen.title(partner)} onClose={() => setMenuOpen(false)}>
           <SheetRows>{menuRows}</SheetRows>
         </SheetShell>
+      ) : null}
+
+      {/* Only while the trade is live: a trade cancelled from the sheet drops
+          out of ACCEPTED/CONFIRMING, and the sheet with it. */}
+      {helpOpen && trade && live ? (
+        <MeetupHelpSheet trade={trade} partner={partner} onClose={() => setHelpOpen(false)} />
       ) : null}
 
       {offerFlow.sheet}

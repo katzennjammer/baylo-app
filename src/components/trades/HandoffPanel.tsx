@@ -50,12 +50,15 @@ export function HandoffPanel({
   partner,
   entry,
   keyboardUp,
+  onSomethingWrong,
 }: {
   trade: ActiveTrade;
   partner: string;
   /** Owned by the screen, so the field survives the screen's own re-layouts. */
   entry: CodeEntryState;
   keyboardUp: boolean;
+  /** Opens the screen's "What happened?" sheet — the same one the ⋯ menu opens. */
+  onSomethingWrong: () => void;
 }) {
   const router = useRouter();
   const start = useConfirmStart(trade.id);
@@ -250,9 +253,7 @@ export function HandoffPanel({
           <CardLink
             label={copy.handoff.somethingWrong}
             tone="secondary"
-            onPress={() =>
-              router.push(`/(app)/messages?partner=${encodeURIComponent(trade.counterparty.id)}`)
-            }
+            onPress={onSomethingWrong}
           />
         </View>
       </View>

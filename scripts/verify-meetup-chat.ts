@@ -13,6 +13,9 @@
  *      differ); with none, the offer id itself is the trade id (schema v2).
  *   5. chatTradeChip(): every trade status maps to the trade screen's words.
  *   6. No hardcoded reward amount: the reward copy uses the number it is given.
+ *   7. The meetup help sheet: the report notes prefix (and the server's 2000
+ *      cap), the action lists, and "Suggest a new hub and time" offered only
+ *      while the trade is ACCEPTED, never once the codes are out (CONFIRMING).
  */
 import type { ActiveTrade } from "../src/api/types";
 import * as copy from "../src/components/trades/copy";
@@ -26,6 +29,12 @@ import {
   pickerStartTime,
   startOfDay,
 } from "../src/lib/meetup-when";
+import {
+  REPORT_NOTES_MAX,
+  UNSAFE_DEFAULT_CATEGORY,
+  helpActions,
+  helpReportNotes,
+} from "../src/components/trades/MeetupHelpSheet";
 
 let failures = 0;
 let checks = 0;
@@ -130,6 +139,32 @@ function eq<T>(label: string, got: T, want: T) {
 {
   eq("reward with amount", copy.picker.rewardBody(25).includes("each earn 25 Leaves"), true);
   eq("reward without amount", /\d/.test(copy.picker.rewardBody(null)), false);
+}
+
+/* 7. meetup help sheet */
+{
+  eq("notes: prefix", helpReportNotes("trade-1", "unsafe"), "Trade trade-1, at handoff: I felt unsafe");
+  eq("notes: no-show", helpReportNotes("t", "noShow"), "Trade t, at handoff: They didn't show up");
+  eq("notes: server cap", REPORT_NOTES_MAX, 2000);
+  eq("notes: never over the cap", helpReportNotes("x".repeat(3000), "other").length, 2000);
+  eq("unsafe starts on harassment", UNSAFE_DEFAULT_CATEGORY, "harassment");
+
+  eq("no-show, ACCEPTED", helpActions("noShow", "ACCEPTED"), ["message", "cancel", "reschedule"]);
+  eq("no-show, CONFIRMING: no reschedule", helpActions("noShow", "CONFIRMING"), ["message", "cancel"]);
+  for (const status of ["PENDING", "CONFIRMING", "COMPLETED", "REJECTED", "CANCELLED"] as const) {
+    for (const reason of ["noShow", "notAsDescribed", "unsafe", "other"] as const) {
+      eq(`reschedule only while ACCEPTED: ${reason}/${status}`, helpActions(reason, status).includes("reschedule"), false);
+    }
+  }
+  eq("not as described", helpActions("notAsDescribed", "CONFIRMING"), ["message", "cancel"]);
+  eq("unsafe: 911 first", helpActions("unsafe", "CONFIRMING")[0], "call911");
+  eq("unsafe", helpActions("unsafe", "ACCEPTED"), ["call911", "report", "cancel"]);
+  eq("something else", helpActions("other", "CONFIRMING"), ["message", "report"]);
+  eq("danger line", copy.help.danger, "If you're in danger right now, call 911.");
+  eq("already-reported copy", copy.help.reportAlreadyOpen("Aj"), "You've already reported Aj. The Baylo team is reviewing it.");
+  // Decision 3: nothing in the sheet's copy implies a consequence for the other person.
+  const words = JSON.stringify(Object.values(copy.help).map((v) => (typeof v === "function" ? v("Aj", "x") : v)));
+  eq("no consequence words", /penalt|record|strike|flag|ban|suspend|warning/i.test(words), false);
 }
 
 console.log(failures === 0 ? `verify-meetup-chat: all ${checks} checks passed` : `verify-meetup-chat: ${failures} of ${checks} FAILED`);

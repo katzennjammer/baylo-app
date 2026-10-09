@@ -509,6 +509,53 @@ export const handoff = {
   somethingWrong: "Something went wrong at the meetup?",
 } as const;
 
+/**
+ * "What happened?" — the meetup help sheet (`MeetupHelpSheet.tsx`), opened by
+ * `handoff.somethingWrong` and the ⋯ menu's `code.somethingWrong`.
+ *
+ * NOTHING HERE PROMISES A CONSEQUENCE. No missed meeting is recorded anywhere,
+ * a cancellation costs neither side anything, and a report is read by a person
+ * who decides. So the copy never says "penalty", "record", "flag" or "strike",
+ * and the no-show panel says nothing about the other person at all.
+ */
+export const help = {
+  title: "What happened?",
+  reason: {
+    noShow: "They didn't show up",
+    notAsDescribed: "The item isn't as described",
+    unsafe: "I felt unsafe",
+    other: "Something else",
+  },
+  reschedule: "Suggest a new hub and time",
+  cancel: "Cancel the trade",
+  /** Read first, in color.urgent, before any other row on the unsafe panel. */
+  danger: "If you're in danger right now, call 911.",
+  call: "Call 911",
+  callFailed: "Could not open the phone app",
+  callFailedBody: "Dial 911 from your phone.",
+  report: (partner: string) => `Report ${partner}`,
+  reportProblem: "Report a problem",
+  reportPickTitle: (partner: string) => `Why are you reporting ${partner}?`,
+  reportReason: (label: string) => `Reason: ${label}. Change`,
+  sendReport: "Send report",
+  reportNote: "The trade and what happened are added to the report for the Baylo team.",
+  reportSent: "Thanks. The Baylo team will review it.",
+  reportAlreadyOpen: (partner: string) =>
+    `You've already reported ${partner}. The Baylo team is reviewing it.`,
+  reportFailed: "Could not send that report",
+  /**
+   * The report's notes, written for the user rather than by them: the server
+   * has no trade target, so the trade id travels here. See helpReportNotes().
+   */
+  notes: (tradeId: string, reason: string) => `Trade ${tradeId}, at handoff: ${reason}`,
+  cancelTitle: "Cancel this trade?",
+  cancelBody:
+    "Your items go back to available, and any held bridging fee is returned. This can't be undone.",
+  keep: "Keep trade",
+  cancelConfirm: "Cancel trade",
+  cancelFailed: "Could not cancel the trade",
+} as const;
+
 /** The hub picker (`app/trade-meetup.tsx`). */
 export const picker = {
   noShared: "No hub is on both your listings yet, so no safe hub reward this time.",
