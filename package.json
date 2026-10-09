@@ -59,6 +59,7 @@
     "verify:location": "tsx scripts/verify-location-timeout.cjs",
     "verify:wordmark": "node scripts/verify-wordmark.cjs",
     "verify:opening": "node --require ./scripts/rn-stub.cjs --require ./scripts/securestore-fake.cjs --import tsx scripts/verify-opening-tier.ts",
+    "verify:meetup": "node --require ./scripts/rn-stub.cjs --import tsx scripts/verify-meetup-chat.ts",
     "vendor:leaflet": "node scripts/vendor-leaflet.mjs",
     "build:apk": "eas build --platform android --profile preview",
     "build:aab": "eas build --platform android --profile production",
