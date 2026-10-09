@@ -351,6 +351,16 @@ export function LockIcon(props: IconProps) {
   );
 }
 
+/** A signed-in device (Active sessions). A handset: body and a speaker slot. */
+export function PhoneIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="6.5" y="2.5" width="11" height="19" rx="2.4" />
+      <Path d="M10.5 18.5h3" />
+    </Glyph>
+  );
+}
+
 /** Report. A flag, which is the mark every platform uses for exactly this. */
 export function FlagIcon(props: IconProps) {
   return (
