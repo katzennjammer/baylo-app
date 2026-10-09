@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { Tappable } from "../Tappable";
+import { CheckIcon } from "../icons";
 import { border, color, radius, size, space, textStyle, type } from "../../theme/tokens";
 import { offerBorder } from "../../theme/offer-tokens";
 
@@ -21,6 +22,7 @@ export function TradeButton({
   onPress,
   tone = "solid",
   disabled = false,
+  disabledInk = "muted",
   accessibilityLabel,
   accessibilityHint,
   style,
@@ -29,12 +31,22 @@ export function TradeButton({
   onPress: () => void;
   tone?: "solid" | "outline" | "quiet";
   disabled?: boolean;
+  /**
+   * `readable` when the disabled label IS the instruction ("Choose a hub
+   * first"): same grey fill, secondary ink instead of muted, so the sentence
+   * can actually be read. Every other caller keeps the muted default.
+   */
+  disabledInk?: "muted" | "readable";
   accessibilityLabel?: string;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const look = disabled
-    ? { backgroundColor: color.control, borderColor: color.control, ink: color.inkMuted }
+    ? {
+        backgroundColor: color.control,
+        borderColor: color.control,
+        ink: disabledInk === "readable" ? color.inkSecondary : color.inkMuted,
+      }
     : tone === "solid"
       ? { backgroundColor: color.forest, borderColor: color.forest, ink: color.onScrim }
       : tone === "outline"
@@ -112,21 +124,32 @@ export function NoticeRow({
   );
 }
 
-/** A small step heading: "1  Read your code to Aj". */
-export function StepHeading({ n, children }: { n: number; children: string }) {
+/**
+ * A small step heading: "1  Read your code to Aj".
+ *
+ * `done` swaps the number for a check in the same forest dot (the meetup
+ * picker's three steps). Omitted — the handoff panel — it draws exactly what
+ * it always has.
+ */
+export function StepHeading({ n, done, children }: { n: number; done?: boolean; children: string }) {
   return (
     <View style={s.step}>
       <View style={s.stepDot}>
-        <Text
-          style={[textStyle(type.urgencyChip), { color: color.onScrim }]}
-          maxFontSizeMultiplier={size.home.headingMaxFontScale}
-        >
-          {n}
-        </Text>
+        {done ? (
+          <CheckIcon size={STEP_DOT - 8} stroke={2} color={color.onScrim} />
+        ) : (
+          <Text
+            style={[textStyle(type.urgencyChip), { color: color.onScrim }]}
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+          >
+            {n}
+          </Text>
+        )}
       </View>
       <Text
         style={[textStyle(type.username), { color: color.ink, flex: 1 }]}
         accessibilityRole="header"
+        accessibilityLabel={done === undefined ? undefined : `Step ${n}, ${children}${done ? ", done" : ""}`}
       >
         {children}
       </Text>

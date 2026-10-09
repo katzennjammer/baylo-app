@@ -527,6 +527,47 @@ export const picker = {
   alreadyAgreed: (partner: string, where: string) =>
     `You and ${partner} already agreed on ${where}. Send again to change it.`,
   planChanged: "The plan changed while you were picking. Check it, then send again.",
+
+  /* ── The three-step layout (meetup redesign, Oct 2026) ─────────────────── */
+  title: (partner: string) => `Plan your meetup with ${partner}`,
+  stepWhere: "Where",
+  stepWhen: "When",
+  stepNote: "Note (optional)",
+  chooseHub: "Choose a hub",
+  chooseHubHint: "Pick a safe hub to meet at",
+  tapToChange: "Tap to change",
+  chooseTime: "Choose a time",
+  changeTime: "Change",
+  notePlaceholder: "Where exactly, or what to look for. Like: by the main entrance, I'll have a blue bag.",
+  /** The primary button while something is missing. Never a silent grey button. */
+  needHub: "Choose a hub first",
+  needDay: "Choose a day",
+  needTime: "Choose a time",
+  pastTime: "Choose a time later than now",
+  tooFar: (days: number) => `Choose a day within ${days} days`,
+  /** The plain-words line above the button: `Sun 18 Oct, 20:00 at Parkmall`. */
+  summary: (when: string, hub: string) => `${when} at ${hub}`,
+
+  /* ── The hub sheet ──────────────────────────────────────────────────────── */
+  sheetTitle: "Choose a hub",
+  searchPlaceholder: "Search hubs",
+  searchLabel: "Search hubs by name, area or type",
+  groupSuggested: (partner: string) => `Suggested by ${partner}`,
+  groupShared: "On both your listings",
+  noMatch: (q: string) => `No hub matches "${q}".`,
+
+  /* ── The safe hub reward sheet ─────────────────────────────────────────── */
+  rewardInfoLabel: "Safe hub reward. What is this?",
+  rewardTitle: "Safe hub reward",
+  /** `n` comes from /api/v1/profile/me's task list; null words it without one. */
+  rewardBody: (n: number | null) =>
+    n === null
+      ? "You both listed this hub as a meetup spot. Meet here and you each earn Leaves once the trade is completed."
+      : `You both listed this hub as a meetup spot. Meet here and you each earn ${grouped(n)} Leaves once the trade is completed.`,
+  rewardSmallPrint:
+    "Doesn't apply to shop accounts, a repeat trade with the same person within 30 days, or past the weekly task limit.",
+  rewardShop: "Shop accounts don't earn this reward.",
+  gotIt: "Got it",
 } as const;
 
 /** The trade offer card in a chat thread. */
@@ -538,6 +579,11 @@ export const chatOffer = {
   declined: "Declined",
   waitingFor: (partner: string) => `Waiting for ${partner}`,
   openTrade: "Open trade",
+  /** The trade's CURRENT state, once the offer became one. */
+  hubSet: "Hub set",
+  handoff: "Handoff",
+  done: "Done",
+  cancelled: "Cancelled",
 } as const;
 
 /* ─────────────────── §10.4 / frame 9i — the incoming offer ──────────── */

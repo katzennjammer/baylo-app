@@ -53,6 +53,17 @@ export function useProfileMe(enabled = true) {
   });
 }
 
+/**
+ * What one task pays, in Leaves, as /api/v1/profile/me reports it. Null while
+ * the profile loads, when it failed, or when the server does not list the task:
+ * the caller words its sentence without a number rather than guess one.
+ */
+export function useTaskReward(task: string): number | null {
+  const me = useProfileMe();
+  const row = me.data?.tasks?.items.find((t) => t.task === task);
+  return typeof row?.reward === "number" ? row.reward : null;
+}
+
 export function usePublicProfile(id: string | undefined) {
   return useQuery({
     queryKey: ["profile", id],

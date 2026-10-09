@@ -17,6 +17,7 @@ import { grouped, meetupWhen, shortDate } from "../../lib/gap";
 import { bracketLabel } from "../../lib/brackets";
 import { ApiError, UNCONFIRMED_MESSAGE } from "../../api/client";
 import { useTradeLiveness } from "../../lib/trade-liveness";
+import { RewardChip, SafeHubRewardSheet } from "./MeetupSheets";
 import { CardLink } from "./TradeCard";
 import * as copy from "./copy";
 import * as present from "./present";
@@ -233,7 +234,15 @@ export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
   }
 
   if (state === "yours-to-answer" && plan) {
-    return <SuggestionCard tradeId={trade.id} plan={plan} partner={partner} onSuggestAnother={openPicker} />;
+    return (
+      <SuggestionCard
+        tradeId={trade.id}
+        plan={plan}
+        partner={partner}
+        shared={!!options.data?.sharedHubIds.includes(plan.hub.id)}
+        onSuggestAnother={openPicker}
+      />
+    );
   }
 
   return (
@@ -255,6 +264,7 @@ export function SuggestionCard({
   tradeId,
   plan,
   partner,
+  shared = false,
   notice,
   onSuggestAnother,
   onAgreed,
@@ -262,6 +272,8 @@ export function SuggestionCard({
   tradeId: string;
   plan: MeetupPlan;
   partner: string;
+  /** Both listings name the suggested hub: show the safe hub reward chip. */
+  shared?: boolean;
   notice?: string | null;
   onSuggestAnother: () => void;
   onAgreed?: () => void;
@@ -269,6 +281,7 @@ export function SuggestionCard({
   const accept = useAcceptMeetup(tradeId);
   const qc = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
+  const [rewardOpen, setRewardOpen] = useState(false);
 
   const agree = () => {
     setFailure(null);
@@ -299,6 +312,11 @@ export function SuggestionCard({
         <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
           {[plan.hub.typeLabel, plan.hub.city].filter(Boolean).join(" · ")}
         </Text>
+        {shared ? (
+          <View style={{ flexDirection: "row", marginTop: 4 }}>
+            <RewardChip onPress={() => setRewardOpen(true)} />
+          </View>
+        ) : null}
         <Text style={[textStyle(type.detailBody), { color: color.ink, marginTop: 4 }]}>
           {meetupWhen(new Date(plan.at))}
         </Text>
@@ -320,6 +338,7 @@ export function SuggestionCard({
           style={{ flex: 1 }}
         />
       </View>
+      {rewardOpen ? <SafeHubRewardSheet onClose={() => setRewardOpen(false)} /> : null}
     </View>
   );
 }

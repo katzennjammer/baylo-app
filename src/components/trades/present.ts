@@ -676,3 +676,58 @@ export function finishedRowWords(
 /* ───────────────────────── re-exports for the screens ───────────────── */
 
 export { firstName, grouped, shortDate, swapLine, offerSwapLine, offerFeeLine, tradeFeeLine };
+
+/* ─────────────────────── the chat offer card's status ────────────────────── */
+
+/**
+ * The trade a chat offer became, from trades the thread already holds (active
+ * plus the 50 most recent history rows) — no request of its own.
+ *
+ * ── WHICH ID ────────────────────────────────────────────────────────────────
+ *
+ * Since schema v2 an offer and its trade are ONE row: accepting it updates
+ * `Trade` where `id = offerId` (baylo src/app/api/offers/[id]/route.ts), and
+ * the `offer_update` message carries that same id as `tradeId`. Checked on
+ * live on 9 Oct 2026: every chat offer's `offerId` is a `Trade.id`, none is a
+ * `legacyOfferId`, and no `offer_update` names a different `tradeId`.
+ *
+ * The lookup still does not lean on that blindly. An `offer_update`'s own
+ * `tradeId` wins whenever the thread has one — a pre-v2 row, whose ids
+ * differ, resolves through it. Only with no update does it try the offer id
+ * itself, which is how a trade whose update row the thread never saw is
+ * still found. Null when the trade is outside what the thread holds: the
+ * card then shows the status saved in the messages, as it always did.
+ */
+export function chatTradeFor(
+  offerId: string,
+  savedTradeId: string | null,
+  tradesById: ReadonlyMap<string, ActiveTrade>,
+): ActiveTrade | null {
+  if (savedTradeId) return tradesById.get(savedTradeId) ?? null;
+  return tradesById.get(offerId) ?? null;
+}
+
+/**
+ * The trade's CURRENT state as the chat card's chip: the trade screen's own
+ * step words (Accepted / Hub set / Handoff / Done), green while it moves,
+ * grey once it ended without a swap. Null while it is still a pending offer:
+ * the card's offer wording ("Your move", "Waiting for Aj") applies then.
+ */
+export function chatTradeChip(trade: ActiveTrade): { label: string; tone: "green" | "grey" } | null {
+  switch (trade.status) {
+    case "ACCEPTED":
+      return trade.meetup?.agreedAt
+        ? { label: copy.chatOffer.hubSet, tone: "green" }
+        : { label: copy.chatOffer.accepted, tone: "green" };
+    case "CONFIRMING":
+      return { label: copy.chatOffer.handoff, tone: "green" };
+    case "COMPLETED":
+      return { label: copy.chatOffer.done, tone: "green" };
+    case "REJECTED":
+      return { label: copy.chatOffer.declined, tone: "grey" };
+    case "CANCELLED":
+      return { label: copy.chatOffer.cancelled, tone: "grey" };
+    default:
+      return null;
+  }
+}

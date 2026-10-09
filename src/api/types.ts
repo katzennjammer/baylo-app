@@ -450,9 +450,11 @@ export interface ViewerIdVerification {
  * status itself and must not assume the page is complete — see the note in
  * `src/api/offer.ts`.
  *
- * Only the blocks this app reads are typed. `impact`, `reviews` and `tasks`
- * arrive and are deliberately left off: typing a field nobody renders is a
- * claim about the server that nothing checks.
+ * Only the blocks this app reads are typed. `impact` and `reviews` arrive and
+ * are deliberately left off: typing a field nobody renders is a claim about
+ * the server that nothing checks. `tasks` is typed for one reader, the safe
+ * hub reward sheet, which takes the amount from here so the app never holds
+ * its own copy of the server's `TASK_REWARDS`.
  */
 export interface ProfileMePayload {
   user: {
@@ -510,6 +512,14 @@ export interface ProfileMePayload {
    * which the Profile tab reads as "has activity": the personal profile.
    */
   hasPersonalActivity?: boolean;
+  /**
+   * The task list, from the server's `TASK_ORDER` / `TASK_REWARDS`. Only
+   * `task` and `reward` are read. Optional: a reader must cope with it absent
+   * and say what it can without a number.
+   */
+  tasks?: {
+    items: { task: string; reward: number }[];
+  };
 }
 
 export interface PublicProfilePayload {
