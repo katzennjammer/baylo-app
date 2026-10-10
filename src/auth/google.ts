@@ -12,7 +12,9 @@ type NativeGoogle = typeof import("@react-native-google-signin/google-signin");
 let native: NativeGoogle | null = null;
 try {
   native = require("@react-native-google-signin/google-signin");
-} catch {
+} catch (err) {
+  // Say why: "missing from this build" and "threw while loading" look the same otherwise.
+  if (__DEV__) console.warn("[google] native sign-in module failed to load:", err);
   native = null;
 }
 // Only reached when `native` is set: SUPPORTED below gates every use.
