@@ -521,7 +521,8 @@ export function useTradeDecision() {
       }
       return (await res.json()) as unknown;
     },
-    onSuccess: () => invalidateTrades(qc),
+    // Settled, not success: see useCancelTrade().
+    onSettled: () => invalidateTrades(qc),
   });
 }
 
@@ -533,6 +534,16 @@ export function useTradeDecision() {
  * a trade row, releases both items from IN_TRADE back to AVAILABLE, and is
  * available to the receiver as well as the sender. The server refuses it outside
  * the states where it makes sense.
+ *
+ * ── REFRESH ON ERROR TOO ────────────────────────────────────────────────────
+ *
+ * An error does not prove nothing changed. Until 11 Oct 2026 the server saved a
+ * cancel and then answered 500 when Pusher failed; the lists were only refreshed
+ * on success, so the screen kept offering a live trade that was already
+ * cancelled, and the next tap was refused. The API no longer does that, but any
+ * failure after the write would leave the same stale screen, so the lists are
+ * re-read either way. The error dialog still shows; the refetch decides what the
+ * screen says after it.
  */
 export function useCancelTrade() {
   const qc = useQueryClient();
@@ -547,7 +558,7 @@ export function useCancelTrade() {
       if (!res.ok) return legacyFailure(res, "We could not call that trade off just now.");
       return (await res.json()) as unknown;
     },
-    onSuccess: () => invalidateTrades(qc),
+    onSettled: () => invalidateTrades(qc),
   });
 }
 

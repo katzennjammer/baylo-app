@@ -130,8 +130,9 @@ export function MeetupHelpSheet({
       {
         text: copy.help.cancelConfirm,
         style: "destructive",
-        // useCancelTrade() invalidates the trade lists on success, which is
-        // what moves the trade screen on to the cancelled trade.
+        // useCancelTrade() invalidates the trade lists when it settles, which
+        // is what moves the trade screen on to the cancelled trade (and puts it
+        // right if an error arrived after the cancel was saved).
         onPress: () =>
           cancelTrade.mutate(trade.id, {
             onSuccess: onClose,
