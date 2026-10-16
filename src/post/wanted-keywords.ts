@@ -120,12 +120,6 @@ export const WANTED_KEYWORDS: Record<Category, readonly string[]> = {
     "food", "snack", "rice", "fruit", "vegetable", "veggies", "coffee", "baked goods",
     "bread", "pastry", "pastries", "meat", "egg", "canned goods", "ulam", "pagkain",
   ],
-  SERVICES: [
-    "service", "tutoring", "tutor", "lesson", "haircut", "cleaning", "repair", "laundry",
-    // Not "delivery": in this field it is as often logistics ("no delivery,
-    // meetup only") as a service anyone wants.
-    "massage", "babysitting", "photography",
-  ],
   OTHER: ["misc", "miscellaneous"],
 };
 

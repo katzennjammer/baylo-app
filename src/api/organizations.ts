@@ -85,7 +85,7 @@ export interface OrganizationsPayload {
  *
  * THE CATEGORY LIST COMES FROM THE SERVER and is not compiled in, unlike
  * CATEGORY_LABELS in ./post. That duplication is justified there because the
- * post wizard has to paint twenty chips before any request has happened; this
+ * post wizard has to paint nineteen chips before any request has happened; this
  * form has already made a request by the time it renders, so there is nothing
  * to gain from a second copy that can go stale against the enum.
  */

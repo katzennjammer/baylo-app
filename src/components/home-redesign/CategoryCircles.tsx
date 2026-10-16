@@ -7,7 +7,6 @@ import {
   BikeIcon,
   BlocksIcon,
   BookIcon,
-  BriefcaseIcon,
   GamepadIcon,
   GemIcon,
   GridIcon,
@@ -83,7 +82,6 @@ const GLYPHS: Record<string, { glyph: Glyph; tone: CategoryToneName }> = {
   PETS: { glyph: PawIcon, tone: "teal" },
   PLANTS: { glyph: SproutIcon, tone: "green" },
   FOOD: { glyph: AppleIcon, tone: "green" },
-  SERVICES: { glyph: BriefcaseIcon, tone: "sky" },
   OTHER: { glyph: MoreIcon, tone: "sand" },
 };
 

@@ -2,6 +2,7 @@ import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { currentSession } from "../api/client";
+import { CATEGORIES } from "../api/post";
 import { initialState, type PostState } from "./state";
 
 /**
@@ -236,8 +237,23 @@ export function useStoredDraft() {
   return {
     status,
     draft,
-    initial: draft?.state ? { ...initialState(), ...draft.state } : initialState(),
+    initial: draft?.state ? withoutRemovedCategories({ ...initialState(), ...draft.state }) : initialState(),
+  };
+}
+
+/**
+ * A draft can name a category the server has since withdrawn (SERVICES, 16 Oct
+ * 2026). Kept, it would sail through every step and be refused with a 400 at
+ * the last one; dropped here, the category step simply asks again.
+ */
+function withoutRemovedCategories(state: PostState): PostState {
+  const known = (c: string) => (CATEGORIES as readonly string[]).includes(c);
+  return {
+    ...state,
+    category: state.category && known(state.category) ? state.category : null,
+    returnCategories: state.returnCategories.filter(known),
   };
 }
 
 export type { DraftEnvelope };
+
