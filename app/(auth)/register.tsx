@@ -40,6 +40,7 @@ import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
 import { openMailApp } from "../../src/lib/open-mail";
 import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
 import { OrgDetailsStep } from "../../src/components/auth-org-details";
+import { rememberSignedUpAsOrganization } from "../../src/auth/signup-kind";
 
 /**
  * Create an account, and the two screens that hang off it.
@@ -191,6 +192,9 @@ export default function RegisterScreen() {
         asOwner={accountType === "organization"}
         onBack={() => setStage({ kind: "account-type" })}
         onRegistered={(next) => {
+          // Remembered before the business step, so "Do this later" still
+          // leaves Post knowing this is an MSME. See src/auth/signup-kind.ts.
+          if (accountType === "organization") void rememberSignedUpAsOrganization(next.email);
           setPending(next);
           setStage(
             accountType === "organization" ? { kind: "org-details" } : { kind: "check-email" },

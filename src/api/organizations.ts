@@ -68,6 +68,17 @@ export function isOrgPostingRefusal(e: unknown): e is ApiError {
   );
 }
 
+/**
+ * POST /api/items refusing the OWNER of an approved shop who posted as
+ * themselves without a verified ID (16 Oct 2026): post as the shop. The server
+ * never switches the author on its own; the post screen asks.
+ */
+export const ORG_CONTEXT_REQUIRED = "ORG_CONTEXT_REQUIRED";
+
+export function isOrgContextRequired(e: unknown): e is ApiError {
+  return e instanceof ApiError && e.status === 403 && e.code === ORG_CONTEXT_REQUIRED;
+}
+
 export interface BusinessCategoryOption {
   value: string;
   label: string;
