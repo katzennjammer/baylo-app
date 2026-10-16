@@ -58,7 +58,6 @@ export const CATEGORIES = [
   "PETS",
   "PLANTS",
   "FOOD",
-  "SERVICES",
   "OTHER",
 ] as const;
 
@@ -70,7 +69,7 @@ export type Category = (typeof CATEGORIES)[number];
  * DUPLICATED ON PURPOSE, and it is the only duplication in this file. The two
  * endpoints this flow uses that return a category — identify and valuation —
  * disagree about whether they send a label: valuation sends `categoryLabel`,
- * identify sends the bare enum. The picker on step 2 has to render twenty
+ * identify sends the bare enum. The picker on step 2 has to render nineteen
  * options before either call has happened, so it cannot wait for a label it
  * will only be given for one of them. Where a server label IS present it wins;
  * this is the fallback and the picker's source.
@@ -94,7 +93,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   PETS: "Pets",
   PLANTS: "Plants",
   FOOD: "Food",
-  SERVICES: "Services",
   OTHER: "Miscellaneous",
 };
 

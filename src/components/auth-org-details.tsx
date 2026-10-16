@@ -71,6 +71,9 @@ const MAX_DTI = 64;
  */
 const DTI_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ./-]*$/;
 
+/** Shop types the server still accepts but the form no longer offers. */
+const HIDDEN_SHOP_TYPES: readonly string[] = ["SERVICES"];
+
 export function OrgDetailsStep({
   accessToken,
   onDone,
@@ -118,7 +121,12 @@ export function OrgDetailsStep({
   const [errors, setErrors] = useState<{ name?: string; dti?: string; category?: string; document?: string }>({});
 
   // apiV1() unwraps to { data, meta }, so the payload is one level in.
-  const categories = data?.data.businessCategories ?? [];
+  // "Services" is no longer OFFERED for a new shop (16 Oct 2026, alongside the
+  // removal of the SERVICES listing category). It stays a valid value on the
+  // server, so a shop that already has it keeps it; it is only not offered.
+  const categories = (data?.data.businessCategories ?? []).filter(
+    (c) => !HIDDEN_SHOP_TYPES.includes(c.value),
+  );
   const busy = create.isPending;
 
   async function pickDocument() {

@@ -570,7 +570,7 @@ export function QuestIcon(props: IconProps) {
 
 /*
  * Category glyphs, for the Home category circles. One per category enum value
- * (src/api/post.ts CATEGORIES) -- all twenty since 30 Sep 2026; GridIcon is
+ * (src/api/post.ts CATEGORIES) -- all nineteen since SERVICES went on 16 Oct 2026; GridIcon is
  * only the fallback for a value added to the server before it gets a mark
  * here. Same 24 box, same round caps and joins, same scale() conversion --
  * they are Glyphs like everything above.
@@ -800,17 +800,6 @@ export function AppleIcon({ tint, ...props }: CategoryIconProps) {
         fill={tinted(tint)}
       />
       <Path d="M12 7.5c0-2 .8-3.5 2.5-4.5" />
-    </Glyph>
-  );
-}
-
-/** SERVICES -- a briefcase. */
-export function BriefcaseIcon({ tint, ...props }: CategoryIconProps) {
-  return (
-    <Glyph {...props}>
-      <Rect x="3" y="7.5" width="18" height="12.5" rx="2" fill={tinted(tint)} />
-      <Path d="M9 7.5v-2A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5v2" />
-      <Path d="M3 13h18" />
     </Glyph>
   );
 }

@@ -851,7 +851,7 @@ function SummaryRow({
  *
  * Section 6 says the date and category pickers do not reposition anything, and
  * the reason a sheet works here is that the choice is exclusive and long:
- * twenty options is more than a chip group can carry and exactly what a list
+ * nineteen options is more than a chip group can carry and exactly what a list
  * is for. It closes on selection — a Done button on a single-select list is a
  * second tap for no decision.
  */
