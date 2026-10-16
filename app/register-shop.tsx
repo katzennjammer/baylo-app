@@ -48,7 +48,7 @@ export default function RegisterShopScreen() {
         goBack(router);
         showDialog(
           "Shop registered",
-          "We will check your business document. Until it is approved the shop cannot post; you can keep posting as yourself from Settings.",
+          "We will check your business document, usually within a day. Until it is approved the shop cannot post; everything else stays open.",
         );
       }}
     />
