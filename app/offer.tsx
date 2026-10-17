@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
@@ -87,9 +87,36 @@ export default function OfferScreen() {
   const router = useRouter();
   const { itemId } = useLocalSearchParams<{ itemId?: string; title?: string }>();
 
-  const { context, isPending, isError, error, refetch } = useOfferContext(itemId);
+  const { context: liveContext, isPending, isError, error, refetch } = useOfferContext(itemId);
   const send = useSendOffer();
   const withdraw = useWithdrawOffer();
+
+  /* ── one send, and a screen that holds still while it leaves ──────────
+   *
+   * `inFlight` drops a second press that lands before the re-render that
+   * swaps the button for `SendingButton` — `mutate` does not dedupe, so two
+   * presses in one frame were two POSTs.
+   *
+   * `frozen` is the context as it stood when Send was pressed. The success
+   * path invalidates the item and live-offer queries this screen reads, and
+   * their answers land while the native-stack pop is still animating: the new
+   * pending offer flipped the tree to `PendingOfferState` (or, with the item
+   * now pending-offered, to the none-in-range panel) inside a screen Fabric
+   * was tearing down — `addViewAt: The specified child already has a parent`.
+   * Rendering from the snapshot keeps the tree identical until unmount; an
+   * error lets go of it. `sent` keeps the "Sending" chrome up for the same
+   * stretch, after `isPending` has gone false. */
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [frozen, setFrozen] = useState<typeof liveContext>(null);
+  const [sent, setSent] = useState(false);
+  const context = frozen ?? liveContext;
 
   /* ── the IME. See the note on `OfferScreenHost`. ────────────────────── */
   const { keyboardUp, imeHeight } = useKeyboardState();
@@ -159,14 +186,26 @@ export default function OfferScreen() {
       : null;
 
   const onSend = useCallback(() => {
-    if (!draft) return;
+    if (!draft || inFlight.current) return;
+    inFlight.current = true;
+    setFrozen(context);
     setFailed(null);
     send.mutate(draft, {
       onSuccess: () => {
+        // The latch stays set: this screen is leaving and must not send again.
+        setSent(true);
+        // The sheet is a `Modal` — its own Android window. Closing it and
+        // popping the screen in one commit is the other half of the crash, so
+        // the sheet goes first and the pop waits a frame.
         setConsentOpen(false);
-        router.back();
+        requestAnimationFrame(() => {
+          // Hardware back still works while sending; don't pop a second screen.
+          if (mounted.current) router.back();
+        });
       },
       onError: (e) => {
+        inFlight.current = false;
+        setFrozen(null);
         setConsentOpen(false);
         // The bracket gate refused (the lock was stale — a subscription lapsed,
         // or the value moved). Nothing was sent and nothing was held, so the
@@ -185,7 +224,7 @@ export default function OfferScreen() {
         setFailed(e instanceof Error && e.message ? e.message : null);
       },
     });
-  }, [draft, send, router, context?.targetBracket]);
+  }, [draft, send, router, context]);
 
   /** The bottom-bar press. A paying proposer goes through the sheet first. */
   const onPrimary = useCallback(() => {
@@ -443,7 +482,7 @@ export default function OfferScreen() {
 
   /* ═══ the offer screen at rest ═══════════════════════════════════════ */
 
-  const sending = send.isPending;
+  const sending = send.isPending || sent;
 
   return (
     <OfferScreenHost imeInset={0} dimmed={sending}>
