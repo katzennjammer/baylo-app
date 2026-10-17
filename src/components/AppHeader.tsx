@@ -32,6 +32,7 @@ import {
   type,
 } from "../theme/tokens";
 import { useHome } from "../api/home";
+import { useQuests } from "../api/quests";
 import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
 import { showDialog } from "./dialog";
@@ -71,9 +72,10 @@ import { showDialog } from "./dialog";
  * Community, Marketplace — pass it, from their Tabs.Screen entries in
  * (app)/_layout.tsx; every other route gets the header without it. It sits
  * first in the icon group, before the bell, and opens the Quests screen
- * (today's five quests from /api/v1/quests). It carries no count: completion
- * is only computed when that screen fetches, so a badge here would be stale
- * by construction.
+ * (today's five quests from /api/v1/quests). Its badge is quests left today:
+ * the unfinished count, 5 → 0. Opening the screen does not clear it; only
+ * finishing quests does. It comes from the server per person, so every
+ * account shows its own number.
  */
 export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {}) {
   const insets = useSafeAreaInsets();
@@ -84,6 +86,17 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   const queryClient = useQueryClient();
   const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const quests = useQuests({ enabled: showQuests });
+  const questBadge = quests.data ? quests.data.quests.filter((q) => !q.completed).length : 0;
+  // Ride the bell's refreshes. The tabs stay mounted, so on its own this query
+  // only refetches on mount and app foreground; /home also refetches on focus
+  // and on every Pusher event, which is when the bell's count moves. Joins a
+  // fetch already in flight rather than starting a second one.
+  const refetchQuests = quests.refetch;
+  useEffect(() => {
+    if (showQuests && dataUpdatedAt) void refetchQuests({ cancelRefetch: false });
+  }, [showQuests, dataUpdatedAt, refetchQuests]);
 
   // The badges below count the acting shop's inbox while acting as it (see
   // `unread` on /api/v1/home), so the channel that refreshes them is the
@@ -191,7 +204,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
             {showQuests ? (
               <HeaderIconButton
                 label="Quests"
-                count={0}
+                count={questBadge}
                 tight={tight}
                 onPress={() => router.push("/quests")}
               >
