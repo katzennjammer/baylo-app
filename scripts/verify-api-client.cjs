@@ -64,6 +64,10 @@ let liveAccessToken = null;
 /** Every request the client made, for assertions about headers. */
 const seen = [];
 let refreshCallCount = 0;
+/** "normal", or how /api/auth/refresh should fail for §5b. */
+let refreshMode = "normal";
+/** Sockets of refresh requests left unanswered in "hang" mode. */
+const hanging = [];
 
 function issuePair(familyId) {
   const family = familyId ?? `fam_${++nextId}`;
@@ -116,6 +120,24 @@ const server = http.createServer(async (req, res) => {
   if (req.url === "/api/auth/refresh" && req.method === "POST") {
     refreshCallCount++;
     const body = await readBody(req);
+
+    // Failure modes for §5b: the server did not say no, it could not answer.
+    // None of them spends the token, exactly as the real route rotates
+    // nothing on a refused request.
+    if (refreshMode === "500") return json(res, 500, { error: "Internal Server Error" });
+    if (refreshMode === "429") {
+      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "30" });
+      return res.end(JSON.stringify({ error: "Too many requests" }));
+    }
+    if (refreshMode === "html") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      return res.end("<html><body>Log in to this Wi-Fi</body></html>");
+    }
+    if (refreshMode === "hang") {
+      hanging.push(req.socket); // never answered; destroyed when the mode resets
+      return;
+    }
+
     const stored = refreshTokens.get(body.refreshToken);
     await new Promise((r) => setTimeout(r, REFRESH_DELAY_MS));
 
@@ -287,6 +309,66 @@ async function main() {
     secureStore.size === 0,
     `${secureStore.size} keys left: ${[...secureStore.keys()].join(", ")}`,
   );
+
+  // ── 5b. A refresh that could not be ASKED ─────────────────────────────────
+  // Only a 401 ends a session. A 500, a 429, a captive portal's 200 page and a
+  // server that never answers all leave the session -- and the unspent refresh
+  // token -- exactly where they were, fail the request with something a person
+  // can read, and let the next 401 try again.
+  console.log("\n[5b] refresh unavailable keeps the session");
+  await client.signIn("test@example.com", PASSWORD);
+
+  async function failingRefresh(mode) {
+    const before = client.currentSession();
+    refreshMode = mode;
+    liveAccessToken = "expired-for-5b"; // the next /home 401s and triggers a refresh
+    const started = Date.now();
+    const err = await client.apiV1("/api/v1/home").then(
+      () => null,
+      (e) => e,
+    );
+    const elapsed = Date.now() - started;
+    refreshMode = "normal";
+    for (const s of hanging.splice(0)) s.destroy();
+    const after = client.currentSession();
+    return { err, elapsed, before, after };
+  }
+
+  for (const [mode, code, status] of [
+    ["500", "REFRESH_UNAVAILABLE", 500],
+    ["429", "RATE_LIMITED", 429],
+    ["html", "REFRESH_UNAVAILABLE", 200],
+  ]) {
+    const r = await failingRefresh(mode);
+    check(`${mode}: the request fails with ${code}`, r.err?.code === code && r.err?.status === status, String(r.err?.code));
+    check(`${mode}: the message is not "Sign in to continue"`, !!r.err?.message && !/sign in to continue/i.test(r.err.message), r.err?.message);
+    check(`${mode}: the session survived`, r.after !== null && r.after.refreshToken === r.before.refreshToken);
+    check(
+      `${mode}: SecureStore still holds the same refresh token`,
+      secureStore.get("baylo.refreshToken") === r.before.refreshToken,
+    );
+    if (mode === "429") check("429: Retry-After travels with the error", r.err?.retryAfter === 30, String(r.err?.retryAfter));
+  }
+
+  // A captive portal that accepts the connection and never answers. Costs the
+  // length of REFRESH_TIMEOUT_MS (6 s), which is the thing being asserted.
+  const hung = await failingRefresh("hang");
+  check("hang: gives up instead of hanging", hung.elapsed >= 5500 && hung.elapsed < 9000, `${hung.elapsed} ms`);
+  check("hang: fails as NETWORK_ERROR (status 0), which the query client retries",
+    hung.err?.code === "NETWORK_ERROR" && hung.err?.status === 0, String(hung.err?.code));
+  check("hang: the session survived", hung.after !== null && hung.after.refreshToken === hung.before.refreshToken);
+
+  // The server is back: the very same refresh token rotates and the request works.
+  const kept = client.currentSession().refreshToken;
+  liveAccessToken = "expired-again";
+  const recovered = await client.apiV1("/api/v1/home").then(
+    (r) => r.data.viewer.leaves,
+    (e) => e,
+  );
+  check("recovered: the next request refreshes and succeeds", recovered === 42, String(recovered));
+  check("recovered: the kept refresh token was the one rotated", refreshTokens.get(kept)?.spent === true);
+  check("recovered: the family is alive", families.get(refreshTokens.get(kept).familyId).revoked === false);
+  await client.signOut();
 
   // ── 6. Sign out ────────────────────────────────────────────────────────────
   // The contract the Profile tab depends on: the family dies server-side AND

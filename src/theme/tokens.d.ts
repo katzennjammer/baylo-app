@@ -23,6 +23,8 @@ export type ColorName =
   | "onGreen"
   | "greenWash"
   | "greenLine"
+  | "accentGreen"
+  | "accentGold"
   | "like"
   | "urgent"
   | "urgentWash"
@@ -34,9 +36,27 @@ export type ColorName =
   | "skeleton"
   | "skeletonSoft"
   | "failedIcon"
-  | "captionFill";
+  | "captionFill"
+  | "onScrim";
 
 export declare const color: Readonly<Record<ColorName, string>>;
+
+export type DarkColorName =
+  | "surface"
+  | "control"
+  | "ink"
+  | "secondary"
+  | "muted"
+  | "divider"
+  | "border"
+  | "green"
+  | "scrim"
+  | "scrimClear"
+  | "greenWash"
+  | "onGreenWash";
+
+/** The consolidated dark palette. See the note in tokens.js. */
+export declare const dark: Readonly<Record<DarkColorName, string>>;
 
 export type FontName =
   | "displayBold"
@@ -105,7 +125,33 @@ export type TypeRoleName =
   | "hubName"
   | "hubLandmark"
   | "dangerAction"
-  | "carouselCount";
+  | "carouselCount"
+  | "homeSection"
+  | "homeSeeAll"
+  | "heroTitle"
+  | "heroSubhead"
+  | "heroCta"
+  | "categoryLabel"
+  | "exclusiveTitle"
+  | "exclusiveMeta"
+  | "countdownPill"
+  | "countdownLive"
+  | "countdownLiveLarge"
+  | "storefrontName"
+  | "storefrontMeta"
+  | "storefrontCategory"
+  | "storefrontBody"
+  | "storefrontBadge"
+  | "storefrontStat"
+  | "storefrontStatLabel"
+  | "storefrontSection"
+  | "storefrontLink"
+  | "storefrontOverlay"
+  | "storefrontStaffName"
+  | "storefrontStaffRole"
+  | "storefrontStep"
+  | "storefrontEmptyTitle"
+  | "storefrontLogoInitial";
 
 export declare const type: Readonly<Record<TypeRoleName, TypeRole>>;
 
@@ -216,6 +262,28 @@ export declare const space: Readonly<{
     actionBarClearance: number;
     actionBarY: number;
   }>;
+  home: Readonly<{
+    top: number;
+    searchGap: number;
+    headerToHero: number;
+    heroX: number;
+    heroY: number;
+    heroSubToCta: number;
+    sectionTop: number;
+    headingToContent: number;
+    categoryGap: number;
+    circleToLabel: number;
+    tileBody: number;
+    tileTitleToMeta: number;
+    tileMetaToLeaves: number;
+    tileBadgeInset: number;
+    tileBadgeGap: number;
+    titleToSubtitle: number;
+    titleToIcon: number;
+    spotlightBody: number;
+    spotlightLogoOverlap: number;
+    bottom: number;
+  }>;
   matches: Readonly<{
     y: number;
     headerToRail: number;
@@ -224,6 +292,14 @@ export declare const space: Readonly<{
     thumbToTitle: number;
     titleToMeta: number;
   }>;
+  storefront: Readonly<Record<
+    | "logoToName" | "nameToMeta" | "nameGap" | "metaGap" | "metaToBody" | "block" | "actionGap"
+    | "statsY" | "statGap" | "cardPad" | "progressTop" | "progressBottom" | "stepY" | "stepGap"
+    | "staffTop" | "staffRowTop" | "staffGap" | "inviteTop" | "inviteGap" | "bottom"
+    | "overlayInset" | "overlayGap" | "overlayX" | "descriptionY" | "descriptionX" | "descriptionGap"
+    | "emptyY" | "emptyGap",
+    number
+  >>;
 }>;
 
 export type RadiusName =
@@ -254,7 +330,23 @@ export type RadiusName =
   | "rangeInput"
   | "hubRow"
   | "carouselDot"
-  | "carouselCount";
+  | "carouselCount"
+  | "hero"
+  | "heroCta"
+  | "categoryCircle"
+  | "exclusiveTile"
+  | "spotlightLogo"
+  | "tileBadge"
+  | "countdownPill"
+  | "countdownPillLarge"
+  | "storefrontLogo"
+  | "storefrontButton"
+  | "storefrontCard"
+  | "storefrontSetupCard"
+  | "storefrontBadge"
+  | "storefrontPill"
+  | "storefrontInput"
+  | "storefrontProgress";
 
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
@@ -343,7 +435,39 @@ export declare const size: Readonly<{
     dangerRow: number;
     actionButton: number;
     backButton: number;
+    overlayButton: number;
+    countdownPill: number;
+    countdownPillX: number;
   }>;
+  home: Readonly<{
+    heroHeight: number;
+    heroPhotoFraction: number;
+    heroPhotoBleed: number;
+    heroCta: number;
+    heroCtaX: number;
+    categoryCircle: number;
+    categoryItem: number;
+    exclusiveTileAspect: number;
+    exclusiveCardPerScreen: number;
+    exclusiveCardPhotoAspect: number;
+    recommendedPerScreen: number;
+    squiggleHeight: number;
+    squiggleStroke: number;
+    headingMaxFontScale: number;
+    overlayMaxFontScale: number;
+    spotlightPerScreen: number;
+    spotlightAspect: number;
+    spotlightHeroFraction: number;
+    spotlightLogo: number;
+    tileBadge: number;
+    countdownPill: number;
+    countdownPillX: number;
+  }>;
+  storefront: Readonly<Record<
+    | "banner" | "logo" | "logoRing" | "logoLift" | "button" | "badge" | "badgeX" | "pill" | "pillX"
+    | "staffAvatar" | "stepMark" | "progress" | "input" | "descriptionMark",
+    number
+  >>;
   skeletonBlock: Readonly<{
     storyLabel: Readonly<{ w: number; h: number }>;
     name: Readonly<{ w: number; h: number }>;
@@ -393,7 +517,30 @@ export type IconName =
   | "check"
   | "emptyGrid"
   | "offer"
-  | "menuRow";
+  | "menuRow"
+  // The verified-organisation mark, beside a poster name. Sized to the tier
+  // badge it replaces rather than to the card leaf: the two occupy the same
+  // slot, so a card with one must not be a pixel taller than a card with the
+  // other.
+  | "orgBadge"
+  // The shop-front placeholder in an organisation's square logo slot.
+  | "orgLogo"
+  // Home redesign (preview): the glyph inside a category circle, and the
+  // perishable / org badges in an Exclusive tile's corner.
+  | "category"
+  | "tileBadge"
+  | "sectionTitle"
+  | "spotlightLogo"
+  | "spotlightHero"
+  | "spotlightBadge"
+  | "countdown"
+  | "countdownLarge"
+  | "photoOverlay"
+  // MSME storefront.
+  | "storefrontBadge"
+  | "storefrontShare"
+  | "storefrontStep"
+  | "storefrontPlus";
 
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 
@@ -422,6 +569,15 @@ export declare const motion: Readonly<{
   skeletonTo: number;
   photoFadeMs: number;
 }>;
+
+export type CategoryToneName = "green" | "clay" | "sand" | "sky" | "lilac" | "teal";
+export interface CategoryTone {
+  bg: string;
+  tint: string;
+  ink: string;
+}
+/** Home's two-tone category circles. See the note in tokens.js. */
+export declare const categoryTone: Readonly<Record<CategoryToneName, Readonly<CategoryTone>>>;
 
 export declare const breakpoint: Readonly<{ tight: number }>;
 

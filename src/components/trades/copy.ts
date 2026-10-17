@@ -84,6 +84,15 @@ export const label = {
 /** §10.6's History row. */
 export const history = {
   rowTitle: "Finished trades",
+  /** The two-option switch at the top of Finished trades. */
+  completedTab: (n: number) => `Completed · ${n}`,
+  calledOffTab: (n: number) => `Called off · ${n}`,
+  withPartner: (partner: string) => `With ${partner}`,
+  calledOffChip: "Called off",
+  declinedChip: "Declined",
+  rate: (partner: string) => `Rate ${partner}`,
+  noneCompleted: "No completed trades yet.",
+  noneCalledOff: "Nothing has been called off.",
   /** `14 trades`. Singular at one, because "1 trades" is a bug people report. */
   count: (n: number, capped = false) =>
     capped ? `${n}+ trades` : `${n} ${n === 1 ? "trade" : "trades"}`,
@@ -235,23 +244,23 @@ export const meetup = {
   /** A hub only the other listing names: fine for them, not on yours. */
   theyOffer: (partner: string) => `${partner} offers this hub`,
   /** Said once, above the rows, when the shared ones are not the whole list. */
-  sharedEarns: "Meeting at a hub you both offer earns the Safe-Zone reward.",
+  sharedEarns: "Meeting at a hub you both offer earns the safe hub reward.",
 
   /* ── The empty intersection. NOT A DEAD END — the picker is still below. ── */
   noSharedTitle: "You have no hub in common yet",
   noSharedBody: (partner: string) =>
-    `Your listing and ${partner}'s do not name the same Safe-Zone hub. You can still ` +
+    `Your listing and ${partner}'s do not name the same safe hub. You can still ` +
     `suggest any hub below — but only a meeting at one you both offer earns the ` +
-    `Safe-Zone reward. Either of you can fix that by adding one to your own listing.`,
+    `safe hub reward. Either of you can fix that by adding one to your own listing.`,
   /** The other listing's hubs — the shortlist worth adding from. */
   theyAlreadyOffer: (partner: string) => `${partner} already offers`,
   addToMine: "Add a hub to my listing",
   /** When even the other listing names none. */
   neitherHasHubs: (partner: string) =>
-    `Neither listing names a Safe-Zone hub yet. Add one to yours and ask ${partner} to ` +
+    `Neither listing names a safe hub yet. Add one to yours and ask ${partner} to ` +
     `add the same one to theirs.`,
   /** When there is no hub anywhere — the server's list came back empty. */
-  noHubsAtAll: "There are no Safe-Zone hubs to choose from right now. Agree a place in chat.",
+  noHubsAtAll: "There are no safe hubs to choose from right now. Agree a place in chat.",
 
   /* ── Failures the client branches on, by `meta.rule`. ─────────────────── */
   hubClosed: "That hub is closed at the moment. Pick another one.",
@@ -260,6 +269,78 @@ export const meetup = {
 
 /** §10.6's `Nothing needs you right now.` — one 15px line, in place of the block. */
 export const nothingPending = "Nothing needs you right now.";
+
+/**
+ * The Trades tab's cards (1 Oct 2026 redesign). Every footer sentence names the
+ * person and, where there is one, the hub — and says plainly when there is not.
+ */
+export const tradeCard = {
+  /** SectionHeader parts: "Your " + accent "move". */
+  yourMoveLead: "Your ",
+  yourMoveAccent: "move",
+  waitingOnThem: "Waiting on them",
+  withPartner: (partner: string) => `With ${partner}`,
+  youGive: "You give",
+  youGet: "You get",
+  leaves: (n: number) => `${grouped(n)} Leaves`,
+  itemPlusLeaves: (title: string, n: number) => `${title} + ${grouped(n)} Leaves`,
+  itemPlusMore: (title: string, more: number) => `${title} + ${more} more`,
+  /** A side with nothing named on the wire (a bracket-only offer, a deleted item). */
+  unnamed: "Not named",
+  steps: ["Accepted", "Hub set", "Handoff", "Done"] as const,
+  noHub: "No hub named yet",
+  hubAndTime: (hub: string, when: string) => `${hub} · ${when}`,
+  showCodeAt: (partner: string, hub: string) => `Show your code to ${partner} at ${hub}`,
+  showCodeNoHub: (partner: string) => `Show your code to ${partner}. No hub named yet.`,
+  /** A CONFIRMING trade whose codes ran out. Opening it issues a fresh pair. */
+  codesExpired: (partner: string, hub: string | null) =>
+    hub
+      ? `Codes expired. Start the handoff again when you're with ${partner} at ${hub}`
+      : `Codes expired. Start the handoff again when you're with ${partner}`,
+  /** Codes still in their window but burned by wrong guesses. */
+  startHandoffWith: (partner: string, hub: string | null) =>
+    hub
+      ? `Start the handoff when you're with ${partner} at ${hub}`
+      : `Start the handoff when you're with ${partner}`,
+  pickHub: (partner: string) => `Pick where you'll meet ${partner}`,
+  theySuggested: (partner: string, hub: string, when: string) =>
+    `${partner} suggested ${hub} · ${when}`,
+  replyToOffer: (partner: string, by: string) => `Reply to ${partner}'s offer by ${by}`,
+  replyToRequest: (partner: string) => `Reply to ${partner}'s swap request`,
+  toConfirm: (partner: string) => `${partner} to confirm`,
+  toAnswer: (partner: string) => `${partner} to answer`,
+  /** A step passed over on the track: codes started with no hub agreed. */
+  stepSkipped: (i: number) => (i === 1 ? "Hub skipped" : "Skipped"),
+  /* The Waiting screen's footers: what the VIEWER did, then whose move it is. */
+  youSuggested: (hub: string) => `You suggested ${hub}`,
+  youSentOffer: "You sent an offer",
+  youSentRequest: "You sent a swap request",
+  youEnteredCode: "You entered their code",
+  changeSuggestion: "Change suggestion",
+  withdraw: "Withdraw",
+  withdrawOffer: "Withdraw offer",
+  /** The pushed Waiting screen's header. */
+  waitingSubtitle: "Nothing to do here until they answer.",
+  waitingEmpty: "Nobody owes you an answer right now.",
+  /** "2 trades need you." + the link "Go to Your move". */
+  needYou: (n: number) => (n === 1 ? "1 trade needs you." : `${n} trades need you.`),
+  goToYourMove: "Go to Your move",
+  requestFrom: (partner: string) => `Swap request from ${partner}`,
+  /* The withdraw confirmations. */
+  withdrawOfferTitle: (partner: string) => `Withdraw your offer to ${partner}?`,
+  withdrawOfferHeld: (held: number) => `${grouped(held)} Leaves come back to you.`,
+  withdrawOfferNothingHeld: "Nothing was held, so nothing comes back.",
+  withdrawRequestTitle: (partner: string) => `Withdraw your swap request to ${partner}?`,
+  withdrawRequestBody: "The trade is called off and both items go back to available.",
+  keep: "Keep it",
+  action: {
+    showCode: "Show code",
+    startHandoff: "Start handoff",
+    pickHub: "Pick hub",
+    answer: "Answer",
+    review: "Review",
+  },
+} as const;
 
 /* ─────────────────────────── §10.6 empty ────────────────────────────── */
 
@@ -305,9 +386,9 @@ export const code = {
   showThis: (partner: string) => `Show this to ${partner}`,
   /** §10.7 `Ask Marco for his four digits` — six, here. */
   askFor: (partner: string) => `Ask ${partner} for their ${spellCount(CODE_LENGTH)} digits`,
-  typeBelow: "Type them in below",
+  typeBelow: "Type it in the boxes above",
   /** Frame 9e's fuller version of the same line. */
-  typeBelowLong: "Type them in below. The code changes if either of you leaves the hub.",
+  typeBelowLong: "The code changes if either of you leaves the hub. Type it above.",
   /** §10.7's waiting line. */
   notYetTyped: (partner: string) =>
     `${partner} hasn't typed yours in yet. You can both do this at the same time.`,
@@ -333,7 +414,7 @@ export const code = {
     `The code changes if either of you leaves the hub. Ask ${partner} to read it again.`,
   readItAgainButton: (partner: string) => `Ask ${partner} to read it again`,
   /** Frame 9e's bottom bar. */
-  typeTheirs: (partner: string) => `Type ${partner}'s code`,
+  typeTheirs: "Complete trade",
   somethingWrong: "Something went wrong at the meetup",
   /**
    * NOT VERBATIM — reason 2 in the header, and the only place this screen tells
@@ -362,6 +443,194 @@ export const code = {
     `Your ${grouped(fee)}-Leaf bridging fee went to ${partner}`,
   feeReceived: (fee: number, partner: string) =>
     `${partner}'s ${grouped(fee)}-Leaf bridging fee came to you`,
+} as const;
+
+/* ───────────────────── the one trade screen (Round 2) ───────────────── */
+
+/**
+ * `app/trade.tsx`: one screen per trade, one panel for the step it is on.
+ * Sentence case throughout; nothing congratulates.
+ */
+export const tradeScreen = {
+  title: (partner: string) => `Trade with ${partner}`,
+  moreLabel: "More actions",
+  /* The offer / accept step. */
+  offerFrom: (partner: string) => `${partner} sent you an offer`,
+  requestFrom: (partner: string) => `${partner} sent you a swap request`,
+  replyBy: (by: string) => `Reply by ${by}. It expires on its own after that.`,
+  accepted: "Accepted",
+  acceptedHeld: (n: number) => `Accepted · ${grouped(n)} Leaves held`,
+  declined: "Declined",
+  /* The hub step. */
+  hubStepTitle: (partner: string) => `Where will you meet ${partner}?`,
+  hubStepBody: "Pick a safe hub and a time. They can agree or suggest another.",
+  chooseHub: "Choose a hub",
+  theySuggested: (partner: string) => `${partner} suggested`,
+  agree: "Agree",
+  suggestAnother: "Suggest another",
+  /* Waiting. */
+  waitingOnSuggestion: (partner: string) => `Waiting for ${partner} to agree to your suggestion`,
+  waitingOnOffer: (partner: string) => `Waiting for ${partner} to answer your offer`,
+  waitingOnRequest: (partner: string) => `Waiting for ${partner} to answer your swap request`,
+  waitingOnCode: (partner: string) => `You entered ${partner}'s code. Waiting for ${partner} to enter yours.`,
+  changeSuggestion: "Change suggestion",
+  withdraw: "Withdraw",
+  /* The menu. */
+  getCodesNow: "Meet now and get codes",
+  changePlace: "Change place or time",
+  viewProfile: (partner: string) => `View ${partner}'s profile`,
+  message: (partner: string) => `Message ${partner}`,
+  /* Done / ended. */
+  completedOn: (date: string, clock: string) => `Completed ${date} · codes matched ${clock}`,
+  calledOff: "This trade was called off",
+  declinedBy: (partner: string) => `${partner} declined this trade`,
+  /* Fee, display only. */
+  feeLabel: "Bridging fee",
+  offerGone:
+    "That offer is not open any more. It may have been withdrawn, or it may have expired on its own.",
+  tradeGone: "That trade is not open any more. It may already be in your finished trades.",
+} as const;
+
+/** The handoff panel: reading and typing the two codes. */
+export const handoff = {
+  step1: (partner: string) => `Read your code to ${partner}`,
+  step1Body: "It's in the email Baylo sent when the meetup started.",
+  openEmail: "Open email",
+  openEmailFailed: "Could not open a mail app. Open your inbox and look for the email from Baylo.",
+  alsoInEmail: "It's also in the email Baylo sent",
+  show: "Show my code",
+  hide: "Hide",
+  hiddenNote: "Hidden so others nearby can't see",
+  step2: (partner: string) => `Type ${partner}'s code`,
+  refresh: "Codes refresh every 15 minutes.",
+  refreshAtHub: "Codes refresh every 15 minutes, and if either of you leaves the hub.",
+  theyTypedYours: (partner: string) => `${partner} has typed yours in.`,
+  readAgain: (partner: string) => `Ask ${partner} to read it again.`,
+  somethingWrong: "Something went wrong at the meetup?",
+} as const;
+
+/**
+ * "What happened?" — the meetup help sheet (`MeetupHelpSheet.tsx`), opened by
+ * `handoff.somethingWrong` and the ⋯ menu's `code.somethingWrong`.
+ *
+ * NOTHING HERE PROMISES A CONSEQUENCE. No missed meeting is recorded anywhere,
+ * a cancellation costs neither side anything, and a report is read by a person
+ * who decides. So the copy never says "penalty", "record", "flag" or "strike",
+ * and the no-show panel says nothing about the other person at all.
+ */
+export const help = {
+  title: "What happened?",
+  reason: {
+    noShow: "They didn't show up",
+    notAsDescribed: "The item isn't as described",
+    unsafe: "I felt unsafe",
+    other: "Something else",
+  },
+  reschedule: "Suggest a new hub and time",
+  cancel: "Cancel the trade",
+  /** Read first, in color.urgent, before any other row on the unsafe panel. */
+  danger: "If you're in danger right now, call 911.",
+  call: "Call 911",
+  callFailed: "Could not open the phone app",
+  callFailedBody: "Dial 911 from your phone.",
+  report: (partner: string) => `Report ${partner}`,
+  reportProblem: "Report a problem",
+  reportPickTitle: (partner: string) => `Why are you reporting ${partner}?`,
+  reportReason: (label: string) => `Reason: ${label}. Change`,
+  sendReport: "Send report",
+  reportNote: "The trade and what happened are added to the report for the Baylo team.",
+  reportSent: "Thanks. The Baylo team will review it.",
+  reportAlreadyOpen: (partner: string) =>
+    `You've already reported ${partner}. The Baylo team is reviewing it.`,
+  reportFailed: "Could not send that report",
+  /**
+   * The report's notes, written for the user rather than by them: the server
+   * has no trade target, so the trade id travels here. See helpReportNotes().
+   */
+  notes: (tradeId: string, reason: string) => `Trade ${tradeId}, at handoff: ${reason}`,
+  cancelTitle: "Cancel this trade?",
+  cancelBody:
+    "Your items go back to available, and any held bridging fee is returned. This can't be undone.",
+  keep: "Keep trade",
+  cancelConfirm: "Cancel trade",
+  cancelFailed: "Could not cancel the trade",
+} as const;
+
+/** The hub picker (`app/trade-meetup.tsx`). */
+export const picker = {
+  noShared: "No hub is on both your listings yet, so no safe hub reward this time.",
+  addHub: "Add a hub to my listing",
+  rewardChip: "Safe hub reward",
+  suggestedChip: (partner: string) => `${partner} suggested`,
+  when: "When",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  pickDate: "Pick a date",
+  pickTime: "Pick a time",
+  submit: (partner: string) => `Suggest to ${partner}`,
+  needBoth: "Pick a hub, a day and a time first",
+  /** The picker's 409s (8 Oct 2026): the server refused a pick over another plan. */
+  alreadySuggested: (partner: string) => `${partner} already suggested a hub`,
+  alreadyAgreed: (partner: string, where: string) =>
+    `You and ${partner} already agreed on ${where}. Send again to change it.`,
+  planChanged: "The plan changed while you were picking. Check it, then send again.",
+
+  /* ── The three-step layout (meetup redesign, Oct 2026) ─────────────────── */
+  title: (partner: string) => `Plan your meetup with ${partner}`,
+  stepWhere: "Where",
+  stepWhen: "When",
+  stepNote: "Note (optional)",
+  chooseHub: "Choose a hub",
+  chooseHubHint: "Pick a safe hub to meet at",
+  tapToChange: "Tap to change",
+  chooseTime: "Choose a time",
+  changeTime: "Change",
+  notePlaceholder: "Where exactly, or what to look for. Like: by the main entrance, I'll have a blue bag.",
+  /** The primary button while something is missing. Never a silent grey button. */
+  needHub: "Choose a hub first",
+  needDay: "Choose a day",
+  needTime: "Choose a time",
+  pastTime: "Choose a time later than now",
+  tooFar: (days: number) => `Choose a day within ${days} days`,
+  /** The plain-words line above the button: `Sun 18 Oct, 20:00 at Parkmall`. */
+  summary: (when: string, hub: string) => `${when} at ${hub}`,
+
+  /* ── The hub sheet ──────────────────────────────────────────────────────── */
+  sheetTitle: "Choose a hub",
+  searchPlaceholder: "Search hubs",
+  searchLabel: "Search hubs by name, area or type",
+  groupSuggested: (partner: string) => `Suggested by ${partner}`,
+  groupShared: "On both your listings",
+  noMatch: (q: string) => `No hub matches "${q}".`,
+
+  /* ── The safe hub reward sheet ─────────────────────────────────────────── */
+  rewardInfoLabel: "Safe hub reward. What is this?",
+  rewardTitle: "Safe hub reward",
+  /** `n` comes from /api/v1/profile/me's task list; null words it without one. */
+  rewardBody: (n: number | null) =>
+    n === null
+      ? "You both listed this hub as a meetup spot. Meet here and you each earn Leaves once the trade is completed."
+      : `You both listed this hub as a meetup spot. Meet here and you each earn ${grouped(n)} Leaves once the trade is completed.`,
+  rewardSmallPrint:
+    "Doesn't apply to shop accounts, a repeat trade with the same person within 30 days, or past the weekly task limit.",
+  rewardShop: "Shop accounts don't earn this reward.",
+  gotIt: "Got it",
+} as const;
+
+/** The trade offer card in a chat thread. */
+export const chatOffer = {
+  from: (partner: string) => `Trade offer from ${partner}`,
+  fromYou: "Your trade offer",
+  yourMove: "Your move",
+  accepted: "Accepted",
+  declined: "Declined",
+  waitingFor: (partner: string) => `Waiting for ${partner}`,
+  openTrade: "Open trade",
+  /** The trade's CURRENT state, once the offer became one. */
+  hubSet: "Hub set",
+  handoff: "Handoff",
+  done: "Done",
+  cancelled: "Cancelled",
 } as const;
 
 /* ─────────────────── §10.4 / frame 9i — the incoming offer ──────────── */

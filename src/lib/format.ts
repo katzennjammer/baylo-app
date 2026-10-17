@@ -45,6 +45,28 @@ export function formatLeaves(n: number): string {
 }
 
 /**
+ * Follower counts: `"1 follower"`, `"950 followers"`, `"1.2K followers"`,
+ * `"3.4M followers"` -- the shape social and shop profiles use.
+ *
+ * Compact from 1,000, one decimal dropped when it is zero ("12K", not
+ * "12.0K"). Truncated like formatLeaves: 1,999 followers is "1.9K", never a
+ * rounded-up "2K" the shop has not reached.
+ */
+export function formatFollowers(n: number): string {
+  return `${compactCount(n)} ${Math.trunc(n) === 1 ? "follower" : "followers"}`;
+}
+
+/** The figure alone: `950`, `1.2K`, `12K`, `3.4M`. See formatFollowers. */
+export function compactCount(n: number): string {
+  const v = Math.max(0, Math.trunc(n));
+  const one = (x: number, unit: string) => {
+    const t = Math.trunc(x * 10) / 10;
+    return `${t % 1 === 0 ? t.toFixed(0) : t.toFixed(1)}${unit}`;
+  };
+  return v < 1_000 ? String(v) : v < 1_000_000 ? one(v / 1_000, "K") : one(v / 1_000_000, "M");
+}
+
+/**
  * Unread badges. Past 99 the badge stops being a number and becomes a shape, so
  * it caps — 2e pins the badge's height and lets only its width breathe, and an
  * uncapped four-digit count would run out from under the icon it belongs to.
@@ -123,19 +145,4 @@ export function clampAspect(width: number, height: number): number {
   const { aspectDefault, aspectMin, aspectMax } = size.photo;
   if (!width || !height) return aspectDefault;
   return Math.min(aspectMax, Math.max(aspectMin, width / height));
-}
-
-/**
- * True when the photo was cropped to get inside the band.
- *
- * Drives the small "expand" label the spec puts in the bottom-right of any
- * non-square photo: it is an admission that what is on screen is not the whole
- * frame, so it has to be keyed on the crop actually having happened rather than
- * on the ratio merely differing from 1:1.
- */
-export function wasCropped(width: number, height: number): boolean {
-  const { aspectMin, aspectMax } = size.photo;
-  if (!width || !height) return false;
-  const raw = width / height;
-  return raw < aspectMin || raw > aspectMax;
 }

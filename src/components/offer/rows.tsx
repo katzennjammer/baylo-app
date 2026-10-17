@@ -304,7 +304,7 @@ export function ItemRow({
           {title}
         </Text>
         <Text
-          style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary, marginTop: 4 }]}
+          style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 4 }]}
         >
           {meta}
         </Text>
@@ -367,7 +367,7 @@ export function HubRow({
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={active ? `${name}, Safe-Zone Hub` : `${name}, no longer a Safe Zone`}
+      accessibilityLabel={active ? `${name}, safe hub` : `${name}, no longer a safe hub`}
       style={{
         minHeight: offerSize.settleRow.minHeight,
         borderRadius: offerRadius.row,
@@ -403,7 +403,7 @@ export function HubRow({
         <Text
           style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 2 }]}
         >
-          Safe-Zone Hub
+          Safe hub
         </Text>
       </View>
       <Radio selected={selected} />
@@ -452,7 +452,7 @@ export function RecordRow({
       </Text>
       <Text
         style={[
-          textStyle(offerType.tableFigure),
+          textStyle(offerType.bodyDense),
           { color: tone === "warm" ? offerColor.warm : offerColor.ink },
         ]}
       >
@@ -474,7 +474,7 @@ export function RecordRow({
 export function NumberedStep({ n, children }: { n: number; children: string }) {
   return (
     <View style={{ flexDirection: "row", gap: 12 }}>
-      <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+      <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
         {String(n).padStart(2, "0")}
       </Text>
       <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>

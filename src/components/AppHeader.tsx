@@ -1,14 +1,25 @@
 import { usePathname, useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
-import { BellIcon, LeafIcon, MessageIcon } from "./icons";
+import { getActingOrgId } from "../api/org-context";
+import { BellIcon, LeafIcon, MessageIcon, QuestIcon } from "./icons";
 import { Divider } from "./Divider";
 import { OfflineBar } from "./home/OfflineBar";
 import { formatBadge, formatLeaves } from "../lib/format";
+import { openPremium } from "../lib/premium";
 import {
   border,
   breakpoint,
@@ -21,10 +32,13 @@ import {
   type,
 } from "../theme/tokens";
 import { useHome } from "../api/home";
+import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
+import { showDialog } from "./dialog";
 
 /**
- * The header on every tab: wordmark, Leaves balance, notifications, messages.
+ * The header on every tab: wordmark, Leaves balance, notifications, messages
+ * (and Quests on three of them — see `showQuests` below).
  *
  * All four numbers come from useHome(), the SAME query the feed renders from.
  * That is the point of /api/v1/home being a composite endpoint — the viewer
@@ -52,14 +66,42 @@ import { useSession } from "../auth/session";
  * actually reserves, which on Android is frequently 24 rather than 44. Pinning
  * it to 44 would paint 20 px of dead space above the wordmark on most of the
  * devices this ships to.
+ *
+ * QUESTS IS OPT-IN, via `showQuests`. Only the three browsing screens — Home,
+ * Community, Marketplace — pass it, from their Tabs.Screen entries in
+ * (app)/_layout.tsx; every other route gets the header without it. It sits
+ * first in the icon group, before the bell, and opens the Quests screen
+ * (today's five quests from /api/v1/quests). It carries no count: completion
+ * is only computed when that screen fetches, so a badge here would be stale
+ * by construction.
  */
-export function AppHeader() {
+export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { viewer, unread, isPending, isError, error, dataUpdatedAt } = useHome();
+  const { viewer, acting, unread, isPending, isFetching, isError, error, dataUpdatedAt } = useHome();
+  const queryClient = useQueryClient();
+  const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // The badges below count the acting shop's inbox while acting as it (see
+  // `unread` on /api/v1/home), so the channel that refreshes them is the
+  // shop's: notifications to the shop are published there, not to the person.
+  const inboxChannelId = acting?.orgUserId ?? session?.user.id;
+  useEffect(() => {
+    if (!inboxChannelId) return;
+    return subscribeToUserChannel(
+      inboxChannelId,
+      () => undefined,
+      undefined,
+      undefined,
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["home"] });
+        void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      },
+    ) ?? undefined;
+  }, [queryClient, inboxChannelId]);
 
   // A 401 is not a connection problem, and saying so would be the last thing
   // someone reads before being bounced to the login screen. By the time the
@@ -67,6 +109,33 @@ export function AppHeader() {
   // up, so the session is cleared and (app)/_layout.tsx is one render away from
   // replacing this whole tree.
   const offline = isError && !(error instanceof ApiError && error.code === "UNAUTHENTICATED");
+
+  // ── Whose Leaves the pill shows (25 Sep 2026) ──────────────────────────────
+  //
+  // Acting as a shop, the SHOP's: /api/v1/home reads the same X-Baylo-Org
+  // header every request carries and returns `acting` with the shop's balance.
+  // Same query, same refreshes as the person's balance -- no second fetch.
+  //
+  // A SWITCH IS IMMEDIATE BECAUSE IT INVALIDATES THIS QUERY: every switch path
+  // (OrgSwitcher, Profile's shop picker and "Switch to Myself", the post
+  // flow's "Post as myself") calls invalidateQueries() straight after, so
+  // /home refetches as the new identity. Until it lands, the cached answer
+  // belongs to the OLD identity, so while it disagrees with this device's
+  // context AND a fetch is in flight the pill shows the dash -- never the
+  // other account's number. Once nothing is in flight, the server's answer
+  // wins: a context it refused comes back `acting: null`, and the person is
+  // then who a boost would charge.
+  //
+  // getActingOrgId() is read fresh, not held: the switch re-renders this via
+  // the query's fetching state. See OrgSwitcher on why the context is not state.
+  const answeredFor = acting?.organizationId ?? null;
+  const pillStale = answeredFor !== getActingOrgId() && isFetching;
+  const pillValue =
+    (isPending && viewer === undefined) || pillStale
+      ? null
+      : acting
+        ? acting.leaves
+        : (viewer?.leaves ?? 0);
 
   // The spec's second breakpoint. Only the header reflows; everything below it
   // is on flex and needs nothing.
@@ -111,11 +180,28 @@ export function AppHeader() {
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>
             <LeavesPill
               // A dash, not 0. Before the first response lands the balance is
-              // unknown, and 0 is a number someone might act on.
-              value={isPending && viewer === undefined ? null : (viewer?.leaves ?? 0)}
+              // unknown, and 0 is a number someone might act on. The same dash
+              // covers the moment after a switch; see pillValue above.
+              value={pillValue}
+              owner={acting && !pillStale ? acting.name : undefined}
               stale={offline}
               tight={tight}
             />
+
+            {showQuests ? (
+              <HeaderIconButton
+                label="Quests"
+                count={0}
+                tight={tight}
+                onPress={() => router.push("/quests")}
+              >
+                <QuestIcon
+                  size={icon.headerAction.size}
+                  stroke={icon.headerAction.stroke}
+                  color={color.ink}
+                />
+              </HeaderIconButton>
+            ) : null}
 
             <HeaderIconButton
               label="Notifications"
@@ -136,7 +222,7 @@ export function AppHeader() {
 
             <HeaderIconButton
               label="Messages"
-              count={unread?.messages ?? 0}
+              count={unread?.messageConversations ?? 0}
               tight={tight}
               onPress={() => router.push("/messages")}
             >
@@ -182,9 +268,12 @@ export function AppHeader() {
 function AccountMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { signOut } = useSession();
+  // No Quests item. It used to open a "coming soon" dialog from here; Quests
+  // is now a header icon on Home, Community and Marketplace that opens the
+  // Quests screen, and a second entrance was redundant.
 
   const confirmSignOut = () => {
-    Alert.alert(
+    showDialog(
       "Sign out?",
       "This device will forget your tokens, and the session is revoked on the server so it cannot be resumed.",
       [
@@ -210,7 +299,7 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       <Pressable
         onPress={() => {
           onClose();
-          router.push("/premium");
+          openPremium(router);
         }}
         accessibilityRole="menuitem"
         style={s.accountMenuItem}
@@ -228,17 +317,6 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       >
         <Ionicons name="trophy-outline" size={19} color={color.ink} />
         <Text style={s.accountMenuText}>Achievements</Text>
-      </Pressable>
-      <Pressable
-        onPress={() => {
-          onClose();
-          router.push("/quests");
-        }}
-        accessibilityRole="menuitem"
-        style={s.accountMenuItem}
-      >
-        <Ionicons name="flag-outline" size={19} color={color.ink} />
-        <Text style={s.accountMenuText}>Quests</Text>
       </Pressable>
       <Pressable
         onPress={() => {
@@ -267,15 +345,24 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
  * `stale` is the offline treatment — the numerals drop to the disabled grey.
  * The balance is the one number on this screen someone might act on, and while
  * the app cannot reach the server it is a number of unknown age.
+ *
+ * EXPORTED for the Home redesign (preview), which sits it in the search row
+ * beside FilterButton. `style` is merged LAST so that row can give it the
+ * filter button's 44 box and radius without a second copy of the pill.
  */
-function LeavesPill({
+export function LeavesPill({
   value,
   stale,
   tight,
+  style,
+  owner,
 }: {
   value: number | null;
   stale: boolean;
   tight: boolean;
+  style?: StyleProp<ViewStyle>;
+  /** Whose balance, for screen readers, when it is not the person's own. */
+  owner?: string;
 }) {
   const leaf = tight ? icon.headerLeafTight : icon.headerLeaf;
   const ink = stale ? color.inkStale : color.forest;
@@ -290,9 +377,12 @@ function LeavesPill({
           paddingLeft: tight ? size.leaves.headerPillLeftTight : size.leaves.headerPillLeft,
           paddingRight: tight ? size.leaves.headerPillRightTight : size.leaves.headerPillRight,
         },
+        style,
       ]}
       accessibilityRole="text"
-      accessibilityLabel={value === null ? "Leaves balance loading" : `${value} Leaves`}
+      accessibilityLabel={
+        value === null ? "Leaves balance loading" : `${owner ? `${owner} balance, ` : ""}${value} Leaves`
+      }
     >
       <LeafIcon size={leaf.size} stroke={leaf.stroke} color={ink} />
       <Text

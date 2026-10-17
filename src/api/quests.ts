@@ -1,80 +1,68 @@
-import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1 } from "./client";
 import { PROFILE_ME_KEY } from "./profile";
 
+/**
+ * Daily quests: GET /api/v1/quests.
+ *
+ * Mirrors QuestView in the server's @/lib/quests. Five a day — 2 Easy, 2
+ * Medium, 1 Hard — assigned per UTC calendar day; `resetsAt` is the next
+ * midnight UTC (08:00 in Manila).
+ *
+ * ── THE GET IS THE COMPLETION PATH ───────────────────────────────────────────
+ *
+ * The server has no event hook for quests. reconcileQuests() recomputes each
+ * quest from real rows (an Offer, an Item, a completed TradeRequest) INSIDE
+ * this request, and pays the Leaves for anything newly satisfied right there.
+ * Two consequences for the client:
+ *
+ *   1. Nothing is ever stale-but-correct here. A cached copy can say "not done"
+ *      about a quest the user finished a minute ago, so `staleTime` is 0 and the
+ *      screen refetches every time it comes back into view.
+ *   2. A fetch can move the Leaf balance. When one reports more quests done
+ *      than the copy it replaces, the balance's owners (useHome() behind
+ *      AppHeader, and profile/me) are invalidated, as a boost does.
+ */
 export type QuestTier = "EASY" | "MEDIUM" | "HARD";
 
-export interface QuestView {
+export interface Quest {
   tier: QuestTier;
+  /** QuestKind on the server. Unique within a day, so it is the list key. */
   quest: string;
   label: string;
   description: string;
+  /** Snapshotted at assignment, so it is what this day pays, not today's table. */
   rewardLeaves: number;
   completed: boolean;
 }
 
-export interface QuestsPayload {
-  quests: QuestView[];
-  weekStart: string;
-  /** ISO instant. The countdown on the Quests screen is `resetsAt - now`. */
+export interface QuestDay {
+  quests: Quest[];
+  periodStart: string;
   resetsAt: string;
 }
 
-export const QUESTS_KEY = ["quests", "week"] as const;
+export const QUESTS_KEY = ["quests"] as const;
 
-/**
- * GET /api/v1/quests — the week's three quests, one per tier (Easy, Medium, Hard).
- *
- * There is no claim step: the server credits Leaves the moment it notices the
- * underlying action (an Offer sent, an Item listed, a completed trade) has
- * happened, on whichever call to this route sees it first — see
- * reconcileQuests() in @/lib/quests on the API. So `completed` here already
- * means "paid," not "ready to collect."
- *
- * A short staleTime, not the minute profile.ts uses: this screen is exactly
- * where someone lands right after finishing a quest action elsewhere in the
- * app, and a stale "not completed" would read as the app not noticing.
- *
- * ── WHY THIS INVALIDATES ["home"] AND profile/me ON EVERY FETCH ─────────────
- *
- * The header's Leaves pill (AppHeader.tsx) reads `viewer.leaves` from
- * useHome(), not from this hook — see the note there: "the balance is not
- * treated as authoritative anywhere a decision depends on it... it goes
- * stale until something refetches it." Every other place that credits or
- * spends Leaves (offer.ts, trades.ts, post.ts, notifications.ts,
- * edit-profile.tsx, verify.tsx) invalidates ["home"] right after, for
- * exactly this reason. This route can ALSO credit Leaves, silently, as a
- * side effect of being called — not of anything the USER did on this
- * screen, which is why there is no mutation to hang an onSuccess off of.
- * So the invalidation runs on every successful fetch instead: harmless
- * (React Query dedupes/no-ops when nothing is listening) when nothing
- * changed, and it is the only way the header pill in the screenshot picks
- * up a quest that just got credited without a full app restart.
- */
-export function useQuests(enabled = true) {
-  const queryClient = useQueryClient();
-  const query = useQuery({
+const doneCount = (day: QuestDay | undefined) =>
+  day ? day.quests.filter((q) => q.completed).length : 0;
+
+export function useQuests() {
+  const qc = useQueryClient();
+  return useQuery({
     queryKey: QUESTS_KEY,
-    queryFn: () => apiV1<QuestsPayload>("/api/v1/quests"),
-    enabled,
-    select: (r) => r.data,
-    staleTime: 10_000,
+    queryFn: async () => {
+      const before = qc.getQueryData<QuestDay>(QUESTS_KEY);
+      const { data } = await apiV1<QuestDay>("/api/v1/quests");
+      // A new day starts from zero, so compare only within the same period.
+      const sameDay = before?.periodStart === data.periodStart;
+      if (doneCount(data) > (sameDay ? doneCount(before) : 0)) {
+        void qc.invalidateQueries({ queryKey: ["home"] });
+        void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+      }
+      return data;
+    },
+    staleTime: 0,
   });
-
-  useEffect(() => {
-    if (!query.dataUpdatedAt) return
-    void queryClient.invalidateQueries({ queryKey: ["home"] });
-    void queryClient.invalidateQueries({ queryKey: PROFILE_ME_KEY });
-    // Keyed on dataUpdatedAt, not on `query.data` itself: a new object with
-    // the same content (e.g. a refetch that changed nothing) still bumps
-    // dataUpdatedAt, and that is fine to invalidate on -- but keying on
-    // `query.data` would also refire for every unrelated re-render that
-    // happens to produce a new reference, which `select` here does not,
-    // but is not a distinction worth relying on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query.dataUpdatedAt]);
-
-  return query;
 }

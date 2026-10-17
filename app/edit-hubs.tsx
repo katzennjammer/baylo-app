@@ -172,10 +172,10 @@ export default function EditHubsScreen() {
           </Text>
           <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
             Pick up to five public places. Traders will choose from these when they arrange to
-            meet, and a meeting at a hub you both offer earns the Safe-Zone reward.
+            meet, and a meeting at a hub you both offer earns the safe hub reward.
           </Text>
           {atLimit ? (
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
               That is five places. Uncheck one to add another.
             </Text>
           ) : null}
@@ -192,7 +192,7 @@ export default function EditHubsScreen() {
         {rows.length === 0 ? (
           <Gutter>
             <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              No Safe-Zone hubs to choose from right now.
+              No safe hubs to choose from right now.
             </Text>
           </Gutter>
         ) : (
@@ -276,13 +276,13 @@ function HubRow({
             {hub.name}
           </Text>
           <Text
-            style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}
+            style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}
             numberOfLines={1}
           >
             {hub.landmark}
           </Text>
           {!hub.isActive ? (
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.warm }]}>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.warm }]}>
               Closed — still on your listing until you uncheck it
             </Text>
           ) : null}

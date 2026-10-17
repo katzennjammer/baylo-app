@@ -116,7 +116,7 @@ export function PickerRow({
         {selectable ? (
           <Text
             style={[
-              textStyle(offerType.leavesRow),
+              textStyle(offerType.rowSubtitle),
               { color: offerColor.inkSecondary, marginTop: 4 },
             ]}
           >
@@ -125,7 +125,7 @@ export function PickerRow({
         ) : (
           <Text
             style={[
-              textStyle(offerType.footnoteMono),
+              textStyle(offerType.helper),
               { color: offerColor.inkTertiary, marginTop: 4 },
             ]}
           >

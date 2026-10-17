@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../src/api/client";
 import {
@@ -22,6 +22,8 @@ import {
   type IdVerificationPayload,
 } from "../src/api/id-verification";
 import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
+import { getActingOrgId } from "../src/api/org-context";
+import { isOrgContextRequired, isOrgPostingRefusal, switchToOrganization, useOrganizations, type ActingOrg } from "../src/api/organizations";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import {
   PostFooter,
@@ -38,20 +40,24 @@ import { StepReturn } from "../src/components/post/StepReturn";
 import { StepReview } from "../src/components/post/StepReview";
 import { StepValue } from "../src/components/post/StepValue";
 import { StepWhatIsIt } from "../src/components/post/StepWhatIsIt";
-import { formatCountdown, PrimaryButton, useCountdown } from "../src/components/post/ui";
+import { formatCountdown, PrimaryButton, TextButton, useCountdown } from "../src/components/post/ui";
 import { CloseIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
+import { useSession } from "../src/auth/session";
+import { signedUpAsOrganization } from "../src/auth/signup-kind";
 import { useDetection } from "../src/post/detection";
 import { discardDraft, saveDraft, useAutosave, useStoredDraft } from "../src/post/draft";
 import { announcePosted } from "../src/post/posted-notice";
 import { PhotoPipelineProvider, usePhotos } from "../src/post/photos";
 import { useValuation } from "../src/post/valuation";
+import { mergeLookingFor } from "../src/post/wanted-keywords";
 import {
   canAdvance,
   effectiveValue,
   isChecking,
   isPostable,
   LAST_STEP,
+  parseQuantity,
   PostStateProvider,
   usePost,
 } from "../src/post/state";
@@ -136,6 +142,49 @@ export default function PostItemRoute() {
     staleTime: 60_000,
   });
 
+  // ── POSTING AS A SHOP: THE SHOP'S REVIEW, NEVER THE PERSON'S ID ─────────
+  //
+  // Mirrors POST /api/items. Acting as an organisation, the personal ID is
+  // never consulted: a VERIFIED shop posts, and a PENDING or REJECTED one is
+  // refused whatever the person's own ID says, with the server's sentence
+  // (`postingRefusal`), shown here before seven steps rather than after them.
+  //
+  // ── AN MSME IS NEVER SENT TO THE PERSONAL ID SCREEN (16 Oct 2026) ───────
+  //
+  // Not acting as a shop and without a verified ID of their own, a shop OWNER
+  // sees the SHOP's state -- under review, not approved, or "Post as <shop>"
+  // -- because the server now refuses them for the shop's reason too
+  // (ownedShopPostingRefusal() in the API). Sign-out clears the acting
+  // context, so this is what an MSME owner meets after every fresh sign-in.
+  // Somebody who signed up as an MSME and skipped Business Details owns no
+  // shop; this phone remembers the choice (src/auth/signup-kind.ts) and
+  // offers the business form instead of the ID form. The membership list is
+  // therefore always asked for.
+  const actingOrgId = getActingOrgId();
+  const orgs = useOrganizations(true);
+  const actingShop = actingOrgId
+    ? orgs.data?.data.organizations.find((o) => o.id === actingOrgId)
+    : undefined;
+  // Since schema v2 an owner has at most one shop (the server 409s a second).
+  const ownedShop = orgs.data?.data.organizations[0];
+  const { session } = useSession();
+  const email = session?.user.email ?? null;
+  const msmeSignup = useQuery({
+    queryKey: ["signup-kind", email],
+    queryFn: () => signedUpAsOrganization(email),
+    staleTime: Infinity,
+  });
+  const qc = useQueryClient();
+  const [, setContextTick] = useState(0);
+  const switchContext = useCallback(
+    async (organizationId: string | null) => {
+      await switchToOrganization(organizationId);
+      await qc.invalidateQueries();
+      setContextTick((t) => t + 1);
+    },
+    [qc],
+  );
+
   // Held on a blank canvas rather than painting step 1 and then replacing it
   // with a restored step 4. One frame of the wrong screen on every resume is
   // more noticeable than one frame of nothing.
@@ -145,11 +194,33 @@ export default function PostItemRoute() {
   // nothing. A gate that FAILS to load is treated as open — the server is the
   // real check, and a flaky network must not be a second way to be locked out
   // of posting.
-  if (status === "reading" || gate.isPending) {
+  if (status === "reading" || gate.isPending || orgs.isLoading || msmeSignup.isPending) {
     return <View style={{ flex: 1, backgroundColor: postColor.surface }} />;
   }
 
-  if (gate.data && !gate.data.verified) {
+  // A gate that failed to load counts as verified, as above.
+  const personallyVerified = !gate.data || gate.data.verified;
+
+  if (actingShop?.postingRefusal) {
+    return (
+      <OrgGatePrompt
+        shop={actingShop}
+        message={actingShop.postingRefusal.message}
+        onPostAsMyself={personallyVerified ? () => void switchContext(null) : null}
+      />
+    );
+  }
+
+  if (gate.data && !personallyVerified && !actingOrgId) {
+    if (ownedShop?.postingRefusal) {
+      return <OrgGatePrompt shop={ownedShop} message={ownedShop.postingRefusal.message} onPostAsMyself={null} />;
+    }
+    if (ownedShop) {
+      return <PostAsShopPrompt shop={ownedShop} onPostAsShop={() => void switchContext(ownedShop.id)} />;
+    }
+    if (msmeSignup.data) {
+      return <FinishBusinessPrompt />;
+    }
     return <IdGatePrompt state={gate.data} />;
   }
 
@@ -163,6 +234,104 @@ export default function PostItemRoute() {
         <Wizard />
       </PhotoPipelineProvider>
     </PostStateProvider>
+  );
+}
+
+/* ─────────────────────────── the shop gate prompt ───────────────────── */
+
+/**
+ * What somebody sees when they tap Post while acting as a shop that has not
+ * passed its business review. The sentence is the server's, verbatim, so it
+ * is the same one a refused POST would carry.
+ *
+ * Also what a shop's OWNER sees when they are not acting as it and have no
+ * verified ID of their own (16 Oct 2026): an MSME verifies with its business,
+ * so the shop's state is the answer, never the personal ID screen.
+ *
+ * The way out, for somebody whose own ID IS verified, is posting AS
+ * THEMSELVES, which the shop's review does not affect. It switches the context
+ * back to "Myself", which is also what the switcher in Settings does. Without
+ * a verified ID there is no way out to offer, and `onPostAsMyself` is null.
+ */
+function OrgGatePrompt({ shop, message, onPostAsMyself }: { shop: ActingOrg; message: string; onPostAsMyself: (() => void) | null }) {
+  const pending = shop.postingRefusal?.code === "ORG_VERIFICATION_PENDING";
+  return (
+    <GateFrame title={pending ? "Your business is under review" : `${shop.name} was not approved`} body={message}>
+      {onPostAsMyself ? (
+        <>
+          <GateNote>You are posting as {shop.name}. You can still post things of your own as yourself.</GateNote>
+          <PrimaryButton label="Post as myself instead" onPress={onPostAsMyself} style={{ marginTop: 28 }} />
+        </>
+      ) : (
+        <GateNote>Everything else stays open: browsing, searching, messaging, and accepting a trade someone offers you.</GateNote>
+      )}
+    </GateFrame>
+  );
+}
+
+/**
+ * The owner of an APPROVED shop, not acting as it, without a personal ID. The
+ * server answers this case with ORG_CONTEXT_REQUIRED and never posts as the
+ * shop on its own -- the author decides the tier cap and the issuance rules --
+ * so the switch is the person's tap, here.
+ */
+function PostAsShopPrompt({ shop, onPostAsShop }: { shop: ActingOrg; onPostAsShop: () => void }) {
+  return (
+    <GateFrame
+      title={`Post as ${shop.name}`}
+      body={`${shop.name} is verified, so your listings go out under the shop's name. You are browsing as yourself right now.`}
+    >
+      <PrimaryButton label={`Post as ${shop.name}`} onPress={onPostAsShop} style={{ marginTop: 28 }} />
+    </GateFrame>
+  );
+}
+
+/**
+ * Signed up as an Organization / MSME on this phone, and Business Details was
+ * put off ("Do this later"), so there is no shop yet. The form is the same one
+ * signup showed, at /register-shop.
+ */
+function FinishBusinessPrompt() {
+  const router = useRouter();
+  return (
+    <GateFrame
+      title="Finish your business verification"
+      body="Your account was set up for an Organization / MSME. Businesses verify with their DTI registration number and a business document, not a personal ID. Add them to post as your shop; a person reviews them, usually within a day."
+    >
+      <GateNote>Everything else stays open: browsing, searching, messaging, and accepting a trade someone offers you.</GateNote>
+      <PrimaryButton label="Add business details" onPress={() => router.push("/register-shop")} style={{ marginTop: 28 }} />
+    </GateFrame>
+  );
+}
+
+/** The close button, heading and sentence every gate screen shares. */
+function GateFrame({ title, body, children }: { title: string; body: string; children: ReactNode }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ flex: 1, backgroundColor: postColor.surface, paddingTop: insets.top }}>
+      <View style={{ height: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+        <Tappable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
+          <CloseIcon size={22} color={postColor.ink} />
+        </Tappable>
+      </View>
+
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
+        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>{title}</Text>
+        <Text style={[textStyle(postType.stepSub), { color: postColor.inkSecondary, marginTop: 12, lineHeight: 22 }]}>
+          {body}
+        </Text>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function GateNote({ children }: { children: ReactNode }) {
+  return (
+    <Text style={[textStyle(postType.stepSub), { color: postColor.inkSecondary, marginTop: 16, lineHeight: 22 }]}>
+      {children}
+    </Text>
   );
 }
 
@@ -273,6 +442,18 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           onPress={() => router.push("/verify-id")}
           style={{ marginTop: 28 }}
         />
+
+        {/* An MSME verifies with business documents, never this screen. The
+            phone may not know this account signed up as one (a reinstall, a
+            second phone; see src/auth/signup-kind.ts), so the door is here
+            too -- only before any personal ID has been sent. */}
+        {state.status === "unverified" && !state.latest ? (
+          <TextButton
+            label="Posting for a business? Register it instead"
+            onPress={() => router.push("/register-shop")}
+            style={{ marginTop: 8 }}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -406,6 +587,34 @@ function Wizard() {
         imageHash: photos[0]?.hash ?? null,
         imageHashes: photos.slice(0, rules.maxPhotos).map((p) => p.hash),
         hubIds: state.hubIds.slice(0, rules.maxHubs),
+        // Step 5's chip group, which until now was collected and thrown away.
+        // Server-side this is the matcher's input: it decides who is told
+        // about this listing. Not perishable-only. The free text above adds
+        // any categories it names by keyword -- chips first, never displaced,
+        // within the server's cap. See src/post/wanted-keywords.ts.
+        lookingForCategories: mergeLookingFor(
+          state.returnCategories,
+          state.wanted,
+          rules.maxReturnCategories,
+        ),
+        // The perishable block, or nothing at all. Spread conditionally so a
+        // standard listing sends no perishable keys rather than four nulls --
+        // the server refuses a window on a non-perishable, and sending the
+        // shape only when it means something keeps that unreachable from here.
+        ...(state.isPerishable
+          ? {
+              isPerishable: true as const,
+              // Parsed once, here, from the raw string the field holds. An
+              // empty box is a legitimate answer: "a basket of calamansi" has
+              // a unit and no number, and the server allows both to be null
+              // together. NaN is coerced to null rather than sent.
+              quantity: parseQuantity(state.quantity),
+              // The unit rides along only when there is a number for it to
+              // qualify -- the server refuses a unit with no quantity.
+              quantityUnit: parseQuantity(state.quantity) === null ? null : state.quantityUnit,
+              tradeWithinHours: state.tradeWithinHours,
+            }
+          : {}),
       });
       // The draft has become a listing. Deleting it here rather than on the way
       // out means a crash between posting and leaving cannot resurrect a draft
@@ -427,6 +636,25 @@ function Wizard() {
       // The draft is saved FIRST. Somebody who has just filled in seven steps
       // and is being redirected must find their work waiting when they come
       // back, or the gate has cost them the listing rather than delayed it.
+      // The shop's review, refusing at the last step: the context was switched
+      // or the shop's status changed after the check above. Same treatment as
+      // the ID gate below: keep the draft, show the server's own sentence.
+      if (isOrgPostingRefusal(e)) {
+        await saveDraft(state);
+        dispatch({ type: "post/fail", message: `${e.message} Your draft is safe.` });
+        return;
+      }
+      // An approved shop's owner, posting as themselves without an ID. Not
+      // switched here: changing the author at the last step is the silent
+      // switch the server refuses to make. Post again offers the switch.
+      if (isOrgContextRequired(e)) {
+        await saveDraft(state);
+        dispatch({
+          type: "post/fail",
+          message: `${e.message} Close this and tap Post again to switch to your shop. Your draft is safe.`,
+        });
+        return;
+      }
       if (isIdGateError(e)) {
         await saveDraft(state);
         router.push("/verify-id");
@@ -441,12 +669,26 @@ function Wizard() {
       // promises "Your draft is safe", and that has to be true before the
       // sentence is shown.
       await saveDraft(state);
+      // TEMPORARY (24 Sep 2026): a perishable post failed and this branch was
+      // the only record of why, which it then replaced with a generic line.
+      if (__DEV__) {
+        console.warn(
+          "[post] createItem failed",
+          e instanceof ApiError ? { status: e.status, code: e.code, message: e.message, issues: e.issues } : e,
+        );
+      }
       dispatch({
         type: "post/fail",
         message:
           e instanceof ApiError && e.status === 0
             ? "No connection. We saved your draft — try again once you are back online."
-            : "We could not post this just now. Your draft is safe. Try again in a moment.",
+            : // A 4xx is the server refusing THIS listing for a stated reason
+              // ("Choose how long you can trade this within"). "Try again in a
+              // moment" would send them to repeat the same refusal; the
+              // server's own sentence tells them what to change.
+              e instanceof ApiError && e.status >= 400 && e.status < 500 && e.message
+              ? `${e.message.replace(/\.$/, "")}. Your draft is safe.`
+              : "We could not post this just now. Your draft is safe. Try again in a moment.",
       });
       return;
     }
@@ -499,7 +741,7 @@ function Wizard() {
         }}
         railTrailing={
           step === 0 && state.photos.length > 0 ? (
-            <Text style={[textStyle(postType.photoCounter), { color: postColor.inkMuted }]}>
+            <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
               {`${state.photos.length} of ${rules.maxPhotos} photos`}
             </Text>
           ) : null
@@ -534,6 +776,7 @@ function Wizard() {
             titleRef={titleRef}
             onFieldBlur={saveNow}
             retryDetection={retryDetection}
+            scrollerRef={scroller}
           />
         ) : null}
         {step === 2 ? <StepCondition board={board} /> : null}
@@ -574,7 +817,7 @@ function Wizard() {
                 justifyContent: "space-between",
               }}
             >
-              <Text style={[textStyle(postType.hubCounter), { color: postColor.inkMuted }]}>
+              <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
                 {`${state.hubIds.length} of ${rules.maxHubs} chosen`}
               </Text>
               <Tappable

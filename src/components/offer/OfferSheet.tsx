@@ -3,15 +3,18 @@ import {
   Animated,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   Text,
   View,
+  useWindowDimensions,
   type FilterFunction,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PrimaryButton, useReducedMotion } from "./chrome";
+import { prompt as promptCopy } from "./copy";
 import {
   offerBorder,
   offerColor,
@@ -20,6 +23,7 @@ import {
   offerSize,
   offerSpace,
   offerType,
+  outOfReach,
   textStyle,
 } from "../../theme/offer-tokens";
 
@@ -39,6 +43,10 @@ import {
  * Bending one shell around both would give it six escape hatches, which is the
  * trade `sheet-ui.tsx` already declined once. What IS shared is the geometry and
  * the motion, and that lives here rather than being written twice.
+ *
+ * The Premium paywall (app/premium.tsx) is the third body on this shell, so it
+ * reads as the same object as `How trading works` wherever it is opened from.
+ * It is the one caller that passes `swipeToDismiss`.
  *
  * ── THE MOTION IS §11's, NOT `animationType="slide"`'s ──────────────────────
  *
@@ -62,16 +70,51 @@ export function OfferSheet({
   onDismiss,
   /** §3.6 fixes the prompt's height at 512. The picker hugs its content. */
   height,
+  /**
+   * Drag the handle down to close. Opt-in, and only meaningful on a
+   * dismissible sheet: the handle strip is the drag target rather than the
+   * whole sheet, so a body that scrolls keeps its own vertical gesture.
+   */
+  swipeToDismiss = false,
   children,
 }: {
   dismissible: boolean;
   onDismiss: () => void;
   height?: number;
+  swipeToDismiss?: boolean;
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const slide = useRef(new Animated.Value(1)).current;
+  const drag = useRef(new Animated.Value(0)).current;
+  const sheetHeight = useRef<number>(offerSpace.prompt.height);
+  // The responder is built once; the latest `onDismiss` is read through a ref.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4,
+      // Only downward travel moves the sheet; pulling up does nothing.
+      onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_, g) => {
+        const shouldClose = g.dy > sheetHeight.current * 0.25 || g.vy > 0.8;
+        Animated.timing(drag, {
+          toValue: shouldClose ? sheetHeight.current : 0,
+          duration: offerMotion.sheetInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (finished && shouldClose) dismissRef.current();
+        });
+      },
+      onPanResponderTerminate: () =>
+        Animated.timing(drag, { toValue: 0, duration: offerMotion.sheetInMs, useNativeDriver: true }).start(),
+    }),
+  ).current;
+  const canSwipe = swipeToDismiss && dismissible;
 
   useEffect(() => {
     if (reduced) {
@@ -125,6 +168,9 @@ export function OfferSheet({
         />
 
         <Animated.View
+          onLayout={(e) => {
+            sheetHeight.current = e.nativeEvent.layout.height;
+          }}
           style={{
             height,
             backgroundColor: offerColor.paper,
@@ -144,13 +190,20 @@ export function OfferSheet({
                       outputRange: [0, offerSpace.prompt.height],
                     }),
               },
+              // The finger's travel, on top of the entrance. Zero unless dragged.
+              { translateY: drag },
             ],
           }}
         >
           {/* §1.1's `surface/quiet` handle track. Present on both sheets: it
               says "this is a sheet" even where it cannot be dragged, and §3.6
               measures the prompt's first gap from it. */}
-          <View style={{ alignItems: "center", paddingTop: 10 }}>
+          <View
+            style={{ alignItems: "center", paddingTop: 10 }}
+            // A 4px bar is too thin to grab; the full-width strip around it is the target.
+            hitSlop={canSwipe ? { top: 10, bottom: 16 } : undefined}
+            {...(canSwipe ? pan.panHandlers : {})}
+          >
             <View
               style={{
                 width: offerSize.handle.w,
@@ -168,92 +221,108 @@ export function OfferSheet({
   );
 }
 
-/* ─────────────────────── §7.4 the one-time prompt ───────────────────── */
+/* ───────────────────── the `How trading works` sheet ────────────────── */
 
 /**
- * `Why some listings look faded`, once per account.
+ * `How trading works`. Once on the first faded grid, and on demand from
+ * Settings.
  *
- * §7.4's rules, all four honoured: it is triggered on the first marketplace
- * entry whose visible grid contains at least one out-of-reach tile; it is
- * dismissed ONLY by `Got it`; it is never shown again, including after the
- * threshold moves; and the flag is `seen_reach_explainer`.
+ * One scrollable sheet: a heading, the four rules as titled paragraphs, then
+ * the faded-tile rule with its swatch pair, and `Got it` pinned under the
+ * scroll. The first-run rules still hold — it is dismissed only by `Got it`,
+ * never by a scrim tap or the back gesture — and the same component serves the
+ * Settings entry, where `Got it` simply closes it.
  *
- * The example pair is the one place this flow puts a swatch beside a word — two
- * mono labels, `within reach` and `further off`, each next to a small block in
- * the treatment it names. §10.8 writes them as mono, so they are mono, and the
- * greyed one carries the same `filter` the tiles do rather than a hand-picked
- * grey: if §1.9's treatment is tuned, the legend moves with it.
+ * The swatch pair is the one place this flow puts a swatch beside a word: two
+ * mono labels, each next to a small block in the treatment it names. The faded
+ * one carries the same `filter` the tiles do rather than a hand-picked grey, so
+ * if the tile treatment is tuned the legend moves with it.
  */
 export function ReachPromptSheet({
   heading,
-  body,
-  exampleNear,
-  exampleFar,
-  steps,
+  sections,
+  faded,
   button,
   onGotIt,
   photoFilter,
 }: {
   heading: string;
-  body: string;
-  exampleNear: string;
-  exampleFar: string;
-  steps: readonly string[];
+  sections: readonly { title: string; body: string }[];
+  faded: { title: string; body: string; exampleNear: string; exampleFar: string };
   button: string;
   onGotIt: () => void;
-  /** `outOfReach.photoFilter`, threaded so the legend cannot drift from §1.9. */
+  /** `outOfReach.photoFilter`, threaded so the legend cannot drift from the tiles. */
   photoFilter: readonly FilterFunction[];
 }) {
   const p = offerSpace.prompt;
+  const { height: windowHeight } = useWindowDimensions();
+  // Tall enough to show most of it on a typical phone, never taller than the
+  // screen leaves room for; whatever does not fit scrolls.
+  const height = Math.min(p.height, Math.round(windowHeight * 0.88));
 
   return (
-    <OfferSheet dismissible={false} onDismiss={onGotIt} height={p.height}>
+    <OfferSheet dismissible={false} onDismiss={onGotIt} height={height}>
       <View style={{ paddingHorizontal: p.x, paddingTop: p.handleToHeading, flex: 1 }}>
         <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink }]}>{heading}</Text>
 
-        <Text
-          style={[
-            textStyle(offerType.body),
-            { color: offerColor.inkSecondary, marginTop: p.headingToBody },
-          ]}
+        <ScrollView
+          style={{ flex: 1, marginTop: p.headingToBody }}
+          contentContainerStyle={{ gap: p.sectionGap, paddingBottom: p.listToButton }}
+          showsVerticalScrollIndicator={false}
         >
-          {body}
-        </Text>
-
-        {/* The example pair. Two swatches at the tile photo's own radius, so
-            they read as miniature tiles rather than as colour chips. */}
-        <View
-          style={{
-            marginTop: p.bodyToExamples,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 20,
-          }}
-        >
-          <Swatch label={exampleNear} />
-          <Swatch label={exampleFar} filter={photoFilter} />
-        </View>
-
-        <View style={{ marginTop: p.examplesToList, gap: p.listItemGap }}>
-          {steps.map((step, i) => (
+          {sections.map((section, i) => (
             <View key={i} style={{ flexDirection: "row", gap: 12 }}>
-              <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+              <Text
+                style={[
+                  textStyle(offerType.helper),
+                  { color: offerColor.inkTertiary, paddingTop: 2 },
+                ]}
+              >
                 {String(i + 1).padStart(2, "0")}
               </Text>
-              <Text
-                style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}
-              >
-                {step}
-              </Text>
+              <View style={{ flex: 1, gap: p.titleToBody }}>
+                <Text style={[textStyle(offerType.reachHeading), { color: offerColor.ink }]}>
+                  {section.title}
+                </Text>
+                <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary }]}>
+                  {section.body}
+                </Text>
+              </View>
             </View>
           ))}
-        </View>
 
-        <View style={{ flex: 1 }} />
+          {/* A rule below the four, not a fifth number: it follows from 02 and 04. */}
+          <View
+            style={{
+              borderTopWidth: offerBorder.rule,
+              borderTopColor: offerColor.rule,
+              paddingTop: p.sectionGap,
+              gap: p.titleToBody,
+            }}
+          >
+            <Text style={[textStyle(offerType.reachHeading), { color: offerColor.ink }]}>
+              {faded.title}
+            </Text>
+            <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary }]}>
+              {faded.body}
+            </Text>
+            {/* Two swatches at the tile photo's own radius, so they read as
+                miniature tiles rather than as colour chips. */}
+            <View
+              style={{
+                marginTop: p.bodyToExamples - p.titleToBody,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 20,
+              }}
+            >
+              <Swatch label={faded.exampleNear} />
+              <Swatch label={faded.exampleFar} filter={photoFilter} />
+            </View>
+          </View>
+        </ScrollView>
 
-        <View style={{ marginTop: p.listToButton }}>
-          <PrimaryButton label={button} onPress={onGotIt} />
-        </View>
+        <PrimaryButton label={button} onPress={onGotIt} />
       </View>
     </OfferSheet>
   );
@@ -270,14 +339,31 @@ function Swatch({ label, filter }: { label: string; filter?: readonly FilterFunc
           backgroundColor: offerColor.photoPlaceholder,
           borderWidth: offerBorder.rule,
           borderColor: offerColor.rule,
-          // The greyed swatch wears §1.9's own filter list, not a substitute.
+          // The faded swatch wears the tiles' own filter list, not a substitute.
           ...(filter ? { filter } : {}),
         }}
       />
-      <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+      <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
         {label}
       </Text>
     </View>
+  );
+}
+
+/**
+ * The sheet with its copy and the tile filter already bound — the one thing
+ * both callers (the marketplace's first run and Settings) render.
+ */
+export function HowTradingWorksSheet({ onGotIt }: { onGotIt: () => void }) {
+  return (
+    <ReachPromptSheet
+      heading={promptCopy.heading}
+      sections={promptCopy.sections}
+      faded={promptCopy.faded}
+      button={promptCopy.button}
+      photoFilter={outOfReach.photoFilter}
+      onGotIt={onGotIt}
+    />
   );
 }
 
@@ -358,8 +444,8 @@ export function PickerBody({
         {children}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: p.x, paddingTop: p.examplesToList }}>
-        <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
+      <View style={{ paddingHorizontal: p.x, paddingTop: p.sectionGap }}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {footnote}
         </Text>
 

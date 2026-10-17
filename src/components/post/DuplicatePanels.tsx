@@ -87,7 +87,7 @@ export function DuplicateRunning() {
           stroke={postIcon.magnifier.stroke}
           color={postColor.inkMuted}
         />
-        <Text style={[textStyle(postType.checkLine), { color: postColor.inkMuted }]}>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
           Checking this photo against existing listings
         </Text>
       </View>
@@ -158,7 +158,7 @@ function ListingRow({ listing, meta }: { listing: MatchedListing; meta: string }
         </Text>
         <Text
           style={[
-            textStyle(postType.draftRowMeta),
+            textStyle(postType.helper),
             { color: postColor.inkMuted, marginTop: 5 },
           ]}
         >
@@ -274,7 +274,7 @@ export function DuplicateWarned({
             gap: 10,
           }}
         >
-          <SectionLabel>THE OTHER LISTING</SectionLabel>
+          <SectionLabel>The other listing</SectionLabel>
           <ListingRow
             listing={listing}
             meta={
@@ -372,7 +372,7 @@ export function DuplicateFailed({
         {showReference ? (
           <View style={{ marginTop: 14 }}>
             <Divider style={{ backgroundColor: postColor.warmLine, marginBottom: 12 }} />
-            <Text style={[textStyle(postType.refLabel), { color: postColor.warmInk }]}>
+            <Text style={[textStyle(postType.helper), { color: postColor.warmInk }]}>
               REFERENCE
             </Text>
             <Text

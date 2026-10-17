@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
+import { getActingOrgId } from "./org-context";
 import type { NotificationItem, NotificationsPayload } from "./types";
 
 /**
@@ -20,10 +21,16 @@ export const NOTIFICATIONS_KEY = ["notifications"] as const;
 /** Matches the trades lists: a minute-old copy is fine while a fresh one loads. */
 const NOTIFICATIONS_STALE_MS = 30_000;
 
-/** GET /api/v1/notifications — newest first, one page of 50. */
+/**
+ * GET /api/v1/notifications — newest first, one page of 50.
+ *
+ * Acting as a shop the server answers with the SHOP's rows (X-Baylo-Org), so
+ * the acting org is part of the key: one identity's bell never renders under
+ * the other. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
+ */
 export function useNotifications() {
   return useQuery({
-    queryKey: NOTIFICATIONS_KEY,
+    queryKey: [...NOTIFICATIONS_KEY, getActingOrgId() ?? "self"],
     queryFn: () => apiV1<NotificationsPayload>("/api/v1/notifications?limit=50"),
     select: (r) => r.data,
     staleTime: NOTIFICATIONS_STALE_MS,
@@ -52,7 +59,8 @@ export function useNotifications() {
  *     note warns against: a message opens a thread WITH someone, not a page
  *     ABOUT them.
  *
- *   trade          → /trade-code?id=<tradeId>, or /trades with no id
+ *   trade          → /trade?id=<tradeId>&handoff=1 (the code panel; this was
+ *                    /trade-code before Round 2), or /trades with no id
  *
  *     THE ID IS NO LONGER DROPPED. What stood here said `/trade-code` "is valid
  *     only for a CONFIRMING trade", and that was not true of the screen even
@@ -68,7 +76,8 @@ export function useNotifications() {
  *     tapping a notification about it. An id-less row still falls back to the
  *     list, which is what a pre-v1 row without an entityId can support.
  *
- *   meetup         → /trade-meetup?id=<tradeId>
+ *   meetup         → /trade?id=<tradeId> (the hub step, with Agree; this was
+ *                    /trade-meetup before Round 2)
  *
  *     ITS OWN TOKEN, NOT "trade", and the distinction is the reason it exists.
  *     A meetup notification is "can you do Saturday?" — routing it to the code
@@ -104,15 +113,58 @@ export function useNotifications() {
 export function notificationTarget(n: NotificationItem): string | null {
   const id = n.entityId;
 
+  if (!n.entityType) {
+    if ((n.type === "NEW_MESSAGE" || n.type === "FOLLOW_REQUEST" || n.type === "FOLLOW_ACCEPTED") && n.actor) {
+      return n.type === "NEW_MESSAGE"
+        ? `/messages?partner=${encodeURIComponent(n.actor.id)}`
+        : `/user?id=${encodeURIComponent(n.actor.id)}`;
+    }
+    if (n.type === "NEW_REVIEW") return "/(app)/profile";
+    if (n.type === "TRADE_REQUEST") return "/trades";
+  }
+
   switch (n.entityType) {
     case "conversation":
       return id ? `/messages?partner=${encodeURIComponent(id)}` : "/messages";
     case "trade":
-      return id ? `/trade-code?id=${encodeURIComponent(id)}` : "/(app)/trades";
+      if (n.type === "TRADE_COMPLETED") {
+        return id ? `/rate-trade?id=${encodeURIComponent(id)}` : "/trades-history";
+      }
+      // `handoff=1` opens the trade screen on its code panel, which is what
+      // the old /trade-code landing did — issuing the codes included.
+      return id ? `/trade?id=${encodeURIComponent(id)}&handoff=1` : "/(app)/trades";
     case "meetup":
-      return id ? `/trade-meetup?id=${encodeURIComponent(id)}` : "/(app)/trades";
+      // The trade screen's hub step, where "Agree" lives since Round 2.
+      return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "user":
       return id ? `/user?id=${encodeURIComponent(id)}` : null;
+    /*
+     * TWO NOTIFICATION TYPES SHARE THIS TOKEN, AND THEY WANT DIFFERENT SCREENS.
+     *
+     * A comment notification is about a conversation on a listing, so it opens
+     * the listing WITH the comments sheet up -- that is what `&comments=1` is
+     * for. A CATEGORY_MATCH is about the listing itself: somebody posted
+     * something in a category the recipient said they wanted, and there is no
+     * conversation to open. Sending them to a comments sheet on a stranger's
+     * new listing would be the wrong screen every single time.
+     *
+     * Branching on `type` rather than minting a second entityType, because the
+     * destination IS the same object -- the token says what to open, `type`
+     * says what happened, and the schema's own note draws exactly that line.
+     */
+    case "item":
+      if (!id) return null;
+      return n.type === "CATEGORY_MATCH"
+        ? `/item?id=${encodeURIComponent(id)}`
+        : `/item?id=${encodeURIComponent(id)}&comments=1`;
+    /*
+     * A business-document decision. The id is the Organization's, and there is
+     * no org screen in the app yet -- so this lands on the person's own profile
+     * and settings, where the organisation they now own or were refused is
+     * reachable. Better than null, which renders an untappable row.
+     */
+    case "organization":
+      return "/settings";
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
     case "review":
@@ -132,6 +184,10 @@ export function notificationTarget(n: NotificationItem): string | null {
       return "/verify-id";
     case "listing_review":
       return id ? `/listing-review?id=${encodeURIComponent(id)}` : null;
+    // The "Welcome back" notice. The id is the Suspension's; the screen shows
+    // the full record -- reason, dates, how it ended -- behind the sentence.
+    case "suspension":
+      return id ? `/suspension?id=${encodeURIComponent(id)}` : null;
     default:
       return null;
   }

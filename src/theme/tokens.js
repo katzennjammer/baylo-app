@@ -47,6 +47,13 @@ const color = {
   greenWash: "#EAF6EC",
   greenLine: "#D2EAD8",
 
+  /* Section-title accents (30 Sep 2026). Text colours, so they are measured
+     as text on `surface` (#FAFAF7): accentGreen 4.55:1 (brand green's hue,
+     darkened until it passes; `green` itself is 2.31:1), accentGold 4.02:1.
+     Both clear WCAG's 3:1 for large text; accentGreen also clears 4.5:1. */
+  accentGreen: "#2A833E",
+  accentGold: "#A0740D",
+
   /* Warm accent. Likes and urgency only — see the spec's own note. */
   like: "#C56A4B",
   urgent: "#B0553A",
@@ -66,6 +73,39 @@ const color = {
 
   /** The scrim behind the "expand" label on a cropped photo. */
   captionFill: "rgba(20, 20, 15, 0.55)",
+  /** Text and glyphs drawn ON `captionFill` — the storefront's "Change cover". */
+  onScrim: "#FFFFFF",
+};
+
+/**
+ * The dark palette, written down once.
+ *
+ * Before this existed it was hand-rolled inline as `darkColors` in
+ * connections.tsx, profile.tsx, user.tsx and messages/thread.tsx. These are the
+ * profile/user values verbatim (the superset of the four #171A17 copies), so
+ * those screens can switch to `dark.*` with no visual change. thread.tsx's copy
+ * is a different, warmer set (#14140F base) and is NOT folded in here.
+ *
+ * First consumer: the Home redesign's Exclusive tiles.
+ */
+const dark = {
+  surface: "#171A17",
+  control: "#252A25",
+  ink: "#F4F5F0",
+  secondary: "#B6BDB3",
+  muted: "#929B91",
+  divider: "#343A34",
+  border: "#596159",
+  green: "#72D681",
+  /** `surface` at 78% — the bottom scrim under a tile's title. */
+  scrim: "rgba(23, 26, 23, 0.78)",
+  /** `surface` at 0% — the scrim's transparent end, same RGB so it never greys. */
+  scrimClear: "rgba(23, 26, 23, 0)",
+  /* The dark stand-ins for `color.greenWash` / `color.forest` on a badge. Were
+     inline in the storefront header, profile.tsx and user.tsx as #244A31 /
+     #BFE8C7; the storefront reads them from here now. */
+  greenWash: "#244A31",
+  onGreenWash: "#BFE8C7",
 };
 
 /* ────────────────────────────── 2. TYPE ─────────────────────────────── */
@@ -209,6 +249,49 @@ const type = {
   dangerAction: { fontFamily: font.sansMedium, fontSize: 14 },
   /** The 1-of-N counter over a carousel. */
   carouselCount: { fontFamily: font.mono, fontSize: 10 },
+
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+
+  /** "Categories", "Exclusive". */
+  homeSection: { fontFamily: font.displaySemi, fontSize: 20 },
+  homeSeeAll: { fontFamily: font.sansSemi, fontSize: 13 },
+  heroTitle: { fontFamily: font.displayBold, fontSize: 20, lineHeight: 25 },
+  heroSubhead: { fontFamily: font.sans, fontSize: 13, lineHeight: 17.6 },
+  heroCta: { fontFamily: font.sansBold, fontSize: 13 },
+  categoryLabel: { fontFamily: font.sansMedium, fontSize: 11 },
+  exclusiveTitle: { fontFamily: font.displaySemi, fontSize: 16, lineHeight: 20 },
+  exclusiveMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
+  /** The live countdown beside "Exclusive". Mono, so the digits never jitter. */
+  countdownPill: { fontFamily: font.monoMedium, fontSize: 12 },
+  /**
+   * The LIVE countdown pill (1 Oct 2026): light bold figures on solid red.
+   * Tabular, so "05:12:44" keeps one width while it ticks; Public Sans
+   * carries `tnum`, as `gridLeaves` already relies on.
+   */
+  countdownLive: { fontFamily: font.sansBold, fontSize: 12, fontVariant: ["tabular-nums"] },
+  /** The same, on the listing screen under the photo. */
+  countdownLiveLarge: { fontFamily: font.sansBold, fontSize: 16, fontVariant: ["tabular-nums"] },
+
+  /* ── MSME storefront (docs/design/MSME Profile 1a) ────────────────────────
+     The design sets these in Figtree 800/700; Figtree is not bundled, so the
+     heavy display weight maps to Bricolage Bold and the UI weights to Public
+     Sans, the same substitution every other screen makes. */
+  storefrontName: { fontFamily: font.displayBold, fontSize: 24, letterSpacing: -0.48, lineHeight: 29 },
+  storefrontMeta: { fontFamily: font.sans, fontSize: 14 },
+  storefrontCategory: { fontFamily: font.sansSemi, fontSize: 14 },
+  storefrontBody: { fontFamily: font.sans, fontSize: 15, lineHeight: 21.75 },
+  storefrontBadge: { fontFamily: font.sansBold, fontSize: 12 },
+  storefrontStat: { fontFamily: font.sansBold, fontSize: 20, fontVariant: ["tabular-nums"] },
+  storefrontStatLabel: { fontFamily: font.sans, fontSize: 12 },
+  storefrontSection: { fontFamily: font.sansBold, fontSize: 17 },
+  storefrontLink: { fontFamily: font.sansBold, fontSize: 13 },
+  storefrontOverlay: { fontFamily: font.sansSemi, fontSize: 12 },
+  storefrontStaffName: { fontFamily: font.sansSemi, fontSize: 15 },
+  storefrontStaffRole: { fontFamily: font.sans, fontSize: 13 },
+  storefrontStep: { fontFamily: font.sans, fontSize: 14 },
+  storefrontEmptyTitle: { fontFamily: font.sansBold, fontSize: 16 },
+  /** The initial in a logo-less shop's square. The person avatar's face, at the logo's scale. */
+  storefrontLogoInitial: { fontFamily: font.sansBold, fontSize: 34 },
 };
 
 /** Truncation, from the spec's own rules. */
@@ -367,6 +450,39 @@ const space = {
     actionBarY: 12,
   },
 
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+  home: {
+    /** Safe-area top + this, then the search row. */
+    top: 8,
+    searchGap: 10,
+    headerToHero: 16,
+    heroX: 18,
+    heroY: 18,
+    heroSubToCta: 12,
+    /** Hero → Categories → Exclusive. */
+    sectionTop: 24,
+    headingToContent: 12,
+    categoryGap: 14,
+    circleToLabel: 7,
+    tileBody: 12,
+    tileTitleToMeta: 3,
+    tileMetaToLeaves: 6,
+    tileBadgeInset: 8,
+    tileBadgeGap: 6,
+    /**
+     * Section header: title row -> subtitle. The squiggle starts at the
+     * bottom of the title's line box and its stroke reaches about 6.25 px
+     * below it, so 12 leaves ~5.75 px clear above the subtitle.
+     */
+    titleToSubtitle: 12,
+    /** Title text -> its trailing icon. */
+    titleToIcon: 6,
+    /** Shop Spotlight card: body padding, and how far the logo rides up into the hero. */
+    spotlightBody: 12,
+    spotlightLogoOverlap: 22,
+    bottom: 28,
+  },
+
   matches: {
     y: 18,
     headerToRail: 12,
@@ -374,6 +490,46 @@ const space = {
     cardGap: 10,
     thumbToTitle: 8,
     titleToMeta: 5,
+  },
+
+  /* ── MSME storefront ──────────────────────────────────────────────────────
+     Read off "MSME Profile 1a". The design's 20 px gutter is NOT carried over:
+     the tabs and grid under the header sit on `screenX`, and a header on a
+     different gutter from the list it heads reads as misaligned. */
+  storefront: {
+    /** Logo → name row. */
+    logoToName: 12,
+    nameToMeta: 4,
+    nameGap: 8,
+    metaGap: 6,
+    metaToBody: 12,
+    /** Description → actions, actions → stats card, stats card → setup card. */
+    block: 16,
+    actionGap: 10,
+    statsY: 12,
+    statGap: 2,
+    cardPad: 16,
+    /** Setup card: heading → progress bar → first step. */
+    progressTop: 10,
+    progressBottom: 6,
+    stepY: 10,
+    stepGap: 12,
+    /** Stats / setup card → the staff section. */
+    staffTop: 20,
+    staffRowTop: 10,
+    staffGap: 12,
+    inviteTop: 12,
+    inviteGap: 8,
+    /** The header's bottom edge → the tabs. */
+    bottom: 22,
+    overlayInset: 12,
+    overlayGap: 8,
+    overlayX: 12,
+    descriptionY: 12,
+    descriptionX: 14,
+    descriptionGap: 10,
+    emptyY: 28,
+    emptyGap: 6,
   },
 };
 
@@ -412,6 +568,27 @@ const radius = {
   hubRow: 10,
   carouselDot: 3,
   carouselCount: 10,
+
+  /* Home redesign (preview). */
+  hero: 18,
+  heroCta: 18,
+  categoryCircle: 28,
+  exclusiveTile: 14,
+  /** The Spotlight card's logo square. Square-ish, never round: see StoreIcon. */
+  spotlightLogo: 10,
+  tileBadge: 14,
+  countdownPill: 12,
+  countdownPillLarge: 17,
+
+  /* MSME storefront. */
+  storefrontLogo: 22,
+  storefrontButton: 14,
+  storefrontCard: 16,
+  storefrontSetupCard: 18,
+  storefrontBadge: 12,
+  storefrontPill: 17,
+  storefrontInput: 12,
+  storefrontProgress: 3,
 };
 
 /* ──────────────────────────── 4. COMPONENTS ─────────────────────────── */
@@ -543,6 +720,90 @@ const size = {
     dangerRow: 44,
     actionButton: 50,
     backButton: 44,
+    /** The circular back / share / more buttons drawn over the photo. */
+    overlayButton: 40,
+    /** The large countdown pill under the photo. */
+    countdownPill: 34,
+    countdownPillX: 14,
+  },
+
+  /* ── Home redesign (preview) ──────────────────────────────────────────── */
+  home: {
+    heroHeight: 148,
+    /** Fraction of the hero's width the photo occupies, measured from the right. */
+    heroPhotoFraction: 0.44,
+    /** How far the photo runs past the hero's right edge before the clip. */
+    heroPhotoBleed: 18,
+    heroCta: 36,
+    heroCtaX: 16,
+    /** 56, not 44: the label sits under it, so the circle IS the target. */
+    categoryCircle: 56,
+    /** Width per category column, so labels centre under their circles. */
+    categoryItem: 64,
+    /** Exclusive tiles are slightly taller than wide, like the reference. */
+    exclusiveTileAspect: 0.86,
+    /**
+     * Exclusive cards visible at once in the single row. Not a whole number
+     * on purpose: the sliver of the next card is what says the row scrolls.
+     */
+    exclusiveCardPerScreen: 1.2,
+    /** The Exclusive card's photo, width over height. Wide, like the reference. */
+    exclusiveCardPhotoAspect: 1.5,
+    /**
+     * Recommended cards visible at once: the same card, narrower than
+     * Exclusive's, so the two rows do not read as one repeated section.
+     */
+    recommendedPerScreen: 1.6,
+    /** The hand-drawn squiggle under "time": its box height and stroke (real px). */
+    squiggleHeight: 8,
+    squiggleStroke: 2.5,
+    /**
+     * Largest system font scale a section heading follows. Past this the
+     * title would wrap or push "See all" off a 320 dp screen; body text below
+     * it keeps scaling.
+     */
+    headingMaxFontScale: 1.3,
+    /**
+     * Largest font scale a badge ON A PHOTO follows (the lock badge, the
+     * countdown pill on a grid tile). Measured 30 Sep 2026: at 320 dp a tile
+     * leaves 127 dp for an overlay, and "A few hours left" needs 125 at 1.15x
+     * but 139 at 1.3x. Past this it would cover the photo; the same facts are
+     * in the tile's screen-reader label.
+     */
+    overlayMaxFontScale: 1.15,
+    /** Shop Spotlight cards visible at once; the part-card says it scrolls. */
+    spotlightPerScreen: 1.6,
+    /** Width over height: tall, a promo card rather than a tile. */
+    spotlightAspect: 0.68,
+    /** Share of the card's height the hero image takes. */
+    spotlightHeroFraction: 0.52,
+    /** The square logo, or the shop-front placeholder in its place. */
+    spotlightLogo: 44,
+    tileBadge: 28,
+    countdownPill: 26,
+    countdownPillX: 10,
+  },
+
+  /* ── MSME storefront ──────────────────────────────────────────────────── */
+  storefront: {
+    banner: 148,
+    logo: 84,
+    /** The page-coloured ring that lifts the logo off a busy banner. */
+    logoRing: 4,
+    /** How far the logo rises into the banner. Just under half, as drawn. */
+    logoLift: 40,
+    /** Edit / Follow / Message / Share. 46, not 44: the design's own value. */
+    button: 46,
+    badge: 24,
+    badgeX: 9,
+    /** "Change cover" and "+ Invite". */
+    pill: 34,
+    pillX: 12,
+    staffAvatar: 44,
+    stepMark: 22,
+    progress: 6,
+    input: 44,
+    descriptionMark: 24,
   },
 
   /**
@@ -580,6 +841,8 @@ const icon = {
   headerLeaf: { size: 15, stroke: 1.7 },
   headerLeafTight: { size: 14, stroke: 1.7 },
   cardLeaf: { size: 13, stroke: 1.8 },
+  orgBadge: { size: 12, stroke: 1.8 },
+  orgLogo: { size: 30, stroke: 1.6 },
   matchesLeaf: { size: 12, stroke: 1.8 },
   social: { size: 21, stroke: 1.6 },
   kebab: { size: 18, dotRadius: 1.6 },
@@ -615,6 +878,27 @@ const icon = {
   offer: { size: 15, stroke: 2 },
   /** Rows in the listing overflow sheet. */
   menuRow: { size: 19, stroke: 1.7 },
+
+  /* Home redesign (preview). */
+  category: { size: 23, stroke: 1.6 },
+  tileBadge: { size: 14, stroke: 1.9 },
+  /** The icon after a section title ("Featured" + sparkle). */
+  sectionTitle: { size: 16, stroke: 1.7 },
+  /** Shop Spotlight: the placeholder in the logo square, and in an imageless hero. */
+  spotlightLogo: { size: 22, stroke: 1.6 },
+  spotlightHero: { size: 40, stroke: 1.4 },
+  spotlightBadge: { size: 13, stroke: 1.9 },
+  /** The flame in the live countdown pill, card and listing sizes. */
+  countdown: { size: 12, stroke: 1.2 },
+  countdownLarge: { size: 16, stroke: 1.2 },
+  /** Back / share / more over the listing photo. */
+  photoOverlay: { size: 20, stroke: 1.9 },
+
+  /* MSME storefront. */
+  storefrontBadge: { size: 13, stroke: 1.9 },
+  storefrontShare: { size: 19, stroke: 2 },
+  storefrontStep: { size: 12, stroke: 2.4 },
+  storefrontPlus: { size: 14, stroke: 2.2 },
 };
 
 const border = {
@@ -653,6 +937,29 @@ const motion = {
   photoFadeMs: 160,
 };
 
+/**
+ * Home's category circles, two-tone (30 Sep 2026).
+ *
+ * Each circle is a soft `bg` disc; the glyph's outline is `ink` and one of its
+ * shapes is filled with `tint`, a step between the two. Six muted families
+ * rather than twenty colours: enough that neighbours in the row differ, few
+ * enough that the row still reads as one set. All light-only, like the rest
+ * of Home. `ink` on `bg` clears 7:1 in every family.
+ *
+ * A LIT circle (forest disc, light glyph) must NOT take the tint -- that is
+ * the one state where the glyph flips colour, and a fill chosen for the pale
+ * disc would sit wrong on forest. The tint is an opt-in prop on the glyph for
+ * exactly that reason; omit it and the glyph is the plain single-stroke mark.
+ */
+const categoryTone = {
+  green: { bg: "#EAF6EC", tint: "#C9E8D1", ink: "#1B4D2B" },
+  clay: { bg: "#FBEEE9", tint: "#F1D2C4", ink: "#80391F" },
+  sand: { bg: "#F7F0E0", tint: "#EBDAB1", ink: "#6E5114" },
+  sky: { bg: "#EAF1F7", tint: "#CBDCEB", ink: "#23445F" },
+  lilac: { bg: "#F1EDF6", tint: "#DCD1EA", ink: "#4D3A66" },
+  teal: { bg: "#E6F3F1", tint: "#C3E2DC", ink: "#1C5148" },
+};
+
 /** The single breakpoint. At or below this width, the header tightens. */
 const breakpoint = { tight: 360 };
 
@@ -670,6 +977,7 @@ function textStyle(role) {
 
 module.exports = {
   color,
+  dark,
   font,
   type,
   lines,
@@ -680,6 +988,7 @@ module.exports = {
   border,
   shadow,
   motion,
+  categoryTone,
   breakpoint,
   textStyle,
 };

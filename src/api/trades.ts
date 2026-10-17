@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiV1, legacyFailure, request } from "./client";
+import { ApiError, apiV1, legacyFailure, request } from "./client";
 import { LIVE_OFFERS_KEY, withdrawOffer } from "./offer";
 import { grouped } from "../lib/gap";
 import { bracketLabel, bracketOf } from "../lib/brackets";
+import { giveGet, viewerIsSender } from "../lib/trade-sides";
 import type { Consent } from "./offer";
 import type {
   ActiveTrade,
@@ -134,6 +135,31 @@ export function useTradeHistory(enabled = true) {
   });
 }
 
+export function useSubmitTradeReview() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { tradeId: string; stars: number; comment?: string }) => {
+      const res = await request("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tradeId: input.tradeId,
+          stars: input.stars,
+          ...(input.comment?.trim() ? { comment: input.comment.trim() } : {}),
+        }),
+      });
+      if (!res.ok) return legacyFailure(res, "Could not submit your review.");
+      return (await res.json()) as { ok: true; reviewId: string };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: TRADES_HISTORY_KEY });
+      void qc.invalidateQueries({ queryKey: ["profile", "me"] });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
 /* ─────────────────────────── the confirmation ───────────────────────── */
 
 /**
@@ -182,7 +208,7 @@ export const MAX_CODE_ATTEMPTS = 5;
  *
  * Five ways to get one, and the screen renders all five the same: a deployment
  * with no SWAP_CODE_KEY, a row issued before sealing existed, a rotated key, an
- * expired code, a code burned by MAX_CODE_ATTEMPTS. `CodeDisplay` takes
+ * expired code, a code burned by MAX_CODE_ATTEMPTS. The handoff panel takes
  * `string | null` and names the email when it is null, exactly as it did when
  * this function was a stub — which is why turning the field on needed no change
  * to any of §6.1's four states.
@@ -444,7 +470,15 @@ export function useOfferDecision() {
       }
       return (await res.json()) as OfferDecided;
     },
-    onSuccess: () => invalidateTrades(qc),
+    onSuccess: () => {
+      invalidateTrades(qc);
+      // The thread draws the offer card's status and the "You accepted" row
+      // from its messages, and nothing else refreshes it: without a live
+      // socket it sat on a 30-second-fresh cache and needed reloads. Prefix
+      // keys, so every identity's thread and list are marked stale.
+      void qc.invalidateQueries({ queryKey: ["messages", "thread"] });
+      void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    },
   });
 }
 
@@ -487,7 +521,8 @@ export function useTradeDecision() {
       }
       return (await res.json()) as unknown;
     },
-    onSuccess: () => invalidateTrades(qc),
+    // Settled, not success: see useCancelTrade().
+    onSettled: () => invalidateTrades(qc),
   });
 }
 
@@ -499,6 +534,16 @@ export function useTradeDecision() {
  * a trade row, releases both items from IN_TRADE back to AVAILABLE, and is
  * available to the receiver as well as the sender. The server refuses it outside
  * the states where it makes sense.
+ *
+ * ── REFRESH ON ERROR TOO ────────────────────────────────────────────────────
+ *
+ * An error does not prove nothing changed. Until 11 Oct 2026 the server saved a
+ * cancel and then answered 500 when Pusher failed; the lists were only refreshed
+ * on success, so the screen kept offering a live trade that was already
+ * cancelled, and the next tap was refused. The API no longer does that, but any
+ * failure after the write would leave the same stale screen, so the lists are
+ * re-read either way. The error dialog still shows; the refetch decides what the
+ * screen says after it.
  */
 export function useCancelTrade() {
   const qc = useQueryClient();
@@ -513,7 +558,7 @@ export function useCancelTrade() {
       if (!res.ok) return legacyFailure(res, "We could not call that trade off just now.");
       return (await res.json()) as unknown;
     },
-    onSuccess: () => invalidateTrades(qc),
+    onSettled: () => invalidateTrades(qc),
   });
 }
 
@@ -591,16 +636,30 @@ export function useMeetupOptions(tradeId: string | undefined) {
       return data;
     },
     enabled: !!tradeId,
+    // Always stale, so every mount refetches. The hub step and the picker both
+    // read the plan from here, and the app-wide 60 s meant the picker opened on
+    // the copy the hub step had just shown — a copy that could predate the
+    // partner's suggestion (8 Oct 2026 two-phone test).
+    staleTime: 0,
   });
+}
+
+/** The standing plan a counter names. Read from the plan this screen drew. */
+export type MeetupReplaces = { hubId: string; at: string; proposedBy: "sender" | "receiver" };
+
+export function replacesOf(plan: MeetupPlan): MeetupReplaces {
+  return { hubId: plan.hub.id, at: plan.at, proposedBy: plan.proposedBy };
 }
 
 /**
  * POST …/meetup — propose a place and time, or counter one.
  *
- * A COUNTER IS THE SAME CALL. There is no decline: sending a different hub or
- * time overwrites the plan and clears the agreement, which leaves the other side
- * something to answer instead of an empty table. The server is what enforces
- * that; this hook just posts.
+ * A COUNTER NAMES WHAT IT REPLACES. Without `replaces` this is a fresh pick,
+ * which the server takes only on an empty table or over the viewer's own
+ * unanswered suggestion. With it, it lands only if that plan is still the one
+ * standing. Anything else is a 409 whose `meta.rule` says why
+ * (MEETUP_PENDING_FROM_PARTNER, MEETUP_ALREADY_AGREED, MEETUP_CHANGED) and
+ * whose `meta.plan` is the plan that IS standing — see `planConflictOf()`.
  *
  * `at` goes over the wire as an ISO instant with an offset, never as typed text.
  */
@@ -608,7 +667,7 @@ export function useProposeMeetup(tradeId: string | undefined) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { hubId: string; at: Date; note?: string }) => {
+    mutationFn: async (input: { hubId: string; at: Date; note?: string; replaces?: MeetupReplaces }) => {
       const { data } = await apiV1<{ plan: MeetupPlan }>(
         `/api/v1/trades/${encodeURIComponent(tradeId!)}/meetup`,
         {
@@ -618,6 +677,7 @@ export function useProposeMeetup(tradeId: string | undefined) {
             hubId: input.hubId,
             at: input.at.toISOString(),
             ...(input.note && input.note.trim().length > 0 ? { note: input.note.trim() } : {}),
+            ...(input.replaces ? { replaces: input.replaces } : {}),
           }),
         },
       );
@@ -627,7 +687,30 @@ export function useProposeMeetup(tradeId: string | undefined) {
       if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
       invalidateTrades(qc);
     },
+    onError: (e) => {
+      // A plan conflict means this phone's copy is stale; fetch the real one.
+      if (planConflictOf(e) && tradeId) {
+        void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+        invalidateTrades(qc);
+      }
+    },
   });
+}
+
+export type PlanConflictRule = "MEETUP_PENDING_FROM_PARTNER" | "MEETUP_ALREADY_AGREED" | "MEETUP_CHANGED";
+
+/**
+ * A 409 from either meetup route that says "that is not the plan standing",
+ * with the plan that is. Null for every other failure, including the plain
+ * 409 for a trade that has moved past ACCEPTED (it carries no rule).
+ */
+export function planConflictOf(e: unknown): { rule: PlanConflictRule; plan: MeetupPlan | null } | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const rule = e.meta.rule;
+  if (rule !== "MEETUP_PENDING_FROM_PARTNER" && rule !== "MEETUP_ALREADY_AGREED" && rule !== "MEETUP_CHANGED") {
+    return null;
+  }
+  return { rule, plan: (e.meta.plan as MeetupPlan | null | undefined) ?? null };
 }
 
 /**
@@ -657,6 +740,12 @@ export function useAcceptMeetup(tradeId: string | undefined) {
     onSuccess: () => {
       if (tradeId) void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
       invalidateTrades(qc);
+    },
+    onError: (e) => {
+      if (planConflictOf(e) && tradeId) {
+        void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+        invalidateTrades(qc);
+      }
     },
   });
 }
@@ -707,11 +796,13 @@ function invalidateTrades(qc: ReturnType<typeof useQueryClient>) {
  * that needs doing right now is at the top of the only list there is, and
  * everything else sorts under it.
  *
- * `Needs you today` admits three kinds, IN THIS ORDER (§6):
+ * `Needs you today` (drawn as "Your move") admits, IN THIS ORDER:
  *
  *   1. a confirmation code is live
- *   2. a promise inside seven days of its deadline, or past it
- *   3. an incoming offer awaiting a reply
+ *   2. an agreed meeting that is today or already past
+ *   3. an incoming offer, then an incoming trade request, awaiting a reply
+ *   4. a hub proposal waiting on the viewer, then an accepted trade with no hub
+ *   5. an agreed meeting on a later day
  *
  * The order is the order, not a sort key — a code beats a deadline beats an
  * offer, because that is the order of how immediately the person in front of you
@@ -738,7 +829,13 @@ export type NeedsItem =
   | { kind: "code"; key: string; trade: ActiveTrade }
   | { kind: "offer"; key: string; offer: LiveOffer }
   /** A PENDING TradeRequest addressed to the viewer. See `useTradeDecision()`. */
-  | { kind: "trade-request"; key: string; trade: ActiveTrade };
+  | { kind: "trade-request"; key: string; trade: ActiveTrade }
+  /**
+   * An ACCEPTED trade whose next step is the viewer's: no hub yet (either side
+   * may propose one), a proposal waiting on the viewer, or an agreed plan where
+   * what is left is meeting and showing the code.
+   */
+  | { kind: "meetup"; key: string; trade: ActiveTrade };
 
 export type WaitingItem =
   | { kind: "sent-offer"; key: string; offer: LiveOffer }
@@ -775,14 +872,50 @@ export function buildTradesModel(input: {
     .filter((t) => t.status === "PENDING" && t.direction === "received")
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
+  /* ── An ACCEPTED trade is the viewer's move unless the hub proposal on it is
+     the viewer's own and still unanswered (1 Oct 2026). It used to sit in
+     Waiting in every state, which filed "pick a hub" — something EITHER side
+     can do — and "they suggested Saturday, answer it" under "Waiting on them".
+     `meetupState()` is the one place the whose-turn comparison lives.
+
+     Agreed plans split on the day: a meeting today or already past goes right
+     under the live codes (somebody is about to be in front of you); a later
+     one goes last, under the hub decisions that are actually blocking. ── */
+  const accepted = trades.filter((t) => t.status === "ACCEPTED");
+  const isToday = (iso: string) => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return Date.parse(iso) <= end.getTime();
+  };
+  const byMeetupTime = (a: ActiveTrade, b: ActiveTrade) =>
+    Date.parse(a.meetup!.at) - Date.parse(b.meetup!.at);
+  const oldestFirst = (a: ActiveTrade, b: ActiveTrade) =>
+    Date.parse(a.createdAt) - Date.parse(b.createdAt);
+
+  const agreed = accepted.filter((t) => meetupState(t) === "agreed");
+  const meetingToday = agreed.filter((t) => isToday(t.meetup!.at)).sort(byMeetupTime);
+  const meetingLater = agreed.filter((t) => !isToday(t.meetup!.at)).sort(byMeetupTime);
+  const hubToAnswer = accepted.filter((t) => meetupState(t) === "yours-to-answer").sort(oldestFirst);
+  const hubToPick = accepted.filter((t) => meetupState(t) === "none").sort(oldestFirst);
+
+  const meetupItem = (trade: ActiveTrade) => ({
+    kind: "meetup" as const,
+    key: `meet:${trade.id}`,
+    trade,
+  });
+
   const needsToday: NeedsItem[] = [
     ...codeTrades.map((trade) => ({ kind: "code" as const, key: `code:${trade.id}`, trade })),
+    ...meetingToday.map(meetupItem),
     ...incoming.map((offer) => ({ kind: "offer" as const, key: `offer:${offer.id}`, offer })),
     ...incomingTrades.map((trade) => ({
       kind: "trade-request" as const,
       key: `req:${trade.id}`,
       trade,
     })),
+    ...hubToAnswer.map(meetupItem),
+    ...hubToPick.map(meetupItem),
+    ...meetingLater.map(meetupItem),
   ];
 
   /* ── Waiting ── everything with a clock on it that is not yours to move.
@@ -792,13 +925,14 @@ export function buildTradesModel(input: {
     .filter((o) => o.direction === "sent")
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
-  // Everything mid-flight that is not in `Needs you today`: an ACCEPTED trade
-  // with no meeting, a CONFIRMING one the viewer has already done their half of,
-  // and a PENDING request the viewer SENT and cannot answer themselves.
+  // Everything mid-flight that is genuinely the other person's move: a hub
+  // proposal the viewer made and they have not answered, a CONFIRMING trade the
+  // viewer has already done their half of, and a PENDING request the viewer
+  // SENT and cannot answer themselves.
   const waitingTrades = trades
     .filter(
       (t) =>
-        t.status === "ACCEPTED" ||
+        (t.status === "ACCEPTED" && meetupState(t) === "waiting-on-them") ||
         (t.status === "CONFIRMING" && !t.canConfirm) ||
         (t.status === "PENDING" && t.direction === "sent"),
     )
@@ -826,7 +960,8 @@ export function buildTradesModel(input: {
  *
  * `buildTradesModel()` already decides what "needs you" means: a live
  * confirmation code, an incoming offer, a PENDING trade request addressed to
- * you. The badge is `needsToday.length` and
+ * you, an accepted trade whose hub or handoff is yours to move. The badge is
+ * `needsToday.length` and
  * nothing else. A separate count — "unanswered offers", say — would be a second
  * definition of urgency that drifts from the first, and the failure mode is the
  * one a badge must never have: a number that does not match what is behind it.
@@ -894,11 +1029,12 @@ export function useNeedsTodayCount(): number {
  * established by the section around it.
  */
 export function swapLine(trade: ActiveTrade): string {
-  const sent = trade.direction === "sent";
-  // On a `sent` trade the viewer offered `offeredItem` and receives
-  // `requestedItem`; on a `received` one it is the reverse.
-  const mineItem = sent ? trade.offeredItem : trade.requestedItem;
-  const theirsItem = sent ? trade.requestedItem : trade.offeredItem;
+  const sent = viewerIsSender(trade.direction);
+  // The viewer gives `mineItem` and gets `theirsItem`: giveGet() decides which.
+  const { give: mineItem, get: theirsItem } = giveGet(sent, {
+    offered: trade.offeredItem,
+    requested: trade.requestedItem,
+  });
 
   if (trade.kind === "leaves") {
     // A legacy Leaves-only trade: the listing sits in BOTH item columns as a
@@ -922,12 +1058,12 @@ export function swapLine(trade: ActiveTrade): string {
  */
 export function offerSwapLine(offer: LiveOffer): string {
   const offered = offer.offeredItems[0] ?? null;
-  if (offer.direction === "sent") {
-    const mine = offered ? bracketed(offered) : "your item";
-    return `Your ${mine} for ${bracketed(offer.post)}`;
-  }
-  const theirs = offered ? bracketed(offered) : "their item";
-  return `Their ${theirs} for your ${bracketed(offer.post)}`;
+  const sent = viewerIsSender(offer.direction);
+  const { give, get } = giveGet(sent, {
+    offered: offered ? bracketed(offered) : sent ? "your item" : "their item",
+    requested: bracketed(offer.post),
+  });
+  return sent ? `Your ${give} for ${get}` : `Their ${get} for your ${give}`;
 }
 
 /**

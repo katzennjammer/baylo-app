@@ -95,11 +95,13 @@ export interface OfferContext {
   highestItemValue: number;
   reach: Bracket;
   /**
-   * `viewer.offerLock === "premium"`: the listing sits in PREMIUM_MIN_BRACKET
-   * or above and this viewer has no live subscription. The server's own
+   * `viewer.offerLock` is set: the listing sits in PREMIUM_MIN_BRACKET or
+   * above and this viewer has no live subscription that opens it. The server's own
    * verdict, mirrored by `enforcePremiumForListing()` on POST /api/offers.
    */
   premiumLocked: boolean;
+  /** Which lock, when `premiumLocked`: "vip" is bracket 9+, which Premium does not open. */
+  lockKind: "premium" | "vip" | null;
   /**
    * The tier's item cap, as a BRACKET, applied to the listing. Null when the
    * tier is unlimited. The server enforces it on POST /api/offers; this is
@@ -108,6 +110,7 @@ export interface OfferContext {
   maxItemBracket: Bracket | null;
   /** True when this listing is above the viewer's tier cap and the offer would 403. */
   tierItemCapExceeded: boolean;
+  pendingOfferedItemIds: Set<string>;
 }
 
 /**
@@ -166,6 +169,12 @@ export function useOfferContext(itemId: string | undefined) {
           ? null
           : bracketOf(limits.maxItemValueLeaves);
 
+    const pendingOfferedItemIds = new Set(
+      (live?.offers ?? [])
+        .filter((offer) => offer.direction === "sent" && offer.status === "PENDING")
+        .flatMap((offer) => offer.offeredItems.map((item) => item.id)),
+    );
+
     context = {
       item: detail.item,
       viewer: detail.viewer,
@@ -186,9 +195,11 @@ export function useOfferContext(itemId: string | undefined) {
       idVerification: me.idVerification,
       highestItemValue,
       reach: reachBracket(highestItemValue),
-      premiumLocked: detail.viewer.offerLock === "premium",
+      premiumLocked: detail.viewer.offerLock !== null,
+      lockKind: detail.viewer.offerLock,
       maxItemBracket: cap,
       tierItemCapExceeded: cap !== null && targetBracket !== null && targetBracket > cap,
+      pendingOfferedItemIds,
     };
   }
 
@@ -252,12 +263,24 @@ export function useReach() {
     0,
   );
 
+  // The tier's own ceiling, as a bracket. `null` is unlimited (Top Trader).
+  const cap = me.data?.reputation?.limits?.maxItemBracket ?? null;
+  const reach = me.data ? reachBracket(highest) : null;
+
   return {
     /**
-     * The reach BRACKET, or null until the shelf has loaded. A grid must not
-     * grey tiles on a guess.
+     * The shelf's reach BRACKET — one above the best item — or null until the
+     * shelf has loaded. A grid must not grey tiles on a guess. Item detail's
+     * `Where you stand` card is written against THIS line, which is why the
+     * cap is not folded in here.
      */
-    reach: me.data ? reachBracket(highest) : null,
+    reach,
+    /**
+     * The grid's line: the LOWER of the shelf's reach and the tier cap. A tile
+     * above either one cannot be offered on, and the `How trading works`
+     * sheet states exactly that rule, so the grid greys by both.
+     */
+    gridReach: reach !== null && cap !== null ? Math.min(reach, cap) : reach,
     isPending: me.isPending,
   };
 }

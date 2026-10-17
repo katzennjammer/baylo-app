@@ -98,18 +98,13 @@ function cloudinaryVideo(transform: string, version: string, publicId: string): 
   return `${CLOUD_BASE}/${transform}/${version}/${publicId}.mp4`;
 }
 
-/**
- * Plays once on a cold start, before the auth screens. ~7s, 1.58 MB.
- *
- * `q_auto` rather than the band's `q_auto:eco`: this one is full-screen with
- * nothing over it, and the eco tier was visible on a phone. See the budget note
- * at the top of the file for what that costs and why it is paid once.
+/*
+ * THE INTRO IS NO LONGER HERE (Oct 2026). It used to be `INTRO_VIDEO_URL`, the
+ * Cloudinary clip measured above. The opening film is now one of three BUNDLED
+ * files picked by tier — see app/intro.tsx and src/media/opening-tier.ts — so
+ * the band below is the only Cloudinary footage left. The intro's measurements
+ * stay above as the record of why the band ships at the tier it does.
  */
-export const INTRO_VIDEO_URL = cloudinaryVideo(
-  "f_auto,q_auto,w_1080,c_limit",
-  "v1788278268",
-  "1_vm9emg",
-);
 
 /**
  * Loops in the band above the auth sheet. 6s, 1.40 MB.
@@ -127,13 +122,14 @@ export const BAND_VIDEO_URL = cloudinaryVideo(
 /**
  * How long the intro is allowed to take before entry proceeds without it.
  *
- * The intro is decoration in front of a sign-in screen. It gets two seconds to
- * put a frame on the glass and is abandoned otherwise — a rule that is checked
- * against the FIRST RENDERED FRAME rather than against a status flag, because
- * "the player says it is ready" and "there is a picture" are not the same
- * moment and only the second one is worth waiting for.
+ * The intro is decoration in front of the app. It gets three seconds from the
+ * screen mounting — the cached-tier read included — to put a frame on the
+ * glass and is abandoned otherwise — a rule that is checked against the FIRST
+ * RENDERED FRAME rather than against a status flag, because "the player says
+ * it is ready" and "there is a picture" are not the same moment and only the
+ * second one is worth waiting for.
  */
-export const INTRO_FIRST_FRAME_BUDGET_MS = 2_000;
+export const INTRO_FIRST_FRAME_BUDGET_MS = 3_000;
 
 /**
  * The ceiling on a playing intro, as a guard against a stall.

@@ -91,13 +91,31 @@ export function BrowseEmpty({ onPost }: { onPost: () => void }) {
 export function BrowseNoMatches({
   query,
   filterCount,
+  orgsOnly = false,
+  shopsMatched = false,
   onClear,
 }: {
   query: string;
   filterCount: number;
-  onClear: () => void;
+  /**
+   * The Organizations pill, passed separately because it is deliberately NOT
+   * in `filterCount` -- that badge counts the filter SHEET's controls and this
+   * one lives on the rail. Without it this screen would say "Nothing matched
+   * these filters" while counting zero of them, and would drop "Try widening
+   * the search" -- its only actionable sentence -- in the one case where the
+   * fix is a single obvious tap.
+   */
+  orgsOnly?: boolean;
+  /**
+   * The search matched a SHOP by name, drawn above this. "No matches" under a
+   * card that plainly is one would contradict it, so the copy narrows to
+   * listings.
+   */
+  shopsMatched?: boolean;
+  onClear?: () => void;
 }) {
   const q = query.trim();
+  const narrowed = filterCount > 0 || orgsOnly;
 
   return (
     <View style={s.wrap}>
@@ -105,7 +123,9 @@ export function BrowseNoMatches({
         <SearchIcon size={icon.emptyGrid.size} stroke={icon.emptyGrid.stroke} color={color.inkMuted} />
       </View>
 
-      <Text style={[textStyle(type.emptyHeadline), s.headline]}>No matches</Text>
+      <Text style={[textStyle(type.emptyHeadline), s.headline]}>
+        {shopsMatched ? "No listings match" : "No matches"}
+      </Text>
 
       {/*
         The search term is quoted back. Somebody who mistyped a word is looking
@@ -113,9 +133,13 @@ export function BrowseNoMatches({
         information that would let them spot it.
       */}
       <Text style={[textStyle(type.emptyBody), s.body]}>
-        {q ? `Nothing matched “${q}”` : "Nothing matched these filters"}
-        {filterCount > 0 && q ? ` with the filters you have on.` : "."}
-        {filterCount > 0 || q ? " Try widening the search." : ""}
+        {q
+          ? `${shopsMatched ? "No listings" : "Nothing"} matched “${q}”`
+          : orgsOnly && filterCount === 0
+            ? "No shops have anything listed right now"
+            : "Nothing matched these filters"}
+        {narrowed && q ? ` with the filters you have on.` : "."}
+        {narrowed || q ? " Try widening the search." : ""}
       </Text>
 
       <Tappable

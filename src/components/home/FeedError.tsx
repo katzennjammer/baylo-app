@@ -70,7 +70,7 @@ export function FeedError({
         their first ever launch.
       */}
       {lastSyncedAt ? (
-        <Text style={[textStyle(type.lastSynced), s.synced]}>
+        <Text style={[textStyle(type.metadata), s.synced]}>
           last synced {clockTime(lastSyncedAt)} · {relativeLong(lastSyncedAt)}
         </Text>
       ) : null}

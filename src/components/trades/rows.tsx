@@ -187,34 +187,6 @@ export function RowAction({
   );
 }
 
-/**
- * Frame 9c's decision pair: two flex:1 at 44, 8 apart, EQUAL WEIGHT.
- *
- * `Decline` first. Not a style choice — putting accept on the right keeps the
- * affirming control under the thumb that is already there, and putting decline
- * first means the eye reads the reversible option before the irreversible one.
- * §4's `Split buttons (accept/decline)` names the geometry and this is it at row
- * scale rather than the 52 the bottom bar uses.
- */
-export function SplitActions({
-  onDecline,
-  onAccept,
-  declineLabel,
-  acceptLabel,
-}: {
-  onDecline: () => void;
-  onAccept: () => void;
-  declineLabel: string;
-  acceptLabel: string;
-}) {
-  return (
-    <View style={{ flexDirection: "row", gap: offerSize.button.splitGap }}>
-      <RowAction label={declineLabel} onPress={onDecline} tone="outline" fill />
-      <RowAction label={acceptLabel} onPress={onAccept} tone="affirm" fill />
-    </View>
-  );
-}
-
 /* ───────────────────── §3.5 the "Needs you today" card ──────────────── */
 
 /**
@@ -286,7 +258,7 @@ export function NeedsCard({
         {monoLines?.map((line) => (
           <Text
             key={line.text}
-            style={[textStyle(offerType.deadline), { color: line.ink ?? offerColor.inkTertiary }]}
+            style={[textStyle(offerType.helper), { color: line.ink ?? offerColor.inkTertiary }]}
             numberOfLines={1}
           >
             {line.text}
@@ -400,7 +372,7 @@ export function WaitingRow({
         {trailing ? (
           <Text
             style={[
-              textStyle(offerType.deadline),
+              textStyle(offerType.helper),
               { color: trailingInk ?? offerColor.inkTertiary, flexShrink: 0 },
             ]}
           >
@@ -464,7 +436,7 @@ export function HistoryCollapsedRow({
       <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink, flex: 1 }]}>
         {title}
       </Text>
-      <Text style={[textStyle(offerType.leavesRow), { color: offerColor.inkSecondary }]}>
+      <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary }]}>
         {count}
       </Text>
       <ChevronRightIcon
@@ -490,14 +462,18 @@ export function HistoryRow({
   title,
   meta,
   tone = "neutral",
+  trailing,
+  onPress,
 }: {
   title: string;
   meta: string;
   tone?: "neutral" | "quiet" | "default";
+  trailing?: React.ReactNode;
+  onPress?: () => void;
 }) {
   const defaulted = tone === "default";
 
-  return (
+  const body = (
     <View
       style={{
         minHeight: offerSize.historyRow.height,
@@ -531,7 +507,7 @@ export function HistoryRow({
       </Text>
       <Text
         style={[
-          textStyle(offerType.deadline),
+          textStyle(offerType.helper),
           {
             color: defaulted
               ? offerColor.warm
@@ -543,8 +519,14 @@ export function HistoryRow({
       >
         {meta}
       </Text>
+      {trailing}
     </View>
   );
+  return onPress ? (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={[title, meta].join(". ")} pressedStyle={{ backgroundColor: offerColor.quiet }}>
+      {body}
+    </Tappable>
+  ) : body;
 }
 
 /* ──────────────────────── the promise notice strip ──────────────────── */

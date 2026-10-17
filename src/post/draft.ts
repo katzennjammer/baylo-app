@@ -2,6 +2,7 @@ import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { currentSession } from "../api/client";
+import { CATEGORIES } from "../api/post";
 import { initialState, type PostState } from "./state";
 
 /**
@@ -220,7 +221,39 @@ export function useStoredDraft() {
     };
   }, []);
 
-  return { status, draft, initial: draft?.state ?? initialState() };
+  // OVER initialState(), NOT INSTEAD OF IT.
+  //
+  // A draft written by an older build has only the fields that build knew
+  // about, and `version` does not catch it: adding an optional field to the
+  // wizard is not a shape change worth discarding somebody's half-filled form
+  // over. But handing the reducer a state object with `isPerishable` and
+  // `quantity` missing gives every reader `undefined`, and the first thing
+  // that happens is `state.quantity.trim()` at submit -- a crash on the one
+  // action the draft existed to protect.
+  //
+  // Spreading over the defaults means a field the stored draft has wins, and a
+  // field it never heard of takes its initial value. Every future field added
+  // to PostState is covered by this without anybody remembering to.
+  return {
+    status,
+    draft,
+    initial: draft?.state ? withoutRemovedCategories({ ...initialState(), ...draft.state }) : initialState(),
+  };
+}
+
+/**
+ * A draft can name a category the server has since withdrawn (SERVICES, 16 Oct
+ * 2026). Kept, it would sail through every step and be refused with a 400 at
+ * the last one; dropped here, the category step simply asks again.
+ */
+function withoutRemovedCategories(state: PostState): PostState {
+  const known = (c: string) => (CATEGORIES as readonly string[]).includes(c);
+  return {
+    ...state,
+    category: state.category && known(state.category) ? state.category : null,
+    returnCategories: state.returnCategories.filter(known),
+  };
 }
 
 export type { DraftEnvelope };
+

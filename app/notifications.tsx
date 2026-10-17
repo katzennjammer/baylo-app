@@ -1,17 +1,22 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { ApiError } from "../src/api/client";
+import { ApiError, apiV1 } from "../src/api/client";
+import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
   useMarkAllNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
-import type { NotificationItem } from "../src/api/types";
+import type { ItemDetailPayload, NotificationItem } from "../src/api/types";
+import { showDialog } from "../src/components/dialog";
+import { startRelist } from "../src/post/relist";
 import { Splash } from "../src/components/Splash";
 import { Hairline, OfferScreenHost } from "../src/components/offer/chrome";
-import { PersonIcon } from "../src/components/icons";
+import { PersonIcon, StoreIcon } from "../src/components/icons";
+import { orgLogoUrl } from "../src/api/organizations";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { RowChevron, Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
@@ -46,6 +51,11 @@ import {
  *
  * A system row has no actor. "your offer on X expired after 3 days" is already a
  * whole sentence, and it gets the leaf-less placeholder rather than a face.
+ *
+ * A row about an ORGANISATION -- an invitation to its staff, the outcome of its
+ * document review -- shows the shop's logo, not the inviting owner's face: the
+ * shop is what the row is about, and the owner is usually photo-less, which
+ * drew a blank grey tile. No logo draws the store glyph, never a blank.
  *
  * ══ EVERY ROW IS READ ON OPEN. THE DOTS STAY ANYWAY. ═══════════════════════
  *
@@ -170,15 +180,7 @@ function NotificationRow({
         paddingVertical: 14,
       }}
     >
-      <Thumb
-        image={item.actor?.avatar ?? null}
-        size={offerSize.tradeRow.thumb}
-        icon={
-          item.actor ? undefined : (
-            <PersonIcon size={20} stroke={1.5} color={offerColor.inkDisabled} />
-          )
-        }
-      />
+      <RowPicture item={item} />
 
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <Text
@@ -186,13 +188,19 @@ function NotificationRow({
             textStyle(offerType.body),
             { color: wasUnread ? offerColor.ink : offerColor.inkSecondary },
           ]}
-          numberOfLines={3}
+          // A row with nowhere to go is shown whole: this list is the only
+          // place its message exists, so cutting it at three lines loses the
+          // rest for good (a suspension notice runs to six or seven).
+          numberOfLines={target ? 3 : undefined}
         >
           {line}
         </Text>
-        <Text style={[textStyle(offerType.deadline), { color: offerColor.inkTertiary }]}>
+        <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary }]}>
           {relativeShort(item.createdAt)}
         </Text>
+        {item.type === "LISTING_EXPIRED" && item.entityId ? (
+          <RelistButton itemId={item.entityId} />
+        ) : null}
       </View>
 
       {/* The unread mark: a plain dot, never a colour event on the whole row.
@@ -231,4 +239,96 @@ function NotificationRow({
       {body}
     </Tappable>
   );
+}
+
+/**
+ * The expiry notice's one-tap Relist. The row itself still opens the listing
+ * screen; this skips it.
+ *
+ * The item is fetched at the tap, not trusted from the row: the notice can be
+ * days old, and what the draft is built from has to be the listing as it is
+ * now. It is relisted only while it is still the owner's and still EXPIRED --
+ * anything else is said, not guessed at.
+ */
+function RelistButton({ itemId }: { itemId: string }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const relist = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const detail = await qc.fetchQuery({
+        queryKey: itemKey(itemId),
+        queryFn: () => apiV1<ItemDetailPayload>(`/api/v1/items/${encodeURIComponent(itemId)}`),
+        staleTime: 0,
+      });
+      const { item, viewer } = detail.data;
+      if (!viewer.isOwner || item.status !== "EXPIRED") {
+        showDialog("Can't relist this", "This listing is no longer an expired listing of yours.");
+        return;
+      }
+      await startRelist(item, () => router.push("/post-item"));
+    } catch (e) {
+      showDialog(
+        "Can't relist this",
+        e instanceof ApiError && e.status === 404
+          ? "This listing no longer exists."
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Tappable
+      onPress={() => void relist()}
+      accessibilityRole="button"
+      accessibilityLabel="Relist"
+      hitSlop={8}
+      style={{ alignSelf: "flex-start", marginTop: 6 }}
+    >
+      <Text style={[textStyle(offerType.rowSubtitle), { color: busy ? offerColor.inkTertiary : offerColor.deep }]}>
+        {busy ? "Opening…" : "Relist"}
+      </Text>
+    </Tappable>
+  );
+}
+
+/**
+ * The picture at the head of a row, most specific first:
+ *
+ *   an organisation row   the shop's logo, else the store glyph
+ *   an actor              their photo, else a store glyph for a shop's
+ *                         account and a person glyph for a person
+ *   neither               the listing's photo, else the person glyph
+ *
+ * Every branch ends in a glyph rather than an empty grey square. The grey
+ * square is what a MISSING PHOTO looks like elsewhere in the app, and a person
+ * or shop with no picture is not a photo that failed to load.
+ */
+function RowPicture({ item }: { item: NotificationItem }) {
+  const glyph = (kind: "store" | "person") =>
+    kind === "store" ? (
+      <StoreIcon size={20} stroke={1.6} color={offerColor.inkSecondary} />
+    ) : (
+      <PersonIcon size={20} stroke={1.5} color={offerColor.inkDisabled} />
+    );
+
+  let image: string | null;
+  let icon: React.ReactNode;
+  if (item.org) {
+    image = orgLogoUrl(item.org.logoUrl);
+    icon = glyph("store");
+  } else if (item.actor) {
+    image = item.actor.avatar;
+    icon = glyph(item.actor.isOrg ? "store" : "person");
+  } else {
+    image = item.itemImage;
+    icon = glyph("person");
+  }
+
+  return <Thumb image={image} size={offerSize.tradeRow.thumb} icon={icon} />;
 }

@@ -1,4 +1,6 @@
+import { recordServerDate } from "../lib/server-time";
 import { getApiBase } from "./config";
+import { ORG_CONTEXT_HEADER, clearActingOrg, getActingOrgId } from "./org-context";
 import {
   clearSession,
   loadSession,
@@ -94,6 +96,45 @@ export class ApiError extends Error {
   /** The message for one field, if the server complained about it. */
   issueFor(field: string): string | undefined {
     return this.issues.find((i) => i.field === field)?.message;
+  }
+}
+
+/**
+ * What a person reads when the server answered with something that is not the
+ * response this client was written against — an HTML 404 from a dev server
+ * that cannot see the route, a crash page, a proxy's error page.
+ *
+ * IT DOES NOT SAY "NOTHING CHANGED". It cannot know: the write may have
+ * committed before the reply went wrong. The honest advice is to look first.
+ *
+ * The path and status go on the end in development only. They are what a
+ * developer needs and are noise to anybody else — the 9 Oct 2026 report was
+ * "/api/v1/trades/<id>/meetup/accept did not return JSON", on a phone.
+ */
+export const UNCONFIRMED_MESSAGE =
+  "We couldn't confirm that went through. Check your connection, then refresh to see if it was saved.";
+
+/**
+ * `typeof`, not a bare `__DEV__`: scripts/verify-api-client.cjs loads this module
+ * under Node, where the global does not exist and reading it would throw.
+ */
+const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+
+/** The one error for an unreadable response. See UNCONFIRMED_MESSAGE. */
+export function malformedResponse(status: number, path: string): ApiError {
+  return new ApiError(
+    status,
+    "MALFORMED_RESPONSE",
+    isDev ? `${UNCONFIRMED_MESSAGE}\n\n[dev] ${path} answered ${status} with no usable JSON` : UNCONFIRMED_MESSAGE,
+  );
+}
+
+/** `res.json()`, but a body that is not JSON throws malformedResponse() instead of a SyntaxError. */
+export async function readJson<T>(res: Response, path: string): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw malformedResponse(res.status, path);
   }
 }
 
@@ -228,11 +269,14 @@ function sendFailure(cause: unknown): never {
  * `{ error: string }`, sometimes with a `code` and sometimes with `issues`.
  * Nothing under /api/auth uses the v1 envelope — see the note on authenticate().
  */
-type LegacyErrorBody = { error?: string; code?: string; issues?: FieldIssue[] };
+type LegacyErrorBody = { error?: string; code?: string; issues?: FieldIssue[] } & Record<string, unknown>;
 
 /** Turns a non-2xx from an /api/auth endpoint into the one error type. */
 export async function legacyFailure(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as LegacyErrorBody;
+  // Whatever else the route said goes through as `meta`, so a screen can read
+  // it by name: a suspension's reason and dates arrive this way.
+  const { error: _error, code: _code, issues: _issues, ...extra } = body;
   const header = res.headers.get("Retry-After");
   const retryAfter = header ? Number(header) : null;
 
@@ -242,6 +286,7 @@ export async function legacyFailure(res: Response, fallback: string): Promise<ne
     body.error ?? fallback,
     Array.isArray(body.issues) ? body.issues : [],
     retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
+    extra,
   );
 }
 
@@ -336,7 +381,7 @@ async function postAuthWithToken<T>(
   // become {} typed as the result and read as real data downstream.
   const parsed: unknown = await res.json().catch(() => null);
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new ApiError(res.status, "MALFORMED_RESPONSE", `${path} did not return a JSON object`);
+    throw malformedResponse(res.status, path);
   }
   return parsed as T;
 }
@@ -692,12 +737,20 @@ async function revokeFamily(base: string, refreshToken: string): Promise<void> {
  * This is also the path a dead refresh token takes — performRefresh() calls it
  * on a terminal 401. Revoking an already-revoked family is a 200 and a no-op,
  * which is why that costs nothing and needs no special case.
+ *
+ * `revoke: false` is for the one caller that KNOWS the family is already dead
+ * server-side: account deletion, where DELETE /api/user revoked every refresh
+ * token in the same transaction. Skipping the call there means the caller's
+ * `await` is not held for up to REVOKE_TIMEOUT_MS by a request that can only
+ * be a no-op. Everything else — the local clear, publish() — is unchanged.
  */
-export async function signOut(): Promise<void> {
+export async function signOut(options: { revoke?: boolean } = {}): Promise<void> {
   const refreshToken = memory?.refreshToken;
   const base = getApiBase();
+  const shouldRevoke = options.revoke !== false;
 
-  const revoking = refreshToken && base ? revokeFamily(base, refreshToken) : null;
+  const revoking =
+    shouldRevoke && refreshToken && base ? revokeFamily(base, refreshToken) : null;
 
   memory = null;
   try {
@@ -724,7 +777,37 @@ export async function signOut(): Promise<void> {
  * mechanism here — no mutex library required, but also no room to insert an
  * `await` into that sequence later.
  */
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+
+/** How long a refresh gets before it counts as "could not refresh, try later". */
+const REFRESH_TIMEOUT_MS = 6000;
+
+/**
+ * What a refresh attempt came to. Three answers, not two, and the third is the
+ * one that used to be missing:
+ *
+ *   token        — rotated; retry the request with it.
+ *   signedOut    — the server said 401: expired, revoked, a family killed by a
+ *                  replay, a device logged out from another phone. Terminal.
+ *   unavailable  — the server did not say no. It was unreachable, slow, rate
+ *                  limiting (429), broken (5xx), or answered something that is
+ *                  not a token pair (a captive portal's 200 HTML page). The
+ *                  session is kept, the request fails with `error`, and the
+ *                  next request that hits a 401 simply tries again.
+ *
+ * Signing out on anything but a 401 made a server hiccup a logout: a 503
+ * during a deploy, or a 429 from the refresh rate limit, would send every
+ * phone that refreshed in that window back to the login screen with its
+ * session thrown away.
+ */
+type RefreshOutcome =
+  | { kind: "token"; accessToken: string }
+  | { kind: "signedOut" }
+  | { kind: "unavailable"; error: ApiError };
+
+/** The message a person reads when their sign-in could not be refreshed. */
+const REFRESH_UNAVAILABLE_MESSAGE =
+  "We couldn't refresh your sign-in just now. You're still signed in. Try again in a moment.";
 
 /**
  * Produces a fresh access token, and guarantees AT MOST ONE refresh request is
@@ -763,12 +846,12 @@ let refreshInFlight: Promise<string | null> | null = null;
  *   the current one, so a refresh has already happened and the caller should
  *   just retry with what is now in memory.
  *
- * Returns null when the session is gone for good, which is the signal to stop
- * retrying and show the login screen.
+ * `signedOut` is the signal to stop retrying and show the login screen;
+ * `unavailable` is the signal to fail this request and keep the session.
  */
-async function refreshOnce(spentAccessToken: string): Promise<string | null> {
+async function refreshOnce(spentAccessToken: string): Promise<RefreshOutcome> {
   // LATE case first: somebody already rotated past the token we used.
-  if (memory && memory.accessToken !== spentAccessToken) return memory.accessToken;
+  if (memory && memory.accessToken !== spentAccessToken) return { kind: "token", accessToken: memory.accessToken };
 
   // SIMULTANEOUS case: join the refresh that is already running.
   if (refreshInFlight) return refreshInFlight;
@@ -781,9 +864,16 @@ async function refreshOnce(spentAccessToken: string): Promise<string | null> {
   }
 }
 
-async function performRefresh(): Promise<string | null> {
+async function performRefresh(): Promise<RefreshOutcome> {
   const refreshToken = memory?.refreshToken;
-  if (!refreshToken) return null;
+  if (!refreshToken) return { kind: "signedOut" };
+
+  // Same reason revokeFamily() has one: React Native's fetch has no default
+  // timeout, and on a captive-portal Wi-Fi the request hangs until the OS gives
+  // up -- minutes on Android. Every request that 401s meanwhile is queued
+  // behind refreshInFlight, so without this the whole app looks frozen.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS);
 
   let res: Response;
   try {
@@ -795,32 +885,72 @@ async function performRefresh(): Promise<string | null> {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refreshToken }),
       credentials: "omit",
+      signal: abort.signal,
     });
-  } catch {
+  } catch (cause) {
     // The network is down, not the session. Leaving the tokens in place means
     // the next attempt works once there is signal again; signing out here would
-    // make every tunnel and lift a logout.
-    return null;
+    // make every tunnel and lift a logout. NETWORK_ERROR, so the query client
+    // retries it like any other transport failure.
+    clearTimeout(timer);
+    return {
+      kind: "unavailable",
+      error: networkError(
+        cause instanceof Error && cause.name === "AbortError"
+          ? new Error(`Refreshing the sign-in took longer than ${REFRESH_TIMEOUT_MS / 1000} seconds`)
+          : cause,
+      ),
+    };
+  }
+
+  // Read the body under the same timer: a server that sends headers and then
+  // stalls is the same hang.
+  const body = res.ok
+    ? ((await res.json().catch(() => ({}))) as Partial<TokenResponse>)
+    : null;
+  clearTimeout(timer);
+
+  if (res.status === 401) {
+    // THE ONLY TERMINAL ANSWER: expired, revoked, or a family killed by a
+    // replay or by "log out" on another device. There is no token left that
+    // will ever work, so drop the session and let the guard in
+    // app/(app)/_layout.tsx route to login.
+    await signOut();
+    return { kind: "signedOut" };
   }
 
   if (!res.ok) {
-    // 401 here is terminal: expired, revoked, or a family killed by a replay.
-    // There is no token left that will ever work, so drop the session and let
-    // the guard in app/(app)/_layout.tsx route to login.
-    await signOut();
-    return null;
+    // 429, 5xx, anything else: the server did not say this session is over.
+    // The refresh token was not spent (a refused refresh rotates nothing), so
+    // keeping it is safe, and the next 401 tries again.
+    const header = res.headers.get("Retry-After");
+    const retryAfter = header !== null && Number.isFinite(Number(header)) ? Number(header) : null;
+    return {
+      kind: "unavailable",
+      error: new ApiError(
+        res.status,
+        res.status === 429 ? "RATE_LIMITED" : "REFRESH_UNAVAILABLE",
+        REFRESH_UNAVAILABLE_MESSAGE,
+        [],
+        retryAfter,
+      ),
+    };
   }
 
-  const body = (await res.json().catch(() => ({}))) as Partial<TokenResponse>;
-  if (!body.accessToken || !body.refreshToken || !memory) {
-    await signOut();
-    return null;
+  if (!body?.accessToken || !body.refreshToken || !memory) {
+    // A 200 that is not a token pair: a captive portal's login page, a proxy.
+    // The real server never answers 200 without one, so this request most
+    // likely never reached it and the token in hand is still good. Not a
+    // logout. (`!memory`: signed out while this was in flight; nothing to keep.)
+    return memory
+      ? { kind: "unavailable", error: new ApiError(res.status, "REFRESH_UNAVAILABLE", REFRESH_UNAVAILABLE_MESSAGE) }
+      : { kind: "signedOut" };
   }
 
   memory = { ...memory, accessToken: body.accessToken, refreshToken: body.refreshToken };
   await saveTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken });
   publish();
-  return body.accessToken;
+  return { kind: "token", accessToken: body.accessToken };
 }
 
 // ── The request path ─────────────────────────────────────────────────────────
@@ -875,6 +1005,24 @@ function toHeaderRecord(
     out[name] = value;
   });
   if (accessToken) out.Authorization = `Bearer ${accessToken}`;
+
+  // The acting organisation, on every authenticated request.
+  //
+  // HERE AND NOT AT THE CALL SITES, because this function is the one funnel
+  // every request and every multipart upload passes through. An org context
+  // added per-endpoint is one the next endpoint somebody writes will not have,
+  // and the failure that produces is a listing quietly attributed to a staff
+  // member's own account instead of to the shop.
+  //
+  // Only sent when set, so a person acting as themselves -- the overwhelming
+  // majority of requests -- sends nothing extra. Read synchronously from a
+  // module variable; see ./org-context for why it cannot be an async read.
+  //
+  // The header is a REQUEST. The server re-reads the membership row before
+  // honouring it and answers 403 ORG_CONTEXT_REFUSED if the grant is gone.
+  const actingOrgId = getActingOrgId();
+  if (accessToken && actingOrgId) out[ORG_CONTEXT_HEADER] = actingOrgId;
+
   return out;
 }
 
@@ -979,6 +1127,15 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
   const multipart = hasRnFileParts(init.body);
 
   const send = async (accessToken: string | null) => {
+    // Every response's Date header teaches the live countdowns the server's
+    // clock. See lib/live-clock.
+    const sentAt = Date.now();
+    const res = await transmit(accessToken);
+    recordServerDate(sentAt, Date.now(), res.headers.get("Date"));
+    return res;
+  };
+
+  const transmit = async (accessToken: string | null) => {
     if (multipart) return sendMultipart(url, init, accessToken);
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), API_REQUEST_TIMEOUT_MS);
@@ -1003,12 +1160,46 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
   const attempted = memory?.accessToken ?? null;
   const res = await send(attempted);
 
+  /*
+   * A DEAD ORG CONTEXT CLEARS ITSELF. NOT RETRIED.
+   *
+   * 403 ORG_CONTEXT_REFUSED means the server re-read the membership row and
+   * this client may no longer act as that organisation — an owner removed
+   * them, or the invitation was withdrawn. The header is the only thing wrong,
+   * and it will be wrong on every subsequent request until something drops it,
+   * so this drops it.
+   *
+   * IT DOES NOT RE-SEND. The request was "post this as the shop", and quietly
+   * re-issuing it as the person would post somebody's listing to the wrong
+   * account on the strength of an error. The caller gets the 403 and decides;
+   * what this guarantees is that the NEXT request is not refused for the same
+   * stale reason.
+   *
+   * `clone()` because reading a body consumes it, and the caller still needs
+   * this response.
+   */
+  if (res.status === 403 && getActingOrgId()) {
+    const peeked = await res
+      .clone()
+      .json()
+      .catch(() => null as unknown);
+    const code = (peeked as { code?: string; error?: { code?: string } } | null);
+    if (code?.code === "ORG_CONTEXT_REFUSED" || code?.error?.code === "ORG_CONTEXT_REFUSED") {
+      clearActingOrg();
+    }
+    return res;
+  }
+
   if (res.status !== 401 || !attempted) return res;
 
-  const fresh = await refreshOnce(attempted);
-  if (!fresh) return res; // Session is gone; hand the 401 back unchanged.
+  const outcome = await refreshOnce(attempted);
+  if (outcome.kind === "signedOut") return res; // Session is gone; hand the 401 back unchanged.
+  // The session is fine and the server could not be asked. Handing back the
+  // 401 would read as "Sign in to continue" on a screen the person is still
+  // signed in to; this says what actually happened.
+  if (outcome.kind === "unavailable") throw outcome.error;
 
-  return send(fresh);
+  return send(outcome.accessToken);
 }
 
 /**
@@ -1024,11 +1215,12 @@ export async function apiV1<T>(
 ): Promise<{ data: T; meta: Record<string, unknown> }> {
   const res = await request(path, init);
 
-  let body: Envelope<T>;
-  try {
-    body = (await res.json()) as Envelope<T>;
-  } catch {
-    throw new ApiError(res.status, "MALFORMED_RESPONSE", `${path} did not return JSON`);
+  const body = await readJson<Envelope<T> | null>(res, path);
+  // Valid JSON that is not an envelope (`null`, an array, a legacy `{ error }`
+  // from a route outside /api/v1) is as unreadable as HTML, and reading
+  // `.error` off `null` below would be a TypeError rather than an ApiError.
+  if (body === null || typeof body !== "object" || Array.isArray(body) || !("data" in body)) {
+    throw malformedResponse(res.status, path);
   }
 
   if (!res.ok || body.error || body.data === null) {
@@ -1043,7 +1235,7 @@ export async function apiV1<T>(
     throw new ApiError(
       res.status,
       body.error?.code ?? "INTERNAL_ERROR",
-      body.error?.message ?? `Request to ${path} failed`,
+      body.error?.message ?? malformedResponse(res.status, path).message,
       [],
       retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
       // `meta` survives the throw for the same reason Retry-After does: the

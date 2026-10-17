@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Text, TextInput, View } from "react-native";
 
 import { CATEGORIES, CATEGORY_LABELS } from "../../api/post";
 import { usePost } from "../../post/state";
+import { mergeLookingFor } from "../../post/wanted-keywords";
 import {
   postColor,
   postSpace,
@@ -52,6 +54,24 @@ export function StepReturn({
   onFieldBlur: () => void;
 }) {
   const { state, dispatch } = usePost();
+  // At the cap the unselected chips go inert, so the limit is met while
+  // tapping rather than as a "Pick at most 6" error on Post. Selected chips
+  // stay live — deselecting one is how the others come back.
+  const atCap = state.returnCategories.length >= rules.maxReturnCategories;
+
+  // What the text adds to the chips, shown so the poster can see what is being
+  // sent on their behalf. Derived from the SAME merge the submit uses, minus
+  // the chips — so a category already tapped is not repeated, and one the cap
+  // squeezes out is not shown, because it will not be sent either. Recomputed
+  // per keystroke like the counter beside it: the table walk is cheap, and a
+  // debounced line would lag the text it describes.
+  const inferred = useMemo(
+    () =>
+      mergeLookingFor(state.returnCategories, state.wanted, rules.maxReturnCategories).filter(
+        (c) => !state.returnCategories.includes(c),
+      ),
+    [state.returnCategories, state.wanted],
+  );
 
   return (
     <View style={{ paddingHorizontal: board.screenX }}>
@@ -97,16 +117,23 @@ export function StepReturn({
         helper="You can leave this open if you are not sure yet."
         counter={`${state.wanted.length}/${rules.wantedMax}`}
       />
+      {inferred.length > 0 ? (
+        <Text
+          style={[textStyle(postType.helper), { color: postColor.inkSecondary, marginTop: 6 }]}
+        >
+          {`Also matching: ${inferred.map((c) => CATEGORY_LABELS[c]).join(", ")}`}
+        </Text>
+      ) : null}
 
       <Divider style={{ marginTop: postSpace.ret.helperToDivider }} />
 
       <Text
         style={[
-          textStyle(postType.fieldLabel),
-          { color: postColor.inkMuted, marginTop: postSpace.ret.dividerToLabel },
+          textStyle(postType.smallTextLabel),
+          { color: postColor.inkSecondary, marginTop: postSpace.ret.dividerToLabel },
         ]}
       >
-        CATEGORIES YOU WOULD CONSIDER — OPTIONAL
+        {`Categories you would consider (optional, up to ${rules.maxReturnCategories})`}
       </Text>
 
       <View
@@ -117,14 +144,18 @@ export function StepReturn({
           gap: postSpace.ret.chipGap,
         }}
       >
-        {CATEGORIES.map((c) => (
-          <Chip
-            key={c}
-            label={CATEGORY_LABELS[c]}
-            selected={state.returnCategories.includes(c)}
-            onPress={() => dispatch({ type: "return/toggle", category: c })}
-          />
-        ))}
+        {CATEGORIES.map((c) => {
+          const selected = state.returnCategories.includes(c);
+          return (
+            <Chip
+              key={c}
+              label={CATEGORY_LABELS[c]}
+              selected={selected}
+              disabled={atCap && !selected}
+              onPress={() => dispatch({ type: "return/toggle", category: c })}
+            />
+          );
+        })}
       </View>
 
       <View style={{ height: 24 }} />

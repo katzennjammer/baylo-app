@@ -983,14 +983,16 @@ the 20-Leaf welcome grant.
 
 ### The verification link
 
-The emailed link is `<NEXTAUTH_URL>/api/auth/verify-email?token=…`, an https URL,
-so on a phone it opens the browser and the server redirects to the web
+The emailed link is `<origin>/api/auth/verify-email?token=…`, where the origin is
+the server's `APP_PUBLIC_URL` or, unset, the LAN address the app dialled
+(`src/lib/public-url.ts` in the API repo; password-reset links work the same
+way). On a phone it opens the browser and the server redirects to the web
 dashboard. `app/verify.tsx` handles the same token for the app, over
 `POST /api/auth/verify-email` — the other transport for one code path.
 
 To make the link open the app instead, either point the email at
 `baylo://verify?token=…` or set up Android App Links: add
-`expo.android.intentFilters` for the `NEXTAUTH_URL` host with
+`expo.android.intentFilters` for the `APP_PUBLIC_URL` host with
 `autoVerify: true`, and serve `/.well-known/assetlinks.json` from that host with
 the app's package name and signing SHA-256. Until then `app/verify.tsx` is
 reachable by deep link (`adb shell am start -a android.intent.action.VIEW -d

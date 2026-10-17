@@ -171,14 +171,10 @@ export const authType = {
   inputLabel: {
     fontFamily: font.sansMedium,
     fontSize: 10,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
   },
   inputLabelStrong: {
     fontFamily: font.sansSemi,
     fontSize: 10,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
   },
   inputValue: { fontFamily: font.sansMedium, fontSize: 15 },
   /** Masked. 0.18em on 15px is 2.7; revealed, the value drops to `inputValue`. */
@@ -224,8 +220,6 @@ export const authType = {
   panelLabel: {
     fontFamily: font.sansMedium,
     fontSize: 10,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   cardName: { fontFamily: font.sansSemi, fontSize: 14, lineHeight: 16.8 },
   cardEmail: { fontFamily: font.sans, fontSize: 12, lineHeight: 15.6 },
@@ -347,7 +341,9 @@ export const authSize = {
 
   /** The rule beside the label in an "or" divider, and the row's own height. */
   dividerRule: 1,
-  dividerLabelRow: 11,
+  // 20, not the spec's 11: the label's line is 19.5 tall, and Android clips a
+  // Text to a shorter row -- "or" rendered as a sliver of its bottom edge.
+  dividerLabelRow: 20,
 
   /** Field and outline-button border weights. */
   inputBorder: 1,

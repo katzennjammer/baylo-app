@@ -3,13 +3,16 @@ import { useEffect, useMemo } from "react";
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { ApiError } from "../../src/api/client";
 import { useConversations } from "../../src/api/messages";
+import { useHome } from "../../src/api/home";
+import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { MessageIcon } from "../../src/components/icons";
+import { MessageIcon, StoreIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
-import { color, font, icon, radius, textStyle } from "../../src/theme/tokens";
+import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -23,12 +26,49 @@ function relativeTime(dateIso: string): string {
   return `${Math.floor(diffSec / 604800)}w`;
 }
 
+/**
+ * What the list's error state says. A REFUSAL IS NOT AN EMPTY INBOX.
+ *
+ * `fetchConversations()` used to turn every 403 into an empty list, so a
+ * refused request and an inbox with nothing in it both read "No conversations
+ * yet" -- which is how a shop owner's empty screen on 26 Sep 2026 could not be
+ * told apart from a real one. A 403 now arrives here as an error and is named
+ * as a refusal, with the status and code printed small underneath, so a
+ * screenshot is enough to say which one happened.
+ *
+ * ORG_CONTEXT_REFUSED has its own words because the client has ALREADY acted
+ * on it: client.ts dropped the shop context on that code, so Retry loads the
+ * person's own inbox, and the copy says so rather than promising the shop's.
+ */
+function conversationsErrorCopy(error: unknown): { headline: string; body: string; code: string | null } {
+  if (error instanceof ApiError && error.status === 403) {
+    const code = `403 · ${error.code || "FORBIDDEN"}`;
+    if (error.code === "ORG_CONTEXT_REFUSED") {
+      return {
+        headline: "Can’t open the shop’s inbox",
+        body: "This account can no longer act for that shop, so you’ve been switched back to your own account. Tap Retry to load your own messages.",
+        code,
+      };
+    }
+    return {
+      headline: "Messages were refused",
+      body: "The server wouldn’t show this inbox to this account. This is a permission problem, not an empty inbox.",
+      code,
+    };
+  }
+  return {
+    headline: "Something went wrong",
+    body: "We couldn’t load your messages right now.",
+    code: error instanceof ApiError && error.status > 0 ? `${error.status} · ${error.code}` : null,
+  };
+}
+
 export default function MessagesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ partner?: string }>();
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const { data, isPending, isError, refetch } = useConversations(params.partner ?? null);
+  const { data, error, isPending, isError, refetch } = useConversations(params.partner ?? null);
   const conversations = useMemo(
     () => [...(data?.conversations ?? [])].sort(
       (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
@@ -36,13 +76,31 @@ export default function MessagesScreen() {
     [data],
   );
 
-  useEffect(() => {
-    if (!session?.user.id) return;
+  // Acting as a shop this list is the SHOP's inbox (the server reads the same
+  // X-Baylo-Org header), so the realtime channel is the shop's too: `viewerId`
+  // is whoever the list was fetched for. See the note in src/api/messages.
+  const inboxId = data?.viewerId ?? session?.user.id;
+  // Say whose inbox it is only when the server says it answered as the shop,
+  // the same test the header pill uses. Deduped with the header's query.
+  const { acting } = useHome();
+  const shopName = acting && acting.organizationId === getActingOrgId() ? acting.name : null;
 
-    return subscribeToUserChannel(session.user.id, () => {
+  useEffect(() => {
+    if (!inboxId) return;
+
+    return subscribeToUserChannel(inboxId, () => {
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
     }) ?? undefined;
-  }, [queryClient, session?.user.id]);
+  }, [queryClient, inboxId]);
+
+  const shopStrip = shopName ? (
+    <View style={styles.shopStrip}>
+      <StoreIcon size={14} stroke={1.6} color={color.forest} />
+      <Text style={styles.shopStripText} numberOfLines={1}>
+        {`Inbox for ${shopName} · replies are sent as the shop`}
+      </Text>
+    </View>
+  ) : null;
 
   if (isPending) {
     return (
@@ -54,11 +112,13 @@ export default function MessagesScreen() {
   }
 
   if (isError) {
+    const failure = conversationsErrorCopy(error);
     return (
       <View style={styles.centered}>
         <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-        <Text style={styles.headline}>Something went wrong</Text>
-        <Text style={styles.body}>We couldn’t load your messages right now.</Text>
+        <Text style={styles.headline}>{failure.headline}</Text>
+        <Text style={styles.body}>{failure.body}</Text>
+        {failure.code ? <Text style={styles.errorCode}>{failure.code}</Text> : null}
         <Tappable onPress={() => void refetch()} style={styles.retryButton} pressedStyle={styles.retryButtonPressed}>
           <Text style={styles.retryText}>Retry</Text>
         </Tappable>
@@ -68,16 +128,24 @@ export default function MessagesScreen() {
 
   if (conversations.length === 0) {
     return (
-      <View style={styles.centered}>
-        <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-        <Text style={styles.headline}>No conversations yet.</Text>
-        <Text style={styles.body}>Messages will appear here when someone starts a conversation.</Text>
+      <View style={styles.screen}>
+        {shopStrip}
+        <View style={styles.centered}>
+          <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
+          <Text style={styles.headline}>No conversations yet.</Text>
+          <Text style={styles.body}>
+            {shopName
+              ? `Messages to ${shopName} will appear here.`
+              : "Messages will appear here when someone starts a conversation."}
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
+      {shopStrip}
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.partnerId}
@@ -88,37 +156,39 @@ export default function MessagesScreen() {
           const label = item.fromMe ? `You: ${preview}` : preview;
 
           return (
-            <Tappable
-              onPress={() => router.push({
-                pathname: "/messages/thread",
-                params: {
-                  partner: item.partnerId,
-                  partnerName: item.partnerName,
-                  partnerAvatar: item.partnerAvatar ?? "",
-                },
-              })}
-              style={styles.row}
-              pressedStyle={styles.rowPressed}
-            >
-              {item.partnerAvatar ? (
-                <Image source={{ uri: item.partnerAvatar }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text>
-                </View>
-              )}
+            <View style={styles.row}>
+              <Tappable onPress={() => router.push({ pathname: "/user", params: { id: item.partnerId } })} style={styles.partnerIdentity} pressedStyle={styles.rowPressed} accessibilityRole="button" accessibilityLabel={`View ${item.partnerName}'s profile`}>
+                {item.partnerAvatar ? <Image source={{ uri: item.partnerAvatar }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text></View>}
+              </Tappable>
 
-              <View style={styles.bodyWrap}>
+              <Tappable
+                onPress={() => router.push({
+                  pathname: "/messages/thread",
+                  params: {
+                    partner: item.partnerId,
+                    partnerName: item.partnerName,
+                    partnerAvatar: item.partnerAvatar ?? "",
+                  },
+                })}
+                style={styles.bodyWrap}
+                pressedStyle={styles.rowPressed}
+                accessibilityRole="button"
+                accessibilityLabel={`Open conversation with ${item.partnerName}`}
+              >
                 <View style={styles.metaRow}>
-                  <Text style={styles.name}>{item.partnerName}</Text>
+                  <Text style={[styles.name, item.unreadCount > 0 && styles.unreadText]}>{item.partnerName}</Text>
                   <Text style={styles.time}>{relativeTime(item.lastMessageAt)}</Text>
                 </View>
                 <View style={styles.previewRow}>
-                  <Text style={styles.preview} numberOfLines={1}>{label}</Text>
-                  {item.unreadCount > 0 ? <View style={styles.unreadDot} /> : null}
+                  <Text style={[styles.preview, item.unreadCount > 0 && styles.unreadText]} numberOfLines={1}>{label}</Text>
+                  {item.unreadCount > 0 ? (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadCount}>{item.unreadCount > 99 ? "99+" : item.unreadCount}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              </View>
-            </Tappable>
+              </Tappable>
+            </View>
           );
         }}
       />
@@ -154,6 +224,28 @@ const styles = StyleSheet.create({
     color: color.inkSecondary,
     textAlign: "center",
   },
+  errorCode: {
+    marginTop: 8,
+    ...type.gridMeta,
+    color: color.inkMuted,
+    textAlign: "center",
+  },
+  shopStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: color.greenWash,
+    borderBottomWidth: 1,
+    borderBottomColor: color.divider,
+  },
+  shopStripText: {
+    flex: 1,
+    fontFamily: font.sansSemi,
+    fontSize: 12,
+    color: color.forest,
+  },
   retryButton: {
     marginTop: 18,
     backgroundColor: color.forest,
@@ -184,6 +276,10 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     backgroundColor: color.control,
+  },
+  partnerIdentity: {
+    minHeight: 44,
+    justifyContent: "center",
   },
   avatar: {
     width: 44,
@@ -219,10 +315,13 @@ const styles = StyleSheet.create({
     color: color.ink,
     flexShrink: 1,
   },
+  unreadText: {
+    fontFamily: font.sansBold,
+    color: color.ink,
+  },
   time: {
     marginLeft: 8,
-    fontFamily: font.mono,
-    fontSize: 10,
+    ...type.gridMeta,
     color: color.inkSecondary,
   },
   previewRow: {
@@ -236,10 +335,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: color.inkSecondary,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  unreadBadge: {
+    minWidth: 8,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: color.green,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  unreadCount: {
+    fontFamily: font.sansBold,
+    fontSize: 10,
+    color: color.onGreen,
   },
 });

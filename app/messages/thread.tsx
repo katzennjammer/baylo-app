@@ -5,24 +5,36 @@ import {
   ActivityIndicator,
   Image,
   Keyboard,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useColorScheme,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { collapseSystemPairs } from "../../src/lib/system-pairs";
+import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
+import type { ActiveTrade } from "../../src/api/types";
+import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
+import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { ImageIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
+import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
+import { ChatBubble, useBubbleContentMax } from "../../src/components/messages/ChatBubble";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
+import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
+import { showDialog } from "../../src/components/dialog";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -46,33 +58,66 @@ export default function MessagesThreadScreen() {
   }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
   const { session } = useSession();
+  const dark = useColorScheme() === "dark";
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [typingName, setTypingName] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const listRef = useRef<ScrollView | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for typing indication
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const activeTrades = useActiveTrades();
+  const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
+  const block = useBlockUser();
   const sortedMessages = useMemo(
-    () => [...(thread.data?.messages ?? [])].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    () => collapseSystemPairs(
+      Array.from(
+        new Map((thread.data?.messages ?? []).map((message) => [message.id, message])).values(),
+      ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+      partner ?? null,
     ),
-    [thread.data],
+    [thread.data, partner],
   );
+  // The newest offer_update per offer: its status, and the trade it became.
+  const offerStatuses = useMemo(() => {
+    const statuses = new Map<string, { status: string; tradeId: string | null }>();
+    for (const message of sortedMessages) {
+      try {
+        const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown; status?: unknown; tradeId?: unknown };
+        if (payload.type === "offer_update" && typeof payload.offerId === "string" && typeof payload.status === "string") {
+          statuses.set(payload.offerId, {
+            status: payload.status,
+            tradeId: typeof payload.tradeId === "string" ? payload.tradeId : null,
+          });
+        }
+      } catch {
+        // Plain-text messages are not offer payloads.
+      }
+    }
+    return statuses;
+  }, [sortedMessages]);
 
   const onNewMessage = useCallback((message: Omit<ThreadMessage, "read">) => {
     if (!partner || message.senderId !== partner) return;
-    queryClient.setQueryData<LegacyThreadResponse>(["messages", "thread", partner], (current) => {
+    queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) => {
       if (!current || current.messages.some((item) => item.id === message.id)) return current;
       return { ...current, messages: [...current.messages, { ...message, read: true }] };
     });
     listRef.current?.scrollToEnd({ animated: true });
   }, [partner, queryClient]);
+
+  const onOfferUpdated = useCallback((event: {
+    systemMessage?: Omit<ThreadMessage, "read">;
+  }) => {
+    if (event.systemMessage) onNewMessage(event.systemMessage);
+  }, [onNewMessage]);
 
   const onTyping = useCallback((event: { senderId: string; senderName: string; isTyping: boolean }) => {
     if (event.senderId !== partner) return;
@@ -83,10 +128,19 @@ export default function MessagesThreadScreen() {
     }
   }, [partner]);
 
+  // The INBOX's channel: the shop's while acting as it, where the partner's
+  // messages to the shop are published. See the note in src/api/messages.
+  const inboxId = thread.data?.currentUserId || session?.user.id;
   useEffect(() => {
-    if (!session?.user.id) return;
-    return subscribeToUserChannel(session.user.id, onNewMessage, onTyping) ?? undefined;
-  }, [onNewMessage, onTyping, session?.user.id]);
+    if (!inboxId) return;
+    return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
+  }, [onNewMessage, onOfferUpdated, onTyping, inboxId]);
+
+  useEffect(() => {
+    if (thread.data) {
+      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    }
+  }, [queryClient, thread.data]);
 
   useEffect(() => () => {
     if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -169,23 +223,62 @@ export default function MessagesThreadScreen() {
   const currentUserId = thread.data?.currentUserId ?? "";
   const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
   const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
+  const bubbleContentMax = useBubbleContentMax();
+  const tradesById = new Map([
+    ...(activeTrades.data?.trades ?? []),
+    ...(tradeHistory.data?.trades ?? []),
+  ].map((trade) => [trade.id, trade]));
+
+  const palette = dark ? darkColors : lightColors;
+
+  const confirmBlock = () => {
+    if (!partner) return;
+    setMenuOpen(false);
+    showDialog(
+      `Block ${otherName}?`,
+      "You will not see each other's listings and neither of you can message the other. Trades already in progress are not cancelled.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => block.mutate(partner, { onSuccess: () => router.back() }),
+        },
+      ],
+    );
+  };
 
   return (
-    <View style={[styles.screen, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      <View style={[styles.header, { height: insets.top + 52 }]}> 
+    <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.header, { height: insets.top + 52, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
         <Tappable onPress={() => router.back()} style={styles.backButton} pressedStyle={styles.backButtonPressed}>
-          <Text style={styles.backText}>←</Text>
+          <ChevronLeftIcon size={22} stroke={1.8} color={palette.ink} />
         </Tappable>
-        <Text style={styles.title}>{otherName}</Text>
+        <Tappable
+          onPress={() => partner && router.push(`/user?id=${encodeURIComponent(partner)}`)}
+          style={styles.titleButton}
+          pressedStyle={styles.backButtonPressed}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${otherName}'s profile`}
+        >
+          <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+        </Tappable>
+        {/* The menu's only action is Block (hiding conversations was removed in
+            schema v2), and blocking is not offered while acting as a shop. */}
+        {getActingOrgId() ? null : (
+          <Tappable onPress={() => setMenuOpen(true)} style={styles.menuButton} pressedStyle={styles.backButtonPressed} accessibilityLabel="Conversation options">
+            <KebabIcon size={20} color={palette.ink} />
+          </Tappable>
+        )}
       </View>
 
       {thread.isPending ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="small" color={color.forest} />
+            <ActivityIndicator size="small" color={palette.forest} />
         </View>
       ) : thread.isError ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>This conversation failed to load.</Text>
+            <Text style={[styles.emptyTitle, { color: palette.ink }]}>This conversation failed to load.</Text>
         </View>
       ) : (
         <>
@@ -197,31 +290,93 @@ export default function MessagesThreadScreen() {
           >
             {sortedMessages.map((message) => {
               const mine = message.senderId === currentUserId;
+              let displayContent = message.content;
+              let offerTradeId: string | null = null;
+              let offerTrade: ActiveTrade | null = null;
+              let isOffer = false;
+              try {
+                const payload = JSON.parse(message.content) as { type?: string; offerId?: unknown };
+                if (payload.type === "offer" && typeof payload.offerId === "string") {
+                  isOffer = true;
+                  const update = offerStatuses.get(payload.offerId);
+                  if (update) {
+                    displayContent = JSON.stringify({ ...payload, status: update.status });
+                    offerTradeId = update.tradeId;
+                  }
+                  offerTrade = chatTradeFor(payload.offerId, update?.tradeId ?? null, tradesById);
+                }
+              } catch {
+                // Plain-text messages are rendered unchanged.
+              }
+              // System rows ("You declined the offer", "Trade completed") are
+              // centred pills belonging to neither side.
+              const payloadType = (() => {
+                try {
+                  return (JSON.parse(displayContent) as { type?: string }).type;
+                } catch {
+                  return undefined;
+                }
+              })();
+              const isOfferUpdate = payloadType === "offer_update";
+              const isSystem = isOfferUpdate || payloadType === "trade_completed";
               return (
-                <View key={message.id} style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheir]}>
-                  {!mine ? (
-                    <View style={styles.avatarColumn}>
-                      {otherAvatar ? (
-                        <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
-                      ) : (
-                        <View style={styles.messageAvatarFallback}>
-                          <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : null}
-                  <View style={styles.messageContent}>
-                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheir]}>
-                      {renderMessageBody({ content: message.content, mine })}
-                    </View>
-                    <Text style={styles.time}>{relativeTime(message.createdAt)}</Text>
-                  </View>
-                </View>
+                <ChatBubble
+                  key={message.id}
+                  mine={mine}
+                  kind={isSystem ? "status" : isOffer ? "card" : "bubble"}
+                  time={relativeTime(message.createdAt)}
+                  avatar={
+                    otherAvatar ? (
+                      <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
+                    ) : (
+                      <View style={styles.messageAvatarFallback}>
+                        <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
+                      </View>
+                    )
+                  }
+                >
+                  {renderMessageBody({
+                    content: displayContent,
+                    mine,
+                    contentMax: bubbleContentMax,
+                    onImagePress: setLightboxUrl,
+                    // An offer opens its trade screen; an offer_update's
+                    // "Open trade" passes the trade id it carries.
+                    onOfferPress: (id) => {
+                      router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
+                    },
+                    onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
+                    offerTradeId,
+                    offerTrade,
+                    partnerName: otherName,
+                    onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
+                    offerDetails: (() => {
+                      try {
+                        const payload = JSON.parse(message.content) as { offerId?: unknown };
+                        return typeof payload.offerId === "string"
+                          ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
+                          : undefined;
+                      } catch {
+                        return undefined;
+                      }
+                    })(),
+                    tradeDetails: (() => {
+                      try {
+                        const payload = JSON.parse(message.content) as { tradeId?: unknown };
+                        return typeof payload.tradeId === "string"
+                          ? tradesById.get(payload.tradeId)
+                          : undefined;
+                      } catch {
+                        return undefined;
+                      }
+                    })(),
+                  })}
+                </ChatBubble>
               );
             })}
           </ScrollView>
 
-          {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
+          {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
 
           <View
             style={[
@@ -238,7 +393,7 @@ export default function MessagesThreadScreen() {
               pressedStyle={styles.attachButtonPressed}
               accessibilityLabel="Attach a photo"
             >
-              <ImageIcon size={20} stroke={1.8} color={color.forest} />
+              <ImageIcon size={20} stroke={1.8} color={palette.forest} />
             </Tappable>
             <TextInput
               value={draft}
@@ -246,7 +401,7 @@ export default function MessagesThreadScreen() {
               placeholder="Type a message…"
               multiline
               style={styles.input}
-              placeholderTextColor={color.inkSecondary}
+              placeholderTextColor={palette.inkSecondary}
             />
             <Tappable
               onPress={() => void onSend()}
@@ -260,9 +415,58 @@ export default function MessagesThreadScreen() {
           {typingName ? <Text style={styles.typing}>{typingName} is typing…</Text> : null}
         </>
       )}
+      <ConversationMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        colors={palette}
+        // Not while acting as a shop: POST /api/v1/blocks acts as the PERSON, so
+        // it would block from their own account and leave the shop's thread
+        // open. Shop-level blocking is not built.
+        onBlock={getActingOrgId() ? undefined : confirmBlock}
+      />
+      <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+        <Pressable style={styles.lightbox} onPress={() => setLightboxUrl(null)} accessibilityLabel="Close full-screen image">
+          {lightboxUrl ? <Image source={{ uri: lightboxUrl }} style={styles.fullImage} resizeMode="contain" /> : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
+
+function ConversationMenu({
+  visible,
+  onClose,
+  onBlock,
+  colors,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onBlock?: () => void;
+  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
+}) {
+  if (!visible) return null;
+  return (
+    <SheetShell title="Conversation" onClose={onClose} colors={colors}>
+      <SheetRows>
+        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} /> : null}
+      </SheetRows>
+    </SheetShell>
+  );
+}
+
+const lightColors = { ...color, surface: color.surface, forest: color.forest };
+const darkColors = {
+  ...color,
+  surface: "#14140F",
+  control: "#2C2A22",
+  ink: "#FAFAF7",
+  inkSecondary: "#C5C1B5",
+  inkMuted: "#999487",
+  divider: "#4A473C",
+  controlLine: "#4A473C",
+  forest: "#3DBE5A",
+  urgent: "#F08A69",
+};
 
 const styles = StyleSheet.create({
   screen: {
@@ -281,20 +485,29 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
+    marginRight: 0,
     transform: [{ translateY: 16 }],
   },
   backButtonPressed: {
     backgroundColor: color.control,
   },
-  backText: {
-    fontSize: 22,
-    color: color.ink,
+  titleButton: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    transform: [{ translateY: 16 }],
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ translateY: 16 }],
   },
   title: {
     ...textStyle({ fontFamily: font.displaySemi, fontSize: 18 }),
@@ -323,21 +536,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
-  bubbleRow: {
-    marginBottom: 12,
-  },
-  bubbleRowMine: {
-    alignItems: "flex-end",
-  },
-  bubbleRowTheir: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    gap: 8,
-  },
-  avatarColumn: {
-    width: 28,
-    alignSelf: "flex-end",
-  },
   messageAvatar: {
     width: 28,
     height: 28,
@@ -355,31 +553,6 @@ const styles = StyleSheet.create({
     fontFamily: font.displaySemi,
     fontSize: 12,
     color: color.surface,
-  },
-  bubble: {
-    maxWidth: "80%",
-    borderRadius: 16,
-    padding: 10,
-    borderWidth: 1,
-  },
-  messageContent: {
-    maxWidth: "80%",
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  bubbleMine: {
-    backgroundColor: color.forest,
-    borderColor: color.forest,
-  },
-  bubbleTheir: {
-    backgroundColor: color.control,
-    borderColor: color.divider,
-  },
-  time: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: color.inkSecondary,
-    marginTop: 4,
   },
   composer: {
     flexDirection: "row",
@@ -450,5 +623,16 @@ const styles = StyleSheet.create({
     color: color.inkSecondary,
     fontFamily: font.sans,
     fontSize: 12,
+  },
+  lightbox: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  fullImage: {
+    width: "100%",
+    height: "100%",
   },
 });

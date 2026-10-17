@@ -1,8 +1,10 @@
 import * as copy from "./copy";
 import { meetupState, offerFeeLine, offerSwapLine, swapLine, tradeFeeLine } from "../../api/trades";
+import type { NeedsItem, WaitingItem } from "../../api/trades";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import { OFFER_REPLY_DAYS, firstName, replyBy, sentAgo } from "../offer/copy";
 import { grouped, meetupWhen, shortDate } from "../../lib/gap";
+import { giveGet, viewerIsSender } from "../../lib/trade-sides";
 
 /**
  * What each row SAYS — one place, so the list and the pushed Waiting screen
@@ -264,6 +266,468 @@ export function groupByMonth(trades: ActiveTrade[]): { label: string; rows: Acti
   return out;
 }
 
+/* ─────────────────────── the Trades tab's cards ─────────────────────── */
+
+/** One half of a card's split row. `leaves` draws the leaf tile instead of a photo. */
+export interface CardSide {
+  image: string | null;
+  title: string;
+  leaves: boolean;
+}
+
+/** Index into `copy.tradeCard.steps`: Accepted · Hub set · Handoff · Done. */
+export type StepIndex = 0 | 1 | 2 | 3;
+
+export interface CardProgress {
+  current: StepIndex;
+  /** Per step. A step BEFORE `current` can be false: codes started with no hub agreed. */
+  done: [boolean, boolean, boolean, boolean];
+  /** Amber while the current step is choosing a hub; forest otherwise. */
+  tone: "forest" | "amber";
+}
+
+export interface CardWords {
+  partner: string;
+  since: string;
+  give: CardSide;
+  get: CardSide;
+  /** Null on a "Waiting on them" card, which carries no track. */
+  progress: CardProgress | null;
+  footer: string;
+  /** A second, secondary line under the footer: the time of a suggestion. */
+  footerDetail?: string | null;
+  /** "Your move" cards only. */
+  action: { label: string; tone: "forest" | "amber"; href: string; a11y: string } | null;
+  /** "Waiting on them" cards only: "Aj to confirm". */
+  waitingOn: string | null;
+  /** Where the card body goes: the one trade screen. */
+  open: string;
+}
+
+function sideOf(
+  item: { title: string; image: string | null } | null,
+  leaves: number | null,
+): CardSide {
+  const n = leaves ?? 0;
+  if (item && n > 0) {
+    return { image: item.image, title: copy.tradeCard.itemPlusLeaves(item.title, n), leaves: false };
+  }
+  if (item) return { image: item.image, title: item.title, leaves: false };
+  if (n > 0) return { image: null, title: copy.tradeCard.leaves(n), leaves: true };
+  return { image: null, title: copy.tradeCard.unnamed, leaves: false };
+}
+
+/**
+ * Give / get, from the viewer's side; which is which is `giveGet()`'s call
+ * (@/lib/trade-sides). The sender put up `offeredItem` (and any
+ * `offeredLeaves`); the receiver put up `requestedItem`. On a Leaves-only trade
+ * the wire sends `offeredItem: null`, so the sender's side is the leaf tile.
+ */
+export function tradeSides(trade: ActiveTrade): { give: CardSide; get: CardSide } {
+  return giveGet(viewerIsSender(trade.direction), {
+    offered: sideOf(trade.offeredItem, trade.offeredLeaves),
+    requested: sideOf(trade.requestedItem, null),
+  });
+}
+
+export function offerSides(offer: LiveOffer): { give: CardSide; get: CardSide } {
+  const [first, ...rest] = offer.offeredItems;
+  const offered = sideOf(first ?? null, offer.offeredLeaves);
+  const offeredSide =
+    first && rest.length > 0 && !(offer.offeredLeaves && offer.offeredLeaves > 0)
+      ? { ...offered, title: copy.tradeCard.itemPlusMore(first.title, rest.length) }
+      : offered;
+  return giveGet(viewerIsSender(offer.direction), {
+    offered: offeredSide,
+    requested: sideOf(offer.post, null),
+  });
+}
+
+/**
+ * The hub the two of them are meeting at, if one is named: the AGREED plan
+ * first, then the claim. Never an unanswered proposal — that is one person's
+ * suggestion, not a place both have said yes to.
+ */
+function namedHub(trade: ActiveTrade): string | null {
+  if (trade.meetup?.agreedAt) return trade.meetup.hub.name;
+  return trade.safeZoneHub?.name ?? null;
+}
+
+const enc = encodeURIComponent;
+
+/** The one trade screen, for a trade row or for an offer that is not a trade yet. */
+export const tradeHref = (tradeId: string) => `/trade?id=${enc(tradeId)}`;
+export const offerHref = (offerId: string) => `/trade?offer=${enc(offerId)}`;
+
+/**
+ * The four-step track for ANY trade, not only a "Your move" card — the trade
+ * screen draws it in every state. Same mapping as `yourMoveCard()`:
+ *
+ *   PENDING (request or offer)     Accepted is current
+ *   ACCEPTED, no agreed hub        Hub set is current, amber
+ *   ACCEPTED, hub agreed           Handoff is current
+ *   CONFIRMING                     Handoff; Hub set dashed if none was agreed
+ *   COMPLETED                      all four, Done current
+ *
+ * Null for a trade that ended without a swap: there is no step to be on.
+ */
+export function tradeProgress(trade: ActiveTrade): CardProgress | null {
+  const hubAgreed = !!trade.meetup?.agreedAt;
+  switch (trade.status) {
+    case "PENDING":
+      return { current: 0, done: [false, false, false, false], tone: "forest" };
+    case "ACCEPTED":
+      return hubAgreed
+        ? { current: 2, done: [true, true, false, false], tone: "forest" }
+        : { current: 1, done: [true, false, false, false], tone: "amber" };
+    case "CONFIRMING":
+      return { current: 2, done: [true, hubAgreed, false, false], tone: "forest" };
+    case "COMPLETED":
+      return {
+        current: 3,
+        done: [true, hubAgreed || !!trade.safeZoneHub, true, true],
+        tone: "forest",
+      };
+    default:
+      return null;
+  }
+}
+
+export const OFFER_PROGRESS: CardProgress = {
+  current: 0,
+  done: [false, false, false, false],
+  tone: "forest",
+};
+
+/**
+ * Whether a CONFIRMING trade has a code to show at `nowSec` (server-corrected
+ * epoch seconds, from lib/live-clock).
+ *
+ *   live     codesLive on the wire and the window still open: "Show code".
+ *   locked   wrong guesses spent the pair but its window is open.
+ *   expired  everything else — the window closed, possibly while this screen
+ *            sat open, which is why it is a function of the clock and not
+ *            only of the response.
+ *
+ * Both non-live phases open the same trade screen, whose code panel issues a
+ * fresh pair on arrival exactly as it always has.
+ */
+export type CodePhase = "live" | "locked" | "expired";
+
+export function codePhase(trade: ActiveTrade, nowSec: number): CodePhase {
+  const until = trade.codesExpireAt ? Date.parse(trade.codesExpireAt) / 1000 : null;
+  const open = until !== null && nowSec < until;
+  if (open && trade.codesLive) return "live";
+  return open ? "locked" : "expired";
+}
+
+/**
+ * A "Your move" card. The step mapping is the one written up for review (1 Oct 2026).
+ *
+ * `phase` is the screen's live reading of `codePhase()` for a `kind: "code"`
+ * item; without one, the response's own `codesLive` decides.
+ */
+export function yourMoveCard(item: NeedsItem, phase?: CodePhase): CardWords {
+  if (item.kind === "offer") {
+    const offer = item.offer;
+    const partner = firstName(offer.counterparty.name);
+    return {
+      partner,
+      since: copy.waiting.since(new Date(offer.createdAt)),
+      ...offerSides(offer),
+      progress: OFFER_PROGRESS,
+      footer: copy.tradeCard.replyToOffer(partner, replyBy(offer.createdAt)),
+      action: {
+        label: copy.tradeCard.action.review,
+        tone: "forest",
+        href: offerHref(offer.id),
+        a11y: `Review the offer from ${offer.counterparty.name}`,
+      },
+      waitingOn: null,
+      open: offerHref(offer.id),
+    };
+  }
+
+  const trade = item.trade;
+  const partner = firstName(trade.counterparty.name);
+  const base = {
+    partner,
+    since: copy.waiting.since(new Date(trade.createdAt)),
+    ...tradeSides(trade),
+    waitingOn: null,
+    open: tradeHref(trade.id),
+  };
+
+  if (item.kind === "trade-request") {
+    return {
+      ...base,
+      progress: { current: 0, done: [false, false, false, false], tone: "forest" },
+      footer: copy.tradeCard.replyToRequest(partner),
+      action: {
+        label: copy.tradeCard.action.review,
+        tone: "forest",
+        href: tradeHref(trade.id),
+        a11y: `Review the swap request from ${trade.counterparty.name}`,
+      },
+    };
+  }
+
+  const codeAction = {
+    label: copy.tradeCard.action.showCode,
+    tone: "forest" as const,
+    href: tradeHref(trade.id),
+    a11y: `Open the confirmation code for ${trade.counterparty.name}`,
+  };
+
+  if (item.kind === "code") {
+    const hub = namedHub(trade);
+    const hubAgreed = !!trade.meetup?.agreedAt;
+    const progress: CardProgress = { current: 2, done: [true, hubAgreed, false, false], tone: "forest" };
+    const now = phase ?? (trade.codesLive ? "live" : "expired");
+    if (now !== "live") {
+      return {
+        ...base,
+        progress,
+        footer:
+          now === "locked"
+            ? copy.tradeCard.startHandoffWith(partner, hub)
+            : copy.tradeCard.codesExpired(partner, hub),
+        action: {
+          label: copy.tradeCard.action.startHandoff,
+          tone: "forest",
+          href: tradeHref(trade.id),
+          a11y: `Start the handoff with ${trade.counterparty.name}`,
+        },
+      };
+    }
+    return {
+      ...base,
+      progress,
+      footer: hub ? copy.tradeCard.showCodeAt(partner, hub) : copy.tradeCard.showCodeNoHub(partner),
+      action: codeAction,
+    };
+  }
+
+  // kind === "meetup": an ACCEPTED trade, in one of the three states that are
+  // the viewer's move. `buildTradesModel()` never files "waiting-on-them" here.
+  const state = meetupState(trade);
+  const plan = trade.meetup;
+  if (state === "agreed" && plan) {
+    return {
+      ...base,
+      progress: { current: 2, done: [true, true, false, false], tone: "forest" },
+      footer: `${copy.tradeCard.showCodeAt(partner, plan.hub.name)} · ${meetupWhen(new Date(plan.at))}`,
+      action: codeAction,
+    };
+  }
+
+  const meetupHref = `/trade-meetup?id=${enc(trade.id)}`;
+  if (state === "yours-to-answer" && plan) {
+    return {
+      ...base,
+      progress: { current: 1, done: [true, false, false, false], tone: "amber" },
+      footer: copy.tradeCard.theySuggested(partner, plan.hub.name, meetupWhen(new Date(plan.at))),
+      action: {
+        label: copy.tradeCard.action.answer,
+        tone: "amber",
+        // Agree / Suggest another live on the trade screen's hub step.
+        href: tradeHref(trade.id),
+        a11y: `Answer ${trade.counterparty.name}'s suggested meeting`,
+      },
+    };
+  }
+
+  return {
+    ...base,
+    progress: { current: 1, done: [true, false, false, false], tone: "amber" },
+    footer: copy.tradeCard.pickHub(partner),
+    action: {
+      label: copy.tradeCard.action.pickHub,
+      tone: "amber",
+      href: meetupHref,
+      a11y: `Pick a hub to meet ${trade.counterparty.name}`,
+    },
+  };
+}
+
+/** A "Waiting on them" card: no track; the hub and time if set, and who it is with. */
+export function waitingCard(item: WaitingItem): CardWords {
+  if (item.kind === "sent-offer") {
+    const offer = item.offer;
+    const partner = firstName(offer.counterparty.name);
+    return {
+      partner,
+      since: copy.waiting.since(new Date(offer.createdAt)),
+      ...offerSides(offer),
+      progress: null,
+      footer: copy.tradeCard.noHub,
+      action: null,
+      waitingOn: copy.tradeCard.toConfirm(partner),
+      open: offerHref(offer.id),
+    };
+  }
+
+  const trade = item.trade;
+  const partner = firstName(trade.counterparty.name);
+  // An unanswered proposal the VIEWER made still names a place and time — it is
+  // the thing the other person is being asked to confirm.
+  const plan = trade.meetup;
+  const footer = plan
+    ? copy.tradeCard.hubAndTime(plan.hub.name, meetupWhen(new Date(plan.at)))
+    : (namedHub(trade) ?? copy.tradeCard.noHub);
+  return {
+    partner,
+    since: copy.waiting.since(new Date(trade.createdAt)),
+    ...tradeSides(trade),
+    progress: null,
+    footer,
+    action: null,
+    waitingOn: copy.tradeCard.toConfirm(partner),
+    open: tradeHref(trade.id),
+  };
+}
+
+/**
+ * A card on the pushed Waiting screen. Same item, same grouping as the tab's
+ * `waitingCard()` — what changes is the footer, which says what the VIEWER did
+ * ("You suggested Marigondon Hall") and, on the right, whose move it is now.
+ */
+export function waitingScreenCard(item: WaitingItem): CardWords {
+  const card = waitingCard(item);
+  const partner = card.partner;
+
+  if (item.kind === "sent-offer") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youSentOffer,
+      footerDetail: null,
+      waitingOn: copy.tradeCard.toAnswer(partner),
+    };
+  }
+
+  const trade = item.trade;
+  if (trade.status === "PENDING") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youSentRequest,
+      footerDetail: null,
+      waitingOn: copy.tradeCard.toAnswer(partner),
+    };
+  }
+  if (trade.status === "CONFIRMING") {
+    return {
+      ...card,
+      footer: copy.tradeCard.youEnteredCode,
+      footerDetail: namedHub(trade),
+      waitingOn: copy.tradeCard.toConfirm(partner),
+    };
+  }
+  // ACCEPTED with the viewer's own suggestion unanswered — the only ACCEPTED
+  // state `buildTradesModel()` files under Waiting.
+  const plan = trade.meetup;
+  return {
+    ...card,
+    footer: plan ? copy.tradeCard.youSuggested(plan.hub.name) : copy.tradeCard.noHub,
+    footerDetail: plan ? meetupWhen(new Date(plan.at)) : null,
+    waitingOn: copy.tradeCard.toConfirm(partner),
+  };
+}
+
+/**
+ * One row on Finished trades (1 Oct 2026 redesign): "With Aya", then
+ * `21 Sep · codes matched 21:23` for a completed trade, or
+ * `5 Jul · Your 800 Leaves ⇄ Levi's Blue Cap` for one that ended without a swap.
+ *
+ * REJECTED and CANCELLED both sit under "Called off" on the switch, but the
+ * chip keeps them apart — "Declined" is the other person saying no, "Called
+ * off" is the trade being ended. They are never collapsed into one word.
+ */
+export function finishedRowWords(
+  trade: ActiveTrade,
+  clock: (at: number) => string,
+): {
+  partner: string;
+  meta: string;
+  give: CardSide;
+  get: CardSide;
+  chip: string | null;
+} {
+  const partner = firstName(trade.counterparty.name);
+  const sides = tradeSides(trade);
+  const when = new Date(trade.updatedAt);
+
+  if (trade.status === "COMPLETED") {
+    const matched = trade.codesMatchedAt ? Date.parse(trade.codesMatchedAt) : when.getTime();
+    return {
+      partner,
+      ...sides,
+      meta: copy.history.tradedMeta(new Date(matched), clock(matched)),
+      chip: null,
+    };
+  }
+  return {
+    partner,
+    ...sides,
+    meta: `${shortDate(when)} · Your ${sides.give.title} ⇄ ${sides.get.title}`,
+    chip: trade.status === "REJECTED" ? copy.history.declinedChip : copy.history.calledOffChip,
+  };
+}
+
 /* ───────────────────────── re-exports for the screens ───────────────── */
 
 export { firstName, grouped, shortDate, swapLine, offerSwapLine, offerFeeLine, tradeFeeLine };
+
+/* ─────────────────────── the chat offer card's status ────────────────────── */
+
+/**
+ * The trade a chat offer became, from trades the thread already holds (active
+ * plus the 50 most recent history rows) — no request of its own.
+ *
+ * ── WHICH ID ────────────────────────────────────────────────────────────────
+ *
+ * Since schema v2 an offer and its trade are ONE row: accepting it updates
+ * `Trade` where `id = offerId` (baylo src/app/api/offers/[id]/route.ts), and
+ * the `offer_update` message carries that same id as `tradeId`. Checked on
+ * live on 9 Oct 2026: every chat offer's `offerId` is a `Trade.id`, none is a
+ * `legacyOfferId`, and no `offer_update` names a different `tradeId`.
+ *
+ * The lookup still does not lean on that blindly. An `offer_update`'s own
+ * `tradeId` wins whenever the thread has one — a pre-v2 row, whose ids
+ * differ, resolves through it. Only with no update does it try the offer id
+ * itself, which is how a trade whose update row the thread never saw is
+ * still found. Null when the trade is outside what the thread holds: the
+ * card then shows the status saved in the messages, as it always did.
+ */
+export function chatTradeFor(
+  offerId: string,
+  savedTradeId: string | null,
+  tradesById: ReadonlyMap<string, ActiveTrade>,
+): ActiveTrade | null {
+  if (savedTradeId) return tradesById.get(savedTradeId) ?? null;
+  return tradesById.get(offerId) ?? null;
+}
+
+/**
+ * The trade's CURRENT state as the chat card's chip: the trade screen's own
+ * step words (Accepted / Hub set / Handoff / Done), green while it moves,
+ * grey once it ended without a swap. Null while it is still a pending offer:
+ * the card's offer wording ("Your move", "Waiting for Aj") applies then.
+ */
+export function chatTradeChip(trade: ActiveTrade): { label: string; tone: "green" | "grey" } | null {
+  switch (trade.status) {
+    case "ACCEPTED":
+      return trade.meetup?.agreedAt
+        ? { label: copy.chatOffer.hubSet, tone: "green" }
+        : { label: copy.chatOffer.accepted, tone: "green" };
+    case "CONFIRMING":
+      return { label: copy.chatOffer.handoff, tone: "green" };
+    case "COMPLETED":
+      return { label: copy.chatOffer.done, tone: "green" };
+    case "REJECTED":
+      return { label: copy.chatOffer.declined, tone: "grey" };
+    case "CANCELLED":
+      return { label: copy.chatOffer.cancelled, tone: "grey" };
+    default:
+      return null;
+  }
+}

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { useLastKnownLocation } from "../../src/lib/hub-distance";
 import { Splash } from "../../src/components/Splash";
 import { useHubs } from "../../src/api/hubs";
 import { useItem } from "../../src/api/item";
@@ -60,6 +61,15 @@ export default function HubsMapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(focus ?? null);
   const [hubTypeFilter, setHubTypeFilter] = useState<string | null>(null);
 
+  /**
+   * The blue "Your location" dot, the same one the marketplace map draws.
+   * PASSIVE: only when location permission is already granted, and only the
+   * last known position (15 min, 2 km) -- this screen never prompts, never
+   * waits on a fresh fix, and says nothing when there is none. The
+   * marketplace map is where the full lookup (and its retry) lives.
+   */
+  const userLocation = useLastKnownLocation();
+
   const scoped = !!itemId;
 
   const hubs: SafeZoneHub[] = useMemo(() => {
@@ -101,7 +111,7 @@ export default function HubsMapScreen() {
 
         <View style={s.headerText}>
           <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>
-            Safe Zones
+            Safe hubs
           </Text>
           <Text style={[textStyle(type.hubLandmark), s.subtitle]} numberOfLines={1}>
             {scoped
@@ -128,7 +138,7 @@ export default function HubsMapScreen() {
           </View>
         ) : isError ? (
           <BrowseError
-            headline="Could not load the Safe Zones"
+            headline="Could not load the safe hubs"
             message={
               apiError?.message ??
               "Check your mobile data or Wi-Fi and try again."
@@ -146,16 +156,19 @@ export default function HubsMapScreen() {
             >
               <HubMap
                 hubs={visibleHubs}
+                userLocation={userLocation}
                 interactive
                 focusHubId={focus}
                 selectedHubId={selectedId}
                 onSelectHub={setSelectedId}
+                // The hub card sits over the bottom edge.
+                attributionAt="top"
                 emptyMessage={
                   hubTypeFilter
-                    ? "No Safe Zones of this type are available yet."
+                    ? "No safe hubs of this type are available yet."
                     : scoped
-                    ? "This listing has no Safe Zone set. Agree on a public place in your messages."
-                    : "No Safe Zones have been set up yet. They are added city by city."
+                    ? "This listing has no safe hub set. Agree on a public place in your messages."
+                    : "No safe hubs have been set up yet. They are added city by city."
                 }
                 style={s.map}
               />

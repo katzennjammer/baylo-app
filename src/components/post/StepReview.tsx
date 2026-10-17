@@ -5,7 +5,7 @@ import { useHubs } from "../../api/hubs";
 import { categoryLabel, conditionLabel } from "../../api/post";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { classifyValue } from "../../lib/trade-rules";
-import { effectiveValue, isPostable, usePost, type PostState } from "../../post/state";
+import { effectiveValue, isPostable, parseQuantity, unitLabel, usePost, type PostState } from "../../post/state";
 import {
   postColor,
   postLines,
@@ -66,7 +66,7 @@ export function StepReview({ board }: { board: Board }) {
       <Divider />
 
       <Section
-        label="ITEM"
+        label="Item"
         onEdit={() => dispatch({ type: "goto", step: 1 })}
         board={board}
       >
@@ -89,8 +89,30 @@ export function StepReview({ board }: { board: Board }) {
         </View>
       </Section>
 
+      {state.isPerishable ? (
+        <Section
+          label="Perishable"
+          // Step 1, same as ITEM: the item-type toggle and its three fields
+          // live on the what-is-it step, under the title.
+          onEdit={() => dispatch({ type: "goto", step: 1 })}
+          board={board}
+        >
+          <Text style={[textStyle(postType.stepSub), { color: postColor.ink }]}>
+            {perishableAmount(state)}
+          </Text>
+          <Text
+            style={[
+              textStyle(postType.helper),
+              { color: postColor.inkMuted, marginTop: postSpace.review.contentToTags },
+            ]}
+          >
+            {`Trade within ${state.tradeWithinHours} hours of posting. It goes live straight away.`}
+          </Text>
+        </Section>
+      ) : null}
+
       <Section
-        label="VALUE"
+        label="Value"
         onEdit={() => dispatch({ type: "goto", step: 3 })}
         board={board}
       >
@@ -105,8 +127,9 @@ export function StepReview({ board }: { board: Board }) {
         </Text>
       </Section>
 
+
       <Section
-        label="HOPING TO GET"
+        label="Hoping to get"
         onEdit={() => dispatch({ type: "goto", step: 4 })}
         board={board}
       >
@@ -130,7 +153,7 @@ export function StepReview({ board }: { board: Board }) {
       </Section>
 
       <Section
-        label="MEETING PLACES"
+        label="Meeting places"
         onEdit={() => dispatch({ type: "goto", step: 5 })}
         board={board}
       >
@@ -154,7 +177,7 @@ export function StepReview({ board }: { board: Board }) {
       </Section>
 
       <Section
-        label="PHOTOS"
+        label="Photos"
         onEdit={() => dispatch({ type: "goto", step: 0 })}
         board={board}
       >
@@ -179,6 +202,20 @@ export function StepReview({ board }: { board: Board }) {
       </View>
     </View>
   );
+}
+
+/**
+ * The quantity as it will be POSTED, not as it was typed.
+ *
+ * Parsed with the same parseQuantity the submit path uses, so a box holding
+ * "0" or a stray "." reads here exactly as the server will receive it: no
+ * number. The unit is dropped with it, because the submit path drops it too.
+ * Units are written as the item page writes them.
+ */
+function perishableAmount(state: PostState): string {
+  const n = parseQuantity(state.quantity);
+  if (n === null) return "No set quantity";
+  return `${n} ${unitLabel(state.quantityUnit)}`;
 }
 
 /* ───────────────────────────── the sections ─────────────────────────── */
@@ -281,7 +318,7 @@ function PhotoRail({
           justifyContent: "center",
         }}
       >
-        <Text style={[textStyle(postType.counter), { color: postColor.inkDisabled }]}>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkDisabled }]}>
           {`+${Math.max(0, remainder)}`}
         </Text>
       </View>

@@ -3,22 +3,25 @@ import { File, Paths } from "expo-file-system";
 import { currentSession } from "../api/client";
 
 /**
- * `seen_reach_explainer` — §7.4's once-per-account flag.
+ * `seen_reach_explainer` — the once-per-account flag behind the first-run
+ * `How trading works` sheet.
  *
- * ── WHY IT IS ON THE DEVICE ─────────────────────────────────────────────────
+ * ── WHERE IT LIVES ──────────────────────────────────────────────────────────
  *
- * §7.4 says "Once per account, flag `seen_reach_explainer`", and there is no
- * endpoint that stores a per-account UI flag — no PATCH /api/v1/profile with a
- * preferences bag, nothing on `User` for it. Adding one is an API change and out
- * of scope for this task.
+ * A forty-byte JSON file, `reach-explainer.v1.json`, in the app's document
+ * directory (`expo-file-system`'s `Paths.document`), holding the user id it
+ * belongs to and when it was set. There is no endpoint that stores a
+ * per-account UI flag — no PATCH /api/v1/profile with a preferences bag,
+ * nothing on `User` for it — so it is on the device.
  *
  * The cost of keeping it locally is exact and worth stating: the prompt can
  * appear a second time on a second device, and it can appear again after the app
  * is reinstalled. Both are once-per-INSTALL rather than once-per-account, which
  * is the honest description of what this file implements. It cannot appear twice
- * on the same install, which is the failure §7.4 is actually guarding against —
- * "Never shown again, INCLUDING AFTER THE THRESHOLD MOVES", i.e. do not let a
- * changing reach re-trigger it.
+ * on the same install, which is the failure this is actually guarding against —
+ * never shown again, INCLUDING AFTER THE THRESHOLD MOVES, i.e. do not let a
+ * changing reach re-trigger it. Settings reopens the sheet on demand without
+ * touching the flag; only the dev-only reset below clears it.
  *
  * ── KEYED BY USER ID, LIKE THE POST DRAFT ───────────────────────────────────
  *
@@ -69,13 +72,13 @@ export function hasSeenReachExplainer(): boolean {
 }
 
 /**
- * Called by `Got it` and by nothing else.
+ * Called by the first-run sheet's `Got it` and by nothing else.
  *
- * §7.4: "Dismissed only by `Got it` — no X, not dismissible by scrim tap, so it
- * can't be missed by accident." That rule is enforced in `OfferSheet`, which
- * takes `dismissible: false`; this function is the other half of it, and the
- * reason it is not called from an unmount effect: a prompt torn down by a
- * process death was not read, and marking it seen would lose the explanation
+ * Dismissed only by `Got it` — no X, not dismissible by scrim tap, so it can't
+ * be missed by accident. That rule is enforced in `OfferSheet`, which takes
+ * `dismissible: false`; this function is the other half of it, and the reason
+ * it is not called from an unmount effect: a prompt torn down by a process
+ * death was not read, and marking it seen would lose the explanation
  * permanently.
  */
 export function markReachExplainerSeen(): void {
@@ -91,5 +94,22 @@ export function markReachExplainerSeen(): void {
     file.write(JSON.stringify(flag));
   } catch {
     // The prompt will appear once more next session. Acceptable; a throw is not.
+  }
+}
+
+/**
+ * Dev only — the Settings row that puts the first-run sheet back for a demo.
+ * Deletes the file rather than rewriting it with another user id, so the next
+ * `hasSeenReachExplainer()` reads "not seen" for every account on the device.
+ * A missing file is already the "not seen" state, so there is nothing to do
+ * when it is absent and nothing to report when the delete fails.
+ */
+export function resetReachExplainerSeen(): void {
+  if (!__DEV__) return;
+  try {
+    const file = flagFile();
+    if (file.exists) file.delete();
+  } catch {
+    // Same stance as the write: the flag is a convenience, never a failure.
   }
 }

@@ -129,6 +129,17 @@ export const isChecking = (p: Photo): boolean =>
  * endpoint, or fifteen seconds of nothing — and looks identical either way,
  * because to the person filling in the form they ARE identical.
  */
+/** The unit a perishable's quantity is counted in. Mirrors the server enum. */
+export type QuantityUnit = "KG" | "PCS" | "LITERS";
+
+/** How a unit reads on screen: "kg", "pcs", "L" — as in "3 pcs". The wire keeps the enum. */
+export function unitLabel(unit: QuantityUnit): string {
+  return unit === "KG" ? "kg" : unit === "PCS" ? "pcs" : "L";
+}
+
+/** The windows the wizard offers. The column is an Int and takes others. */
+export type TradeWithinHours = 6 | 24;
+
 export type DetectPhase = "idle" | "detecting" | "detected" | "corrected" | "failed";
 
 export interface Detection {
@@ -174,7 +185,42 @@ export interface PostState {
   revaluationSpent: boolean;
 
   wanted: string;
+  /**
+   * The categories the poster will take back — step 5's chip group.
+   *
+   * IT NOW LEAVES THE DEVICE. This was collected here from the day the wizard
+   * was built and then dropped at submit, so the answer went nowhere. It is
+   * sent as `lookingForCategories` and is what the server's matcher reads to
+   * decide who hears about the listing.
+   */
   returnCategories: Category[];
+
+  /**
+   * Perishable: something with a shelf life, traded inside a window.
+   *
+   * ── THE FOUR FIELDS ARE ONE DECISION ────────────────────────────────────
+   *
+   * `isPerishable` false means the other three are not merely unset, they are
+   * meaningless — the server refuses a window on a standard listing and a
+   * quantity with no unit. They are held flat here because the reducer is
+   * flat and the draft serialises one object, but every write goes through
+   * `item-type/set`, which clears the other three when it turns this off.
+   * That is what keeps an impossible combination unreachable from the UI
+   * rather than merely refused by the API.
+   *
+   * ── WHAT PERISHABLE BUYS, SO THE STEP CAN SAY IT ────────────────────────
+   *
+   * Not a higher value. A perishable whose value lands more than one bracket
+   * above the suggestion is CLAMPED to the cap and published, where a standard
+   * listing would be parked for review. The trade is speed for ceiling, and
+   * step 4 says so before the number is chosen rather than after.
+   */
+  isPerishable: boolean;
+  /** Null is legitimate on a perishable — "a basket of calamansi" has no number. */
+  quantity: string;
+  quantityUnit: QuantityUnit;
+  /** 6 or 24. Only meaningful while `isPerishable`. */
+  tradeWithinHours: TradeWithinHours;
 
   hubIds: string[];
   /** True when "Skip for now" was taken. A real route, not an empty selection. */
@@ -212,6 +258,13 @@ export function initialState(): PostState {
     revaluationSpent: false,
     wanted: "",
     returnCategories: [],
+    isPerishable: false,
+    // KG and 24 are the defaults a perishable takes the moment the toggle is
+    // flipped, so the step never renders with an empty unit or an unchosen
+    // window. Inert while `isPerishable` is false; see the note above.
+    quantity: "",
+    quantityUnit: "KG",
+    tradeWithinHours: 24,
     hubIds: [],
     hubsSkipped: false,
     posting: false,
@@ -238,6 +291,16 @@ export type PostAction =
   | { type: "detect/undo" }
   | { type: "field/title"; value: string }
   | { type: "field/category"; value: Category }
+  /**
+   * The Standard/Perishable toggle. ONE ACTION FOR BOTH DIRECTIONS, because
+   * turning it off has to clear the other three fields — a reducer that let
+   * the screen set `isPerishable` directly would let a stale quantity survive
+   * a switch back to Standard and be sent with a listing that is not one.
+   */
+  | { type: "item-type/set"; perishable: boolean }
+  | { type: "field/quantity"; value: string }
+  | { type: "field/quantity-unit"; value: QuantityUnit }
+  | { type: "field/trade-within"; value: TradeWithinHours }
   | { type: "field/condition"; value: Condition }
   | { type: "valuation/pending" }
   | { type: "valuation/done"; payload: ValuationPayload }
@@ -377,6 +440,33 @@ export function reduce(s: PostState, a: PostAction): PostState {
         valuation: null,
       };
 
+    case "item-type/set":
+      // Turning it OFF clears the other three, which is the whole reason this
+      // is one action rather than a plain field setter. A quantity left behind
+      // by a switch back to Standard would be sent with a listing the server
+      // then refuses -- and the refusal would name a field the user cannot see
+      // any more, which is the worst kind of validation error.
+      //
+      // Turning it ON does NOT reset them, so flipping off and back on inside
+      // one session keeps what was typed. The clear is about what LEAVES the
+      // device, not about being tidy.
+      return a.perishable
+        ? { ...s, isPerishable: true }
+        : { ...s, isPerishable: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
+
+    case "field/quantity":
+      // Held as the raw STRING the user typed, not as a number. "1." and "0."
+      // are states a decimal input passes through, and parsing on every
+      // keystroke would delete the character being typed. It is parsed once,
+      // at submit.
+      return { ...s, quantity: a.value };
+
+    case "field/quantity-unit":
+      return { ...s, quantityUnit: a.value };
+
+    case "field/trade-within":
+      return { ...s, tradeWithinHours: a.value };
+
     /* ── valuation ── */
 
     case "valuation/pending":
@@ -448,6 +538,9 @@ export function reduce(s: PostState, a: PostAction): PostState {
 
     case "return/toggle": {
       const has = s.returnCategories.includes(a.category);
+      // The chips disable themselves at the cap; this is the same rule one
+      // layer down, so no path can build a selection the server will refuse.
+      if (!has && s.returnCategories.length >= rules.maxReturnCategories) return s;
       return {
         ...s,
         returnCategories: has
@@ -558,6 +651,20 @@ export function titleError(s: PostState): string | null {
 /** The value that will actually be posted. The suggestion until it is moved. */
 export function effectiveValue(s: PostState): number | null {
   return s.valueLeaves ?? s.valuation?.suggestedLeaves ?? null;
+}
+
+/**
+ * The quantity field's raw string as a number, or null.
+ *
+ * NULL FOR AN EMPTY BOX, and that is a real answer rather than a missing one:
+ * a perishable may have a unit and no number ("a basket of calamansi"), and
+ * the server accepts both being null together. NaN, zero and negatives all
+ * come back null too -- the field is numeric-only, so those are states a
+ * half-typed value passes through rather than things anybody meant.
+ */
+export function parseQuantity(raw: string): number | null {
+  const n = Number.parseFloat(raw.trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** How many steps of seven are filled in — the draft row's meta line. */

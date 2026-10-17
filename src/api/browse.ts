@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { apiV1 } from "./client";
 import type { BrowsePayload } from "./types";
@@ -19,8 +19,13 @@ import type { BrowsePayload } from "./types";
  *   q          1–100 chars. Matches title OR DESCRIPTION, not title alone.
  *   category   one value, or several comma-separated (max 5).
  *   condition  one value.
+ *   orgsOnly   "true", or absent.
+ *   businessCategory  comma-separated shop categories; ONLY with orgsOnly.
  *   minLeaves  / maxLeaves — inclusive bounds; min may not exceed max.
- *   cursor, limit, lat, lng, radiusKm, sort
+ *   perishable "true" (perishables only) or "false" (standard only), or absent.
+ *   sort       "recent" (default), "nearest" (needs lat/lng), or "expiring"
+ *              (needs perishable=true).
+ *   cursor, limit, lat, lng, radiusKm
  *
  * ANYTHING ELSE IS A 400, not an ignored parameter: the route parses with
  * `z.strictObject`, so an unknown key is rejected outright. Do not add a filter
@@ -40,6 +45,44 @@ export interface BrowseFilters {
   condition?: string | null;
   minLeaves?: number | null;
   maxLeaves?: number | null;
+  /**
+   * The Organizations pill: only listings posted by an organisation.
+   *
+   * NOT A CATEGORY, although it sits in the category rail and looks like one.
+   * `categories` is the ITEM taxonomy; this is a fact about the POSTER, and as
+   * a category value a shop's rice would have to be either FOOD or
+   * Organizations. As a separate filter the two compose, which is what
+   * somebody tapping both pills means.
+   *
+   * It is also why this does NOT count toward `activeFilterCount()`: that
+   * badge counts the FILTER SHEET's controls, and this one lives on the rail
+   * where its own pill already shows it is on. Counting it would put a "1" on
+   * a sheet containing nothing.
+   */
+  orgsOnly?: boolean;
+  /**
+   * The chips under the Organizations pill: kinds of SHOP (Sari-sari store,
+   * Apparel...), from Organization.businessCategory. AND with everything else,
+   * OR among themselves -- the same arrangement `categories` has.
+   *
+   * Meaningless without `orgsOnly`, and the server 400s on it alone, so the
+   * pill's toggle clears it and `toQueryString` never sends it by itself.
+   */
+  businessCategories?: readonly string[];
+  /**
+   * Perishables only (true), standard listings only (false), or both (null /
+   * absent). Item.isPerishable, a fact the POSTER sets -- NOT the Food
+   * category: a jar of honey is Food and standard, a bouquet is perishable
+   * and Plants. Needs a server with the parameter (orgs-and-perishables,
+   * 67d5e8e); an older one 400s on it, so only send it when it is set.
+   */
+  perishable?: boolean | null;
+  /**
+   * "expiring": soonest trade window first. The server REQUIRES perishable
+   * true with it and 400s otherwise. Absent is the server's default, newest
+   * first. Home's Exclusive rail is the one caller.
+   */
+  sort?: "expiring";
 }
 
 /** Mirrors MAX_CATEGORIES in the server's browse route. */
@@ -68,7 +111,9 @@ export function isFiltered(f: BrowseFilters): boolean {
   return (
     !!f.q?.trim() ||
     (f.categories?.length ?? 0) > 0 ||
+    f.orgsOnly === true ||
     !!f.condition ||
+    f.perishable != null ||
     f.minLeaves != null ||
     f.maxLeaves != null
   );
@@ -95,10 +140,26 @@ function toQueryString(filters: BrowseFilters, cursor: string | null): string {
   }
   if (filters.condition) p.set("condition", filters.condition);
 
+  // Only ever sent as "true". The server reads the absent parameter as false,
+  // so sending "false" would be a no-op that changes the cache key -- two keys
+  // for one query, and a refetch every time the pill is turned off.
+  if (filters.orgsOnly) p.set("orgsOnly", "true");
+  if (filters.orgsOnly && filters.businessCategories && filters.businessCategories.length > 0) {
+    p.set("businessCategory", filters.businessCategories.join(","));
+  }
+
   // `!= null` rather than truthiness: 0 is a legitimate lower bound and `if
   // (min)` would silently drop it, which reads as "the filter did nothing".
   if (filters.minLeaves != null) p.set("minLeaves", String(filters.minLeaves));
   if (filters.maxLeaves != null) p.set("maxLeaves", String(filters.maxLeaves));
+
+  // Tri-state: "false" is a real filter here (standard listings only), unlike
+  // orgsOnly, so it is sent. Absent is both.
+  if (filters.perishable != null) p.set("perishable", String(filters.perishable));
+  // Only with perishable=true: the server 400s `expiring` without it, and a
+  // filter change elsewhere (the sheet, the helper, a removed chip) must not be
+  // able to turn a sort into an error. Dropped rather than sent.
+  if (filters.sort === "expiring" && filters.perishable === true) p.set("sort", filters.sort);
 
   if (cursor) p.set("cursor", cursor);
 
@@ -135,9 +196,18 @@ function browseKey(f: BrowseFilters) {
     {
       q: f.q?.trim() || undefined,
       categories: f.categories?.length ? [...f.categories].sort() : undefined,
+      // Folded to undefined when off, for the same reason the blank strings
+      // are: `false` and `undefined` are the same query and must be the same
+      // cache key.
+      orgsOnly: f.orgsOnly ? true : undefined,
+      businessCategories:
+        f.orgsOnly && f.businessCategories?.length ? [...f.businessCategories].sort() : undefined,
       condition: f.condition || undefined,
       minLeaves: f.minLeaves ?? undefined,
       maxLeaves: f.maxLeaves ?? undefined,
+      perishable: f.perishable ?? undefined,
+      // Keyed as sent: an `expiring` that toQueryString() drops is no sort.
+      sort: f.sort === "expiring" && f.perishable === true ? f.sort : undefined,
     },
   ] as const;
 }
@@ -169,7 +239,54 @@ export function useBrowse(filters: BrowseFilters) {
      * them.
      */
     facets: pages[0]?.payload.facets.categories ?? [],
+    /** Kinds of shop with something available. Empty unless `orgsOnly`. */
+    businessFacets: pages[0]?.payload.facets.businessCategories ?? [],
+    /**
+     * Shops whose NAME matched `q`, for the top card. From page 0, which is
+     * the only page the server fills it on.
+     */
+    orgMatches: pages[0]?.payload.organizations ?? [],
   };
+}
+
+/**
+ * Whether the rail's current scope — its categories and "Shops only" (with
+ * its shop kinds) — has ANY perishable listed right now. The Marketplace sort
+ * control ("Newest / Ending soon") shows only when it does.
+ *
+ * DATA, NOT A CATEGORY LIST (1 Oct 2026). The post flow lets every category be
+ * perishable (the toggle is not gated, and the server's create schema checks
+ * the perishable fields, never the category), so there is no list of
+ * "perishable categories" to hide the control by. What is actually listed is
+ * the only honest answer.
+ *
+ * ONE ROW. The same /browse the grid reads, with `perishable=true&limit=1`:
+ * a listing or none. Keyed on the rail's scope ONLY, so typing a search or
+ * opening the filter sheet does not re-ask; the question is "can this category
+ * have an Ending soon order", not "does this exact result set".
+ *
+ * `placeholderData` keeps the previous answer while a new scope loads, so the
+ * control never blinks out and back on a category tap. `undefined` means no
+ * answer has ever arrived.
+ */
+export function usePerishablesInScope(filters: BrowseFilters, enabled: boolean) {
+  const scope: BrowseFilters = {
+    categories: filters.categories,
+    orgsOnly: filters.orgsOnly,
+    businessCategories: filters.businessCategories,
+    perishable: true,
+  };
+  return useQuery({
+    queryKey: ["browse-perishable-probe", browseKey(scope)[1]],
+    queryFn: async () => {
+      const qs = toQueryString(scope, null);
+      const { data } = await apiV1<BrowsePayload>(`/api/v1/browse${qs}&limit=1`);
+      return data.items.length > 0;
+    },
+    enabled,
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
 }
 
 /**

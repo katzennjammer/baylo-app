@@ -313,7 +313,7 @@ function HeroPhoto({
               paddingVertical: 5,
             }}
           >
-            <Text style={[textStyle(postType.photoCounter), { color: postColor.inkSecondary }]}>
+            <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
               {HERO_UPLOAD_CAPTION(photo.progress)}
             </Text>
           </View>

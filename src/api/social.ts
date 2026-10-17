@@ -269,13 +269,13 @@ export function useAddComment(itemId: string | null) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (content: string) =>
+    mutationFn: ({ content, parentId }: { content: string; parentId?: string }) =>
       apiV1<{ comment: ItemComment; stats: ItemStats }>(
         `/api/v1/items/${encodeURIComponent(itemId!)}/comments`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, parentId }),
         },
       ),
 
@@ -287,6 +287,21 @@ export function useAddComment(itemId: string | null) {
         (cached) => {
           if (!cached?.pages.length) return cached;
           const [first, ...rest] = cached.pages;
+          if (data.comment.parentId) {
+            const addReply = (comment: ItemComment): ItemComment => {
+              if (comment.id !== data.comment.parentId) {
+                return comment.replies
+                  ? { ...comment, replies: comment.replies.map(addReply) }
+                  : comment;
+              }
+              return {
+                ...comment,
+                replyCount: comment.replyCount + 1,
+                replies: [...(comment.replies ?? []), data.comment],
+              };
+            };
+            return { ...cached, pages: [{ ...first, comments: first.comments.map(addReply) }, ...rest] };
+          }
           return {
             ...cached,
             pages: [{ ...first, comments: [data.comment, ...first.comments] }, ...rest],

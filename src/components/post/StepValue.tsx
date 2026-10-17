@@ -522,7 +522,7 @@ function ValueSlider({
       >
         <Text
           style={[
-            textStyle(postType.bandValue),
+            textStyle(postType.tag),
             { color: locked ? postColor.inkDisabled : postColor.inkMuted },
           ]}
         >
@@ -530,7 +530,7 @@ function ValueSlider({
         </Text>
         <Text
           style={[
-            textStyle(postType.bandLabel),
+            textStyle(postType.helper),
             { color: locked ? postColor.inkDisabled : postColor.inkMuted },
           ]}
         >
@@ -538,7 +538,7 @@ function ValueSlider({
         </Text>
         <Text
           style={[
-            textStyle(postType.bandValue),
+            textStyle(postType.tag),
             { color: locked ? postColor.inkDisabled : postColor.inkMuted },
           ]}
         >

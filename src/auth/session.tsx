@@ -2,16 +2,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useQueryClient } from "@tanstack/react-query";
 import {
   adoptSession as apiAdoptSession,
+  authenticate,
   currentSession,
   exchangeGoogleIdToken,
   hydrateSession,
   onSessionChange,
-  signIn as apiSignIn,
-  signInWithGoogle as apiSignInWithGoogle,
   signOut as apiSignOut,
   type GoogleExchange,
 } from "../api/client";
+import { clearActingOrg, restoreActingOrg } from "../api/org-context";
 import { hydrateApiBase } from "../api/config";
+import { resetOpeningTier } from "../media/opening-tier-store";
 import { TimeoutError, withTimeout } from "../api/timeout";
 import { registerClearSessionDevItem } from "../dev/dev-menu";
 import type { StoredSession } from "./storage";
@@ -66,7 +67,8 @@ interface SessionState {
    * the user away mid-sentence.
    */
   adoptSession: (session: StoredSession) => Promise<void>;
-  signOut: () => Promise<void>;
+  /** `revoke: false` only when the server already revoked the tokens (account deletion). */
+  signOut: (options?: { revoke?: boolean }) => Promise<void>;
 }
 
 const SessionContext = createContext<SessionState | null>(null);
@@ -120,7 +122,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // screen on its own. Timing out only decides what the user looks at while
     // they wait.
     withTimeout(
-      hydrateApiBase().then(() => hydrateSession()),
+      // restoreActingOrg() rides along with the session read rather than
+      // running on its own, because the two are one fact: a client that has
+      // rehydrated a session but not its acting organisation will send the
+      // first few requests of the launch as the wrong identity. Ordered before
+      // hydrateSession() so it is in place by the time anything can fire.
+      hydrateApiBase()
+        .then(() => restoreActingOrg())
+        .then(() => hydrateSession()),
       HYDRATION_TIMEOUT_MS,
       "Reading the saved session",
     )
@@ -150,24 +159,46 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      await apiSignIn(email, password);
-      // Anything cached belonged to whoever was signed in before. Clearing is
-      // not an optimisation: /api/v1/home is keyed on the caller, so a stale
-      // page would render the previous account's feed, leaves and unread counts
-      // under the new user's name until the refetch landed.
+  /**
+   * Installs a session, with the cache cleared BEFORE it is installed.
+   *
+   * Anything cached belonged to whoever was signed in before. Clearing is not
+   * an optimisation: /api/v1/home is keyed on the caller, so a stale page would
+   * render the previous account's feed, leaves and unread counts under the new
+   * user's name until the refetch landed.
+   *
+   * THE ORDER IS THE BUG THAT WAS HERE. This used to be `await install; clear()`.
+   * apiAdoptSession() publishes the session synchronously, so by the time its
+   * await returned the (app) guard had already mounted Home and Home's
+   * `["home"]` fetch was on the wire. clear() then destroyed that query out
+   * from under its observers with a SILENT cancel — TanStack dispatches no
+   * state change for a silent cancel, so nothing re-rendered — and the screen
+   * sat on its skeleton, bound to a dead query stuck at pending, while the
+   * response it was waiting for arrived and was dropped on the floor. Leaving
+   * for another tab and coming back "fixed" it because the focus refetch
+   * rebinds the observer to a live query. Clearing first means the only
+   * queries that can be running when Home mounts are its own.
+   */
+  const install = useCallback(
+    async (next: StoredSession) => {
       queryClient.clear();
+      await apiAdoptSession(next);
     },
     [queryClient],
   );
 
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      await install(await authenticate(email, password));
+    },
+    [install],
+  );
+
   const signInWithGoogle = useCallback(
     async (idToken: string) => {
-      await apiSignInWithGoogle(idToken);
-      queryClient.clear();
+      await install((await exchangeGoogleIdToken(idToken)).session);
     },
-    [queryClient],
+    [install],
   );
 
   // No queryClient.clear() here, deliberately: nothing has been installed, so
@@ -178,18 +209,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const adoptSession = useCallback(
-    async (next: StoredSession) => {
-      await apiAdoptSession(next);
-      queryClient.clear();
-    },
-    [queryClient],
-  );
+  const adoptSession = install;
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { revoke?: boolean }) => {
     try {
-      await apiSignOut();
+      await apiSignOut(options);
     } finally {
+      // The acting organisation goes with the session it qualified. Leaving it
+      // behind means the next person to sign in on this device starts out
+      // posting as an organisation they may not even belong to -- the server
+      // would refuse it, but the app would be asking, and the first thing they
+      // would see is a 403 they cannot explain.
+      clearActingOrg();
+      // And the opening film goes back to the normal one. AFTER the clear, which
+      // re-resolves the tier itself; the store serialises the two writes, so
+      // "normal" is the one that lands.
+      resetOpeningTier();
       // In the finally rather than after the await. apiSignOut() drops the
       // session before anything that can throw, so a failure past that point
       // would otherwise leave a signed-out app still holding the previous

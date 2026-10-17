@@ -92,7 +92,7 @@ export function StepHubs({ board }: { board: Board }) {
       ) : isError || hubs.length === 0 ? (
         <View style={{ paddingHorizontal: board.hubX, paddingTop: 4 }}>
           <HelperRow>
-            No Safe-Zone Hubs near you yet. You can post without one and agree a place in chat.
+            No safe hubs near you yet. You can post without one and agree a place in chat.
           </HelperRow>
         </View>
       ) : (
@@ -178,11 +178,11 @@ function HubRow({
           </Text>
           <Text
             style={[
-              textStyle(postType.hubEyebrow),
+              textStyle(postType.tag),
               { color: selected ? postColor.forest : postColor.inkMuted },
             ]}
           >
-            {hub.typeLabel.toUpperCase()}
+            {hub.typeLabel}
           </Text>
         </View>
         <Text

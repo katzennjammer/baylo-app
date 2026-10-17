@@ -323,6 +323,44 @@ export function PinIcon(props: IconProps) {
   );
 }
 
+/**
+ * Marketplace's Grid/Map toggle: a folded map. Not PinIcon, which marks one
+ * place (a pickup, a hub); the toggle switches to a whole view of places.
+ */
+export function MapIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M3.5 6.2 9 4l6 2.2L20.5 4v13.8L15 20l-6-2.2L3.5 20Z" />
+      <Path d="M9 4v13.8" />
+      <Path d="M15 6.2V20" />
+    </Glyph>
+  );
+}
+
+/**
+ * The out-of-reach badge on a grid tile. It sits beside the bracket it is
+ * about, on a tile that still opens: the badge says "above your reach", not
+ * "forbidden".
+ */
+export function LockIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="5" y="10.5" width="14" height="10" rx="2.2" />
+      <Path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" />
+    </Glyph>
+  );
+}
+
+/** A signed-in device (Active sessions). A handset: body and a speaker slot. */
+export function PhoneIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="6.5" y="2.5" width="11" height="19" rx="2.4" />
+      <Path d="M10.5 18.5h3" />
+    </Glyph>
+  );
+}
+
 /** Report. A flag, which is the mark every platform uses for exactly this. */
 export function FlagIcon(props: IconProps) {
   return (
@@ -366,6 +404,418 @@ export function BlockIcon(props: IconProps) {
     <Glyph {...props}>
       <Circle cx="12" cy="12" r="8.5" />
       <Path d="M6 6 18 18" />
+    </Glyph>
+  );
+}
+
+/* ──────────────────────────── organisations ─────────────────────────── */
+
+/**
+ * The verified-organisation mark: a check inside a rosette.
+ *
+ * DELIBERATELY NOT THE PLAIN CheckIcon. That glyph means "selected" everywhere
+ * else in this app — it is the filter sheet's tick and the post wizard's
+ * confirm — and reusing it for a claim about an account would make the same
+ * mark mean two unrelated things on screens that show both. The rosette is
+ * what says this is a badge rather than a state.
+ *
+ * Drawn as an outline like everything else here, so it inherits the stroke
+ * table rather than arriving as a filled shape that ignores it.
+ */
+export function VerifiedOrgIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 2.6l2.3 1.7 2.8-.2.9 2.7 2.4 1.5-1 2.7 1 2.7-2.4 1.5-.9 2.7-2.8-.2L12 21.4l-2.3-1.7-2.8.2-.9-2.7-2.4-1.5 1-2.7-1-2.7 2.4-1.5.9-2.7 2.8.2z" />
+      <Path d="M8.6 12.2 11 14.6l4.4-4.6" />
+    </Glyph>
+  );
+}
+
+/**
+ * The placeholder where an organisation has no logo: a shop front.
+ *
+ * An awning over a counter, not a generic building. The distinction matters at
+ * 40 px, which is the size this renders at on a feed card: a plain rectangle
+ * with windows reads as an office block or, worse, as a broken image, while an
+ * awning reads as a shop even when it is barely legible.
+ *
+ * It fills a SQUARE, because an organisation's logo slot is square — see the
+ * profile header. A round mask over this would crop the awning's corners off,
+ * which is most of what makes it recognisable.
+ */
+export function StoreIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 9.5h16V20H4z" />
+      <Path d="M3.2 9.5 5 4.2h14l1.8 5.3z" />
+      <Path d="M9.6 20v-5.4h4.8V20" />
+    </Glyph>
+  );
+}
+
+/* ────────────────────── home redesign (preview) ─────────────────────── */
+
+/**
+ * Perishable. A bolt, not a clock: the clock already means "rate limited" in
+ * the post flow (post-icons.tsx), and a perishable is an opportunity, not a
+ * wait. Drawn in `color.urgent` by the caller.
+ */
+export function BoltIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12Z" />
+    </Glyph>
+  );
+}
+
+/**
+ * Featured — a paid boost. A star, so it never reads as the perishable bolt
+ * beside it: the two can share a Home grid, and a user has to tell them apart
+ * without tapping in.
+ */
+/** Arrows out to the corners: "see this bigger" — the hub page's map strip. */
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M14.5 3.5H20.5V9.5" />
+      <Path d="M20.5 3.5 14 10" />
+      <Path d="M9.5 20.5H3.5V14.5" />
+      <Path d="M3.5 20.5 10 14" />
+    </Glyph>
+  );
+}
+
+/** "Opens elsewhere" — the Directions links hand off to the phone's maps app. */
+export function ArrowUpRightIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M7 17 17 7" />
+      <Path d="M8.5 7H17v8.5" />
+    </Glyph>
+  );
+}
+
+/** The live countdown's mark. Filled, like the liked heart: it sits on a solid red pill. */
+export function FlameIcon(props: IconProps) {
+  return (
+    <Glyph {...props} fill={props.color}>
+      <Path d="M12 22c-4 0-7-2.8-7-6.6 0-3.1 2-5.2 3.6-7 .5 1.5 1.4 2.6 2.6 3.1C11 7.6 12.3 4.6 15 2c.3 3 1.6 4.8 2.8 6.6C19 10.4 19 12.2 19 15.4 19 19.2 16 22 12 22Z" />
+    </Glyph>
+  );
+}
+
+export function StarIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 5.9L12 16.8l-5.3 2.8 1.1-5.9-4.4-4.2 6-.8z" />
+    </Glyph>
+  );
+}
+
+/**
+ * Sparkle: a four-point star with a small one beside it. Home's "Featured"
+ * heading. Not StarIcon, which is the boost badge on a tile -- the heading
+ * names the section, the star marks a listing in it.
+ */
+export function SparkleIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M10.5 3.5c.7 4.2 2.8 6.3 7 7-4.2.7-6.3 2.8-7 7-.7-4.2-2.8-6.3-7-7 4.2-.7 6.3-2.8 7-7Z" />
+      <Path d="M18.5 14.5v5" />
+      <Path d="M16 17h5" />
+    </Glyph>
+  );
+}
+
+/** The Community tab — the old Home feed. Two people, same weight as PersonIcon. */
+export function CommunityIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="9" cy="8" r="3.6" />
+      <Path d="M2.5 20.5v-1.2A4.8 4.8 0 0 1 7.3 14.5h3.4a4.8 4.8 0 0 1 4.8 4.8v1.2" />
+      <Path d="M15.5 4.6a3.6 3.6 0 0 1 0 6.8" />
+      <Path d="M18.2 14.8a4.8 4.8 0 0 1 3.3 4.5v1.2" />
+    </Glyph>
+  );
+}
+
+/**
+ * The Quests header icon. A target: a quest is a goal you are working toward,
+ * and the concentric-ring mark is the one shape in this set that says "aim" without
+ * saying anything else.
+ *
+ * WHY NOT ONE OF THE GLYPHS ALREADY HERE. Every near-fit is already spoken for
+ * and would collide on a screen where both appear:
+ *
+ *   LeafIcon    is the CURRENCY. It is in the header pill, on every card's
+ *               value line and in the Exclusive tiles. A leaf on the bar would
+ *               read as "your Leaves", which is a balance, not a destination.
+ *   FlagIcon    is Report. It is the mark in the listing kebab and the report
+ *               sheet, and an icon that shares a glyph with "report this" is
+ *               one people will hesitate over.
+ *   SproutIcon  is the PLANTS category, drawn in the category circles on Home
+ *               itself — one of the screens this icon sits above.
+ *
+ * Two circles and nothing else, because this is drawn at header-icon size: a bullseye with
+ * tick marks or a centre dot turns to mud at that size, and the rings survive.
+ */
+export function QuestIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" />
+      <Circle cx="12" cy="12" r="3.5" />
+    </Glyph>
+  );
+}
+
+/*
+ * Category glyphs, for the Home category circles. One per category enum value
+ * (src/api/post.ts CATEGORIES) -- all nineteen since SERVICES went on 16 Oct 2026; GridIcon is
+ * only the fallback for a value added to the server before it gets a mark
+ * here. Same 24 box, same round caps and joins, same scale() conversion --
+ * they are Glyphs like everything above.
+ *
+ * TWO-TONE, OPT-IN. Each takes an optional `tint`: one closed shape of the
+ * mark (the screen, the shirt, the paw pad) is filled with it, under the same
+ * outline. Omitted, the fill is `none` and the glyph is exactly the plain
+ * single-stroke mark it was -- which is what a lit circle wants, since its
+ * glyph flips to a light colour on forest and a pale tint would sit wrong
+ * there. See categoryTone in tokens.js.
+ */
+export type CategoryIconProps = IconProps & { tint?: string };
+
+const tinted = (tint: string | undefined) => tint ?? "none";
+
+/** ELECTRONICS */
+export function MonitorIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="3" y="4" width="18" height="12.5" rx="2" fill={tinted(tint)} />
+      <Path d="M8.5 20.5h7" />
+      <Path d="M12 16.5v4" />
+    </Glyph>
+  );
+}
+
+/** CLOTHING ("Fashion") */
+export function ShirtIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M8.5 3.5 3 6.6l2 4.4 2.5-1.2v10.7h9V9.8L19 11l2-4.4-5.5-3.1a3.5 3.5 0 0 1-7 0Z"
+        fill={tinted(tint)}
+      />
+    </Glyph>
+  );
+}
+
+/** BAGS */
+export function BagIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5 8h14l-1 12.5H6Z" fill={tinted(tint)} />
+      <Path d="M9 10V6.5a3 3 0 0 1 6 0V10" />
+    </Glyph>
+  );
+}
+
+/** BEAUTY -- a lipstick. */
+export function LipstickIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="7.5" y="12" width="9" height="9" rx="1.5" fill={tinted(tint)} />
+      <Path d="M9 12V8.5h6V12" />
+      <Path d="M10 8.5V5.3l4-2.1v5.3" />
+    </Glyph>
+  );
+}
+
+/** ACCESSORIES -- a wristwatch. */
+export function WatchIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="5" fill={tinted(tint)} />
+      <Path d="M9 7.9 9.7 3h4.6l.7 4.9" />
+      <Path d="m9 16.1.7 4.9h4.6l.7-4.9" />
+      <Path d="M12 10v2l1.3 1.3" />
+    </Glyph>
+  );
+}
+
+/** FURNITURE ("Home & Garden") */
+export function SofaIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5 11V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3" />
+      <Path d="M3.5 11a1.5 1.5 0 0 1 3 0v2h11v-2a1.5 1.5 0 0 1 3 0v5.5h-17Z" fill={tinted(tint)} />
+      <Path d="M5.5 16.5V19" />
+      <Path d="M18.5 16.5V19" />
+    </Glyph>
+  );
+}
+
+/** BOOKS ("Books & Media") */
+export function BookIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M4 5.5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2Z" fill={tinted(tint)} />
+      <Path d="M4 19.5a2 2 0 0 0 2 2h13v-4" />
+    </Glyph>
+  );
+}
+
+/** GAMING */
+export function GamepadIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M7 7.5h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.4a2.2 2.2 0 0 1-3.8 1l-2.2-2.8h-5l-2.2 2.8a2.2 2.2 0 0 1-3.8-1l-.9-4.4A4.5 4.5 0 0 1 7 7.5Z"
+        fill={tinted(tint)}
+      />
+      <Path d="M8 10.5v3" />
+      <Path d="M6.5 12h3" />
+      <Path d="M15.5 11h.01" />
+      <Path d="M17.5 13h.01" />
+    </Glyph>
+  );
+}
+
+/** SPORTS */
+export function BallIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" fill={tinted(tint)} />
+      <Path d="M3.5 12h17" />
+      <Path d="M12 3.5v17" />
+      <Path d="M6 6a8.5 8.5 0 0 1 0 12" />
+      <Path d="M18 6a8.5 8.5 0 0 0 0 12" />
+    </Glyph>
+  );
+}
+
+/** BIKES */
+export function BikeIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="5.5" cy="16" r="3.5" fill={tinted(tint)} />
+      <Circle cx="18.5" cy="16" r="3.5" fill={tinted(tint)} />
+      <Path d="M5.5 16 9.5 8.5h5l4 7.5" />
+      <Path d="M9.5 8.5 12 16h-6.5" />
+      <Path d="M8 5.5h3" />
+    </Glyph>
+  );
+}
+
+/** TOYS ("Kids & Toys") */
+export function BlocksIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="3.5" y="12.5" width="7.5" height="7.5" rx="1.5" />
+      <Rect x="13" y="12.5" width="7.5" height="7.5" rx="1.5" />
+      <Rect x="8.25" y="4" width="7.5" height="7.5" rx="1.5" fill={tinted(tint)} />
+    </Glyph>
+  );
+}
+
+/** TOOLS -- a hammer: head across the top right, handle down to the left. */
+export function HammerIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M11 6.5 14.5 3 21 9.5 17.5 13Z" fill={tinted(tint)} />
+      <Path d="M14.25 9.75 4.5 19.5" />
+    </Glyph>
+  );
+}
+
+/** MUSIC -- a pair of beamed notes. */
+export function MusicIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M9 18V5.5l11-2V16" />
+      <Circle cx="6.5" cy="18" r="2.5" fill={tinted(tint)} />
+      <Circle cx="17.5" cy="16" r="2.5" fill={tinted(tint)} />
+    </Glyph>
+  );
+}
+
+/** ART -- a painter's palette. */
+export function PaletteIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 1.6-2.1-.5-1.3.4-2.4 1.8-2.4h2.1a3 3 0 0 0 3-3C20.5 7.2 16.7 3.5 12 3.5Z"
+        fill={tinted(tint)}
+      />
+      <Circle cx="7.5" cy="11.5" r="1" />
+      <Circle cx="10" cy="7.5" r="1" />
+      <Circle cx="14.5" cy="7.5" r="1" />
+    </Glyph>
+  );
+}
+
+/** COLLECTIBLES -- a cut gem. */
+export function GemIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M6.5 4h11L21 9l-9 11.5L3 9Z" fill={tinted(tint)} />
+      <Path d="M3 9h18" />
+      <Path d="M9.5 4 8 9l4 11.5L16 9l-1.5-5" />
+    </Glyph>
+  );
+}
+
+/** PETS -- a paw print. */
+export function PawIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M8 17.2c0-2.6 1.8-4.7 4-4.7s4 2.1 4 4.7c0 1.8-1.5 2.8-4 2.8s-4-1-4-2.8Z"
+        fill={tinted(tint)}
+      />
+      <Circle cx="5" cy="11" r="1.8" />
+      <Circle cx="9" cy="6.8" r="1.8" />
+      <Circle cx="15" cy="6.8" r="1.8" />
+      <Circle cx="19" cy="11" r="1.8" />
+    </Glyph>
+  );
+}
+
+/** PLANTS */
+export function SproutIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M12 21v-9" />
+      <Path d="M12 12C12 8 9.5 5.5 5 5.5c0 4.5 2.5 6.5 7 6.5Z" fill={tinted(tint)} />
+      <Path d="M12 14c0-3.5 2.2-5.5 7-5.5 0 3.8-2.4 5.5-7 5.5Z" fill={tinted(tint)} />
+    </Glyph>
+  );
+}
+
+/** FOOD */
+export function AppleIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Path
+        d="M12 7.5c-1.6-1.2-4.6-1.4-6.3.6-2 2.4-1.2 6.9 1 9.7 1.5 1.9 3 2.4 5.3 1.3 2.3 1.1 3.8.6 5.3-1.3 2.2-2.8 3-7.3 1-9.7-1.7-2-4.7-1.8-6.3-.6Z"
+        fill={tinted(tint)}
+      />
+      <Path d="M12 7.5c0-2 .8-3.5 2.5-4.5" />
+    </Glyph>
+  );
+}
+
+/**
+ * OTHER -- a ring with three dots, "more". The dots are filled in the stroke
+ * colour: a round-capped zero-length path at 1.6 px is too small to read as a
+ * dot at 23 px.
+ */
+export function MoreIcon({ tint, ...props }: CategoryIconProps) {
+  return (
+    <Glyph {...props}>
+      <Circle cx="12" cy="12" r="8.5" fill={tinted(tint)} />
+      <Circle cx="8" cy="12" r="1.1" fill={props.color} stroke="none" />
+      <Circle cx="12" cy="12" r="1.1" fill={props.color} stroke="none" />
+      <Circle cx="16" cy="12" r="1.1" fill={props.color} stroke="none" />
     </Glyph>
   );
 }

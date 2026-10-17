@@ -37,14 +37,29 @@ import { VideoFallback } from "./VideoFallback";
  * over the poster for a beat — which reads as a flicker. `onFirstFrameRender`
  * fires when there is a picture, which is the only moment worth revealing.
  *
- * ── `surfaceType="textureView"` IS LOAD-BEARING ON ANDROID ──────────────────
+ * ── `surfaceType="surfaceView"`, BECAUSE TEXTUREVIEW CRASHED A REAL PHONE ────
  *
- * The default is `surfaceView`, which punches a hole through the window rather
- * than compositing into it. A SurfaceView cannot be alpha-blended by the view
- * system, so the fade would snap from invisible to opaque — and, much worse, it
- * does not reliably respect z-order against its React Native siblings, so the
- * scrim gradient that is supposed to sit ON TOP of the footage can end up
- * behind it. Both things this file promises depend on the TextureView.
+ * This used to be `textureView`, for the fade and the z-order: a SurfaceView
+ * punches a hole through the window rather than compositing into it, so it
+ * cannot be alpha-blended (the fade can snap from invisible to opaque) and does
+ * not reliably respect z-order against its React Native siblings (the scrim
+ * that should sit ON TOP of the footage can end up behind it).
+ *
+ * It was switched on 25 Sep 2026 because the TextureView path KILLED THE APP
+ * on a vivo V2346 (Android 16, MediaTek mt6835, Mali GPU): Android's own
+ * renderer aborts with `AutoBackendTextureRelease ... Invalid GrBackendTexture`
+ * the moment a frame from the MediaTek hardware decoder (c2.mtk.avc.decoder)
+ * reaches it -- at 1080p and at 720p alike, so it is not the clip. That abort
+ * is inside libhwui, below anything JavaScript or VideoFallback can catch, and
+ * it takes Expo Go down with it. Budget MediaTek/Mali phones are common in this
+ * app's market, so a first-launch crash outranks a smoother fade. SurfaceView
+ * hands frames straight to the compositor and skips that path; tested clean on
+ * the same phone.
+ *
+ * So the trade-off above is now real: if the fade or the scrim misbehaves on
+ * Android, fix it in the layout (e.g. fade the poster OUT instead of the video
+ * IN), NOT by returning to textureView. `EXPO_PUBLIC_DISABLE_VIDEO=1` remains
+ * the per-machine escape hatch if a device fails on SurfaceView too.
  *
  * ── IT PAUSES WHENEVER IT IS NOT BEING LOOKED AT ────────────────────────────
  *
@@ -357,7 +372,7 @@ function BandVideoInner({ height }: { height: number }) {
         // showing through at the edges.
         contentFit="cover"
         nativeControls={false}
-        surfaceType="textureView"
+        surfaceType="surfaceView"
         // ExoPlayer's own shutter is an opaque black rectangle drawn until the
         // first frame arrives. This component's whole no-black-frame promise is
         // that the poster shows through until then, so the shutter has to go.

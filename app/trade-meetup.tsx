@@ -1,81 +1,96 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import {
-  meetupStateOf,
-  useAcceptMeetup,
+  planConflictOf,
+  replacesOf,
   useActiveTrades,
   useMeetupOptions,
   useProposeMeetup,
 } from "../src/api/trades";
-import type { SafeZoneHub } from "../src/api/types";
+import type { MeetupPlan, SafeZoneHub } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
 import { Tappable } from "../src/components/Tappable";
-import {
-  Hairline,
-  OfferScreenHost,
-  PrimaryButton,
-  SecondaryButton,
-  SectionLabel,
-} from "../src/components/offer/chrome";
+import { ChevronRightIcon, PinIcon } from "../src/components/icons";
+import { OfferBottomBar, OfferScreenHost } from "../src/components/offer/chrome";
 import { firstName } from "../src/components/offer/copy";
+import { CalendarIcon } from "../src/components/offer/icons";
+import { ClockIcon } from "../src/components/post/post-icons";
+import {
+  HubPickerSheet,
+  RewardChip,
+  SafeHubRewardSheet,
+  SuggestedChip,
+  hubMeta,
+} from "../src/components/trades/MeetupSheets";
+import { SuggestionCard } from "../src/components/trades/TradePanels";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import * as copy from "../src/components/trades/copy";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
-import { meetupWhen } from "../src/lib/gap";
+import { StepHeading, TradeButton } from "../src/components/trades/trade-ui";
+import { meetupWhen, shortDate } from "../src/lib/gap";
+import { distanceKm, useLastKnownLocation } from "../src/lib/hub-distance";
+import {
+  MEETUP_MAX_DAYS_AHEAD,
+  addDays,
+  clock,
+  combine,
+  fullWhen,
+  meetupGap,
+  pickerStartTime,
+  startOfDay,
+  type ClockTime,
+  type MeetupGap,
+} from "../src/lib/meetup-when";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
-import { offerColor, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
+import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
+import { offerBorder } from "../src/theme/offer-tokens";
 
 /**
- * Arranging where and when — gap 6, and the screen that closes it.
+ * The hub picker: "Plan your meetup with Aj" (three-step layout, Oct 2026).
  *
- * ══ WHAT WAS MISSING ════════════════════════════════════════════════════════
+ * Opened from the trade screen's hub step ("Choose a hub", "Suggest another",
+ * "Change suggestion"). It does ONE thing — POST …/meetup — and goes back.
+ * Agreeing to the other person's suggestion is on the trade screen.
  *
- * Between accepting a trade and meeting for it there was nothing at all. The hub
- * was claimed at confirm/submit — AFTER the meeting — so two people who had just
- * agreed to swap had no way in the app to settle where or when, and Messages is
- * still a placeholder, so there was no fallback either. They accepted, and then
- * the app had no further opinion until they were somehow standing together.
+ * ══ UNCHANGED FROM THE SCREEN IT REPLACES ═══════════════════════════════════
  *
- * ══ THE PLAN IS NOT THE CLAIM ═══════════════════════════════════════════════
+ *   - THE PLAN IS NOT THE CLAIM. Nothing here writes `safeZoneHubId`.
+ *   - Nothing here issues codes.
+ *   - Any active hub can be suggested; only a hub both listings name earns the
+ *     safe hub reward at confirmation. The server's rule, not this screen's.
+ *   - The standing plan seeds the form, so a counter changes one half, not both.
+ *   - `meta.rule` failures: a closed hub is un-selected; an unknown one
+ *     refetches the list.
+ *   - The payload is {hubId, at, note, replaces}, built exactly as before.
  *
- * Nothing on this screen writes `safeZoneHubId`. That column means "we met here",
- * it is what the 10-Leaf Safe-Zone award reads, and writing a plan into it would
- * pay out the moment somebody SUGGESTED a place — for a meeting that had not
- * happened, on one person's say-so. The plan becomes the claim in exactly one
- * place, `confirm/submit`, after both codes match and only if both parties
- * agreed it. A suggestion is not evidence.
+ * ══ WHAT CHANGED (Oct 2026) ═════════════════════════════════════════════════
  *
- * ══ AND IT DOES NOT ISSUE CODES ═════════════════════════════════════════════
+ *   - Three numbered steps — Where, When, Note — each ticked once done, so all
+ *     of it fits on one screen. Where is ONE card showing the chosen hub; the
+ *     list moved into a searchable sheet (MeetupSheets.tsx), the partner's
+ *     suggestion and the shared hubs pinned first, the rest by city.
+ *   - The time is a full-width row, not a chip.
+ *   - The button says what is missing instead of greying out silently, and a
+ *     plain-words summary sits above it once everything is chosen.
+ *   - A time earlier than now, or a day past the server's 90-day limit, is
+ *     refused HERE, before a round trip. The server's checks stay the backstop
+ *     (it allows 15 minutes of slack in the past; this screen allows none).
+ *   - "Safe hub reward" opens a sheet that explains it.
  *
- * Agreeing here does not start a confirmation. Codes live 15 minutes, so a pair
- * minted when a meeting is agreed for Saturday would be dead days before either
- * of them could read one out — and the trade would sit in CONFIRMING having
- * confirmed nothing. Codes come from the code screen, which is the only thing
- * that has ever issued them.
+ * ══ A PICK OVER SOMEBODY ELSE'S PLAN IS A COUNTER, AND SAYS SO ══════════════
  *
- * ══ THERE IS NO DECLINE, AND THAT IS THE DESIGN ═════════════════════════════
- *
- * `Suggest another` is the disagreement. A bare decline empties the table and
- * puts both people back where they started with nothing to react to; countering
- * always leaves something on it. The server treats a counter as a new proposal,
- * which clears the agreement and hands the question to the other side.
- *
- * ══ ANY OPEN HUB CAN BE PROPOSED; ONLY A SHARED ONE PAYS ════════════════════
- *
- * The list is every active hub, not the intersection of the two listings'
- * hubs. A listing's hubs are the owner saying "I will meet at any of these",
- * not the only places they will ever go — and requiring a match left two people
- * who had each named five different public places with nowhere to meet. So the
- * shared hubs sort first, marked as ones you both already offer, and anything
- * else is allowed but flagged as new to the other person, who agrees or
- * counters. The claim rule is unchanged: at confirmation only a hub both
- * listings named becomes the claim, so a meeting elsewhere earns no Leaves. That
- * is said once, above the rows, and the empty intersection keeps its route out
- * — now as a notice over a working picker rather than in place of one.
+ * Since 8 Oct 2026 the server refuses a fresh pick while the partner's
+ * suggestion stands, and takes a counter only when it names the plan it
+ * replaces. `basis` is that plan: the one standing when this screen first
+ * read fresh data, not whatever a later refetch brought in, so a suggestion
+ * that lands while somebody is picking is SHOWN to them (a 409) rather than
+ * silently countered. On MEETUP_PENDING_FROM_PARTNER the screen swaps to the
+ * partner's suggestion with Agree / Suggest another; "Suggest another" makes
+ * that suggestion the basis and keeps every choice already made here.
  */
 export default function TradeMeetupScreen() {
   const router = useRouter();
@@ -84,28 +99,13 @@ export default function TradeMeetupScreen() {
   const active = useActiveTrades();
   const options = useMeetupOptions(id);
   const propose = useProposeMeetup(id);
-  const accept = useAcceptMeetup(id);
+  const location = useLastKnownLocation();
 
   const trade = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
-
-  /*
-   * ── THE PLAN COMES FROM THIS SCREEN'S OWN REQUEST, NOT THE LIST ───────────
-   *
-   * `useMeetupOptions` is fetched fresh on every mount of this screen and its
-   * answer carries the standing plan. The list row carries the same plan but
-   * from a cache that can be 30 seconds old — and this screen is where a
-   * "Renz suggested a place" notification lands, which is precisely the moment
-   * that cache is most likely to predate the thing being looked at. Reading
-   * `trade.meetup` here was how a tap on that notification opened onto "no
-   * place or time yet". The list is kept as the fallback for the first paint
-   * only, while the fresh answer is in flight.
-   */
   const plan = options.data ? options.data.plan : (trade?.meetup ?? null);
   const you = options.data?.you ?? (trade?.direction === "sent" ? "sender" : "receiver");
-  const state = meetupStateOf(plan, you);
+  const theirSuggestion = plan && !plan.agreedAt && plan.proposedBy !== you ? plan.hub.id : null;
 
-  // The push channel invalidates both of these on the partner's move; this is
-  // the net under it for a phone whose socket is down. See trade-liveness.ts.
   useTradeLiveness(
     useCallback(
       (o: { cancelRefetch: boolean }) => Promise.all([active.refetch(o), options.refetch(o)]),
@@ -114,52 +114,51 @@ export default function TradeMeetupScreen() {
   );
 
   const [hubId, setHubId] = useState<string | null>(null);
-  const [when, setWhen] = useState<Date | null>(null);
+  const [day, setDay] = useState<Date | null>(null);
+  const [time, setTime] = useState<ClockTime | null>(null);
   const [note, setNote] = useState("");
   const [picking, setPicking] = useState<"date" | "time" | null>(null);
+  const [sheet, setSheet] = useState<"hubs" | null>(null);
+  const [rewardOpen, setRewardOpen] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** The plan a send counters. `undefined` until fresh data has arrived. */
+  const [basis, setBasis] = useState<MeetupPlan | null | undefined>(undefined);
+  /** The partner's suggestion a 409 handed back, while it is on screen. */
+  const [conflictPlan, setConflictPlan] = useState<MeetupPlan | null>(null);
 
-  /*
-   * ── THE STANDING PLAN SEEDS THE FORM, BUT ONLY AS A STARTING POINT ────────
-   *
-   * Somebody countering is nearly always changing ONE of the two — the place or
-   * the time — and making them re-enter the half they agree with is how a
-   * counter-proposal turns into a typo. Seeded from the plan, overridden the
-   * moment they touch either control, which is what the `??` chain is doing:
-   * local state wins, the plan fills in, and neither is copied into the other.
-   */
+  // Fresh, not cached: staleTime 0 refetches on mount, and the cached copy
+  // shown meanwhile is exactly the one that may predate the partner's pick.
+  useEffect(() => {
+    if (basis === undefined && options.isFetchedAfterMount && options.data) setBasis(options.data.plan);
+  }, [basis, options.isFetchedAfterMount, options.data]);
+
+  // Local choice wins; the standing plan fills in what was not touched.
+  const planAt = plan ? new Date(plan.at) : null;
   const chosenHubId = hubId ?? plan?.hub.id ?? null;
-  const chosenWhen = when ?? (plan ? new Date(plan.at) : null);
+  const chosenDay = day ?? (planAt ? startOfDay(planAt) : null);
+  const chosenTime = time ?? (planAt ? { h: planAt.getHours(), m: planAt.getMinutes() } : null);
+  const chosenWhen = chosenDay && chosenTime ? combine(chosenDay, chosenTime) : null;
 
   const partner = firstName(trade?.counterparty.name ?? "them");
 
-  /*
-   * Shared first, then the ones the other listing names (not new to them),
-   * then everything else — each group alphabetical, which is the server's
-   * order and is preserved by a stable sort. Computed once per payload rather
-   * than on every keystroke in the note field.
-   */
   const shared = useMemo(() => new Set(options.data?.sharedHubIds ?? []), [options.data]);
   const theirs = useMemo(() => new Set(options.data?.theirHubIds ?? []), [options.data]);
-  const hubs = useMemo(() => {
-    const rank = (h: SafeZoneHub) => (shared.has(h.id) ? 0 : theirs.has(h.id) ? 1 : 2);
-    return [...(options.data?.hubs ?? [])].sort((a, b) => rank(a) - rank(b));
-  }, [options.data, shared, theirs]);
-  const noneShared = shared.size === 0;
+  const hubs = options.data?.hubs ?? [];
+  const kmTo = useMemo(
+    () => (location ? (h: SafeZoneHub) => distanceKm(location.latitude, location.longitude, h) : null),
+    [location],
+  );
+  const chosenHub = hubs.find((h) => h.id === chosenHubId) ?? null;
 
   const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") return <Splash waitingOn="Signing you back in" />;
 
-  /*
-   * The gate is this screen's own request. The list row is wanted for the
-   * partner's name and nothing else, so a trade the (possibly stale) list does
-   * not hold yet is not a reason to refuse a plan the server just answered
-   * with — "not open any more" is said only when neither request knows it.
-   */
+  const title = copy.picker.title(partner);
+
   if (options.isPending || (!trade && active.isPending)) {
     return (
       <OfferScreenHost imeInset={0}>
-        <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
+        <TradesBackTitle title={title} onBack={() => router.back()} />
         <TradesSkeleton />
       </OfferScreenHost>
     );
@@ -167,12 +166,12 @@ export default function TradeMeetupScreen() {
   if (!trade && !options.data) {
     return (
       <OfferScreenHost imeInset={0}>
-        <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
+        <TradesBackTitle title={title} onBack={() => router.back()} />
         {options.isError ? (
           <TradesErrorPanel onRetry={() => void Promise.all([active.refetch(), options.refetch()])} />
         ) : (
           <Gutter style={{ paddingTop: 18 }}>
-            <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
+            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>
               That trade is not open any more.
             </Text>
           </Gutter>
@@ -180,52 +179,12 @@ export default function TradeMeetupScreen() {
       </OfferScreenHost>
     );
   }
-
-  const busy = propose.isPending || accept.isPending;
-
-  const onError = (e: unknown) => {
-    if (e instanceof ApiError) {
-      // The server puts the branchable reason in `meta.rule` — /api/v1's error
-      // codes are a closed set by design. A closed hub wants "pick another";
-      // an unknown one means this list is stale and wants a fresh one.
-      const rule = (e.meta as { rule?: string } | undefined)?.rule;
-      setFailure(rule === "SAFEZONE_HUB_CLOSED" ? copy.meetup.hubClosed : e.message);
-      // A hub that is no longer proposable should stop being selected, so the
-      // next tap is not the same rejected request.
-      if (rule) setHubId(null);
-      if (rule === "SAFEZONE_HUB_INVALID") void options.refetch();
-      return;
-    }
-    setFailure("That did not go through. Nothing has changed.");
-  };
-
-  const send = () => {
-    if (!chosenHubId || !chosenWhen) return;
-    setFailure(null);
-    propose.mutate(
-      { hubId: chosenHubId, at: chosenWhen, note },
-      { onSuccess: () => router.back(), onError },
-    );
-  };
-
-  const agree = () => {
-    if (!plan) return;
-    setFailure(null);
-    // The echo is what protects against a counter landing between this screen
-    // rendering and the tap. See `useAcceptMeetup`.
-    accept.mutate(
-      { confirmHubId: plan.hub.id, confirmAt: plan.at },
-      { onSuccess: () => router.back(), onError },
-    );
-  };
-
-  /* ── Nothing to pick from at all — not "nothing shared", nothing. ───────── */
   if (hubs.length === 0 && !options.isError) {
     return (
       <OfferScreenHost imeInset={0}>
-        <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
+        <TradesBackTitle title={title} onBack={() => router.back()} />
         <Gutter style={{ paddingTop: 18 }}>
-          <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
+          <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>
             {copy.meetup.noHubsAtAll}
           </Text>
         </Gutter>
@@ -233,311 +192,434 @@ export default function TradeMeetupScreen() {
     );
   }
 
-  const canSend = !!chosenHubId && !!chosenWhen;
+  const onError = (e: unknown) => {
+    const planConflict = planConflictOf(e);
+    if (planConflict) {
+      const standing = planConflict.plan;
+      if (standing && !standing.agreedAt && standing.proposedBy !== you) {
+        setFailure(null);
+        setConflictPlan(standing);
+        return;
+      }
+      // Agreed, or the viewer's own (another device), or gone: say so, and
+      // make the next send name what is really standing.
+      setBasis(standing);
+      setFailure(
+        standing?.agreedAt
+          ? copy.picker.alreadyAgreed(partner, copy.meetup.where(standing.hub.name, meetupWhen(new Date(standing.at))))
+          : copy.picker.planChanged,
+      );
+      return;
+    }
+    if (e instanceof ApiError) {
+      const rule = (e.meta as { rule?: string } | undefined)?.rule;
+      setFailure(rule === "SAFEZONE_HUB_CLOSED" ? copy.meetup.hubClosed : e.message);
+      if (rule) setHubId(null);
+      if (rule === "SAFEZONE_HUB_INVALID") void options.refetch();
+      return;
+    }
+    setFailure("That did not go through. Nothing has changed.");
+  };
 
-  return (
-    <OfferScreenHost imeInset={0} dimmed={busy}>
-      <TradesBackTitle title={copy.meetup.setIt} onBack={() => router.back()} />
+  const gapNow = () => meetupGap({ hubId: chosenHub?.id ?? null, day: chosenDay, time: chosenTime, now: new Date() });
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
-        {options.isError ? <TradesErrorPanel onRetry={() => void options.refetch()} /> : null}
+  const send = () => {
+    // Checked again at the tap, not only at render: a screen left open can
+    // cross the chosen time without re-rendering.
+    const missing = gapNow();
+    if (missing || !chosenHub || !chosenWhen) {
+      if (missing) setFailure(gapLabel(missing));
+      return;
+    }
+    setFailure(null);
+    const standing = basis !== undefined ? basis : plan;
+    // A fresh pick only over nothing, or over the viewer's own unanswered one.
+    const counters = !!standing && (standing.proposedBy !== you || !!standing.agreedAt);
+    propose.mutate(
+      { hubId: chosenHub.id, at: chosenWhen, note, replaces: counters ? replacesOf(standing) : undefined },
+      { onSuccess: () => router.back(), onError },
+    );
+  };
 
-        {failure ? (
-          <Gutter style={{ paddingTop: 12 }}>
-            <Text style={[textStyle(offerType.body), { color: offerColor.warm }]}>
-              {failure}
-            </Text>
-          </Gutter>
-        ) : null}
-
-        {/* ── What is on the table, when something is. ─────────────────────── */}
-        {plan ? (
-          <>
-            <View style={{ height: 14 }} />
-            <Gutter style={{ gap: 4 }}>
-              <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
-                {state === "agreed"
-                  ? copy.meetup.agreed
-                  : state === "yours-to-answer"
-                    ? copy.meetup.theyProposed(partner)
-                    : copy.meetup.waitingOnThem(partner)}
-              </Text>
-              <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]}>
-                {copy.meetup.where(plan.hub.name, meetupWhen(new Date(plan.at)))}
-              </Text>
-              <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-                {plan.hub.landmark}
-              </Text>
-              {plan.note ? (
-                <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-                  {plan.note}
-                </Text>
-              ) : null}
-            </Gutter>
-
-            {/* The one filled control is `Agree`, and only when agreeing is
-                this viewer's to do. Somebody looking at their own standing
-                proposal gets no primary action — there is nothing for them to
-                do but wait or change it. */}
-            {state === "yours-to-answer" ? (
-              <Gutter style={{ paddingTop: 14 }}>
-                <PrimaryButton
-                  label={copy.meetup.agree}
-                  onPress={agree}
-                  accessibilityLabel={`Agree to meet at ${plan.hub.name}`}
-                />
-              </Gutter>
-            ) : null}
-
-            <View style={{ height: 18 }} />
-            <Hairline />
-            <View style={{ height: 6 }} />
-            <SectionLabel>{copy.meetup.suggestAnother}</SectionLabel>
-          </>
-        ) : null}
-
-        {/* ── The empty intersection: a notice with a route out, NOT a wall.
-            The picker below still works; this says why the reward is off the
-            table and which one tap fixes it. ────────────────────────────── */}
-        {noneShared ? (
-          <>
-            <View style={{ height: 14 }} />
-            <Gutter style={{ gap: 6 }}>
-              <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]}>
-                {copy.meetup.noSharedTitle}
-              </Text>
-              <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-                {theirs.size > 0
-                  ? copy.meetup.noSharedBody(partner)
-                  : copy.meetup.neitherHasHubs(partner)}
-              </Text>
-            </Gutter>
-            <Gutter style={{ paddingTop: 12 }}>
-              <SecondaryButton
-                label={copy.meetup.addToMine}
-                // Straight to the hub editor for the viewer's own listing, with
-                // the other side's hubs passed as the suggestion — adding one
-                // of those is what makes the intersection non-empty.
-                onPress={() =>
-                  router.push({
-                    pathname: "/edit-hubs",
-                    params: {
-                      itemId: options.data?.yourItemId ?? "",
-                      suggest: [...theirs].join(","),
-                    },
-                  })
-                }
-              />
-            </Gutter>
-            <View style={{ height: 6 }} />
-          </>
-        ) : null}
-
-        {/* ── Where ───────────────────────────────────────────────────────── */}
-        <View style={{ height: 12 }} />
-        <SectionLabel>{copy.meetup.pickHub}</SectionLabel>
-        {shared.size < hubs.length ? (
-          <Gutter style={{ paddingBottom: 8 }}>
-            <Text style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}>
-              {copy.meetup.sharedEarns}
-            </Text>
-          </Gutter>
-        ) : null}
-        <Hairline />
-        {hubs.map((hub) => (
-          <View key={hub.id}>
-            <HubRow
-              hub={hub}
-              selected={hub.id === chosenHubId}
-              badge={
-                shared.has(hub.id)
-                  ? copy.meetup.bothNamed
-                  : theirs.has(hub.id)
-                    ? copy.meetup.theyOffer(partner)
-                    : copy.meetup.newToThem(partner)
-              }
-              // The shared badge is the reassuring one and is worth its line on
-              // every row. The other two are context for a choice, so they
-              // appear on the chosen row only — the list stays scannable.
-              badgeAlways={shared.has(hub.id)}
-              onPress={() => {
-                setFailure(null);
-                setHubId(hub.id);
+  if (conflictPlan && id) {
+    return (
+      <OfferScreenHost imeInset={0}>
+        <TradesBackTitle title={title} onBack={() => router.back()} />
+        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          <Gutter style={{ paddingTop: space.home.tileBody }}>
+            <SuggestionCard
+              tradeId={id}
+              plan={conflictPlan}
+              partner={partner}
+              shared={shared.has(conflictPlan.hub.id)}
+              notice={copy.picker.alreadySuggested(partner)}
+              onAgreed={() => router.back()}
+              onSuggestAnother={() => {
+                setBasis(conflictPlan);
+                setConflictPlan(null);
               }}
             />
-            <Hairline />
-          </View>
-        ))}
+          </Gutter>
+        </ScrollView>
+      </OfferScreenHost>
+    );
+  }
 
-        {/* ── When ────────────────────────────────────────────────────────── */}
-        <View style={{ height: 18 }} />
-        <SectionLabel>{copy.meetup.pickTime}</SectionLabel>
-        <Gutter style={{ paddingTop: 8, flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <SecondaryButton
-              label={chosenWhen ? meetupWhen(chosenWhen) : "Pick a day and time"}
+  const now = new Date();
+  const today = startOfDay(now);
+  const tomorrow = addDays(today, 1);
+  const isToday = !!chosenDay && chosenDay.getTime() === today.getTime();
+  const isTomorrow = !!chosenDay && chosenDay.getTime() === tomorrow.getTime();
+  const otherDay = !!chosenDay && !isToday && !isTomorrow;
+
+  const gap = gapNow();
+  const whenProblem = gap === "past" || gap === "tooFar" ? gapLabel(gap) : null;
+  const whenDone = !!chosenDay && !!chosenTime && !whenProblem;
+
+  const onPicked = (e: DateTimePickerEvent, picked?: Date) => {
+    const mode = picking;
+    setPicking(null);
+    if (e.type === "dismissed" || !picked) return;
+    setFailure(null);
+    if (mode === "date") setDay(startOfDay(picked));
+    else setTime({ h: picked.getHours(), m: picked.getMinutes() });
+  };
+
+  const pickDay = (d: Date) => {
+    setFailure(null);
+    setDay(d);
+  };
+
+  return (
+    <OfferScreenHost imeInset={0} dimmed={propose.isPending}>
+      <TradesBackTitle title={title} onBack={() => router.back()} />
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        {options.isError ? <TradesErrorPanel onRetry={() => void options.refetch()} /> : null}
+
+        {/* ── 1 Where ── */}
+        <Gutter style={{ paddingTop: space.home.tileBody, gap: space.home.tileBody }}>
+          <StepHeading n={1} done={!!chosenHub}>
+            {copy.picker.stepWhere}
+          </StepHeading>
+          <WhereCard
+            hub={chosenHub}
+            km={chosenHub && kmTo ? kmTo(chosenHub) : null}
+            reward={!!chosenHub && shared.has(chosenHub.id)}
+            suggestedBy={chosenHub && chosenHub.id === theirSuggestion ? partner : null}
+            onPress={() => setSheet("hubs")}
+            onReward={() => setRewardOpen(true)}
+          />
+        </Gutter>
+
+        {/* ── 2 When ── */}
+        <Gutter style={{ paddingTop: space.home.sectionTop, gap: space.home.tileBody }}>
+          <StepHeading n={2} done={whenDone}>
+            {copy.picker.stepWhen}
+          </StepHeading>
+          <View style={s.chips} accessibilityRole="radiogroup">
+            <Chip label={copy.picker.today} on={isToday} onPress={() => pickDay(today)} />
+            <Chip label={copy.picker.tomorrow} on={isTomorrow} onPress={() => pickDay(tomorrow)} />
+            <Chip
+              label={otherDay ? shortDate(chosenDay!) : copy.picker.pickDate}
+              on={otherDay}
+              icon={<CalendarIcon size={15} stroke={1.7} color={otherDay ? color.forest : color.ink} />}
               onPress={() => setPicking("date")}
             />
           </View>
+          <TimeRow time={chosenTime} problem={!!whenProblem} onPress={() => setPicking("time")} />
+          {whenProblem ? (
+            <Text accessibilityLiveRegion="polite" style={[textStyle(type.metadata), { color: color.urgent }]}>
+              {whenProblem}
+            </Text>
+          ) : null}
         </Gutter>
 
-        {/*
-          TWO STEPS ON ANDROID, ONE CONTROL ON iOS — the platform's own idiom,
-          not a shared lowest common denominator. Android's picker is a modal
-          that does one of date or time, so the date dismisses into the time;
-          iOS shows a single inline spinner that does both.
-
-          `minimumDate` is now: the server refuses a past time with 15 minutes of
-          slack, and a picker that lets somebody scroll to last Tuesday and then
-          rejects it has wasted the one interaction that could have prevented it.
-        */}
         {picking ? (
           <DateTimePicker
-            value={chosenWhen ?? defaultWhen()}
-            mode={Platform.OS === "ios" ? "datetime" : picking}
-            minimumDate={new Date()}
-            onChange={(e: DateTimePickerEvent, picked?: Date) => {
-              if (e.type === "dismissed" || !picked) {
-                setPicking(null);
-                return;
-              }
-              setFailure(null);
-              if (Platform.OS === "android" && picking === "date") {
-                // Carry the chosen day forward and ask for the time on top of
-                // it, keeping whatever hour was already selected.
-                const base = chosenWhen ?? defaultWhen();
-                const merged = new Date(picked);
-                merged.setHours(base.getHours(), base.getMinutes(), 0, 0);
-                setWhen(merged);
-                setPicking("time");
-                return;
-              }
-              setWhen(picked);
-              setPicking(null);
-            }}
+            value={picking === "date" ? (chosenDay ?? tomorrow) : (chosenWhen ?? pickerStartTime(chosenDay, now))}
+            mode={picking}
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            minimumDate={picking === "date" ? today : undefined}
+            maximumDate={picking === "date" ? addDays(today, MEETUP_MAX_DAYS_AHEAD) : undefined}
+            onChange={onPicked}
           />
         ) : null}
 
-        {/* ── The note ────────────────────────────────────────────────────── */}
-        <View style={{ height: 18 }} />
-        <SectionLabel>{copy.meetup.noteLabel}</SectionLabel>
-        <Gutter style={{ paddingTop: 8 }}>
+        {/* ── 3 Note ── */}
+        <Gutter style={{ paddingTop: space.home.sectionTop, gap: space.home.tileBody }}>
+          <StepHeading n={3} done={note.trim().length > 0}>
+            {copy.picker.stepNote}
+          </StepHeading>
           <TextInput
             value={note}
             onChangeText={setNote}
             multiline
-            // The column is VARCHAR(200) and the route's schema caps at 200, so
-            // the field stops rather than being refused after the fact.
             maxLength={200}
-            placeholder={copy.meetup.notePlaceholder}
-            placeholderTextColor={offerColor.inkTertiary}
+            placeholder={copy.picker.notePlaceholder}
+            placeholderTextColor={color.inkMuted}
             textAlignVertical="top"
-            style={[
-              textStyle(offerType.body),
-              { color: offerColor.ink, minHeight: 56, padding: 0 },
-            ]}
-            cursorColor={offerColor.green}
-            selectionColor={offerColor.green}
-            accessibilityLabel={copy.meetup.noteLabel}
-          />
-        </Gutter>
-
-        <Gutter style={{ paddingTop: 20 }}>
-          <PrimaryButton
-            label={plan ? copy.meetup.counter : copy.meetup.propose}
-            onPress={send}
-            disabled={!canSend}
-            disabledHint="Pick a hub and a time first"
+            style={[textStyle(type.detailBody), s.note]}
+            cursorColor={color.forest}
+            selectionColor={color.green}
+            accessibilityLabel={copy.picker.stepNote}
           />
         </Gutter>
       </ScrollView>
+
+      <OfferBottomBar
+        above={
+          failure || (!gap && chosenHub && chosenWhen) ? (
+            <View style={{ gap: 4, marginBottom: space.browse.searchGap }}>
+              {failure ? (
+                <Text accessibilityLiveRegion="polite" style={[textStyle(type.detailBody), { color: color.urgent }]}>
+                  {failure}
+                </Text>
+              ) : null}
+              {!gap && chosenHub && chosenWhen ? (
+                <Text style={[textStyle(type.detailBody), { color: color.ink }]}>
+                  {copy.picker.summary(fullWhen(chosenWhen), chosenHub.name)}
+                </Text>
+              ) : null}
+            </View>
+          ) : undefined
+        }
+      >
+        <TradeButton
+          label={gap ? gapLabel(gap) : copy.picker.submit(partner)}
+          onPress={send}
+          disabled={!!gap || propose.isPending}
+          disabledInk={gap ? "readable" : "muted"}
+        />
+      </OfferBottomBar>
+
+      {sheet === "hubs" ? (
+        <HubPickerSheet
+          hubs={hubs}
+          shared={shared}
+          suggestedId={theirSuggestion}
+          partner={partner}
+          selectedId={chosenHub?.id ?? null}
+          kmTo={kmTo}
+          showNoShared={shared.size === 0}
+          onAddHub={() => {
+            setSheet(null);
+            router.push({
+              pathname: "/edit-hubs",
+              params: { itemId: options.data?.yourItemId ?? "", suggest: [...theirs].join(",") },
+            });
+          }}
+          onPick={(picked) => {
+            setFailure(null);
+            setHubId(picked);
+            setSheet(null);
+          }}
+          onReward={() => setRewardOpen(true)}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+      {rewardOpen ? <SafeHubRewardSheet onClose={() => setRewardOpen(false)} /> : null}
     </OfferScreenHost>
   );
 }
 
-/**
- * A sensible first offer for the picker: tomorrow at 14:00.
- *
- * NOT `new Date()`. Opening on this instant means the first value the spinner
- * shows is already in the past by the time somebody has read the screen, and on
- * Android that value is one confirm away from being submitted. An afternoon
- * tomorrow is a plausible swap slot and is never rejected by the server's
- * past-time check.
- */
-function defaultWhen(): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(14, 0, 0, 0);
-  return d;
+/* ─────────────────────────────── pieces ─────────────────────────────── */
+
+/** The button's words for what is still missing. */
+function gapLabel(gap: MeetupGap): string {
+  switch (gap) {
+    case "hub":
+      return copy.picker.needHub;
+    case "day":
+      return copy.picker.needDay;
+    case "time":
+      return copy.picker.needTime;
+    case "past":
+      return copy.picker.pastTime;
+    case "tooFar":
+      return copy.picker.tooFar(MEETUP_MAX_DAYS_AHEAD);
+  }
 }
 
 /**
- * One hub in the picker.
- *
- * Three kinds of row now, told apart by `badge`: both listings name it (the
- * one that earns the reward), only the other listing names it, or neither —
- * the last being the one the other person will see for the first time. The
- * shared badge is always drawn; the other two only on the selected row, so
- * that a list of twenty hubs is not twenty lines of caveat.
+ * Step 1's one card: the chosen hub with "Tap to change", or "Choose a hub".
+ * Either way the whole card opens the hub sheet.
  */
-function HubRow({
+function WhereCard({
   hub,
-  selected,
-  badge,
-  badgeAlways,
+  km,
+  reward,
+  suggestedBy,
+  onPress,
+  onReward,
+}: {
+  hub: SafeZoneHub | null;
+  km: number | null;
+  reward: boolean;
+  suggestedBy: string | null;
+  onPress: () => void;
+  onReward: () => void;
+}) {
+  const meta = hub ? hubMeta(hub, km) : null;
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={
+        hub ? `${hub.name}, ${meta}. ${copy.picker.tapToChange}` : `${copy.picker.chooseHub}. ${copy.picker.chooseHubHint}`
+      }
+      style={[s.card, hub ? s.cardChosen : null]}
+      pressedStyle={{ backgroundColor: color.inset }}
+    >
+      <PinIcon size={22} stroke={1.7} color={hub ? color.forest : color.inkSecondary} />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        {hub ? (
+          <>
+            <Text style={[textStyle(type.username), { color: color.ink }]} numberOfLines={2}>
+              {hub.name}
+            </Text>
+            <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]} numberOfLines={2}>
+              {meta}
+            </Text>
+            {reward || suggestedBy ? (
+              <View style={s.rowChips}>
+                {reward ? <RewardChip onPress={onReward} /> : null}
+                {suggestedBy ? <SuggestedChip partner={suggestedBy} /> : null}
+              </View>
+            ) : null}
+            <Text style={[textStyle(type.metadata), { color: color.forest, marginTop: 4 }]}>
+              {copy.picker.tapToChange}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[textStyle(type.username), { color: color.ink }]}>{copy.picker.chooseHub}</Text>
+            <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
+              {copy.picker.chooseHubHint}
+            </Text>
+          </>
+        )}
+      </View>
+      <ChevronRightIcon size={18} stroke={1.7} color={color.inkSecondary} />
+    </Tappable>
+  );
+}
+
+/** Step 2's time: a full-width row that opens the native time picker. */
+function TimeRow({ time, problem, onPress }: { time: ClockTime | null; problem: boolean; onPress: () => void }) {
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={time ? `Time, ${clock(time)}. ${copy.picker.changeTime}` : copy.picker.chooseTime}
+      style={[
+        s.timeRow,
+        problem
+          ? { borderWidth: offerBorder.selected, borderColor: color.urgent }
+          : time
+            ? { borderWidth: offerBorder.selected, borderColor: color.forest }
+            : { borderWidth: offerBorder.rule, borderColor: color.controlLine },
+      ]}
+      pressedStyle={{ backgroundColor: color.inset }}
+    >
+      <ClockIcon size={18} stroke={1.7} color={time ? color.forest : color.inkSecondary} />
+      <Text
+        style={[textStyle(type.username), { color: time ? color.ink : color.inkSecondary, flex: 1 }]}
+        maxFontSizeMultiplier={size.home.headingMaxFontScale}
+      >
+        {time ? clock(time) : copy.picker.chooseTime}
+      </Text>
+      {time ? (
+        <Text
+          style={[textStyle(type.metadata), { color: color.forest }]}
+          maxFontSizeMultiplier={size.home.headingMaxFontScale}
+        >
+          {copy.picker.changeTime}
+        </Text>
+      ) : null}
+      <ChevronRightIcon size={18} stroke={1.7} color={color.inkSecondary} />
+    </Tappable>
+  );
+}
+
+function Chip({
+  label,
+  on,
+  icon,
   onPress,
 }: {
-  hub: SafeZoneHub;
-  selected: boolean;
-  badge: string;
-  badgeAlways: boolean;
+  label: string;
+  on: boolean;
+  icon?: React.ReactNode;
   onPress: () => void;
 }) {
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`${hub.name}, ${hub.city}`}
-      style={{
-        paddingHorizontal: offerSpace.screenX,
-        paddingVertical: 12,
-        backgroundColor: selected ? offerColor.tintGreen : undefined,
-      }}
-      pressedStyle={{ opacity: 0.85 }}
+      accessibilityState={{ selected: on }}
+      accessibilityLabel={label}
+      // The chip is 36 tall; the slop takes the target to 44.
+      hitSlop={{ top: 4, bottom: 4 }}
+      style={[
+        s.chip,
+        on
+          ? { borderWidth: offerBorder.selected, borderColor: color.forest, backgroundColor: color.greenWash }
+          : { borderWidth: border.chip, borderColor: color.controlLine, backgroundColor: color.surface },
+      ]}
+      pressedStyle={{ opacity: 0.75 }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <View
-          style={{
-            width: 18,
-            height: 18,
-            borderRadius: 9,
-            borderWidth: selected ? 6 : 1.5,
-            borderColor: selected ? offerColor.green : offerColor.hairline,
-          }}
-        />
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text style={[textStyle(offerType.body), { color: offerColor.ink }]} numberOfLines={1}>
-            {hub.name}
-          </Text>
-          <Text
-            style={[textStyle(offerType.footnoteMono), { color: offerColor.inkTertiary }]}
-            numberOfLines={1}
-          >
-            {hub.landmark}
-          </Text>
-          {selected || badgeAlways ? (
-            <Text
-              style={[
-                textStyle(offerType.footnoteMono),
-                { color: badgeAlways ? offerColor.green : offerColor.inkTertiary },
-              ]}
-            >
-              {badge}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+      {icon ?? null}
+      <Text
+        style={[textStyle(type.trendingChip), { color: on ? color.forest : color.ink }]}
+        maxFontSizeMultiplier={size.home.headingMaxFontScale}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
     </Tappable>
   );
 }
+
+const s = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.home.tileBody,
+    minHeight: size.control.primaryButton + 16,
+    padding: space.home.tileBody,
+    borderRadius: radius.hubRow,
+    borderWidth: offerBorder.rule,
+    borderColor: color.controlLine,
+    backgroundColor: color.surface,
+  },
+  cardChosen: { borderWidth: offerBorder.selected, borderColor: color.forest },
+  rowChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: space.browse.searchGap },
+  chip: {
+    flexDirection: "row",
+    gap: 6,
+    minHeight: size.browse.chip,
+    paddingHorizontal: size.browse.chipX,
+    borderRadius: radius.trendingChip,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.browse.searchGap,
+    minHeight: size.control.primaryButton,
+    paddingHorizontal: space.home.tileBody,
+    borderRadius: radius.hubRow,
+    backgroundColor: color.surface,
+  },
+  note: {
+    color: color.ink,
+    minHeight: 72,
+    padding: space.home.tileBody,
+    borderRadius: radius.hubRow,
+    borderWidth: offerBorder.rule,
+    borderColor: color.controlLine,
+  },
+});

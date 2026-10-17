@@ -180,7 +180,7 @@ export function PendingOfferState({
           <Section pad={offerSpace.section.settle}>
             <SectionLabel>{copy.label.meet}</SectionLabel>
             <View style={{ marginTop: offerSpace.labelToContent }}>
-              <ItemRow image={null} title={hubName} meta="Safe-Zone Hub" photoSize={44} />
+              <ItemRow image={null} title={hubName} meta="Safe hub" photoSize={44} />
             </View>
           </Section>
         </>
@@ -344,18 +344,25 @@ export function LoadFailedPanel({
  * triangle and a "Try again" button, and none of the three is true here:
  * nothing failed, there is nothing to retry, and §1.4 keeps the warm accent
  * for failures, debts and defaults. This is a quiet border, a lock, and a way
- * back. See the copy module for what this state must not do — no price, no
- * purchase control, and nothing that makes the listing feel hidden.
+ * back — plus the way to the Premium screen, the one paywall, which is where
+ * the price and the "payments are not open yet" line live. See the copy
+ * module for what this state must not do.
  */
 export function PremiumLockedPanel({
+  kind = "premium",
   bracket,
   owner,
+  onSeePremium,
   onBack,
 }: {
+  kind?: "premium" | "vip";
   bracket: number;
   owner: string;
+  /** Opens the Premium screen — the one paywall. */
+  onSeePremium: () => void;
   onBack: () => void;
 }) {
+  const c = kind === "vip" ? copy.vip : copy.premium;
   return (
     <Section pad={offerSpace.section.gap}>
       <View
@@ -369,7 +376,7 @@ export function PremiumLockedPanel({
           gap: 12,
         }}
         accessibilityRole="text"
-        accessibilityLabel={copy.premium.a11y(bracket)}
+        accessibilityLabel={c.a11y(bracket)}
       >
         <LockIcon
           size={offerIcon.warning.size}
@@ -378,17 +385,18 @@ export function PremiumLockedPanel({
         />
         <View style={{ flex: 1 }}>
           <Text style={[textStyle(offerType.errorHeading), { color: offerColor.ink }]}>
-            {copy.premium.heading}
+            {c.heading}
           </Text>
           <Text
             style={[textStyle(offerType.errorText), { color: offerColor.inkSecondary, marginTop: 4 }]}
           >
-            {copy.premium.body(bracket, owner)}
+            {c.body(bracket, owner)}
           </Text>
         </View>
       </View>
 
-      <View style={{ marginTop: offerSpace.labelToContent }}>
+      <View style={{ marginTop: offerSpace.labelToContent, gap: offerSpace.rowGap }}>
+        <PrimaryButton label={c.see} onPress={onSeePremium} />
         <SecondaryButton label="Back to the listing" onPress={onBack} />
       </View>
     </Section>

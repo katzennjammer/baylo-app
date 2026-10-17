@@ -1,183 +1,387 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Path, Rect } from "react-native-svg";
 
 import { useProfileMe } from "../src/api/profile";
-import { Splash } from "../src/components/Splash";
-import { color, radius, textStyle, type } from "../src/theme/tokens";
-import { PREMIUM_MIN_BRACKET } from "../src/lib/brackets";
-import { BRIDGE_FEE_PER_BRACKET, PREMIUM_BRIDGE_FEE_PER_BRACKET } from "../src/lib/trade-rules";
+import { PrimaryButton, SecondaryButton, SectionLabel } from "../src/components/offer/chrome";
+import { LockIcon } from "../src/components/offer/icons";
+import { OfferSheet } from "../src/components/offer/OfferSheet";
+import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
+import { bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
+import {
+  hasPremiumAccess,
+  PREMIUM_BETA_NOTE,
+  PREMIUM_BRIDGE_FEE_PER_BRACKET,
+  PREMIUM_PRICE,
+  PREMIUM_TERM_LABEL,
+  type PremiumReason,
+} from "../src/lib/premium";
+import { BRIDGE_FEE_PER_BRACKET } from "../src/lib/trade-rules";
+import { noteOpeningReputation } from "../src/media/opening-tier-store";
+import {
+  offerBorder,
+  offerColor,
+  offerIcon,
+  offerRadius,
+  offerSpace,
+  offerType,
+  textStyle,
+} from "../src/theme/offer-tokens";
+
+/**
+ * The Premium sheet — the ONE paywall.
+ *
+ * Reached from the account menu, and from every place the bracket gate blocks
+ * an action: the locked offer bar on item detail, the composer's lock panel,
+ * and a 403 PREMIUM_REQUIRED / VIP_REQUIRED on send or accept (see
+ * `openPremium()` in src/lib/premium). There is no second paywall anywhere;
+ * a gate that wants to explain itself sends people here with `reason`.
+ *
+ * ── IT IS A SHEET, AND THE SAME ONE AS `How trading works` ──────────────────
+ *
+ * Still a route, so `openPremium()` stays the one way in and every entry point
+ * gets the same thing: app/_layout declares `/premium` a `transparentModal`
+ * with no navigator animation, and this screen draws nothing but an
+ * `OfferSheet` — the shell `How trading works` uses — over whatever opened it.
+ * The sheet brings its own slide-up, scrim and rounded top. Unlike that
+ * first-run prompt this one is dismissible: a scrim tap, the back gesture, a
+ * drag down on the handle, or `Done`, all of which pop the route.
+ *
+ * Same tokens, same rhythm: `offerSpace.prompt`'s 20 gutter, a 700 Bricolage
+ * heading, then titled paragraphs — a 15/600 `reachHeading` over a 14/21
+ * `bodyDense` in inkSecondary, 3 apart, 16 between — and one green primary
+ * button pinned at the bottom. Where that sheet numbers its rules `01`–`04`
+ * in mono, the perks here lead with an icon on a green-wash tile, because a
+ * perk is a thing you get rather than a step you follow.
+ *
+ * ── WHAT THIS SCREEN MUST NOT DO ─────────────────────────────────────────────
+ *
+ * Pretend a purchase exists. There is no Play Billing integration, so the
+ * buy button is DISABLED and says why directly under it; nothing here
+ * grants Premium, and nothing here charges anyone. Status is read live from
+ * `reputation` on GET /api/v1/profile/me — the server's own verdict — never
+ * inferred, so this screen cannot say "Active" to someone the gate refuses.
+ *
+ * Every number is imported, not typed: the bracket floors from brackets.ts,
+ * the standard fee from the trade-rules mirror, the Premium rate from
+ * premium.ts's mirror of the server's PREMIUM_BRIDGE_FEE_PER_BRACKET.
+ */
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** `18 Oct 2026`. Plain enough to read as a date and not a timestamp. */
+/** `18 Oct 2026`. */
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+const DISCOUNT_PERCENT = Math.round(
+  ((BRIDGE_FEE_PER_BRACKET - PREMIUM_BRIDGE_FEE_PER_BRACKET) / BRIDGE_FEE_PER_BRACKET) * 100,
+);
+
 /**
- * The four perks on the PM's final list (24 Sep 2026). The daily free-Leaves
- * allowance that used to be here is GONE, deliberately -- not hidden, dropped
- * -- so this list must never grow back a line for it without a matching
- * product decision, the same way it must never quote a number this file
- * cannot point at in @/lib somewhere.
+ * The perks, each one something a live subscription actually changes on the
+ * server today. The search assistant (Premium-gated POST /api/v1/assistant) is
+ * deliberately absent: the phone has no way to reach it yet, and a perk you
+ * cannot use is not one.
  */
-const premiumPerks = [
-  `Trade for items in Bracket ${PREMIUM_MIN_BRACKET} and above`,
-  `Discounted Value Bridging price (${PREMIUM_BRIDGE_FEE_PER_BRACKET} Leaves per bracket instead of ${BRIDGE_FEE_PER_BRACKET})`,
-  "A Premium badge on your profile",
-  "The Premium Member achievement",
+const PERKS: readonly { key: string; Icon: (p: IconProps) => React.JSX.Element; title: string; body: string }[] = [
+  {
+    key: "brackets",
+    Icon: UnlockIcon,
+    title: `Trade in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above`,
+    body:
+      `Propose on and accept items in Brackets ${PREMIUM_MIN_BRACKET} and ${VIP_MIN_BRACKET - 1}. ` +
+      `Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which comes later.`,
+  },
+  {
+    key: "bridge",
+    Icon: LeafIcon,
+    title: "Cheaper bridging fees",
+    body:
+      `${PREMIUM_BRIDGE_FEE_PER_BRACKET} Leaves per bracket instead of ${BRIDGE_FEE_PER_BRACKET} — ` +
+      `${DISCOUNT_PERCENT}% off whenever you're the one paying the bridge.`,
+  },
+  {
+    key: "badge",
+    Icon: StarIcon,
+    title: "Premium badge",
+    body: "The Premium Member badge, shown on your profile. It stays yours even if Premium lapses.",
+  },
 ];
 
-/**
- * The membership screen, reached from the account menu's "Premium" row.
- *
- * Premium only -- VIP is not offered here. If VIP comes back, its perks and
- * the second MembershipCard live in git history (see the commit that
- * removed them) rather than being re-derived from scratch.
- *
- * ── WHAT THIS SCREEN MUST NOT DO ─────────────────────────────────────────────
- *
- * Same rule the offer-flow lock states follow (see
- * src/components/offer/copy.ts): no price, no "Upgrade" or "Subscribe"
- * control, no button that leads nowhere. There is no Play Billing account to
- * sell a subscription through yet, so a tappable-looking CTA here would be a
- * promise the app cannot keep. Status is read live from `reputation` on
- * GET /api/v1/profile/me — the same `premium`/`premiumUntil` fields the
- * offer flow's lock screens are driven by — never hand-typed, so this screen
- * can never show "active" to someone the server would refuse.
- */
 export default function PremiumScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ reason?: string; bracket?: string }>();
+  const reason: PremiumReason | null =
+    params.reason === "premium" || params.reason === "vip" ? params.reason : null;
+  const bracket = params.bracket ? Number(params.bracket) : NaN;
   const { data, isLoading } = useProfileMe();
+  const { height: windowHeight } = useWindowDimensions();
 
-  if (isLoading || !data) {
-    return <Splash waitingOn="Loading membership" />;
+  const rep = data?.reputation;
+  const active = hasPremiumAccess(rep);
+
+  // The opening film's cached tier follows the paywall's own read of the
+  // server's verdict. There is no purchase callback to hang this on — the buy
+  // button is disabled until Play Billing exists — so this is the success path:
+  // a grant (today by hand, later a purchase that invalidates profile/me)
+  // reaches here as `active`, and the next launch plays the Premium film.
+  useEffect(() => {
+    if (rep) noteOpeningReputation({ premium: rep.premium, vip: rep.vip });
+  }, [rep?.premium, rep?.vip]); // eslint-disable-line react-hooks/exhaustive-deps
+  const p = offerSpace.prompt;
+  // `How trading works`'s sizing: its height, clamped to the window; the body scrolls.
+  const height = Math.min(p.height, Math.round(windowHeight * 0.88));
+  const close = () => router.back();
+
+  if (isLoading) {
+    return (
+      <OfferSheet dismissible swipeToDismiss onDismiss={close} height={height}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={offerColor.green} accessibilityLabel="Loading Premium" />
+        </View>
+      </OfferSheet>
+    );
   }
 
-  const { reputation } = data;
-  const premiumActive = reputation.premium ?? false;
-
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} accessibilityLabel="Go back" style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={color.ink} />
-        </Pressable>
-        <Text style={[textStyle(type.sectionHeading), styles.title]}>Premium</Text>
-      </View>
-
-      <View style={styles.hero}>
-        <View style={styles.badge}>
-          <Ionicons name="star" size={28} color={color.onGreen} />
+    <OfferSheet dismissible swipeToDismiss onDismiss={close} height={height}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: p.x, paddingTop: p.handleToHeading, paddingBottom: p.listToButton }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Hero ─────────────────────────────────────────────────────── */}
+        <View style={{ alignItems: "center" }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: offerColor.green,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <StarIcon size={34} stroke={2} color={offerColor.onGreen} />
+          </View>
+          <Text
+            style={[
+              textStyle(offerType.screenHeading),
+              { color: offerColor.ink, marginTop: p.handleToHeading, textAlign: "center" },
+            ]}
+            accessibilityRole="header"
+          >
+            {active ? "You're a Premium member" : "Unlock Premium"}
+          </Text>
+          <Text
+            style={[
+              textStyle(offerType.body),
+              { color: offerColor.inkSecondary, marginTop: 6, textAlign: "center" },
+            ]}
+          >
+            {active
+              ? "Here's everything your membership includes."
+              : "Trade for bigger things, pay less to bridge, and show it on your profile."}
+          </Text>
+          {rep ? <StatusPill active={active} rep={rep} /> : null}
         </View>
-        <Text style={[textStyle(type.detailTitle), styles.heroTitle]}>
-          {premiumActive ? "You're a Premium member" : "Premium, coming soon"}
-        </Text>
-        <Text style={[textStyle(type.detailBody), styles.heroBody]}>
-          Premium unlocks higher-value trading brackets and a cheaper bridging fee.
-          There is no billing yet, so there is nothing to buy here today.
-        </Text>
-      </View>
 
-      <MembershipCard
-        name="Premium"
-        active={premiumActive}
-        until={reputation.premiumUntil ?? null}
-        perks={premiumPerks}
-      />
-    </ScrollView>
+        {/* ── Why you're here, when a gate sent you ────────────────────── */}
+        {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
+        {reason === "vip" && active ? <BlockedNote reason="vip" bracket={bracket} /> : null}
+
+        {/* ── Perks ───────────────────────────────────────────────────── */}
+        <View style={{ marginTop: 28 }}>
+          <SectionLabel>What you get</SectionLabel>
+          <View
+            style={{
+              marginTop: offerSpace.labelToContent,
+              borderRadius: offerRadius.sheet,
+              borderWidth: offerBorder.hairline,
+              borderColor: offerColor.hairline,
+              backgroundColor: offerColor.paper,
+              paddingHorizontal: 16,
+            }}
+          >
+            {PERKS.map(({ key, Icon, title, body }, i) => (
+              <View
+                key={key}
+                style={{
+                  flexDirection: "row",
+                  gap: 14,
+                  paddingVertical: p.sectionGap,
+                  borderTopWidth: i === 0 ? 0 : offerBorder.hairline,
+                  borderTopColor: offerColor.hairline,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: offerColor.trackGreen,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon size={20} stroke={1.8} color={offerColor.deep} />
+                </View>
+                <View style={{ flex: 1, gap: p.titleToBody }}>
+                  <Text style={[textStyle(offerType.reachHeading), { color: offerColor.ink }]}>{title}</Text>
+                  <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary }]}>{body}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Price ───────────────────────────────────────────────────── */}
+        {!active ? (
+          <View
+            style={{
+              marginTop: 20,
+              borderRadius: offerRadius.sheet,
+              borderWidth: offerBorder.selected,
+              borderColor: offerColor.green,
+              backgroundColor: offerColor.tintGreen,
+              paddingVertical: 18,
+              paddingHorizontal: 20,
+              alignItems: "center",
+            }}
+            accessibilityLabel={`Premium costs ${PREMIUM_PRICE}, ${PREMIUM_TERM_LABEL.replace(" · ", ", ")}. ${PREMIUM_BETA_NOTE}`}
+          >
+            <SectionLabel>Beta price</SectionLabel>
+            <Text
+              style={[
+                textStyle(offerType.detailTitle),
+                { color: offerColor.ink, fontSize: 36, lineHeight: 42, marginTop: 8 },
+              ]}
+            >
+              {PREMIUM_PRICE}
+            </Text>
+            <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 2 }]}>
+              {PREMIUM_TERM_LABEL}
+            </Text>
+            <Text
+              style={[
+                textStyle(offerType.helper),
+                { color: offerColor.inkTertiary, marginTop: 8, textAlign: "center" },
+              ]}
+            >
+              {PREMIUM_BETA_NOTE}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* Pinned under the scroll, as `Got it` is. The sheet already pads for
+          the home indicator, so this is not `OfferBottomBar`, which would pad
+          for it a second time. */}
+      <View style={{ paddingHorizontal: p.x }}>
+        {active ? (
+          <SecondaryButton label="Done" onPress={close} />
+        ) : (
+          <>
+            <PrimaryButton
+              label={`Get Premium · ${PREMIUM_PRICE} one-time`}
+              onPress={() => {}}
+              disabled
+              disabledHint="Payments open in a future update. You will not be charged today."
+            />
+            <Text
+              style={[
+                textStyle(offerType.helper),
+                { color: offerColor.inkTertiary, marginTop: offerSpace.bottomBar.buttonToFootnote },
+              ]}
+            >
+              Payments open in a future update. You will not be charged today.
+            </Text>
+          </>
+        )}
+      </View>
+    </OfferSheet>
   );
 }
 
-function MembershipCard({
-  name,
+/** Active / Not active, with the date the server holds when there is one. */
+function StatusPill({
   active,
-  until,
-  perks,
+  rep,
 }: {
-  name: string;
   active: boolean;
-  until: string | null;
-  perks: string[];
+  rep: { vip?: boolean; premiumUntil?: string | null; premiumLifetime?: boolean; vipUntil?: string | null };
 }) {
+  const viaVip = rep.vip === true;
+  const until = viaVip ? rep.vipUntil : rep.premiumUntil;
+  const base = viaVip ? "Active through VIP" : "Active";
+  let label: string;
+  if (!active) {
+    label = rep.premiumUntil ? `Not active · expired ${formatDate(rep.premiumUntil)}` : "Not active";
+  } else if (!viaVip && rep.premiumLifetime) {
+    // A beta lifetime grant holds a 9999 sentinel date; never print it.
+    label = "Active · lifetime";
+  } else {
+    label = until ? `${base} · until ${formatDate(until)}` : base;
+  }
+
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeadRow}>
-        <Text style={[textStyle(type.itemTitle), styles.cardTitle]}>{name}</Text>
-        <View style={[styles.statusPill, active ? styles.statusPillActive : styles.statusPillInactive]}>
-          <Text style={[styles.statusPillText, active ? styles.statusPillTextActive : styles.statusPillTextInactive]}>
-            {active ? "Active" : "Not active"}
-          </Text>
-        </View>
-      </View>
-      <Text style={[textStyle(type.detailBody), styles.copy]}>
-        {active && until
-          ? `Renews or expires on ${formatDate(until)}.`
-          : until
-            ? `Expired on ${formatDate(until)}.`
-            : `Not subscribed yet — pricing is coming in a future update.`}
+    <View
+      style={{
+        marginTop: 14,
+        paddingHorizontal: 12,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: "center",
+        backgroundColor: active ? offerColor.trackGreen : offerColor.quiet,
+      }}
+    >
+      <Text style={[textStyle(offerType.chip), { color: active ? offerColor.deep : offerColor.inkSecondary }]}>
+        {label}
       </Text>
-      <View style={styles.perkList}>
-        {perks.map((perk) => (
-          <View key={perk} style={styles.perkRow}>
-            <Ionicons
-              name={active ? "checkmark-circle" : "checkmark-circle-outline"}
-              size={18}
-              color={active ? color.green : color.inkSecondary}
-            />
-            <Text style={[textStyle(type.detailBody), styles.perkText]}>{perk}</Text>
-          </View>
-        ))}
-      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.surface },
-  content: { padding: 20, gap: 18, paddingBottom: 36 },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  backButton: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  title: { color: color.ink },
-  hero: {
-    backgroundColor: color.inset,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: color.divider,
-    padding: 20,
-    gap: 12,
-    alignItems: "center",
-  },
-  badge: {
-    width: 62,
-    height: 62,
-    borderRadius: 18,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: { color: color.ink, textAlign: "center" },
-  heroBody: { color: color.inkSecondary, textAlign: "center" },
-  card: {
-    backgroundColor: color.inset,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: color.divider,
-    padding: 18,
-    gap: 12,
-  },
-  cardHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardTitle: { color: color.ink },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  statusPillActive: { backgroundColor: color.green },
-  statusPillInactive: { backgroundColor: color.divider },
-  statusPillText: { fontSize: 12, fontWeight: "700" },
-  statusPillTextActive: { color: color.onGreen },
-  statusPillTextInactive: { color: color.inkSecondary },
-  copy: { color: color.inkSecondary },
-  perkList: { gap: 10 },
-  perkRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  perkText: { color: color.ink, flex: 1 },
-});
+/**
+ * What the gate just refused, in one quiet line — the lock panel's treatment
+ * (hairline, padlock, inkSecondary), never the warm failure accent: being
+ * below a bracket is not an error.
+ */
+function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: number }) {
+  const where = Number.isFinite(bracket) ? `That listing is in ${bracketLabel(bracket)}. ` : "";
+  const text =
+    reason === "vip"
+      ? `${where}Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which isn't part of Premium and isn't available yet.`
+      : `${where}Trading at ${bracketLabel(PREMIUM_MIN_BRACKET)} and above opens with Premium.`;
+
+  return (
+    <View
+      style={{
+        marginTop: 22,
+        flexDirection: "row",
+        gap: 12,
+        padding: 14,
+        borderRadius: offerRadius.row,
+        borderWidth: offerBorder.hairline,
+        borderColor: offerColor.rule,
+        backgroundColor: offerColor.sunk,
+      }}
+    >
+      <LockIcon size={offerIcon.lock.size} stroke={offerIcon.lock.stroke} color={offerColor.inkSecondary} />
+      <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>{text}</Text>
+    </View>
+  );
+}
+
+/** The padlock from the lock states, opened. Same box and shackle geometry. */
+function UnlockIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Rect x="4" y="10.5" width="16" height="10.5" rx="2.2" />
+      <Path d="M7.6 10.5V7.6a4.4 4.4 0 0 1 8.5-1.6" />
+    </Glyph>
+  );
+}

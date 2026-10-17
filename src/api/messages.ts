@@ -1,6 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, request } from "./client";
+import { getActingOrgId } from "./org-context";
+
+/*
+ * ── ACTING AS A SHOP, THIS IS THE SHOP'S INBOX (25 Sep 2026) ────────────────
+ *
+ * Every request here carries X-Baylo-Org (see toHeaderRecord in ./client), and
+ * the server answers for the SHOP's backing account while it is set: the
+ * conversation list is the shop's, a reply is sent as the shop. So the same
+ * screens serve both, and two things here follow the identity rather than the
+ * session:
+ *
+ *   - "mine" in a thread is the INBOX's id, which acting as a shop is not
+ *     `currentSession().user.id`. The conversation list returns it as
+ *     `viewerId`; bubbles and the realtime channel use that.
+ *   - the query keys carry the acting org, so one identity's cached threads
+ *     can never render, even for a frame, under the other.
+ */
+
+/** The identity segment of every messages query key. */
+const identityKey = () => getActingOrgId() ?? "self";
+
+export const conversationsQueryKey = (fallbackPartnerId?: string | null) =>
+  ["messages", "conversations", identityKey(), fallbackPartnerId ?? "all"] as const;
+
+export const threadQueryKey = (partnerId: string | null) =>
+  ["messages", "thread", identityKey(), partnerId] as const;
 
 export interface ConversationListItem {
   partnerId: string;
@@ -16,6 +42,11 @@ export interface ConversationListItem {
 export interface ConversationListResponse {
   conversations: ConversationListItem[];
   nextCursor?: string | null;
+  /**
+   * Whose inbox this is: the person, or the acting shop's backing account.
+   * Absent from a server before the shop inbox (25 Sep 2026).
+   */
+  viewerId?: string;
 }
 
 export interface ThreadMessage {
@@ -62,23 +93,42 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
 
   const body = (await res.json()) as LegacyThreadEnvelope | ThreadMessage[];
   const messages = Array.isArray(body) ? body : body.messages ?? [];
+  if (__DEV__) {
+    console.log(
+      "[messages/thread] server image payloads",
+      messages
+        .filter((message) => {
+          try { return (JSON.parse(message.content) as { type?: unknown }).type === "image"; } catch { return false; }
+        })
+        .map((message) => ({ id: message.id, content: message.content })),
+    );
+  }
   let partnerName = Array.isArray(body) ? "Conversation" : body.partnerName ?? "Conversation";
   let partnerAvatar = Array.isArray(body) ? null : body.partnerAvatar ?? null;
+  let inboxId: string | undefined;
   if (Array.isArray(body)) {
     try {
       const { data } = await apiV1<ConversationListResponse>("/api/v1/messages/conversations");
       const conversation = data.conversations.find((item) => item.partnerId === partnerId);
       partnerName = conversation?.partnerName ?? partnerName;
       partnerAvatar = conversation?.partnerAvatar ?? partnerAvatar;
+      inboxId = data.viewerId;
     } catch {
       // The thread itself is still useful when the conversation summary is unavailable.
     }
   }
   // The legacy endpoint returns a bare message array, so it cannot carry the
-  // viewer id. Use the authenticated mobile session for bubble ownership.
+  // viewer id. The conversation list's `viewerId` is the INBOX -- the shop's
+  // backing account while acting as it -- and is what bubble ownership needs.
+  // Failing that, a two-party thread still says who "me" is: whichever side
+  // is not the partner. The session is the last resort, and correct only as
+  // oneself.
+  const inferred =
+    messages.find((m) => m.senderId !== partnerId)?.senderId ??
+    messages.find((m) => m.senderId === partnerId)?.receiverId;
   const currentUserId = Array.isArray(body)
-    ? currentSession()?.user.id ?? ""
-    : body.currentUserId ?? body.viewerId ?? currentSession()?.user.id ?? "";
+    ? inboxId ?? inferred ?? currentSession()?.user.id ?? ""
+    : body.currentUserId ?? body.viewerId ?? inferred ?? currentSession()?.user.id ?? "";
   const partnerIdValue = Array.isArray(body) ? partnerId : body.partnerId ?? partnerId;
 
   return {
@@ -86,10 +136,22 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
     partnerName,
     partnerAvatar,
     currentUserId,
-    messages: messages.map((msg) => ({
-      ...msg,
-      createdAt: typeof msg.createdAt === "string" ? msg.createdAt : new Date().toISOString(),
-    })),
+    messages: messages.map((msg) => {
+      let content = msg.content;
+      try {
+        const payload = JSON.parse(content) as { type?: unknown; url?: unknown; imageUrl?: unknown };
+        if (payload?.type === "image" && typeof payload.url !== "string" && typeof payload.imageUrl === "string") {
+          content = JSON.stringify({ ...payload, url: payload.imageUrl });
+        }
+      } catch {
+        // Plain text messages stay untouched.
+      }
+      return {
+        ...msg,
+        content,
+        createdAt: typeof msg.createdAt === "string" ? msg.createdAt : new Date().toISOString(),
+      };
+    }),
   };
 }
 
@@ -101,6 +163,7 @@ export async function fetchConversations(
     return {
       conversations: Array.isArray(body.conversations) ? body.conversations : [],
       nextCursor: body.nextCursor ?? null,
+      viewerId: body.viewerId,
     };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
@@ -132,17 +195,19 @@ export async function fetchConversations(
       };
     }
 
-    if (error instanceof ApiError && error.status === 403) {
-      return { conversations: [] };
-    }
-
+    // A 403 is THROWN, never read as an empty list (26 Sep 2026). It used to
+    // return `{ conversations: [] }`, so a refused request -- a shop context
+    // the server no longer honours, say -- rendered "No conversations yet",
+    // identical to an inbox that really is empty. That made a shop owner's
+    // empty screen undiagnosable from the phone. The screen now shows a
+    // refusal as a refusal; see `conversationsErrorCopy()` in (app)/messages.
     throw error;
   }
 }
 
 export function useConversations(fallbackPartnerId?: string | null) {
   return useQuery({
-    queryKey: ["messages", "conversations", fallbackPartnerId ?? "all"],
+    queryKey: conversationsQueryKey(fallbackPartnerId),
     queryFn: () => fetchConversations(fallbackPartnerId),
     staleTime: 20_000,
   });
@@ -150,7 +215,7 @@ export function useConversations(fallbackPartnerId?: string | null) {
 
 export function useThread(partnerId: string | null) {
   return useQuery({
-    queryKey: ["messages", "thread", partnerId],
+    queryKey: threadQueryKey(partnerId),
     enabled: !!partnerId,
     queryFn: async () => {
       if (!partnerId) throw new Error("No partner selected.");
@@ -208,3 +273,4 @@ export function useSendMessage() {
     },
   });
 }
+

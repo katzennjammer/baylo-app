@@ -150,8 +150,8 @@ function HubListFallback({
         />
         <Text style={[textStyle(type.hubLandmark), s.bannerText]}>
           {listHubs
-            ? "The map could not be drawn. Every Safe Zone is listed below."
-            : "The map could not be drawn. The Safe Zones are listed below."}
+            ? "The map could not be drawn. Every safe hub is listed below."
+            : "The map could not be drawn. The safe hubs are listed below."}
         </Text>
         <Tappable
           onPress={onRetry}
@@ -174,7 +174,7 @@ function HubListFallback({
       {!listHubs ? null : hubs.length === 0 ? (
         <View style={s.empty}>
           <Text style={[textStyle(type.hubLandmark), s.emptyText]}>
-            No Safe Zones to list.
+            No safe hubs to list.
           </Text>
         </View>
       ) : (
@@ -214,7 +214,7 @@ function HubRow({ hub, onOpenHub }: { hub: SafeZoneHub; onOpenHub?: (hubId: stri
           {`${hub.typeLabel} · ${hub.city}`}
         </Text>
         <Text style={[textStyle(type.hubLandmark), s.rowLandmark]}>
-          {hub.isActive ? hub.landmark : "No longer a Safe Zone — agree somewhere else"}
+          {hub.isActive ? hub.landmark : "No longer a safe hub — agree somewhere else"}
         </Text>
 
         <View style={s.rowActions}>

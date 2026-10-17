@@ -321,14 +321,18 @@ export function AuthScreen({
     [board, width, keyboardUp, keyboardInset, grossOverlap, insets.top, insets.bottom],
   );
 
-  const sheetTop = collapse.interpolate({ inputRange: [0, 1], outputRange: [restTop, 0] });
-  const sheetRadius = collapse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [authRadius.sheet, 0],
-  });
+  // Keep the auth composition anchored when the IME opens. The ScrollView's
+  // viewport becomes shorter and scrolls the focused field into view; moving
+  // the entire sheet to y=0 makes the form jump and makes the band disappear.
+  const sheetTop = keyboardUp ? 0 : restTop;
+  const sheetRadius = authRadius.sheet;
 
   return (
-    <LoginBackground band={{ height: band, scrim: scrimStops[scrim] }}>
+    <LoginBackground
+      band={{ height: band, scrim: scrimStops[scrim] }}
+      keyboardInset={keyboardInset}
+      keyboardUp={keyboardUp}
+    >
       <Ctx.Provider value={value}>
         {/*
           TWO VIEWS, AND THE SPLIT IS LOAD-BEARING.
@@ -357,7 +361,7 @@ export function AuthScreen({
                   right: 0,
                   top: 0,
                   height: band,
-                  opacity: collapse.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                  opacity: 1,
                 }}
                 pointerEvents={keyboardUp ? "none" : "auto"}
               >
@@ -383,11 +387,12 @@ export function AuthScreen({
                   flexGrow: 1,
                   paddingHorizontal: board.sheetX,
                   paddingTop: padTop,
+                  paddingBottom: pinned ? 0 : value.safeBottom + (keyboardUp ? 32 : 0),
                   // The spec's canvas ends the footer flush with 844 because a
                   // canvas has no gesture bar. A real one does.
-                  paddingBottom: pinned ? 0 : value.safeBottom,
                 }}
                 keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets
                 showsVerticalScrollIndicator={false}
                 // No rubber-banding: the sheet is welded to the band above it
                 // and to the screen edge below, and a bounce visibly unwelds it.
@@ -522,13 +527,13 @@ export function BandBackButton({ onPress, label }: { onPress: () => void; label:
   );
 }
 
-/** "STEP 2 OF 2" — mono, over the footage. */
+/** "Step 2 of 2", over the footage. Sentence case, body family. */
 export function BandEyebrow({ children }: { children: React.ReactNode }) {
   const { board, safeTop } = useMetrics();
   return (
     <Text
       style={[
-        authText(authType.eyebrow),
+        authText(authType.pillLabel),
         {
           position: "absolute",
           left: board.bandXWithBack + board.backWidth,
@@ -570,7 +575,7 @@ export function DevChip({ children }: { children: React.ReactNode }) {
       pointerEvents="none"
     >
       <Text
-        style={[authText(authType.devChip), { color: sheetColor.onVideoMono }]}
+        style={[authText(authType.declarationCompact), { color: sheetColor.onVideoMono }]}
         numberOfLines={1}
         // The interesting end of a URL is the RIGHT one — the port, and which
         // host it is. A truncated `http://192.168.1…` says nothing.
@@ -1384,7 +1389,7 @@ export function OrDivider({ label = "or" }: { label?: string }) {
       }}
     >
       <View style={{ flex: 1, height: authSize.dividerRule, backgroundColor: sheetColor.dividerLine }} />
-      <Text style={[authText(authType.dividerLabel), { color: sheetColor.label }]}>{label}</Text>
+      <Text style={[authText(authType.subhead), { color: sheetColor.label }]}>{label}</Text>
       <View style={{ flex: 1, height: authSize.dividerRule, backgroundColor: sheetColor.dividerLine }} />
     </View>
   );
@@ -1439,7 +1444,7 @@ export function CompactHeader({
       </View>
 
       {counter ? (
-        <Text style={[authText(authType.fieldCounter), { color: sheetColor.label }]}>
+        <Text style={[authText(authType.declarationCompact), { color: sheetColor.label }]}>
           {counter}
         </Text>
       ) : null}
@@ -1476,6 +1481,8 @@ export function RejectionMark() {
 export interface PanelRow {
   label: string;
   value: string;
+  /** Label above value, value free to wrap. For a sentence, not a figure. */
+  stacked?: boolean;
 }
 
 /**
@@ -1488,7 +1495,7 @@ export interface PanelRow {
  */
 export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
   const { board } = useMetrics();
-  const valueRole = board.tight ? authType.panelValueTight : authType.panelValue;
+  const valueRole = board.tight ? authType.cardName : authType.cardName;
 
   return (
     <View
@@ -1504,10 +1511,10 @@ export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
         <View
           key={row.label}
           style={{
-            flexDirection: "row",
-            alignItems: "center",
+            flexDirection: row.stacked ? "column" : "row",
+            alignItems: row.stacked ? "flex-start" : "center",
             justifyContent: "space-between",
-            gap: gap.panelRow,
+            gap: row.stacked ? 6 : gap.panelRow,
             paddingVertical: board.panelY,
             borderTopWidth: i === 0 ? 0 : authSize.panelBorder,
             borderTopColor: sheetColor.panelLine,
@@ -1516,7 +1523,14 @@ export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
           <Text style={[authText(authType.panelLabel), { color: sheetColor.errorInk }]}>
             {row.label}
           </Text>
-          <Text style={[authText(valueRole), { color: sheetColor.ink }]}>{row.value}</Text>
+          <Text
+            style={[
+              authText(row.stacked ? authType.body : valueRole),
+              { color: sheetColor.ink },
+            ]}
+          >
+            {row.value}
+          </Text>
         </View>
       ))}
     </View>

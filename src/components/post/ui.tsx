@@ -398,6 +398,7 @@ export function Field({
   value,
   placeholder,
   onChangeText,
+  onFocus,
   onBlur,
   error,
   disabled = false,
@@ -411,6 +412,7 @@ export function Field({
   value: string;
   placeholder: string;
   onChangeText: (v: string) => void;
+  onFocus?: () => void;
   onBlur?: () => void;
   error?: string | null;
   disabled?: boolean;
@@ -434,6 +436,10 @@ export function Field({
           : "empty";
   const c = fieldColors(state);
   const pad = c.width === postBorder.fieldActive ? 13 : 14;
+  // Read OUTSIDE the style prop. Reanimated's Babel plugin flags any `x.value`
+  // written inside an inline style as a shared value read by mistake; this is
+  // a colour string, but the check is syntactic and cannot tell.
+  const valueInk = c.value;
 
   return (
     <View>
@@ -456,13 +462,16 @@ export function Field({
 
         <View style={{ flex: 1 }}>
           <Text style={[textStyle(postType.fieldLabel), { color: c.label }]}>
-            {label.toUpperCase()}
+            {label}
           </Text>
           <TextInput
             ref={inputRef}
             value={value}
             onChangeText={onChangeText}
-            onFocus={() => setFocused(true)}
+            onFocus={() => {
+              setFocused(true);
+              onFocus?.();
+            }}
             onBlur={() => {
               setFocused(false);
               onBlur?.();
@@ -480,7 +489,7 @@ export function Field({
             style={[
               textStyle(value ? postType.fieldValue : postType.fieldPlaceholder),
               {
-                color: c.value,
+                color: valueInk,
                 padding: 0,
                 marginTop: 5,
                 // A TextInput with no explicit height collapses differently on
@@ -551,7 +560,7 @@ export function PickerField({
       >
         <View style={{ flex: 1 }}>
           <Text style={[textStyle(postType.fieldLabel), { color: c.label }]}>
-            {label.toUpperCase()}
+            {label}
           </Text>
           <Text
             style={[
@@ -676,7 +685,7 @@ export function HelperCounterRow({
         {helper}
       </Text>
       {counter ? (
-        <Text style={[textStyle(postType.counter), { color: postColor.inkMuted }]}>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
           {counter}
         </Text>
       ) : null}
@@ -718,18 +727,23 @@ export function Chip({
   label,
   selected,
   onPress,
+  disabled = false,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  /** Dimmed and inert — e.g. an unselected chip once a group is at its cap. */
+  disabled?: boolean;
 }) {
   return (
     <Tappable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
       accessibilityLabel={label}
       style={{
+        opacity: disabled ? 0.4 : 1,
         height: postSize.chip.height,
         borderRadius: postRadius.chip,
         paddingHorizontal: postSize.chip.x,
@@ -927,7 +941,7 @@ export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
 
 export function SectionLabel({ children }: { children: string }) {
   return (
-    <Text style={[textStyle(postType.sectionLabel), { color: postColor.inkMuted }]}>
+    <Text style={[textStyle(postType.smallTextLabel), { color: postColor.inkSecondary }]}>
       {children}
     </Text>
   );

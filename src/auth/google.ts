@@ -1,128 +1,82 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
-import { Prompt } from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
-
 import { ApiError, type GoogleExchange } from "../api/client";
 import { useSession } from "./session";
+import { suspensionFrom, type SuspensionNotice } from "../lib/suspension";
+
+// Required, not imported: the package throws while loading when the installed
+// binary was built without it (an older dev build, Expo Go), and an import that
+// throws takes the whole login screen with it. Password sign-in must survive
+// that, so a missing module only disables the Google button.
+type NativeGoogle = typeof import("@react-native-google-signin/google-signin");
+let native: NativeGoogle | null = null;
+try {
+  native = require("@react-native-google-signin/google-signin");
+} catch {
+  native = null;
+}
+// Only reached when `native` is set: SUPPORTED below gates every use.
+const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = native ?? ({} as NativeGoogle);
 
 /**
- * Continue with Google, on the device.
+ * Continue with Google, on the device — NATIVE sign-in (30 Sep 2026).
  *
  * The shape of this flow, and why it is this shape:
  *
- *   1. expo-auth-session opens Google's consent page in the system browser
- *      (a Custom Tab on Android, SFAuthenticationSession on iOS) — NOT a
- *      WebView. Google refuses to authenticate inside an embedded WebView, and
- *      is right to: the host app can read every keystroke in one.
- *   2. Google redirects back to `com.baylo.app:/oauthredirect` with an
- *      authorization code, which expo-web-browser catches on `Linking`.
- *      `app/+native-intent.ts` keeps expo-router off that URL so it is not
- *      ALSO treated as a navigation — see the note there for what that was
- *      costing.
- *   3. The library exchanges that code for tokens using PKCE and NO client
- *      secret. Installed-app clients are public clients — there is nowhere in
- *      an APK to keep a secret — so PKCE is what binds the code to this
- *      request instead.
- *   4. The `id_token` out of that exchange goes to POST /api/auth/google/token,
- *      which verifies its signature, issuer, audience and expiry against
- *      Google's JWKS before it counts as evidence of anything.
+ *   1. `@react-native-google-signin/google-signin` shows Google's own account
+ *      picker from Google Play services. No browser tab, no redirect URI, no
+ *      custom URI scheme.
+ *   2. Google identifies the app by its PACKAGE NAME AND SIGNING CERTIFICATE
+ *      (SHA-1). That pair must be registered as an Android OAuth client in the
+ *      SAME Google Cloud project as the Web client id below, or sign-in fails
+ *      with DEVELOPER_ERROR. Every signing key needs its own entry: the debug
+ *      keystore, EAS's key, and — after a Play Store release — Play App
+ *      Signing's key (Play Console → Test and release → App integrity).
+ *   3. The ID token comes back with `aud` = the WEB client id passed to
+ *      `configure()`, whichever Android client matched. That is the point of
+ *      this design: the backend trusts ONE audience (or that client's project,
+ *      see GOOGLE_TRUSTED_PROJECTS in baylo/src/lib/google-audience.ts), and a
+ *      new signing key never needs a server change.
+ *   4. The token goes to POST /api/auth/google/token, which verifies signature,
+ *      issuer, audience and expiry against Google's JWKS before it counts as
+ *      evidence of anything.
  *
- * NOTHING IS TRUSTED ON THIS SIDE. The email, name and picture in the ID token
- * are read only by the server, after verification. This module never parses the
- * token, and must not start: anything decided here is decided by whoever is
- * holding the phone.
+ * WHY IT REPLACED THE BROWSER FLOW. The previous version used expo-auth-session
+ * with a `com.baylo.app:/oauthredirect` redirect. Google discourages custom URI
+ * schemes for Android clients — any app can register the same scheme, and a
+ * browser redirect cannot prove which app receives the code — and they are off
+ * by default on newly created Android clients. For a Play Store launch where
+ * Google is the main way in, that was a risk this removes.
  *
- * `aud` on the token from step 3 is the ANDROID (or iOS) client id, not the web
- * one, because that is the client that performed the exchange. The server has
- * to accept it explicitly — see GOOGLE_NATIVE_CLIENT_IDS in the route — and
- * the whole flow 401s at step 4 until that is set. That is the correct failure:
- * a backend that accepted an unlisted audience would accept ID tokens minted
- * for unrelated apps.
+ * NOTHING IS TRUSTED ON THIS SIDE. The email, name and picture are read only by
+ * the server, after verification. This module never parses the token.
  *
- * NOT AVAILABLE IN EXPO GO. The redirect URI is this app's own scheme, and
- * Expo Go does not have it — links there arrive as `exp://…/--/…` instead. A
- * development build is required — see README.
+ * NOT AVAILABLE IN EXPO GO: it is a native module. A development build is
+ * required — see README. Android only for now; iOS is configured by the plugin
+ * (iosUrlScheme in app.config.js) but UNTESTED, and web shows the button
+ * disabled.
  */
 
-// Dismisses the auth browser tab if it is somehow still open when the app comes
-// back to the foreground. Cheap insurance against a stranded Custom Tab; a
-// no-op when there is nothing to close.
-WebBrowser.maybeCompleteAuthSession();
-
-const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "";
-const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
+/**
+ * The OAuth "Web application" client id. NOT a secret — client ids are public —
+ * but it must live in the same Google Cloud project as the Android client(s).
+ */
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
 
-/** The client id this platform will actually use, or "" if it is not set. */
-function clientIdForPlatform(): string {
-  if (Platform.OS === "android") return ANDROID_CLIENT_ID;
-  if (Platform.OS === "ios") return IOS_CLIENT_ID;
-  return WEB_CLIENT_ID;
+const SUPPORTED = native !== null && (Platform.OS === "android" || Platform.OS === "ios");
+
+let configured = false;
+function ensureConfigured(): void {
+  if (configured) return;
+  GoogleSignin.configure({
+    webClientId: WEB_CLIENT_ID,
+    ...(Platform.OS === "ios" && IOS_CLIENT_ID ? { iosClientId: IOS_CLIENT_ID } : {}),
+    // Only what the backend reads off the token.
+    scopes: ["openid", "profile", "email"],
+  });
+  configured = true;
 }
-
-/**
- * Why an unconfigured build gets a disabled button and not a crash.
- *
- * `Google.useAuthRequest` throws an invariant when the id for the running
- * platform is missing, and a hook that throws during render takes the whole
- * login screen with it. Password sign-in must keep working on a build where
- * nobody has filled in the Google ids yet, so the hook is fed a harmless
- * placeholder and the button is disabled with a message that says which
- * variable is missing.
- */
-const PLACEHOLDER_CLIENT_ID = "unconfigured.apps.googleusercontent.com";
-
-/**
- * Where Google sends the authorization code back to.
- *
- * STATED, NOT INFERRED. Left alone, `Google.useAuthRequest` builds this as
- * `makeRedirectUri({ native: `${applicationId}:/oauthredirect` })`, and
- * `makeRedirectUri` only honours its `native` argument when
- * `Constants.executionEnvironment` is `"bare"` or `"standalone"`. That check
- * does not hold in this app.
- *
- * expo-constants assembles its export by SPREADING the native module —
- * `const { name, appOwnership, ...nativeConstants } = ExponentConstants` —
- * whereas `Constants.expoConfig` is a `defineProperty` getter that reads
- * `ExponentConstants.manifest` off the module directly. The two disagree here:
- * `expoConfig` resolves, since the embedded app config is plainly readable, but
- * `executionEnvironment` arrives undefined, so the guard fails and
- * `makeRedirectUri` falls through to `Linking.createURL("oauthredirect")` —
- * which returns the FIRST entry of `expo.scheme` in app.json.
- *
- * That accident is what produced `baylo://oauthredirect`, which Google accepted
- * for months and then began rejecting with `invalid_request` — no change on
- * this side, just a tightening on theirs. So the value pinned here is now the
- * one Google documents. Either way IT IS A FACT RATHER THAN A COINCIDENCE:
- * reordering `expo.scheme` in app.json used to silently move the redirect URI
- * out from under a registered OAuth client, and an expo-constants release that
- * repaired the spread would have moved it too. Neither can now.
- *
- * GOOGLE'S CANONICAL FORM, WITH A SINGLE SLASH. Google documents
- * `<package or bundle id>:/oauthredirect` for installed-app clients, and the
- * slash count is load-bearing. `com.baylo.app:/oauthredirect` has no authority,
- * so the segment is its PATH; `com.baylo.app://oauthredirect` would make that
- * same segment a HOST, which is a different URI and not one this client is
- * registered for. Do not "tidy" the slash.
- *
- * BOTH SCHEMES MUST STAY IN `expo.scheme`. That array is what puts
- * `<data android:scheme="com.baylo.app"/>` and `<data android:scheme="baylo"/>`
- * in the manifest; drop the one named here and the browser has nothing to hand
- * the redirect to, so the flow dies on the return leg. `baylo` stays regardless
- * — `Linking.createURL` and every other in-app deep link are built on it.
- *
- * If this ever has to move again, it moves alone: `app/+native-intent.ts`
- * recognises both shapes, so the return leg is swallowed either way. The
- * failure mode is loud and early — `invalid_request` or `redirect_uri_mismatch`
- * on the consent screen, before any authorization code exists.
- *
- * Web is left undefined deliberately: `useAuthRequest` only substitutes its own
- * value when the key is absent, and on web the correct answer is the page's own
- * origin, which `makeRedirectUri` does derive correctly.
- */
-const NATIVE_REDIRECT_URI = "com.baylo.app:/oauthredirect";
 
 export interface GoogleSignInOptions {
   /**
@@ -136,16 +90,22 @@ export interface GoogleSignInOptions {
    * surface that has no step to show.
    */
   onNeedsDateOfBirth?: (pending: GoogleExchange) => void;
+  /**
+   * Called INSTEAD of setting `error`, when the server refuses the sign-in
+   * because the account is suspended. The screen shows the full notice; a
+   * caller that does not pass it gets the server's sentence as `error`.
+   */
+  onSuspended?: (notice: SuspensionNotice) => void;
 }
 
 export interface GoogleSignIn {
   /** Starts the flow. Safe to call repeatedly; ignored while one is running. */
   start: () => void;
-  /** True from the moment the browser opens until the exchange has settled. */
+  /** True from the moment the picker opens until the exchange has settled. */
   busy: boolean;
   /** Null unless the flow failed in a way worth showing. Cancelling is not. */
   error: string | null;
-  /** False when the client id for this platform is missing. */
+  /** False when this platform or build cannot run Google sign-in. */
   configured: boolean;
   /** Why it is unavailable, for the disabled state's caption. */
   unavailableReason: string | null;
@@ -156,83 +116,62 @@ export interface GoogleSignIn {
 export function useGoogleSignIn(options: GoogleSignInOptions = {}): GoogleSignIn {
   const { exchangeGoogle, adoptSession } = useSession();
 
-  // Held in a ref rather than named in the effect's deps. A screen passes a
-  // fresh closure on every render, and depending on it would re-run the effect
-  // continuously while a response sat in state — `handled` below stops that
-  // becoming a repeated POST, but the churn is avoidable and this avoids it.
+  // Held in a ref: a screen passes a fresh closure on every render.
   const onNeedsDob = useRef(options.onNeedsDateOfBirth);
   onNeedsDob.current = options.onNeedsDateOfBirth;
+  const onSuspended = useRef(options.onSuspended);
+  onSuspended.current = options.onSuspended;
 
-  const configured = clientIdForPlatform().length > 0;
+  const isConfigured = SUPPORTED && WEB_CLIENT_ID.length > 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: ANDROID_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
-    iosClientId: IOS_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
-    webClientId: WEB_CLIENT_ID || PLACEHOLDER_CLIENT_ID,
-    redirectUri: Platform.OS === "web" ? undefined : NATIVE_REDIRECT_URI,
-    prompt: Prompt.SelectAccount,
-    // Only what the backend reads off the token. Asking for more would put
-    // scopes on the consent screen that nothing in this app uses, which is both
-    // a worse first impression and a larger blast radius on the access token
-    // that comes back beside the id token.
-    scopes: ["openid", "profile", "email"],
-  });
-
-  /**
-   * Guards against handling one response twice.
-   *
-   * `response` is a piece of state that survives re-renders, so the effect
-   * below runs again on every unrelated render while a successful response is
-   * still sitting there. Without this the ID token would be posted to the
-   * backend repeatedly — harmless in effect, since the endpoint is idempotent,
-   * but it would issue a fresh token pair each time and make the logs a lie.
-   */
-  const handled = useRef<unknown>(null);
-
+  // A result that lands after the screen unmounted must not set state.
+  const mounted = useRef(true);
   useEffect(() => {
-    if (!response || handled.current === response) return;
-    handled.current = response;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
-    // The user backed out, or the browser tab was dismissed. Not an error, and
-    // showing one for it is the single most common way this flow annoys people.
-    if (response.type === "cancel" || response.type === "dismiss") {
-      setBusy(false);
+  const start = useCallback(() => {
+    if (busy) return;
+    if (!isConfigured) {
+      setError(unavailableReason());
       return;
     }
+    setError(null);
+    setBusy(true);
 
-    if (response.type === "error") {
-      setBusy(false);
-      setError(
-        response.error?.message ??
-          "Google sign-in was refused. Check that this app's package name and " +
-            "SHA-1 match the Android OAuth client in the Google console.",
-      );
-      return;
-    }
-
-    if (response.type !== "success") {
-      setBusy(false);
-      return;
-    }
-
-    const idToken = response.params?.id_token ?? response.authentication?.idToken ?? null;
-    if (!idToken) {
-      setBusy(false);
-      // Reached when the code-for-token exchange came back without an id_token,
-      // which in practice means the client id used for the exchange is not an
-      // installed-app client (a Web client id here produces exactly this).
-      setError(
-        "Google returned no ID token. The client id in use must be an Android " +
-          "(or iOS) OAuth client, not a Web one.",
-      );
-      return;
-    }
-
-    let cancelled = false;
     (async () => {
       try {
+        ensureConfigured();
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+        const result = await GoogleSignin.signIn();
+        // The user backed out of the picker. Not an error, and showing one for
+        // it is the single most common way this flow annoys people.
+        if (!isSuccessResponse(result)) return;
+
+        const idToken = result.data.idToken;
+
+        // Forget the Google account on this device's Google Sign-In cache so the
+        // NEXT tap shows the picker again instead of silently reusing it — the
+        // same "select account" behaviour the browser flow had. This does not
+        // touch the Baylo session.
+        await GoogleSignin.signOut().catch(() => undefined);
+
+        if (!idToken) {
+          if (mounted.current) {
+            setError(
+              "Google returned no ID token. EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID must be a " +
+                "Web application client in the same Google Cloud project as the Android client.",
+            );
+          }
+          return;
+        }
+
         const pending = await exchangeGoogle(idToken);
 
         if (pending.needsDateOfBirth && onNeedsDob.current) {
@@ -248,89 +187,80 @@ export function useGoogleSignIn(options: GoogleSignInOptions = {}): GoogleSignIn
         // publishes, and the (auth) guard redirects — same contract as
         // password sign-in, and for the same reason.
       } catch (err) {
-        if (cancelled) return;
-        setError(googleBackendMessage(err));
+        if (!mounted.current) return;
+        const notice = suspensionFrom(err);
+        if (notice && onSuspended.current) onSuspended.current(notice);
+        else setError(googleErrorMessage(err));
       } finally {
-        if (!cancelled) setBusy(false);
+        if (mounted.current) setBusy(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [response, exchangeGoogle, adoptSession]);
-
-  const start = useCallback(() => {
-    if (busy) return;
-    if (!configured) {
-      setError(unavailableReason());
-      return;
-    }
-    if (!request) {
-      // The request builds asynchronously (PKCE needs a random verifier). A tap
-      // this early is rare and does nothing; the button is disabled until it is
-      // ready, so this is belt as well as braces.
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    promptAsync().catch((err: unknown) => {
-      setBusy(false);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not open Google sign-in. Is a browser installed on this device?",
-      );
-    });
-  }, [busy, configured, promptAsync, request]);
+  }, [busy, isConfigured, exchangeGoogle, adoptSession]);
 
   return {
     start,
     busy,
     error,
-    configured,
-    unavailableReason: configured ? null : unavailableReason(),
+    configured: isConfigured,
+    unavailableReason: isConfigured ? null : unavailableReason(),
     reset: useCallback(() => setError(null), []),
   };
 }
 
 function unavailableReason(): string {
-  const variable = Platform.select({
-    android: "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID",
-    ios: "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID",
-    default: "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID",
-  });
-  return `Google sign-in is not configured — set ${variable} in .env and restart Metro with --clear.`;
+  if (!native && Platform.OS !== "web") {
+    return "This build of the app does not include Google sign-in. Install the latest build, or continue with email.";
+  }
+  if (!SUPPORTED) return "Google sign-in is available in the Android app.";
+  return "Google sign-in is not configured — set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in .env and restart Metro with --clear.";
 }
 
 /**
- * Turns a failure from POST /api/auth/google/token into something actionable.
- *
- * The backend's messages are correct but terse, and the two that will actually
- * be hit during setup — a 500 because GOOGLE_NATIVE_CLIENT_IDS is unset, and a
- * 401 because the Android client id is not in it — are indistinguishable from
- * "Google said no" unless the cause is spelled out here.
+ * Turns a failure into something actionable. The native module reports setup
+ * mistakes with bare codes, and the two that will actually be hit during setup
+ * — DEVELOPER_ERROR (package/SHA-1 not registered) and a 401 from the backend
+ * (audience not trusted) — are indistinguishable from "Google said no" unless
+ * the cause is spelled out here.
  */
-function googleBackendMessage(err: unknown): string {
-  if (!(err instanceof ApiError)) {
-    return "Something went wrong finishing Google sign-in. Please try again.";
+function googleErrorMessage(err: unknown): string {
+  if (isErrorWithCode(err)) {
+    switch (err.code) {
+      case statusCodes.SIGN_IN_CANCELLED:
+        return "Google sign-in was cancelled.";
+      case statusCodes.IN_PROGRESS:
+        return "Google sign-in is already open.";
+      case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+        return "Google Play services is missing or out of date on this phone. Update it from the Play Store, or continue with email.";
+      default:
+        // DEVELOPER_ERROR arrives as code "10" on Android.
+        if (String(err.code) === "10" || /DEVELOPER_ERROR/i.test(err.message)) {
+          return (
+            "Google sign-in is not set up for this build (DEVELOPER_ERROR).\n\n" +
+            "In Google Cloud Console, the project that owns the Web client id must also " +
+            "have an Android OAuth client for package com.baylo.app with THIS build's " +
+            "SHA-1 signing fingerprint."
+          );
+        }
+        return err.message || "Google sign-in failed. Please try again.";
+    }
   }
 
-  if (err.status === 401) {
-    return (
-      `${err.message}\n\nIf this is a fresh setup: the ID token's audience is ` +
-      `this app's Android OAuth client id, and the server only accepts ids ` +
-      `listed in GOOGLE_NATIVE_CLIENT_IDS. Add it there and restart the server.`
-    );
+  if (err instanceof ApiError) {
+    if (err.status === 401) {
+      return (
+        `${err.message}\n\nThe server does not trust this Google client. Its id (the Web ` +
+        `client id) must be listed in GOOGLE_NATIVE_CLIENT_IDS, or its project number in ` +
+        `GOOGLE_TRUSTED_PROJECTS, in the API's .env — then restart the server.`
+      );
+    }
+    if (err.status === 500) {
+      return (
+        `${err.message}\n\nThe server has no accepted Google audiences configured — set ` +
+        `GOOGLE_TRUSTED_PROJECTS or GOOGLE_NATIVE_CLIENT_IDS in the API's .env.`
+      );
+    }
+    return err.message;
   }
 
-  if (err.status === 500) {
-    return (
-      `${err.message}\n\nThe server has no accepted Google audiences ` +
-      `configured — set GOOGLE_CLIENT_ID and GOOGLE_NATIVE_CLIENT_IDS in the ` +
-      `Next.js .env.`
-    );
-  }
-
-  return err.message;
+  return "Something went wrong finishing Google sign-in. Please try again.";
 }

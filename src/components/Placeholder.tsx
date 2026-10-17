@@ -29,7 +29,7 @@ export function Placeholder({
       {children ? <View style={s.circle}>{children}</View> : null}
       <Text style={[textStyle(type.emptyHeadline), s.title]}>{title}</Text>
       <Text style={[textStyle(type.emptyBody), s.blurb]}>{blurb}</Text>
-      <Text style={[textStyle(type.sectionEyebrow), s.note]}>NOT BUILT YET</Text>
+      <Text style={[textStyle(type.sectionHeading), s.note]}>Not built yet</Text>
     </View>
   );
 }

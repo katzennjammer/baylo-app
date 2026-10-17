@@ -49,6 +49,8 @@ export function useHome() {
     /** Everything that is not the feed comes from page 0. */
     viewer: first?.viewer,
     unread: first?.unread,
+    /** The shop the last fetch acted as, or null. See HomePayload.acting. */
+    acting: first?.acting ?? null,
     trending: first?.trending ?? [],
     matches: first?.matches ?? [],
     /** Every page's feed, flattened, in order, with repeats dropped. */
@@ -77,4 +79,22 @@ function dedupeById<T extends { id: string }>(rows: T[]): T[] {
     out.push(row);
   }
   return out;
+}
+
+/**
+ * The acting shop's backing account id, or null — off the SAME home query the
+ * header reads (deduped by key), so it agrees with the pill about which shop
+ * the server answered as. `enabled` exists because the (app) layout calls this
+ * before it knows there is a session, and an unauthenticated /home is a 401
+ * that would trip the refresh interceptor for nothing.
+ */
+export function useActingShopUserId(enabled: boolean): string | null {
+  const query = useInfiniteQuery({
+    queryKey: HOME_KEY,
+    queryFn: ({ pageParam }) => fetchHomePage(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled,
+  });
+  return query.data?.pages[0]?.payload.acting?.orgUserId ?? null;
 }

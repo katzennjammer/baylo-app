@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, apiV1, currentSession, legacyFailure, request } from "./client";
+import { ApiError, apiV1, currentSession, legacyFailure, malformedResponse, readJson, request } from "./client";
 import { getApiBase } from "./config";
 import type { SafeZoneHub } from "./types";
 
@@ -58,7 +58,6 @@ export const CATEGORIES = [
   "PETS",
   "PLANTS",
   "FOOD",
-  "SERVICES",
   "OTHER",
 ] as const;
 
@@ -70,7 +69,7 @@ export type Category = (typeof CATEGORIES)[number];
  * DUPLICATED ON PURPOSE, and it is the only duplication in this file. The two
  * endpoints this flow uses that return a category — identify and valuation —
  * disagree about whether they send a label: valuation sends `categoryLabel`,
- * identify sends the bare enum. The picker on step 2 has to render twenty
+ * identify sends the bare enum. The picker on step 2 has to render nineteen
  * options before either call has happened, so it cannot wait for a label it
  * will only be given for one of them. Where a server label IS present it wins;
  * this is the fallback and the picker's source.
@@ -94,7 +93,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   PETS: "Pets",
   PLANTS: "Plants",
   FOOD: "Food",
-  SERVICES: "Services",
   OTHER: "Miscellaneous",
 };
 
@@ -167,7 +165,7 @@ export async function uploadPhoto(
   const res = await request("/api/upload", { method: "POST", body: form, signal });
   if (!res.ok) return legacyFailure(res, "Upload failed");
 
-  return (await res.json()) as UploadResult;
+  return readJson<UploadResult>(res, "/api/upload");
 }
 
 /**
@@ -265,7 +263,7 @@ export function uploadPhotoWithProgress(
       try {
         resolve(JSON.parse(xhr.responseText) as UploadResult);
       } catch {
-        reject(new ApiError(xhr.status, "MALFORMED_RESPONSE", "/api/upload did not return JSON"));
+        reject(malformedResponse(xhr.status, "/api/upload"));
       }
     };
 
@@ -295,15 +293,19 @@ export interface IdentifyResult {
 /**
  * What the photo is.
  *
- * ── THIS ENDPOINT ANSWERS 200 ON FAILURE ────────────────────────────────────
+ * ── TWO WAYS TO FAIL, ONE MEANING ───────────────────────────────────────────
  *
- * Deliberately, server-side: a vision call that throws returns
- * `{ name: "", category: "OTHER", condition: "GOOD", tags: [] }` with a 200,
- * because a listing flow that dead-ends on an AI outage is a worse product than
- * one that asks the user to type. So a caller cannot use the HTTP status to
- * tell success from failure — an EMPTY `name` is the signal, and it is the only
- * one there is. `detectionFailed()` below is where that reading lives so no
- * screen re-derives it.
+ * A vision call that THROWS server-side (outage, no API credit) is a 503 since
+ * 27 Sep 2026, and throws here. It used to be a 200 carrying
+ * `{ name: "", category: "OTHER", ... }`, which kept the wizard moving but
+ * hid a whole evening of identification silently failing on an unfunded key.
+ *
+ * A model that answers but cannot read the photo is still a 200 with an EMPTY
+ * `name`. `detectionFailed()` below is where that reading lives.
+ *
+ * Callers treat both the same way -- see useDetection(), where a throw and an
+ * empty name both land on "Tell us what it is". A listing flow must never
+ * dead-end on an AI outage; it asks the user to type instead.
  *
  * A 429 is still a real 429 and still throws, with Retry-After attached.
  */
@@ -319,7 +321,7 @@ export async function identifyPhoto(
   });
   if (!res.ok) return legacyFailure(res, "Could not identify this photo");
 
-  return (await res.json()) as IdentifyResult;
+  return readJson<IdentifyResult>(res, "/api/ai/identify");
 }
 
 /** The one reading of "identify did not work". Empty name, nothing else. */
@@ -528,6 +530,30 @@ export interface CreateItemInput {
   imageHashes: (string | null)[];
   /** Max 5. `resolveHubIds` rejects a sixth and the item is not created. */
   hubIds: string[];
+  /**
+   * The categories the poster will take in return — step 5's chip group.
+   *
+   * THIS EXISTED IN THE WIZARD AND WAS NEVER SENT. `returnCategories` has been
+   * collected on step 5 since the flow was built and then dropped on the floor
+   * at submit, so the answer people gave went nowhere. It is now the matcher's
+   * input server-side: it is what decides who gets told about a new listing.
+   *
+   * Capped at 6 by the server. Not perishable-only -- a standard listing is
+   * just as likely to name what it wants back.
+   */
+  lookingForCategories: Category[];
+  /**
+   * The perishable block, or omitted entirely for a standard listing.
+   *
+   * ALL OR NOTHING: the server refuses a quantity with no unit, a unit with no
+   * quantity, a window on a non-perishable, and a perishable with no window.
+   * Sending them as one optional object rather than four loose fields is what
+   * makes those states unrepresentable here rather than merely refused there.
+   */
+  isPerishable?: boolean;
+  quantity?: number | null;
+  quantityUnit?: "KG" | "PCS" | "LITERS" | null;
+  tradeWithinHours?: 6 | 24 | null;
 }
 
 /** What POST /api/items answers with. Only the id is read by this flow. */
@@ -546,7 +572,21 @@ export interface CreatedItem {
     decision: "suggested" | "lowered" | "raisedWithinCap" | "needsReview";
     pending: boolean;
     notice: string | null;
+    /**
+     * TRUE when this was a perishable whose value was lowered to the
+     * unreviewed cap instead of being parked for review.
+     *
+     * A SEPARATE FLAG FROM `pending`, and never both: a clamped listing IS
+     * live, which is the opposite of parked. The dialog styles it as
+     * information rather than as a wait, and `clampNotice` is the server's own
+     * sentence for it. Absent on an older server, which clamps nothing.
+     */
+    clamped?: boolean;
+    clampNotice?: string | null;
+    requestedLeaves?: number | null;
   };
+  /** Set when the listing was posted for an organisation. Null for yourself. */
+  postedAs?: { organizationId: string; name: string } | null;
 }
 
 /**
@@ -570,7 +610,7 @@ export async function createItem(input: CreateItemInput): Promise<CreatedItem> {
     body: JSON.stringify(input),
   });
   if (!res.ok) return legacyFailure(res, "We could not post this just now.");
-  return (await res.json()) as CreatedItem;
+  return readJson<CreatedItem>(res, "/api/items");
 }
 
 /**
@@ -596,7 +636,10 @@ export function useCreateItem() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["browse"] });
       void qc.invalidateQueries({ queryKey: ["home"] });
-      void qc.invalidateQueries({ queryKey: ["profile", "me"] });
+      // The whole ["profile"] prefix, not just ["profile", "me"]: a listing
+      // posted AS AN ORGANISATION lands on the shop's shelf, which the Profile
+      // tab reads as ["profile", <orgUserId>] for a shop-only account.
+      void qc.invalidateQueries({ queryKey: ["profile"] });
     },
   });
 }

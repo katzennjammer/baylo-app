@@ -1,4 +1,9 @@
-import { LEAFLET_CSS, LEAFLET_JS } from "./leaflet-bundle.generated";
+import {
+  LEAFLET_CSS,
+  LEAFLET_JS,
+  MARKERCLUSTER_CSS,
+  MARKERCLUSTER_JS,
+} from "./leaflet-bundle.generated";
 import {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
@@ -192,7 +197,28 @@ const PIN = {
   ring: "#FAFAF7",
   selectedRing: "#3DBE5A",
   nearbyRing: "#3DBE5A",
+  /** The light halo behind a selected pin's head (color.greenLine). */
+  selectedHalo: "#D2EAD8",
 };
+
+/**
+ * Cluster bubbles, from the same hand-kept palette: a `color.surface` disc
+ * with a 2 px `color.forest` ring and a forest count (#1B4D2B on #FAFAF7,
+ * about 9.3:1). Quiet on purpose: the bright green fill competed with the
+ * pins, which stay dark forest. Replaces the plugin's default
+ * green/yellow/orange, whose stylesheet is deliberately not vendored.
+ */
+const CLUSTER = { fill: "#FAFAF7", text: "#1B4D2B", ring: "#1B4D2B" };
+
+/** The viewer's position: a plain blue dot, white border, soft halo. */
+const USER_DOT = { fill: "#1167D8", border: "#FFFFFF", halo: "rgba(17, 103, 216, 0.18)" };
+
+/**
+ * How close, in screen pixels, two pins must be to share a bubble. The pin is
+ * 32 px wide; 48 merges pins that overlap or nearly touch, and leaves pins a
+ * finger-width apart as separate targets.
+ */
+const CLUSTER_RADIUS_PX = 48;
 
 /* ─────────────────────────────── the page ───────────────────────────── */
 
@@ -215,16 +241,47 @@ export interface MapHtmlOptions {
   focusHubId?: string;
   /** Draw at a fixed scale with gestures off — the inline preview on item detail. */
   interactive: boolean;
+  /** Levels wider than the fitted view. The item-detail preview uses it. */
+  zoomOut?: number;
+  /**
+   * A pin drawn SELECTED from the start (the light ring), for a still preview
+   * that has no selection of its own: the hub page's map strip.
+   */
+  highlightHubId?: string;
 }
 
-export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: MapHtmlOptions): string {
+export function buildMapHtml({
+  hubs,
+  userLocation,
+  focusHubId,
+  interactive,
+  zoomOut,
+  highlightHubId,
+}: MapHtmlOptions): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <style>${LEAFLET_CSS}</style>
+<style>${MARKERCLUSTER_CSS}</style>
 <style>
+  /* Cluster bubbles: Baylo green, sized by count in iconCreateFunction. */
+  .baylo-cluster-wrap { background: none; border: 0; }
+  .baylo-cluster {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: ${CLUSTER.fill};
+    border: 2px solid ${CLUSTER.ring};
+    color: ${CLUSTER.text};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 700 14px sans-serif;
+    box-shadow: 0 2px 6px rgba(20, 20, 15, 0.28);
+  }
   html, body { margin: 0; padding: 0; height: 100%; background: #EDEBE3; }
   /* The canvas colour under the tiles. Matches the app's divider grey so the
      gap before the first tile paints reads as "loading", not as "broken". */
@@ -246,57 +303,20 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
   /* Nearby is a glow + ring, not a second colour: type glyphs stay the legend. */
   .baylo-pin.is-nearby svg { filter: drop-shadow(0 0 7px rgba(61, 190, 90, 0.95)); }
 
-  .baylo-user-location {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 128px !important;
-    height: 72px !important;
-    margin: -72px 0 0 -24px;
-    color: #FFFFFF;
-    font: 700 12px sans-serif;
-    white-space: nowrap;
-  }
-
-  .baylo-user-location-label {
+  /* The viewer: a blue dot with a white border and a soft halo. No text
+     label -- the dot is the convention every map app uses, and a "You are
+     here" pill covered the pins around it. */
+  .baylo-user-location { background: none; border: 0; }
+  .baylo-user-dot {
     display: block;
-    padding: 5px 9px;
-    border: 2px solid #FAFAF7;
-    border-radius: 12px;
-    background: #1167D8;
-    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.3);
-  }
-
-  .baylo-user-location-badge {
-    display: block;
-    position: relative;
-    width: 40px;
-    height: 40px;
-    margin-top: 3px;
-    border: 3px solid #FAFAF7;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    margin: 9px;
     border-radius: 50%;
-    background: #1167D8;
-    box-shadow: 0 1px 5px rgba(20, 20, 15, 0.35);
-  }
-
-  .baylo-user-location-badge::after {
-    content: '';
-    position: absolute;
-    bottom: -7px;
-    left: 12px;
-    width: 11px;
-    height: 11px;
-    border-right: 3px solid #FAFAF7;
-    border-bottom: 3px solid #FAFAF7;
-    background: #1167D8;
-    transform: rotate(45deg);
-  }
-
-  .baylo-user-location-badge svg {
-    position: relative;
-    z-index: 1;
-    display: block;
-    margin: 7px auto;
+    background: ${USER_DOT.fill};
+    border: 3px solid ${USER_DOT.border};
+    box-shadow: 0 0 0 9px ${USER_DOT.halo}, 0 1px 4px rgba(20, 20, 15, 0.3);
   }
 
   /* Kills the blue tap flash Android WebView paints over the pin. */
@@ -306,12 +326,15 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
 <body>
 <div id="map"></div>
 <script>${LEAFLET_JS}</script>
+<script>${MARKERCLUSTER_JS}</script>
 <script>
 (function () {
   var HUBS = ${safeJson(hubs)};
   var USER_LOCATION = ${safeJson(userLocation ?? null)};
   var FOCUS_ID = ${safeJson(focusHubId ?? null)};
   var INTERACTIVE = ${interactive ? "true" : "false"};
+  var ZOOM_OUT = ${Math.max(0, Math.round(zoomOut ?? 0))};
+  var HIGHLIGHT_ID = ${safeJson(highlightHubId ?? null)};
   var GLYPHS = ${safeJson(GLYPHS)};
   var FALLBACK_GLYPH = ${safeJson(FALLBACK_GLYPH)};
   var PIN = ${safeJson(PIN)};
@@ -401,8 +424,15 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
     var c = hub.isActive ? PIN.active : PIN.inactive;
     var glyph = GLYPHS[hub.type] || FALLBACK_GLYPH;
     var ring = selected ? PIN.selectedRing : (hub.nearby ? PIN.nearbyRing : PIN.ring);
+    // Selected: a light ring around the head, so the pin visibly matches the
+    // outlined card in the strip. Drawn past the box (overflow visible), so
+    // the box and its tip anchor are unchanged.
+    var halo = selected
+      ? '<circle cx="16" cy="16" r="19" fill="none" stroke="' + PIN.selectedHalo + '" stroke-width="4"/>'
+      : '';
     return (
-      '<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">' +
+      '<svg width="32" height="42" viewBox="0 0 32 42" style="overflow:visible" xmlns="http://www.w3.org/2000/svg">' +
+        halo +
         '<path d="M16 1.6c-7.9 0-14.4 6.4-14.4 14.4 0 10.1 14.4 24 14.4 24s14.4-13.9 14.4-24c0-8-6.5-14.4-14.4-14.4z"' +
           ' fill="' + c.body + '" stroke="' + ring + '" stroke-width="2.2"/>' +
         '<circle cx="16" cy="16" r="10.4" fill="' + c.disc + '"/>' +
@@ -426,11 +456,35 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
   }
 
   var markers = {};
-  var selectedId = null;
+  var selectedId = HIGHLIGHT_ID;
+
+  /* ── clusters ────────────────────────────────────────────────────────────
+     Pins within CLUSTER_RADIUS_PX of each other merge into one numbered
+     bubble; zooming in splits it, and tapping it zooms to its pins. At the
+     deepest zoom, pins at the same spot fan out (spiderfy) instead.
+     Interactive map only: the inline preview on item detail shows one
+     listing's hubs at a fixed scale and has nothing to zoom into. */
+  var clusters = INTERACTIVE
+    ? L.markerClusterGroup({
+        maxClusterRadius: ${CLUSTER_RADIUS_PX},
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true,
+        iconCreateFunction: function (cluster) {
+          var n = cluster.getChildCount();
+          var d = n < 10 ? 38 : n < 100 ? 44 : 50;
+          return L.divIcon({
+            className: 'baylo-cluster-wrap',
+            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe hubs">' + n + '</div>',
+            iconSize: [d, d]
+          });
+        }
+      })
+    : null;
 
   HUBS.forEach(function (hub) {
     var marker = L.marker([hub.latitude, hub.longitude], {
-      icon: iconFor(hub, false),
+      icon: iconFor(hub, hub.id === HIGHLIGHT_ID),
       keyboard: false,
       title: hub.name,
       alt: hub.name,
@@ -443,21 +497,19 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       select(hub.id);
       post({ type: 'hub', id: hub.id });
     });
-    marker.addTo(map);
+    if (clusters) clusters.addLayer(marker);
+    else marker.addTo(map);
     markers[hub.id] = { hub: hub, marker: marker };
   });
+  if (clusters) map.addLayer(clusters);
 
   if (USER_LOCATION) {
     L.marker([USER_LOCATION.latitude, USER_LOCATION.longitude], {
       icon: L.divIcon({
         className: 'baylo-user-location',
-        html: '<span class="baylo-user-location-label">You are here</span>' +
-          '<span class="baylo-user-location-badge"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
-          '<circle cx="12" cy="7" r="3" fill="none" stroke="#FFFFFF" stroke-width="2"/>' +
-          '<path d="M6.5 20c.5-4.2 2.3-6.5 5.5-6.5s5 2.3 5.5 6.5M12 13.5v5.5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-          '</svg></span>',
-        iconSize: [128, 72],
-        iconAnchor: [24, 72]
+        html: '<span class="baylo-user-dot" role="img" aria-label="Your location"></span>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
       }),
       interactive: false,
       zIndexOffset: 2000
@@ -472,6 +524,22 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       entry.marker.setIcon(iconFor(entry.hub, which === id));
     });
     selectedId = id;
+  }
+
+  /* A hub chosen from OUTSIDE the map (the nearby strip under it) may be
+     inside a bubble, or off screen, where highlighting its pin would change
+     nothing visible. zoomToShowLayer zooms and pans until the pin is its own
+     marker (spiderfying at the deepest zoom if it must), then the pin is
+     highlighted. A pin the person just tapped is already visible, so this is
+     a plain select for it. */
+  function reveal(id) {
+    var entry = markers[id];
+    if (!entry) return;
+    if (clusters && clusters.getVisibleParent(entry.marker) !== entry.marker) {
+      clusters.zoomToShowLayer(entry.marker, function () { select(id); });
+    } else {
+      select(id);
+    }
   }
 
   map.on('click', function () {
@@ -496,10 +564,21 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
     if (pts.length === 1) {
       // fitBounds on a single point has no scale to work from and snaps to
       // maxZoom, which shows four roof tiles and no context.
-      map.setView(pts[0], ${SINGLE_HUB_ZOOM}, { animate: !!animate });
+      map.setView(pts[0], ${SINGLE_HUB_ZOOM} - ZOOM_OUT, { animate: !!animate });
       return;
     }
-    map.fitBounds(L.latLngBounds(pts), {
+    var bounds = L.latLngBounds(pts);
+    if (ZOOM_OUT > 0) {
+      // The listing preview: the fitted zoom, then ZOOM_OUT levels wider, so
+      // the pins sit in their neighbourhood rather than filling the frame.
+      var fitted = map.getBoundsZoom(bounds, false, L.point(
+        FIT_PADDING[0][1] + FIT_PADDING[1][1],
+        FIT_PADDING[0][0] + FIT_PADDING[1][0]
+      ));
+      map.setView(bounds.getCenter(), Math.min(fitted, ${SINGLE_HUB_ZOOM}) - ZOOM_OUT, { animate: !!animate });
+      return;
+    }
+    map.fitBounds(bounds, {
       paddingTopLeft: FIT_PADDING[0],
       paddingBottomRight: FIT_PADDING[1],
       maxZoom: ${SINGLE_HUB_ZOOM},
@@ -534,15 +613,30 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
     fitPoints(pts, animate);
   }
 
-  if (FOCUS_ID && markers[FOCUS_ID]) {
-    var f = markers[FOCUS_ID].hub;
-    map.setView([f.latitude, f.longitude], ${SINGLE_HUB_ZOOM});
-    select(FOCUS_ID);
-  } else if (USER_LOCATION) {
-    fitNearby(false);
-  } else {
-    fitAll(false);
+  function openingView() {
+    if (FOCUS_ID && markers[FOCUS_ID]) {
+      var f = markers[FOCUS_ID].hub;
+      map.setView([f.latitude, f.longitude], ${SINGLE_HUB_ZOOM});
+      // reveal, not select: at this zoom the pin can still sit in a bubble.
+      reveal(FOCUS_ID);
+    } else if (USER_LOCATION) {
+      fitNearby(false);
+    } else {
+      fitAll(false);
+    }
   }
+  openingView();
+
+  /* THE OPENING FIT RUNS AGAIN ONCE THE VIEW HAS ITS REAL SIZE (1 Oct 2026).
+     This document can run before the native WebView is measured (see the
+     onLoadEnd note in HubMap). fitBounds against a too-small viewport picks a
+     far-out zoom -- the whole island instead of the hubs -- and the later
+     invalidateSize() fixed the size but never the zoom. So the first
+     invalidate() re-fits, unless the person has already touched the map:
+     moving it under their finger would be worse than a wide first view. */
+  var touched = false;
+  var refitted = false;
+  document.getElementById('map').addEventListener('touchstart', function () { touched = true; }, { passive: true });
 
   /* ── the RN-callable surface ─────────────────────────────────────────── */
   //
@@ -555,9 +649,15 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       var entry = markers[id];
       if (!entry) return;
       map.setView([entry.hub.latitude, entry.hub.longitude], zoom || ${SINGLE_HUB_ZOOM}, { animate: true });
-      select(id);
+      // The zoom above may still leave it in a bubble; reveal() finishes the job.
+      map.once('moveend', function () { reveal(id); });
     },
-    select: function (id) { select(id); },
+    // From RN whenever the selection changes: a strip tap, a pin tap echoed
+    // back, or a sheet closing (null). See reveal().
+    select: function (id) {
+      if (id) reveal(id);
+      else select(null);
+    },
     fitAll: function () { fitAll(true); },
     retryTiles: function () {
       okPosted = false;
@@ -565,7 +665,13 @@ export function buildMapHtml({ hubs, userLocation, focusHubId, interactive }: Ma
       errorCount = 0;
       tiles.redraw();
     },
-    invalidate: function () { map.invalidateSize(); }
+    invalidate: function () {
+      map.invalidateSize();
+      if (!refitted && !touched) {
+        refitted = true;
+        openingView();
+      }
+    }
   };
 
   post({ type: 'ready' });

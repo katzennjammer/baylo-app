@@ -34,13 +34,12 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Baylo uses your location to show nearby Safe-Zone hubs."
+          "locationWhenInUsePermission": "Baylo uses your location to show nearby safe hubs."
         }
       ],
       "expo-secure-store",
       "expo-build-properties",
       "expo-image",
-      "expo-web-browser",
       "expo-video",
       "@react-native-community/datetimepicker",
       [

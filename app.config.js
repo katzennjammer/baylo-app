@@ -19,18 +19,38 @@
  * `expo.android.usesCleartextTraffic` is not a key the Expo config schema
  * accepts; `expo-build-properties` is the supported way to reach it.
  *
- * Nothing here fires for local development: the variable is unset, this returns
- * app.json untouched, and debug builds keep getting cleartext the way they
- * always have.
+ * The cleartext part does not fire for local development: the variable is
+ * unset, and debug builds keep getting cleartext the way they always have. The
+ * Google Sign-In plugin below is added in every build.
  */
-module.exports = ({ config }) => {
-  if (process.env.BAYLO_ALLOW_CLEARTEXT !== "1") return config;
+/**
+ * NATIVE GOOGLE SIGN-IN. `@react-native-google-signin/google-signin`'s plugin
+ * has two modes, and the one WITHOUT options assumes Firebase: it applies the
+ * google-services Gradle plugin, which fails the Android build without a
+ * google-services.json. So it is always given options here.
+ *
+ * Its only option, `iosUrlScheme`, is the iOS client id reversed
+ * (`com.googleusercontent.apps.<id without the domain>`). It is derived from
+ * EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID rather than typed into app.json, so there is
+ * one place the id lives. With no iOS id set (an EAS Android build, whose env
+ * comes from eas.json) a placeholder satisfies the plugin's validation; it
+ * only affects iOS, which is untested.
+ */
+function googleSignInPlugin() {
+  const iosClientId = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "").trim();
+  const suffix = ".apps.googleusercontent.com";
+  const iosUrlScheme = iosClientId.endsWith(suffix)
+    ? `com.googleusercontent.apps.${iosClientId.slice(0, -suffix.length)}`
+    : "com.googleusercontent.apps.unconfigured";
+  return ["@react-native-google-signin/google-signin", { iosUrlScheme }];
+}
 
-  return {
-    ...config,
-    plugins: [
-      ...(config.plugins ?? []),
-      ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
-    ],
-  };
+module.exports = ({ config }) => {
+  const plugins = [...(config.plugins ?? []), googleSignInPlugin()];
+
+  if (process.env.BAYLO_ALLOW_CLEARTEXT === "1") {
+    plugins.push(["expo-build-properties", { android: { usesCleartextTraffic: true } }]);
+  }
+
+  return { ...config, plugins };
 };

@@ -15,8 +15,10 @@ import { useSession } from "../../src/auth/session";
 export default function AuthLayout() {
   const { session, isLoading } = useSession();
 
-  if (isLoading) return <Splash />;
-  if (session) return <Redirect href="/(app)" />;
+  // tone="boot": this is the initial session read, on the cold-start path.
+  if (isLoading) return <Splash tone="boot" />;
+  // HOME REDESIGN (preview): land on the new Home, as "/" does.
+  if (session) return <Redirect href="/(app)/home" />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, request } from "./client";
-import type { ProfileMePayload, PublicProfilePayload } from "./types";
+import type { BrowsePayload, FollowStatus, ProfileConnectionUser, ProfileMePayload, PublicProfilePayload } from "./types";
 
 /**
  * GET /api/v1/profile/me — the viewer's own shelf, standing and ID gate.
@@ -53,6 +53,17 @@ export function useProfileMe(enabled = true) {
   });
 }
 
+/**
+ * What one task pays, in Leaves, as /api/v1/profile/me reports it. Null while
+ * the profile loads, when it failed, or when the server does not list the task:
+ * the caller words its sentence without a number rather than guess one.
+ */
+export function useTaskReward(task: string): number | null {
+  const me = useProfileMe();
+  const row = me.data?.tasks?.items.find((t) => t.task === task);
+  return typeof row?.reward === "number" ? row.reward : null;
+}
+
 export function usePublicProfile(id: string | undefined) {
   return useQuery({
     queryKey: ["profile", id],
@@ -72,10 +83,194 @@ export function useFollow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ followeeId: userId }),
       });
-      if (!response.ok) throw new Error("Could not send follow request");
+      if (!response.ok) throw new Error("Could not follow this user");
     },
-    onSuccess: (_data, { userId }) => {
+    onMutate: async ({ userId }) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", userId] });
+      await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
+      patchCachedProfile(queryClient, userId, "ACCEPTED");
+      updateConnectionCaches(queryClient, userId, "ACCEPTED");
+      updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
+    },
+    onError: (_error, { userId }) => {
+      // The status flags on every connections list this patched; the count
+      // and the followee's own list are re-read in onSettled.
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+      updateBrowseOrgCaches(queryClient, userId, "NONE");
+    },
+    // Success or not: the server's count and the followee's follower list are
+    // the truth the optimistic patch guessed at. The list has to be refetched
+    // rather than patched -- a new follower is a row it does not have yet.
+    onSettled: (_data, _error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections", userId] });
     },
   });
+}
+
+export function useUnfollow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const response = await request(`/api/follows/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not unfollow this user");
+    },
+    onMutate: async ({ userId }) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", userId] });
+      await queryClient.cancelQueries({ queryKey: ["profile-connections"] });
+      patchCachedProfile(queryClient, userId, "NONE");
+      updateConnectionCaches(queryClient, userId, "NONE");
+      updateBrowseOrgCaches(queryClient, userId, "NONE");
+    },
+    onError: (_error, { userId }) => {
+      // The status flags on every connections list this patched; the count
+      // and the followee's own list are re-read in onSettled.
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+      updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
+    },
+    // Success or not: the server's count and the followee's follower list are
+    // the truth the optimistic patch guessed at. The list has to be refetched
+    // rather than patched -- a new follower is a row it does not have yet.
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections", userId] });
+    },
+  });
+}
+
+/**
+ * The optimistic half of follow / unfollow on a profile that is on screen.
+ *
+ * THE CACHE HOLDS THE ENVELOPE, NOT THE PAYLOAD. usePublicProfile() stores
+ * apiV1()'s `{ data, meta }` and unwraps it with `select`, and `select` only
+ * shapes what the screen reads -- setQueryData sees the raw entry. From 16 Sep
+ * 2026 (3b83e43) until this was fixed, the updaters here read
+ * `profile.counts.followers` off the envelope, threw inside onMutate, and so
+ * the POST was never sent: every Follow tap on a profile silently rolled back
+ * to "Follow" and the old count. The type parameter below is the real shape so
+ * that drift is a compile error next time.
+ *
+ * Moving from "not ACCEPTED" to ACCEPTED is +1, the reverse -1; anything else
+ * leaves the count alone, so a double tap cannot count twice.
+ */
+function patchCachedProfile(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueryData<{ data: PublicProfilePayload; meta: Record<string, unknown> }>(
+    ["profile", userId],
+    (entry) => {
+      if (!entry) return entry;
+      const profile = entry.data;
+      const was = profile.follow.status;
+      if (was === status) return entry;
+      const delta = status === "ACCEPTED" ? 1 : was === "ACCEPTED" ? -1 : 0;
+      return {
+        ...entry,
+        data: {
+          ...profile,
+          counts: { ...profile.counts, followers: Math.max(0, profile.counts.followers + delta) },
+          follow: { ...profile.follow, status },
+        },
+      };
+    },
+  );
+}
+
+function updateConnectionCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueriesData<{ pages: Array<{ users: ProfileConnectionUser[] }> }>(
+    { queryKey: ["profile-connections"] },
+    (data) => data ? {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        users: page.users.map((user) => user.id === userId ? { ...user, follow: { status } } : user),
+      })),
+    } : data,
+  );
+}
+
+/**
+ * The search results' shop cards carry the viewer's follow state too, so a
+ * follow from the storefront shows on the card when you come back, and one
+ * from the card shows on the storefront. `userId` is the shop's backing
+ * account, which is what a card's `orgUserId` is.
+ */
+function updateBrowseOrgCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId: string,
+  status: FollowStatus,
+) {
+  queryClient.setQueriesData<{ pages: Array<{ payload: BrowsePayload }> }>(
+    { queryKey: ["browse"] },
+    (data) => data ? {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        payload: {
+          ...page.payload,
+          organizations: page.payload.organizations?.map((org) => {
+            if (org.orgUserId !== userId || org.follow === status) return org;
+            const delta = status === "ACCEPTED" ? 1 : org.follow === "ACCEPTED" ? -1 : 0;
+            return { ...org, follow: status, followers: org.followers === undefined ? undefined : Math.max(0, org.followers + delta) };
+          }),
+        },
+      })),
+    } : data,
+  );
+}
+
+type ConnectionKind = "followers" | "following";
+type ConnectionPage = { users: ProfileConnectionUser[]; nextCursor: string | null };
+
+async function fetchConnections(userId: string, kind: ConnectionKind, cursor: string | null): Promise<ConnectionPage> {
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor) params.set("cursor", cursor);
+  const response = await apiV1<{ users: ProfileConnectionUser[] }>(
+    `/api/v1/profile/${encodeURIComponent(userId)}/${kind}?${params.toString()}`,
+  );
+  return {
+    users: response.data.users,
+    nextCursor: typeof response.meta.nextCursor === "string" ? response.meta.nextCursor : null,
+  };
+}
+
+export function useProfileConnections(userId: string | undefined, kind: ConnectionKind, enabled = true) {
+  const query = useInfiniteQuery({
+    queryKey: ["profile-connections", userId, kind],
+    queryFn: ({ pageParam }) => fetchConnections(userId!, kind, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: !!userId && enabled,
+  });
+  return {
+    ...query,
+    users: query.data?.pages.flatMap((page) => page.users) ?? [],
+  };
+}
+
+export function followButtonStatus(status: FollowStatus): "Follow" | "Following" | "Requested" {
+  if (status === "ACCEPTED") return "Following";
+  if (status === "PENDING") return "Requested";
+  return "Follow";
+}
+
+/**
+ * The text on a follow button. `followButtonStatus` is the state (it drives
+ * the button's styling and what a tap does); this adds the one case that is
+ * wording only: they follow you and you do not follow them → "Follow Back".
+ * A tap still just follows. Shared by the profile screen and the connections
+ * list so the two cannot drift again — the profile used to ignore `followsYou`.
+ */
+export function followButtonLabel(
+  status: FollowStatus,
+  followsYou: boolean,
+): "Follow" | "Follow Back" | "Following" | "Requested" {
+  const label = followButtonStatus(status);
+  return label === "Follow" && followsYou ? "Follow Back" : label;
 }

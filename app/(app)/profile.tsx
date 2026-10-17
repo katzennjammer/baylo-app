@@ -1,19 +1,26 @@
-import { useCallback, useState } from "react";
-import { FlatList, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useProfileMe } from "../../src/api/profile";
-import { fetchAchievements } from "../../src/api/achievements";
+import { useProfileMe, usePublicProfile } from "../../src/api/profile";
+import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
+import { bracketLabel } from "../../src/lib/brackets";
 import { color, font } from "../../src/theme/tokens";
+import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
+import { getActingOrgId } from "../../src/api/org-context";
+import { StoreIcon } from "../../src/components/icons";
+import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
+import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
+import { fetchAchievements } from "../../src/api/achievements";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 
 /**
@@ -21,7 +28,7 @@ import { NoticeDialog } from "../../src/components/NoticeDialog";
  *
  * Sign-out is no longer here. It lives in the AppHeader account menu, next to
  * Settings and Achievements, which is the one place it is reachable from every
- * tab. The gear tile at the end of the grid opens /settings.
+ * tab.
  *
  * THE IDENTITY BLOCK READS THE STORED SESSION, not useHome(). It costs no
  * request — name, email and avatar were written to SecureStore by the token
@@ -32,8 +39,9 @@ import { NoticeDialog } from "../../src/components/NoticeDialog";
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { data: profile, refetch } = useProfileMe();
+  const { data: profile, refetch, isRefetching: profileRefetching, isLoading: profileLoading } = useProfileMe();
   const dark = useColorScheme() === "dark";
+  const [tab, setTab] = useState<"posts" | "reviews">("posts");
 
   // Badge art, the shelf and the counts are written by other screens and by the
   // admin panel, and this tab stays mounted behind them. Without this the shelf
@@ -43,6 +51,15 @@ export default function ProfileScreen() {
   useRefetchOnFocus(refetch);
 
   const user = session?.user;
+  const {
+    summary,
+    reviews,
+    refetch: refetchReviews,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isRefetching: reviewsRefetching,
+  } = useProfileReviews(user?.id, tab === "reviews");
 
   const shareProfile = useCallback(async () => {
     const profileUrl = `${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(user?.id ?? "")}`;
@@ -52,26 +69,371 @@ export default function ProfileScreen() {
     });
   }, [profile?.user.name, user?.id, user?.name]);
 
+  // The shop this device is ACTING AS, if any. getActingOrgId() is read per
+  // render, not mirrored: see OrgSwitcher.
+  //
+  // WHILE ACTING AS A SHOP, THIS TAB IS THE SHOP -- for everybody, not just
+  // shop-only accounts. Until 25 Sep 2026 somebody with a personal history
+  // who switched to their shop still got their PERSONAL profile here, under a
+  // small "Acting as" strip: the Post button made shop listings while the tab
+  // showed their own shelf, which is the wrong half of the account to put in
+  // front of them. Now the storefront is shown with a prominent "Switch to
+  // Myself" above it, and choosing that brings the personal profile back.
+  const qc = useQueryClient();
+  const { data: orgsData, isLoading: orgsLoading } = useOrganizations();
+  const [, setContextTick] = useState(0);
+  const [pickingShop, setPickingShop] = useState(false);
+  const actingOrgId = getActingOrgId();
+  const actingOrg = actingOrgId ? orgsData?.data.organizations.find((o) => o.id === actingOrgId) : undefined;
+
+  // ── SHOP-ONLY ACCOUNTS NEVER SEE A PERSONAL PROFILE ─────────────────────
+  //
+  // Somebody who has never listed, offered or traded as themselves, and who
+  // owns or staffs at least one shop, gets the shop HERE, in place of the
+  // personal layout: an empty personal shelf would only raise the question
+  // "which account am I?". The server decides "never as themselves" (see
+  // hasPersonalActivity() in the API); a server that does not send the flag
+  // gets the personal profile, which is how this tab always behaved.
+  //
+  // Not a permanent mode. The flag is recomputed on every profile/me read, so
+  // the first personal listing puts the personal profile back.
+  //
+  // Only shops whose backing account the server names can be shown, hence the
+  // orgUserId filter (see ActingOrg.orgUserId).
+  const shops = (orgsData?.data.organizations ?? []).filter((o) => !!o.orgUserId);
+  const shopOnly = profile?.hasPersonalActivity === false && shops.length > 0;
+  const actingShop = actingOrg?.orgUserId ? actingOrg : undefined;
+  // One shop: that one. Several: whichever this device is acting as, or the
+  // picker until one is chosen.
+  const shownShop = actingShop ?? (shops.length === 1 ? shops[0] : undefined);
+
+  // Viewing a shop here also ACTS AS it. Otherwise the Post button would list
+  // things on a personal shelf this person has never used, and the first one
+  // would quietly bring back the personal profile. Same steps as OrgSwitcher:
+  // switch, drop every cache fetched as the previous identity, re-render.
+  const selectShop = useCallback(async (organizationId: string | null) => {
+    setPickingShop(false);
+    if (organizationId !== getActingOrgId()) {
+      await switchToOrganization(organizationId);
+      await qc.invalidateQueries();
+    }
+    setContextTick((t) => t + 1);
+  }, [qc]);
+  const [switchingToSelf, setSwitchingToSelf] = useState(false);
+  const switchToMyself = useCallback(async () => {
+    setSwitchingToSelf(true);
+    try {
+      await selectShop(null);
+    } finally {
+      setSwitchingToSelf(false);
+    }
+  }, [selectShop]);
+
+  // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
+  // ONCE per mount, which is once per sign-in because this tab stays mounted.
+  // Without the ref, somebody who deliberately switches to "Myself" (from
+  // Settings, or "Post as myself instead" when their shop is still in review)
+  // would be switched straight back the next time this tab re-rendered.
+  const adoptShopId = shopOnly && !actingShop && shops.length === 1 ? shops[0].id : null;
+  const adoptedOnce = useRef(false);
+  useEffect(() => {
+    if (!adoptShopId || adoptedOnce.current) return;
+    adoptedOnce.current = true;
+    void selectShop(adoptShopId);
+  }, [adoptShopId, selectShop]);
+
   const items = profile?.items ?? [];
+  const rows: ProfileListRow[] = tab === "posts"
+    ? chunkItems(items).map((postItems) => ({ kind: "posts", items: postItems }))
+    : reviews.map((review) => ({ kind: "review", review }));
+  const onRefresh = useCallback(() => {
+    if (tab === "reviews") void refetchReviews();
+    else void refetch();
+  }, [refetch, refetchReviews, tab]);
+  const onEndReached = useCallback(() => {
+    if (tab === "reviews" && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, tab]);
+  // Held for the first load of either answer, so a shop-only account does not
+  // see its empty personal profile flash first. `isLoading` is false while a
+  // query is paused offline, so with no signal this still falls through to the
+  // personal layout drawn from the stored session, as the header promises.
+  if (profileLoading || orgsLoading) {
+    return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
+  }
+
+  if (shopOnly) {
+    if (pickingShop || !shownShop) {
+      return <ShopPicker dark={dark} shops={shops} activeId={actingShop?.id ?? null} onPick={(id) => void selectShop(id)} />;
+    }
+    return (
+      <ShopView
+        key={shownShop.orgUserId}
+        dark={dark}
+        orgUserId={shownShop.orgUserId!}
+        viewerId={user?.id ?? null}
+        topSlot={shops.length > 1 ? <ShopCard dark={dark} name={shownShop.name} logoUrl={shownShop.logoUrl} actionLabel="Switch shop" onPress={() => setPickingShop(true)} /> : null}
+      />
+    );
+  }
+
+  // A person with their own history, currently acting as one of their shops.
+  if (actingShop) {
+    return (
+      <ShopView
+        key={actingShop.orgUserId}
+        dark={dark}
+        orgUserId={actingShop.orgUserId!}
+        viewerId={user?.id ?? null}
+        topSlot={<SwitchToMyselfCard dark={dark} shopName={actingShop.name} personName={profile?.user.name ?? user?.name ?? null} busy={switchingToSelf} onPress={() => void switchToMyself()} />}
+      />
+    );
+  }
+
   return (
-    <FlatList
+    <FlatList<ProfileListRow>
       style={s.screen}
-      data={items}
-      numColumns={3}
-      keyExtractor={(item) => item.id}
-      ListHeaderComponent={<ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />}
-      renderItem={({ item }) => <ProfileTile dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />}
-      ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>Your listings will appear here.</Text>}
-      ListFooterComponent={<SettingsTile dark={dark} onPress={() => router.push("/settings")} />}
+      data={rows}
+      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
+      ListHeaderComponent={<>
+        <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
+      </>}
+      renderItem={({ item: row }) => row.kind === "posts" ? (
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+      ) : (
+        <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
+      )}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.6}
+      refreshControl={<RefreshControl refreshing={tab === "posts" ? profileRefetching : reviewsRefetching} onRefresh={onRefresh} tintColor={dark ? darkColors.green : color.green} />}
+      ListFooterComponent={tab === "reviews" && isFetchingNextPage ? <ActivityIndicator color={dark ? darkColors.green : color.green} style={s.footer} /> : null}
+      ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
+    />
+  );
+}
+
+/**
+ * "You're acting as <shop>". On a personal profile it is the way into the
+ * storefront; on a shop-only account's storefront it switches between shops.
+ */
+function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: { dark: boolean; name: string; logoUrl: string | null; onPress: () => void; actionLabel?: string }) {
+  const palette = dark ? darkColors : lightColors;
+  const logo = orgLogoUrl(logoUrl);
+  return (
+    <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. ${actionLabel}`}>
+      {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+      <View style={s.shopText}>
+        <Text style={[s.shopEyebrow, { color: palette.muted }]}>Acting as</Text>
+        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
+      </View>
+      <Text style={[s.shopLink, { color: palette.green }]}>{actionLabel}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The way back to the personal profile, above the storefront of a shop the
+ * person is acting as. PROMINENT ON PURPOSE -- a full-width card with a filled
+ * button, not a strip -- because it is also the answer to "why is my profile
+ * gone?", and a person who does not see it will think their account changed.
+ * It says what switching does, not just that it can be done.
+ */
+function SwitchToMyselfCard({ dark, shopName, personName, busy, onPress }: { dark: boolean; shopName: string; personName: string | null; busy: boolean; onPress: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={[s.selfCard, { backgroundColor: dark ? "#1F3326" : color.greenWash, borderColor: dark ? "#2F5A3B" : color.greenLine }]}>
+      <View style={s.selfCardText}>
+        <Text style={[s.shopEyebrow, { color: palette.muted }]}>You are acting as</Text>
+        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shopName}</Text>
+        <Text style={[s.selfCardBody, { color: palette.secondary }]}>New listings you post go on this shop.</Text>
+      </View>
+      <Pressable onPress={busy ? undefined : onPress} style={[s.selfButton, { backgroundColor: palette.green, opacity: busy ? 0.6 : 1 }]} accessibilityRole="button" accessibilityState={{ busy }} accessibilityLabel={`Switch to myself${personName ? `, ${personName}` : ""}. Shows your personal profile`}>
+        <Ionicons name="person-outline" size={16} color={dark ? "#10210F" : color.onGreen} />
+        <Text style={[s.selfButtonText, { color: dark ? "#10210F" : color.onGreen }]}>{busy ? "Switching…" : "Switch to Myself"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** A shop-only account with several shops chooses which one this tab shows, and acts as. */
+function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: ActingOrg[]; activeId: string | null; onPick: (organizationId: string) => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={s.screen}>
+      <Text style={[s.pickerTitle, { color: palette.ink }]}>Your shops</Text>
+      <Text style={[s.pickerSub, { color: palette.muted }]}>Choose the shop to open. New listings and offers are made as the shop you choose.</Text>
+      {shops.map((shop) => {
+        const logo = orgLogoUrl(shop.logoUrl);
+        const active = shop.id === activeId;
+        return (
+          <Pressable key={shop.id} onPress={() => onPick(shop.id)} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`Open ${shop.name}`}>
+            {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+            <View style={s.shopText}>
+              <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
+              <Text style={[s.shopEyebrow, { color: palette.muted }]}>{"Owner"}{active ? " · Acting as" : ""}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.muted} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The storefront, as the Profile tab of a shop-only account.
+ *
+ * The same pieces the public /user screen draws for an organisation, minus the
+ * back row, because here it is a tab rather than a pushed screen. A member
+ * never sees Follow or Message (OrgStorefrontHeader swaps them for Edit and
+ * Share), so those two handlers are inert.
+ */
+function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUserId: string; viewerId: string | null; topSlot: React.ReactNode }) {
+  const router = useRouter();
+  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const { data, isPending, isError, refetch, isRefetching } = usePublicProfile(orgUserId);
+  const reviewQuery = useProfileReviews(orgUserId, tab === "reviews");
+  const palette = dark ? darkColors : lightColors;
+  useRefetchOnFocus(refetch);
+  // The storefront's invite field needs both: see useStorefrontKeyboard.
+  const list = useRef<FlatList<ProfileListRow>>(null);
+  const { imeInset } = useStorefrontKeyboard();
+
+  if (isPending) return <View style={[s.screen, s.centred]}><ActivityIndicator color={palette.green} /></View>;
+  const org = data?.user.org;
+  if (isError || !data || !org) {
+    return (
+      <View style={s.screen}>
+        {topSlot}
+        <Text style={[s.empty, { color: palette.muted }]}>Your shop could not be loaded.</Text>
+        <Pressable onPress={() => void refetch()} accessibilityRole="button" style={s.retry}><Text style={[s.shopLink, { color: palette.green }]}>Try again</Text></Pressable>
+      </View>
+    );
+  }
+
+  const rows: ProfileListRow[] = tab === "posts"
+    ? chunkItems(data.items).map((postItems) => ({ kind: "posts", items: postItems }))
+    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+  const inert = () => undefined;
+
+  return (
+    <FlatList<ProfileListRow>
+      ref={list}
+      style={[s.screen, { marginBottom: imeInset }]}
+      keyboardShouldPersistTaps="handled"
+      data={rows}
+      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
+      ListHeaderComponent={<>
+        {topSlot}
+        <OrgStorefrontHeader
+          dark={dark}
+          org={org}
+          counts={data.counts}
+          viewerId={viewerId}
+          follow={{ label: "", busy: false, disabled: true, primary: false, onPress: inert }}
+          onMessage={inert}
+          onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
+          onShare={() => void Share.share({ message: `${org.name} on Baylo\n${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
+          onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+        />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier /> : null}
+      </>}
+      renderItem={({ item: row }) => row.kind === "posts" ? (
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+      ) : (
+        <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
+      )}
+      onEndReached={() => { if (tab === "reviews" && reviewQuery.hasNextPage && !reviewQuery.isFetchingNextPage) void reviewQuery.fetchNextPage(); }}
+      onEndReachedThreshold={0.6}
+      refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={() => { if (tab === "reviews") void reviewQuery.refetch(); else void refetch(); }} tintColor={palette.green} />}
+      ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
+      ListEmptyComponent={tab === "reviews"
+        ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
+        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
     />
   );
 }
 
 type DisplayedAchievements = ProfileMePayload["displayedAchievements"];
 
-function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, following, achievements, onEdit, onShare, onMoreAchievements }: { dark: boolean; name: string; avatar: string | null; bio: string | null | undefined; tier?: string; posts: number; followers: number; following: number; achievements: DisplayedAchievements; onEdit: () => void; onShare: () => void; onMoreAchievements: () => void }) {
+type ProfileListRow =
+  | { kind: "posts"; items: Item[] }
+  | { kind: "review"; review: ProfileReview };
+
+function chunkItems(items: Item[]): Item[][] {
+  const rows: Item[][] = [];
+  for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3));
+  return rows;
+}
+
+function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, following, achievements, onFollowers, onFollowing, onEdit, onShare, onMoreAchievements }: { dark: boolean; name: string; avatar: string | null; bio: string | null | undefined; tier?: string; posts: number; followers: number; following: number; achievements: DisplayedAchievements; onFollowers: () => void; onFollowing: () => void; onEdit: () => void; onShare: () => void; onMoreAchievements: () => void }) {
   const palette = dark ? darkColors : lightColors;
-  return <View style={[s.header, { borderBottomColor: palette.divider }]}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Stat dark={dark} label="Followers" value={followers} /><Stat dark={dark} label="Following" value={following} /></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /><View style={[s.rule, { backgroundColor: palette.divider }]} /></View>;
+  return <View style={s.header}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Pressable onPress={onFollowers} style={s.stat} accessibilityRole="button" accessibilityLabel={`${followers} followers`}><Text style={[s.statValue, { color: palette.ink }]}>{followers}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Followers</Text></Pressable><Pressable onPress={onFollowing} style={s.stat} accessibilityRole="button" accessibilityLabel={`${following} following`}><Text style={[s.statValue, { color: palette.ink }]}>{following}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Following</Text></Pressable></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /></View>;
+}
+
+export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active: "posts" | "reviews"; onChange: (tab: "posts" | "reviews") => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={[s.tabs, { borderTopColor: palette.divider, borderBottomColor: palette.divider }]}>
+      <Pressable onPress={() => onChange("posts")} accessibilityRole="tab" accessibilityLabel="Posts" accessibilityState={{ selected: active === "posts" }} style={s.tab}>
+        <GridIcon size={20} stroke={1.7} color={active === "posts" ? palette.green : palette.muted} />
+        <View style={[s.tabUnderline, { backgroundColor: active === "posts" ? palette.green : "transparent" }]} />
+      </Pressable>
+      <Pressable onPress={() => onChange("reviews")} accessibilityRole="tab" accessibilityLabel="Reviews" accessibilityState={{ selected: active === "reviews" }} style={s.tab}>
+        <Ionicons name="star-outline" size={21} color={active === "reviews" ? palette.green : palette.muted} />
+        <View style={[s.tabUnderline, { backgroundColor: active === "reviews" ? palette.green : "transparent" }]} />
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * `hideTier` is for an organisation's storefront. Orgs do not climb the trust
+ * ladder, so the server's trustTier is null for one, and the fallback below
+ * would label a sari-sari store "New Trader".
+ */
+export function ReviewSummary({ dark, summary, hideTier = false }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean }) {
+  const palette = dark ? darkColors : lightColors;
+  if (!summary) return <View style={s.summaryLoading}><ActivityIndicator color={palette.green} /></View>;
+  return (
+    <View style={[s.summary, { backgroundColor: palette.surface }]}>
+      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "-"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>average rating</Text></View>
+      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.totalReviews}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>reviews</Text></View>
+      {hideTier ? null : <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>}
+    </View>
+  );
+}
+
+export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean; review: import("../../src/api/reviews").ProfileReview; onReviewer: () => void; onItem: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={[s.reviewRow, { borderBottomColor: palette.divider }]}>
+      <Pressable onPress={onReviewer} style={s.reviewIdentity} accessibilityRole="button" accessibilityLabel={`View ${review.reviewer.name}'s profile`}>
+        <ReviewAvatar uri={review.reviewer.avatar} name={review.reviewer.name} dark={dark} />
+        <View style={s.reviewIdentityText}><Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text><RatingStars dark={dark} rating={review.rating} /></View>
+        <Text style={[s.reviewDate, { color: palette.muted }]}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+      </Pressable>
+      {review.comment ? <Text style={[s.reviewComment, { color: palette.secondary }]}>{review.comment}</Text> : null}
+      {review.item ? <Pressable onPress={onItem} style={[s.reviewItem, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Open ${review.item.title}`}>
+        {review.item.image ? <Image source={{ uri: review.item.image }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={18} color={palette.muted} /></View>}
+        <View style={s.reviewItemText}><Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text><Text style={[s.reviewItemMeta, { color: palette.muted }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text></View>
+      </Pressable> : null}
+    </View>
+  );
+}
+
+function ReviewAvatar({ uri, name, dark }: { uri: string | null; name: string; dark: boolean }) {
+  const palette = dark ? darkColors : lightColors;
+  return uri
+    ? <Image source={{ uri }} contentFit="cover" style={s.reviewAvatar} />
+    : <View style={[s.reviewAvatar, s.reviewAvatarFallback, { backgroundColor: palette.control }]}><Text style={[s.reviewAvatarText, { color: palette.green }]}>{name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
+}
+
+function RatingStars({ dark, rating }: { dark: boolean; rating: number }) {
+  const palette = dark ? darkColors : lightColors;
+  return <View style={s.stars}>{[1, 2, 3, 4, 5].map((star) => <Ionicons key={star} name={star <= rating ? "star" : "star-outline"} size={14} color={star <= rating ? "#C58A24" : palette.muted} />)}</View>;
 }
 
 function Stat({ dark, label, value }: { dark: boolean; label: string; value: number }) { const palette = dark ? darkColors : lightColors; return <View style={s.stat}><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></View>; }
@@ -87,20 +449,19 @@ export function shelfLabel(item: Item): string | null {
   if (item.hiddenByModerator) return "Hidden by a moderator";
   if (item.status === "PENDING_REVIEW") return "Waiting for review";
   if (item.status === "VALUE_REJECTED") return "Value not approved";
+  if (item.status === "IN_TRADE") return "In trade";
+  if (item.status === "TRADED") return "Traded";
   return null;
 }
 
-function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
+/** One shelf tile. (The owner's Boost pill and Featured pill went with Featured boosts in schema v2.) */
+export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }, label !== null && s.dimmed]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
     {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
     {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
   </Pressable>;
-}
-
-function SettingsTile({ dark, onPress }: { dark: boolean; onPress: () => void }) {
-  return <View style={s.settingsRow}><Pressable onPress={onPress} style={[s.settingsTile, { backgroundColor: dark ? darkColors.control : color.control }]} accessibilityRole="button" accessibilityLabel="Settings"><Ionicons name="settings-outline" size={24} color={dark ? darkColors.muted : color.inkMuted} /></Pressable></View>;
 }
 
 /** The server's achievement `icon` keys, drawn with Ionicons. Unknown keys get a trophy. */
@@ -130,16 +491,19 @@ const badgeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
  *
  * ── TAPPING AN EARNED BADGE ──────────────────────────────────────
  *
- * `displayedAchievements` (from /profile/me) only carries id/name/icon/
- * imageUrl -- enough to draw the circle, not enough to explain it. Rather
- * than widen that payload, this reuses the SAME ["achievements"] query the
- * Achievements screen already runs (fetchAchievements, same query key), so
- * a user who has opened that screen this session gets the popup instantly
- * from cache; one who hasn't pays one extra request, on tap, not on load.
+ * `displayedAchievements` only carries id/name/icon/imageUrl -- enough to draw
+ * the circle, not to explain it. Rather than widen that payload, a tap reuses
+ * the SAME ["achievements"] query the Achievements screen runs, so the popup
+ * is instant from cache for anyone who opened that screen this session, and
+ * costs one request on tap (never on load) for anyone who has not.
+ *
+ * That list is the whole catalogue, so a badge on SOMEONE ELSE's profile
+ * (user.tsx, `own={false}`) resolves too. Its `unlockedAt` is the VIEWER's,
+ * though, so the "Earned" date is only shown on your own profile.
  */
 const SHELF_CAP = 4;
 
-function Badges({ dark, achievements, onMore }: { dark: boolean; achievements: DisplayedAchievements; onMore: () => void }) {
+export function Badges({ dark, achievements, showMore = true, own = true, onMore }: { dark: boolean; achievements: DisplayedAchievements; showMore?: boolean; own?: boolean; onMore: () => void }) {
   const palette = dark ? darkColors : lightColors;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detail = useQuery({
@@ -149,21 +513,23 @@ function Badges({ dark, achievements, onMore }: { dark: boolean; achievements: D
     enabled: selectedId !== null,
   });
   const selected = detail.data?.achievements.find((a) => a.id === selectedId) ?? null;
-
+  // Until the catalogue answers, the popup still opens with what the circle
+  // already knows, so a tap is never met with nothing.
+  const tapped = achievements.find((a) => a.id === selectedId) ?? null;
+  const dialogBadge = selected ?? tapped;
+  const dialogBody = selected
+    ? own && selected.unlockedAt
+      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
+      : selected.description
+    : detail.isError
+      ? "Could not load this badge's details."
+      : "Loading…";
   const shown = achievements.slice(0, SHELF_CAP);
-  const hasRoom = shown.length < SHELF_CAP;
+  const hasRoom = showMore && shown.length < SHELF_CAP;
   const data: { key: string; icon: keyof typeof Ionicons.glyphMap; imageUrl: string | null; label: string; more?: boolean }[] = [
     ...shown.map((a) => ({ key: a.id, icon: badgeIcons[a.icon] ?? "trophy-outline", imageUrl: a.imageUrl, label: a.name })),
     ...(hasRoom ? [{ key: "more", icon: "add-outline" as const, imageUrl: null, label: "More", more: true }] : []),
   ];
-
-  const selectedIcon = selected ? badgeIcons[selected.icon] ?? "trophy-outline" : "trophy-outline";
-  const selectedBody = selected
-    ? selected.unlockedAt
-      ? `${selected.description}\n\nEarned ${new Date(selected.unlockedAt).toLocaleDateString()}`
-      : selected.description
-    : "";
-
   return (
     <View style={s.badges}>
       <FlatList
@@ -182,20 +548,20 @@ function Badges({ dark, achievements, onMore }: { dark: boolean; achievements: D
             <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
               {item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
             </View>
-            <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={1} ellipsizeMode="tail">{item.label}</Text>
+            <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text>
           </Pressable>
         )}
       />
-      {selected ? (
+      {dialogBadge ? (
         <NoticeDialog
           visible
-          title={selected.name}
-          body={selectedBody}
+          title={dialogBadge.name}
+          body={dialogBody}
           icon={
-            selected.imageUrl ? (
-              <Image source={{ uri: selected.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+            dialogBadge.imageUrl ? (
+              <Image source={{ uri: dialogBadge.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
             ) : (
-              <Ionicons name={selectedIcon} size={24} color={color.green} />
+              <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
           }
           onDismiss={() => setSelectedId(null)}
@@ -205,8 +571,12 @@ function Badges({ dark, achievements, onMore }: { dark: boolean; achievements: D
   );
 }
 
+function shortBadgeLabel(label: string): string {
+  return label.replace(/^Trusted Trader$/, "Trusted").replace(/^First Offer$/, "First offer");
+}
+
 /** The same fallback-to-initial avatar FeedCard uses, at the size this screen wants. */
-function Avatar({ uri, name }: { uri: string | null; name: string }) {
+export function Avatar({ uri, name }: { uri: string | null; name: string }) {
   if (uri) {
     return (
       <Image
@@ -227,40 +597,79 @@ function Avatar({ uri, name }: { uri: string | null; name: string }) {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+  centred: { alignItems: "center", justifyContent: "center" },
+  retry: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 16 },
+  pickerTitle: { fontFamily: font.sansSemi, fontSize: 18, marginHorizontal: 16, marginTop: 16 },
+  pickerSub: { fontFamily: font.sans, fontSize: 13, lineHeight: 18, marginHorizontal: 16, marginTop: 4, marginBottom: 4 },
+  shopCard: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginTop: 8, padding: 10, borderRadius: 10, minHeight: 56 },
+  shopLogo: { width: 36, height: 36, borderRadius: 8 },
+  shopLogoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
+  shopText: { flex: 1, minWidth: 0 },
+  shopEyebrow: { fontFamily: font.sans, fontSize: 11 },
+  selfCard: { marginHorizontal: 16, marginTop: 10, marginBottom: 4, padding: 14, borderRadius: 12, borderWidth: 1, gap: 12 },
+  selfCardText: { gap: 1 },
+  selfCardBody: { fontFamily: font.sans, fontSize: 12, marginTop: 4 },
+  selfButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10 },
+  selfButtonText: { fontFamily: font.sansSemi, fontSize: 14 },
+  shopName: { fontFamily: font.sansSemi, fontSize: 14, marginTop: 1 },
+  shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },
-  avatar: { width: 86, height: 86, borderRadius: 43 },
-  avatarFallback: { width: 86, height: 86, borderRadius: 43, alignItems: "center", justifyContent: "center", backgroundColor: color.green },
-  avatarText: { color: color.onGreen, fontFamily: font.sansBold, fontSize: 30 },
+  avatar: { width: 76, height: 76, borderRadius: 38 },
+  avatarFallback: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: color.green },
+  avatarText: { color: color.onGreen, fontFamily: font.sansBold, fontSize: 26 },
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 },
   stat: { alignItems: "center", minWidth: 58 },
   statValue: { fontFamily: font.sansSemi, fontSize: 18 },
   statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 8 },
   name: { fontFamily: font.sansSemi, fontSize: 15, maxWidth: "75%" },
-  tier: { borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6 },
+  tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 },
   tierText: { fontFamily: font.sansSemi, fontSize: 11 },
-  bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 12 },
-  actions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 8 },
   actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8 },
   actionText: { fontFamily: font.sansSemi, fontSize: 14 },
-  badges: { marginTop: 12, marginHorizontal: -16 },
+  badges: { marginTop: 8, marginHorizontal: -16 },
   badgesContent: { paddingHorizontal: 16, gap: 18 },
-  badgeItem: { width: 64, alignItems: "center" },
+  badgeItem: { width: 76, alignItems: "center" },
   badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   badgeArt: { width: "100%", height: "100%" },
   badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
   moreBadge: { borderStyle: "dashed" },
-  badgeLabel: { width: 64, fontFamily: font.sans, fontSize: 11, marginTop: 4, textAlign: "center" },
-  rule: { height: 1, marginTop: 12 },
-  tile: { width: "33.3333%", aspectRatio: 1, marginRight: 2, marginBottom: 2 },
+  badgeLabel: { width: 76, fontFamily: font.sans, fontSize: 11, lineHeight: 14, marginTop: 4, textAlign: "center" },
+  tabs: { height: 45, flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", position: "relative" },
+  tabUnderline: { position: "absolute", bottom: -StyleSheet.hairlineWidth, width: 24, height: 2 },
+  summary: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 16, paddingHorizontal: 16 },
+  summaryLoading: { height: 64, alignItems: "center", justifyContent: "center" },
+  summaryValue: { fontFamily: font.displaySemi, fontSize: 20, textAlign: "center" },
+  summaryLabel: { fontFamily: font.sans, fontSize: 11, marginTop: 3, textAlign: "center" },
+  summaryTier: { maxWidth: 130, alignItems: "center" },
+  summaryTierText: { fontFamily: font.sansSemi, fontSize: 13, textAlign: "center" },
+  reviewRow: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  reviewIdentity: { minHeight: 44, flexDirection: "row", alignItems: "center" },
+  reviewAvatar: { width: 40, height: 40, borderRadius: 20 },
+  reviewAvatarFallback: { alignItems: "center", justifyContent: "center" },
+  reviewAvatarText: { fontFamily: font.sansBold, fontSize: 15 },
+  reviewIdentityText: { flex: 1, minWidth: 0, marginLeft: 10 },
+  reviewName: { fontFamily: font.sansSemi, fontSize: 14 },
+  stars: { flexDirection: "row", gap: 2, marginTop: 3 },
+  reviewDate: { fontFamily: font.sans, fontSize: 11, marginLeft: 8 },
+  reviewComment: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 10 },
+  reviewItem: { minHeight: 52, flexDirection: "row", alignItems: "center", marginTop: 12, borderRadius: 6, overflow: "hidden" },
+  reviewItemImage: { width: 52, height: 52 },
+  reviewItemText: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  reviewItemTitle: { fontFamily: font.sansSemi, fontSize: 13 },
+  reviewItemMeta: { fontFamily: font.sans, fontSize: 11, marginTop: 3 },
+  footer: { paddingVertical: 18 },
+  gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 },
+  tile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
   tileImage: { width: "100%", height: "100%" },
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },
   dimmed: { opacity: 0.6 },
   statusPill: { position: "absolute", top: 6, left: 6, maxWidth: "88%", backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
   statusText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 11 },
-  settingsRow: { width: "33.3333%", aspectRatio: 1 },
-  settingsTile: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: color.control },
   empty: { color: color.inkMuted, fontFamily: font.sans, fontSize: 14, textAlign: "center", paddingVertical: 48 },
 });
 

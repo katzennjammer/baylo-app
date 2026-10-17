@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Tappable } from "../Tappable";
 import { ChevronLeftIcon } from "../icons";
+import { textStyle as baseTextStyle, type } from "../../theme/tokens";
 import {
   offerColor,
   offerIcon,
@@ -11,10 +12,9 @@ import {
   offerType,
   textStyle,
 } from "../../theme/offer-tokens";
-import { font } from "../../theme/tokens";
 
 /**
- * The Trades tab's own chrome — the large title, the block label, the host.
+ * The Trades tab's own chrome — the block label, the host.
  *
  * ── ALMOST NOTHING NEW ──────────────────────────────────────────────────────
  *
@@ -26,17 +26,19 @@ import { font } from "../../theme/tokens";
  * its own opening line — so a second set of buttons here would be a second
  * system pretending to be the same one.
  *
- * What genuinely is this screen's own is below: a 22px large title where the
- * offer flow has a 15px nav title, and the `label + 21` block header §4 gives
- * the sections.
+ * What genuinely is this screen's own is below: the `label + 21` block header
+ * §4 gives the sections.
  *
  * ── THE TAB'S APP HEADER IS TURNED OFF FOR THIS SCREEN ──────────────────────
  *
  * `(app)/_layout.tsx` puts `AppHeader` on every tab. §3.5's running y starts at
- * 0 with a 44 status bar and puts the `Trades` title in the 44 that follows, so
- * the wordmark row would push every measured value in the table down by its own
- * height. `headerShown: false` on the Trades screen is the whole change, and it
- * is why `TradesTitle` below draws a bar rather than configuring one.
+ * 0 with a 44 status bar, so the wordmark row would push every measured value in
+ * the table down by its own height. `headerShown: false` on the Trades screen is
+ * the whole change.
+ *
+ * NO IN-SCREEN TITLE EITHER (26 Sep 2026). §3.5 drew a 22px `Trades` bar under
+ * the status area; it only repeated the tab bar's own `Trades` label, so it was
+ * removed and the section headers start the screen.
  */
 
 /* ───────────────────────────── the host ─────────────────────────────── */
@@ -81,45 +83,6 @@ export function TradesHost({
       }}
     >
       {children}
-    </View>
-  );
-}
-
-/* ────────────────────────── the large title ─────────────────────────── */
-
-/**
- * §3.5's nav bar: `Trades`, 22px Bricolage, 16 of side padding.
- *
- * NOT `offerType.screenHeading` (25px) and not `navTitle` (15px). §3.5 names 22
- * specifically, which is `tokens.type.wordmarkTight`'s size and the same figure
- * the frames draw — a title that is a destination's name rather than a
- * screen-full heading. The role is composed here rather than added to
- * `offer-tokens` because it appears on exactly one screen.
- *
- * `trailing` carries frame 9d's `14 trades` mono, which rides the same bar when
- * the History list is pushed.
- */
-export function TradesTitle({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        height: offerSpace.navBar,
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: offerSpace.screenX,
-      }}
-    >
-      <Text
-        accessibilityRole="header"
-        style={[
-          textStyle({ fontFamily: font.displayBold, fontSize: 22, letterSpacing: -0.44 }),
-          { color: offerColor.ink, flex: 1 },
-        ]}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
-      {trailing}
     </View>
   );
 }
@@ -185,29 +148,13 @@ export function TradesBackTitle({
   );
 }
 
-/** Frame 9d's and 9i's trailing mono on a nav bar. 12 of right padding. */
-export function NavMono({ children }: { children: string }) {
-  return (
-    <Text
-      style={[
-        textStyle(offerType.deadline),
-        { color: offerColor.inkTertiary, paddingRight: offerSpace.navX },
-      ]}
-    >
-      {children}
-    </Text>
-  );
-}
-
 /* ────────────────────────── the block header ────────────────────────── */
 
 /**
- * §4's section header: "mono 11 label, 21px below label to first item".
+ * §4's section header: a small label, 21px below label to first item.
  *
  * `offerSize.sectionHeader.labelToFirst` is that 21, and §3.5's table agrees —
- * label at 102, first card at 123. `SectionLabel` from the offer flow draws the
- * label itself, including the accessible-name correction that stops a screen
- * reader spelling out an uppercased string letter by letter.
+ * label at 102, first card at 123. `TradesSectionLabel` draws the label.
  *
  * `top` differs per block and comes from §3.5 rather than from §3.1's default:
  * `Needs you today` opens at 14 below the bar and `Waiting` at 18.
@@ -242,15 +189,14 @@ export function BlockHeader({
 /**
  * §2's section label, drawn here rather than imported, for one reason: the
  * offer flow's `SectionLabel` is a bare `Text` and this one is sometimes inside
- * a row with a trailing element. Same type role, same ink, same accessible-name
- * correction — the label is already uppercase through `textTransform`, and a
- * screen reader handed an uppercased string spells it out on some engines.
+ * a row with a trailing element. Same type role and ink: sentence case in the
+ * body family since 1 Oct 2026, when the spaced mono capitals went app-wide.
  */
 export function TradesSectionLabel({ children }: { children: string }) {
   return (
     <Text
-      style={[textStyle(offerType.sectionLabel), { color: offerColor.inkTertiary }]}
-      accessibilityLabel={children}
+      style={[baseTextStyle(type.sectionHeading), { color: offerColor.inkSecondary }]}
+      accessibilityRole="header"
     >
       {children}
     </Text>

@@ -58,6 +58,29 @@ export interface ItemOwner {
    */
   trustTier: TrustTier | null;
   featuredAchievement: { id: string; name: string; icon: string; imageUrl: string | null } | null;
+  /**
+   * The organisation this owner IS, or null for a person.
+   *
+   * WHEN THIS IS SET, `trustTier` IS ALWAYS NULL — the server enforces it, so
+   * a card never has to choose between two badges. Organisations do not climb
+   * the trade-count ladder; their badge is this one. Render `org` where the
+   * RISING/NEW badge would have gone and nothing else changes.
+   *
+   * `verified` IS NOT "this object exists". A PENDING organisation is a real
+   * account that posts and trades and has no checkmark yet, so the badge is
+   * drawn on `org.verified` and never on `org != null`.
+   */
+  org: OrgBadge | null;
+}
+
+/** An organisation's public badge, as it appears on a card or a profile. */
+export interface OrgBadge {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  businessCategory: string;
+  /** Only a reviewed, VERIFIED organisation earns the checkmark. */
+  verified: boolean;
 }
 
 /** A curated public meetup point. Coordinates here are public and precise. */
@@ -113,6 +136,8 @@ export interface ItemComment {
   createdAt: string;
   user: { id: string; name: string; avatar: string | null };
   replyCount: number;
+  replies?: ItemComment[];
+  parentId?: string | null;
 }
 
 export interface Item {
@@ -142,6 +167,28 @@ export interface Item {
    */
   valueRejectionReason: string | null;
   wanted: string | null;
+  /**
+   * The perishable block, or null for a standard listing.
+   *
+   * ONE NULLABLE OBJECT, not four loose fields: the four only mean anything
+   * together, and a shape that can express "a quantity with no window" invites
+   * a screen to render one. `expiresAt` is derived server-side from createdAt
+   * plus the window; count down against it rather than recomputing.
+   *
+   * `expired` true means the window has passed but the server's lazy sweep has
+   * not run yet. Treat it as gone — the status will catch up on the next feed
+   * read.
+   */
+  perishable: {
+    quantity: number | null;
+    quantityUnit: string | null;
+    tradeWithinHours: number;
+    expiresAt: string;
+    expired: boolean;
+  } | null;
+  /** Categories the owner will take back. `[]` means none were stated. */
+  lookingFor: string[];
+  lookingForLabels: string[];
   pickup: Pickup | null;
   owner: ItemOwner;
   stats: ItemStats;
@@ -156,9 +203,47 @@ export interface Item {
 }
 
 /** GET /api/v1/browse — `meta.nextCursor` carries the keyset cursor. */
+/**
+ * An organisation whose NAME matched the search, drawn as a top card above the
+ * item grid. First page of a search only; an empty array otherwise.
+ */
+export interface BrowseOrgMatch {
+  id: string;
+  /** The storefront is read by this id — `/user?id=<orgUserId>`. */
+  orgUserId: string;
+  name: string;
+  logoUrl: string | null;
+  businessCategory: string;
+  businessCategoryLabel: string;
+  verified: boolean;
+  /**
+   * The viewer's Follow edge to the shop's backing account -- the same Follow
+   * row a person's profile uses. These three are absent from a server older
+   * than the card's Follow button; the card then draws no button.
+   */
+  follow?: FollowStatus;
+  /** ACCEPTED followers of the shop. */
+  followers?: number;
+  /** The viewer owns this shop: no Follow on their own shop. */
+  isMember?: boolean;
+}
+
+export interface BusinessCategoryFacet {
+  businessCategory: string;
+  label: string;
+  /** Shops in this category with something available — not listings. */
+  count: number;
+}
+
 export interface BrowsePayload {
   items: Item[];
-  facets: { categories: { category: string; label: string; count: number }[] };
+  /** Absent from a server older than 25 Sep 2026. */
+  organizations?: BrowseOrgMatch[];
+  facets: {
+    categories: { category: string; label: string; count: number }[];
+    /** Only filled while `orgsOnly` is on. Absent from an older server. */
+    businessCategories?: BusinessCategoryFacet[];
+  };
 }
 
 /**
@@ -200,16 +285,22 @@ export interface ItemDetailPayload {
   review: ListingReview | null;
   viewer: {
     isOwner: boolean;
+    state: string;
+    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
     /**
      * Why the offer control is LOCKED, when it is. `"premium"`: the listing is
-     * in bracket 7 or above and this viewer has no live subscription. Separate
-     * from `canOffer` because the two draw different controls — an inert
-     * button versus an explanation with the listing left fully in view.
-     * Advisory; POST /api/offers re-checks and answers 403 PREMIUM_REQUIRED.
+     * in bracket 7 or above and this viewer has no live subscription. `"vip"`:
+     * the listing is in bracket 9 or above and this viewer has no live VIP
+     * (Premium alone does not clear it) — the server has sent this since VIP
+     * landed, and reading it as "no lock" left a live Offer button over a
+     * certain 403. Separate from `canOffer` because the two draw different
+     * controls — an inert button versus an explanation with the listing left
+     * fully in view. Advisory; POST /api/offers re-checks and answers 403
+     * PREMIUM_REQUIRED or VIP_REQUIRED.
      */
-    offerLock: "premium" | null;
+    offerLock: "premium" | "vip" | null;
     leaves: number;
     tradeableItems: { id: string; title: string; image: string | null }[];
     /** Non-null when this viewer already has a PENDING offer on this listing. */
@@ -249,7 +340,24 @@ export interface MatchCandidate {
 /** GET /api/v1/home — the whole home tab in one request. */
 export interface HomePayload {
   viewer: HomeViewer;
-  unread: { messages: number; notifications: number; followRequests: number };
+  /**
+   * The shop this request acted as (X-Baylo-Org), with the SHOP's balance --
+   * what the header pill shows while acting as it. Null acting as yourself, or
+   * when the server refused the context. `viewer.leaves` is always the
+   * person's. Absent from a server older than 25 Sep 2026.
+   *
+   * `orgUserId` is the shop's backing account: its inbox, and the realtime
+   * channel the header listens on while acting as it. `unread` below is that
+   * inbox's while `acting` is non-null. Absent from a server before the shop
+   * inbox (25 Sep 2026, evening).
+   */
+  acting?: { organizationId: string; name: string; leaves: number; orgUserId?: string } | null;
+  unread: {
+    messages: number;
+    messageConversations: number;
+    notifications: number;
+    followRequests: number;
+  };
   feed: Item[];
   trending: TrendingCategory[];
   matches: MatchCandidate[];
@@ -278,6 +386,27 @@ export interface ViewerReputation {
    * subscribed", never as a crash. Advisory: enforced on POST /api/offers.
    */
   premium?: boolean;
+  /**
+   * isVip(User.vipUntil) on the server. VIP is a SUPERSET of Premium: a VIP
+   * passes every Premium gate without premiumUntil being set. So "does this
+   * person have Premium access" is `hasPremiumAccess()` in src/lib/premium.ts, never `premium`
+   * alone. Optional for the same reason as `premium`.
+   */
+  vip?: boolean;
+  /**
+   * The raw `User.premiumUntil` / `User.vipUntil`, ISO or null. DISPLAY-ONLY —
+   * "active until 18 Oct 2026" on the Premium screen. Never decides access:
+   * `premium`/`vip` above are the server's verdict. Optional for the same
+   * reason as `premium`.
+   */
+  premiumUntil?: string | null;
+  /**
+   * True when premiumUntil is the server's beta LIFETIME sentinel (a 9999
+   * date): say "lifetime", never show that date. Optional for the same reason
+   * as `premium`; missing reads as a dated grant.
+   */
+  premiumLifetime?: boolean;
+  vipUntil?: string | null;
   limits: {
     /**
      * The highest BRACKET this tier may ACQUIRE. `null` is unlimited. The
@@ -321,9 +450,11 @@ export interface ViewerIdVerification {
  * status itself and must not assume the page is complete — see the note in
  * `src/api/offer.ts`.
  *
- * Only the blocks this app reads are typed. `impact`, `reviews` and `tasks`
- * arrive and are deliberately left off: typing a field nobody renders is a
- * claim about the server that nothing checks.
+ * Only the blocks this app reads are typed. `impact` and `reviews` arrive and
+ * are deliberately left off: typing a field nobody renders is a claim about
+ * the server that nothing checks. `tasks` is typed for one reader, the safe
+ * hub reward sheet, which takes the amount from here so the app never holds
+ * its own copy of the server's `TASK_REWARDS`.
  */
 export interface ProfileMePayload {
   user: {
@@ -345,6 +476,12 @@ export interface ProfileMePayload {
     lifetimeLeaves: number;
     rank: { label: string; next: { label: string; toNext: number } | null };
     isVerified: boolean;
+    /**
+     * False for an account made with Google that never set a password. Optional:
+     * a server older than 3 Oct 2026 omits it, and Settings then says nothing
+     * about how the account signs in rather than guessing.
+     */
+    hasPassword?: boolean;
     createdAt: string;
   };
   counts: {
@@ -369,11 +506,53 @@ export interface ProfileMePayload {
   achievementCount: number;
   reputation: ViewerReputation;
   idVerification: ViewerIdVerification;
+  /**
+   * False when this person has never listed, offered or traded AS THEMSELVES,
+   * only for an organisation. Absent from a server older than 24 Sep 2026,
+   * which the Profile tab reads as "has activity": the personal profile.
+   */
+  hasPersonalActivity?: boolean;
+  /**
+   * The task list, from the server's `TASK_ORDER` / `TASK_REWARDS`. Only
+   * `task` and `reward` are read. Optional: a reader must cope with it absent
+   * and say what it can without a number.
+   */
+  tasks?: {
+    items: { task: string; reward: number }[];
+  };
 }
 
 export interface PublicProfilePayload {
   user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
     rank: { label: string };
+    trustTier: string | null;
+    /**
+     * Set when this profile is an organisation. Null for a person, which is
+     * almost every profile.
+     *
+     * THE SCREEN BRANCHES ON THIS AND NOTHING ELSE: square logo instead of a
+     * round avatar, the shop-front placeholder instead of initials, the
+     * verified badge instead of the trust tier. The rest of the profile -- posts grid, Follow,
+     * Message, tabs -- is identical, which is why this is one extra field and
+     * not a second payload shape.
+     *
+     * `trustTier` is ALWAYS null alongside it; the server guarantees that, so
+     * no screen has to choose between two badges.
+     */
+    org: (OrgBadge & {
+      createdAt: string;
+      /**
+       * The storefront fields. OPTIONAL on the wire, not just nullable: a
+       * server from before the storefront omits them, and the storefront then
+       * renders its fallbacks (gradient band, no tagline, stat from counts).
+       */
+      bannerUrl?: string | null;
+      description?: string | null;
+      /** COMPLETED trades on either side, counted from the rows. */
+      completedTrades?: number;
+      /** "OWNER" when the viewer owns this shop, else null. Staff were removed (2 Oct 2026). */
+      viewerRole?: "OWNER" | null;
+    }) | null;
   };
   counts: Pick<ProfileMePayload["counts"], "listed" | "completedTrades" | "reviews" | "followers" | "following">;
   follow: {
@@ -382,6 +561,18 @@ export interface PublicProfilePayload {
   };
   items: Item[];
   reviews: unknown[];
+  displayedAchievements: ProfileMePayload["displayedAchievements"];
+}
+
+export type FollowStatus = "NONE" | "PENDING" | "ACCEPTED";
+
+export interface ProfileConnectionUser {
+  id: string;
+  name: string;
+  avatar: string | null;
+  trustTier: string | null;
+  follow: { status: FollowStatus };
+  followsYou: boolean;
 }
 
 /* ───────── GET /api/v1/trades — read for TWO fields, not for the tab ────── */
@@ -482,6 +673,10 @@ export interface ActiveTrade {
   bridgeFeeLeaves?: number | null;
   bridgeFeePaidBySender?: boolean | null;
   counterparty: { id: string; name: string; avatar: string | null };
+  myReview: { rating: number } | null;
+  receivedReview: { rating: number } | null;
+  rewardLeaves: number | null;
+  codesMatchedAt: string | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;
   requestedItem: TradeItemBrief;
@@ -514,6 +709,21 @@ export interface ActiveTrade {
    * without a second request per trade.
    */
   canConfirm: boolean;
+  /**
+   * Whether there is a code to SHOW, as of the response: both codes issued,
+   * unexpired, and not burned by wrong guesses. `canConfirm` stays true on an
+   * expired CONFIRMING trade — it is still the viewer's move — so this is what
+   * separates "Show code" from "Start handoff". True exactly when opening the
+   * code panel would show the existing pair rather than issue a fresh one.
+   */
+  codesLive: boolean;
+  /**
+   * The earlier of the two codes' expiries, ISO, so a card can flip to "Start
+   * handoff" on its own when the window closes. Null when the pair is missing
+   * or already expired. Still set on a BURNED pair whose window is open: that
+   * is the "locked" state (`codesLive` false, this in the future).
+   */
+  codesExpireAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -641,8 +851,19 @@ export interface NotificationItem {
   createdAt: string;
   entityType: string | null;
   entityId: string | null;
-  /** Who did it. Null for anything the system itself raised. */
-  actor: { id: string; name: string | null; avatar: string | null } | null;
+  /** The lead photo for an item notification, when the event has no actor. */
+  itemImage: string | null;
+  /**
+   * The organisation an `organization` row is about. Its logo is the row's
+   * picture. Absent from a
+   * server older than 25 Sep 2026.
+   */
+  org?: { id: string; name: string; logoUrl: string | null } | null;
+  /**
+   * Who did it. Null for anything the system itself raised. `isOrg` marks a
+   * shop's backing account, which is drawn as a shop when it has no logo.
+   */
+  actor: { id: string; name: string | null; avatar: string | null; isOrg?: boolean } | null;
 }
 
 export interface NotificationsPayload {

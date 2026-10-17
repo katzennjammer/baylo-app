@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChevronLeftIcon } from "../icons";
+import { textStyle as baseTextStyle, type } from "../../theme/tokens";
 import { Tappable } from "../Tappable";
 import {
   offerBoard,
@@ -262,15 +263,17 @@ export function Section({
   );
 }
 
-/** §2's section label: mono 500, 11px, +1.32 tracking, uppercase, `#8C8A7E`. */
+/**
+ * §2's section label. Sentence case in the body family (1 Oct 2026): it was
+ * mono 500 in spaced capitals, which read as a ledger rather than a sentence.
+ * `type.sectionHeading` is the app's small label; secondary ink, because a
+ * 13px sentence in `#8C8A7E` does not clear contrast the way caps did.
+ */
 export function SectionLabel({ children }: { children: string }) {
   return (
     <Text
-      style={[textStyle(offerType.sectionLabel), { color: offerColor.inkTertiary }]}
-      // The label is already uppercase through `textTransform`; the accessible
-      // name is the readable form, because a screen reader spelling out
-      // "Y-O-U-'-R-E O-F-F-E-R-I-N-G" is what uppercase does to some engines.
-      accessibilityLabel={children}
+      style={[baseTextStyle(type.sectionHeading), { color: offerColor.inkSecondary }]}
+      accessibilityRole="header"
     >
       {children}
     </Text>
