@@ -672,6 +672,27 @@ export function draftProgress(s: PostState): number {
   return Math.min(LAST_STEP + 1, s.step + 1);
 }
 
+/**
+ * ONE upload figure for the whole post, 0…1 — not the selected photo's.
+ *
+ * Every photo that is part of the post counts equally: a landed one is 1, one
+ * in flight is its own request's fraction. Failed and rejected photos are left
+ * out, because neither is uploading and either would hold the figure short of
+ * the end forever. The equal weight is deliberate: a photo's byte total is only
+ * known once its request reports, so a byte-weighted sum would jump whenever a
+ * late photo's size arrived.
+ *
+ * It cannot reach 1 while anything is still uploading — an in-flight photo
+ * reports at most 0.99 until the server answers (see uploadPhotoWithProgress).
+ * Null when nothing is uploading, which is when there is nothing to show.
+ */
+export function uploadProgress(photos: readonly Photo[]): number | null {
+  const counted = photos.filter((p) => p.upload === "uploading" || p.upload === "done");
+  if (!counted.some((p) => p.upload === "uploading")) return null;
+  const sum = counted.reduce((acc, p) => acc + (p.upload === "done" ? 1 : p.progress), 0);
+  return sum / counted.length;
+}
+
 /* ─────────────────────────── the context ────────────────────────────── */
 
 interface PostCtx {
