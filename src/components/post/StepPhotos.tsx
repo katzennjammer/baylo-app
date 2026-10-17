@@ -4,7 +4,7 @@ import { ScrollView, Text, useWindowDimensions, View } from "react-native";
 
 import { clampAspect } from "../../lib/format";
 import { PHOTO_ERRORS, usePhotos } from "../../post/photos";
-import { usePost, type Photo } from "../../post/state";
+import { uploadProgress, usePost, type Photo } from "../../post/state";
 import {
   postBorder,
   postColor,
@@ -57,8 +57,15 @@ import {
  * gallery is a full-width button directly beneath, not a link.
  */
 
+/**
+ * The WHOLE post's upload, not the hero's — see `uploadProgress`.
+ *
+ * Floored, not rounded: 99.6% is not finished, and rounding would print 100
+ * while the last reply is still on its way. The clamp is a safety net only;
+ * the figure it is given is already 0…1.
+ */
 const HERO_UPLOAD_CAPTION = (progress: number) =>
-  `uploading · ${Math.round(progress * 100)}%`;
+  `uploading · ${Math.max(0, Math.min(100, Math.floor(progress * 100)))}%`;
 
 export function StepPhotos({
   board,
@@ -92,6 +99,7 @@ export function StepPhotos({
   const hero = photos[state.selectedPhoto] ?? null;
   const atLimit = photos.length >= rules.maxPhotos;
   const busy = photos.some((p) => p.upload === "uploading");
+  const overall = uploadProgress(photos);
 
   const [galleryDenied, setGalleryDenied] = useState(false);
 
@@ -118,6 +126,7 @@ export function StepPhotos({
       {hero ? (
         <HeroPhoto
           photo={hero}
+          overall={overall}
           width={width}
           aspect={aspects[hero.id] ?? postSize.photo.heroAspect}
           onMeasure={measure}
@@ -250,6 +259,7 @@ export function StepPhotos({
 
 function HeroPhoto({
   photo,
+  overall,
   width,
   aspect,
   onMeasure,
@@ -257,6 +267,8 @@ function HeroPhoto({
   markerInset,
 }: {
   photo: Photo;
+  /** The whole post's upload, or null when nothing is uploading. */
+  overall: number | null;
   width: number;
   aspect: number;
   onMeasure: (id: string, w: number, h: number) => void;
@@ -292,32 +304,35 @@ function HeroPhoto({
       {/* The upload bar sits ON the photo, at its top edge, with its own
           semi-opaque track — `line` would disappear over a pale photo. */}
       {photo.upload === "uploading" ? (
-        <>
-          <View style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
-            <ProgressBar
-              fraction={photo.progress}
-              height={postSize.photo.uploadBar}
-              track={postColor.uploadTrack}
-              fill={postColor.green}
-            />
-          </View>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              right: markerInset,
-              bottom: markerInset,
-              backgroundColor: postColor.captionChip,
-              borderRadius: postRadius.markerChip,
-              paddingHorizontal: 8,
-              paddingVertical: 5,
-            }}
-          >
-            <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
-              {HERO_UPLOAD_CAPTION(photo.progress)}
-            </Text>
-          </View>
-        </>
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
+          <ProgressBar
+            fraction={photo.progress}
+            height={postSize.photo.uploadBar}
+            track={postColor.uploadTrack}
+            fill={postColor.green}
+          />
+        </View>
+      ) : null}
+
+      {/* The caption is the post's figure, so it stays while ANY photo is
+          uploading — including when the hero itself has already landed. */}
+      {overall !== null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: markerInset,
+            bottom: markerInset,
+            backgroundColor: postColor.captionChip,
+            borderRadius: postRadius.markerChip,
+            paddingHorizontal: 8,
+            paddingVertical: 5,
+          }}
+        >
+          <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
+            {HERO_UPLOAD_CAPTION(overall)}
+          </Text>
+        </View>
       ) : null}
 
       {/* The mark is drawn only once the photo is really on the listing. A

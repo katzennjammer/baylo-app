@@ -196,6 +196,9 @@ export async function uploadPhoto(
  * cookie ever entering the jar. See the note at the top of `client.ts` for what
  * a stray cookie would do to `resolveSession()`.
  */
+/** The most a request's sent bytes may claim. The server's reply is the last 1%. */
+const SENT_CEILING = 0.99;
+
 export function uploadPhotoWithProgress(
   uri: string,
   onProgress: (fraction: number) => void,
@@ -229,8 +232,27 @@ export function uploadPhotoWithProgress(
     // generated; overwriting it with a boundary-less header makes the server's
     // formData() parse fail on every single upload.
 
+    // ── THE NATIVE COUNTER IS NOT BOUNDED BY THE TOTAL ──
+    //
+    // `loaded` can run past `total`: when the native stack sends the body a
+    // second time on one request (a transparent resend on a fresh connection),
+    // the byte counter keeps climbing while `total` stays the size of ONE copy.
+    // Passing `loaded / total` through is how the caption read 200%. Bytes past
+    // the total are the resend, so they count as progress through the current
+    // copy; an Android-style retry that restarts the counter at 0 is covered by
+    // never moving backwards.
+    //
+    // And the last byte leaving the phone is not the upload finishing — the
+    // server still has to store the photo and answer. Sent bytes therefore stop
+    // at SENT_CEILING; only the caller's `progress: 1` after a 2xx means done.
+    let reported = 0;
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+      if (!e.lengthComputable || e.total <= 0) return;
+      const sent = e.loaded > e.total ? e.loaded % e.total : e.loaded;
+      const fraction = Math.min(SENT_CEILING, sent / e.total);
+      if (fraction <= reported) return;
+      reported = fraction;
+      onProgress(fraction);
     };
 
     xhr.onload = () => {
