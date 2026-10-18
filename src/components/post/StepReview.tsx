@@ -16,6 +16,7 @@ import {
   type Board,
 } from "../../theme/post-tokens";
 import { MarkerBadge } from "./CameraMarker";
+import { PhotoIssues } from "./PhotoIssues";
 import { Divider, LeavesChip, SectionLabel, SmallTextButton, Tag } from "./ui";
 
 /**
@@ -61,6 +62,15 @@ export function StepReview({ board }: { board: Board }) {
       <View style={{ height: postSpace.review.headingBelow }} />
 
       <PhotoRail photos={photos} board={board} />
+      {/* The photos that are not on the rail yet, and why. Post is disabled
+          until this is empty, so the reason sits right under the photos. */}
+      <PhotoIssues
+        style={{ paddingHorizontal: board.reviewX, marginTop: postSpace.review.railBelow }}
+        onShowPhoto={(index) => {
+          dispatch({ type: "goto", step: 0 });
+          dispatch({ type: "photo/select", index });
+        }}
+      />
       <View style={{ height: postSpace.review.railBelow }} />
 
       <Divider />

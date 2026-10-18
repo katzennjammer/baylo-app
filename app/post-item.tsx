@@ -55,9 +55,12 @@ import {
   canAdvance,
   effectiveValue,
   isChecking,
+  isPending,
   isPostable,
   LAST_STEP,
   parseQuantity,
+  photoProblem,
+  photosReady,
   PostStateProvider,
   usePost,
 } from "../src/post/state";
@@ -563,6 +566,9 @@ function Wizard() {
   );
 
   const post = useCallback(async () => {
+    // Every photo, or no post: the button is disabled until then, and this is
+    // the same rule again so no path can post a listing a photo short.
+    if (!photosReady(state.photos)) return;
     const photos = state.photos.filter(isPostable);
     const value = effectiveValue(state);
     if (!state.category || photos.length === 0 || value === null) return;
@@ -718,11 +724,24 @@ function Wizard() {
   const checkingPhotos =
     step === 0 && !state.photos.some(isPostable) && state.photos.some(isChecking);
 
+  /**
+   * The last step, while Post waits on photos. A problem photo (failed,
+   * rejected, blocked) needs the owner; a pending one only needs time, and the
+   * count says how much is left. The review lists each one under the photos.
+   */
+  const photoProblems = step === LAST_STEP ? state.photos.filter((p) => photoProblem(p) !== null).length : 0;
+  const waitingPhotos =
+    step === LAST_STEP && photoProblems === 0 && state.photos.some(isPending);
+
   const footerLabel =
     step === LAST_STEP
       ? state.posting
         ? "Posting…"
-        : "Post this item"
+        : photoProblems > 0
+          ? "Fix photos to post"
+          : waitingPhotos
+            ? `Waiting for photos… ${state.photos.filter(isPostable).length} of ${state.photos.length}`
+            : "Post this item"
       : checkingPhotos
           ? "Checking your photo…"
           : "Next";
@@ -867,7 +886,7 @@ function Wizard() {
               // whole reason the button is disabled, so it is the one thing that
               // must not be swapped out for a spinner.
               icon={
-                checkingPhotos ? (
+                checkingPhotos || waitingPhotos ? (
                   <ActivityIndicator size="small" color={postColor.inkDisabled} />
                 ) : undefined
               }
