@@ -262,7 +262,7 @@ function ChooseHowToSignIn({
         </>
       }
     >
-      <Headline variant="signIn">Barter, not buy.</Headline>
+      <Headline variant="signIn">Buy less, Baylo.</Headline>
 
       <View style={{ height: gap.headlineToBody }} />
       <Body large>

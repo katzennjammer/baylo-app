@@ -107,7 +107,7 @@ export function AuthHeader({ tagline }: { tagline: string }) {
   return (
     <View className="mb-6 self-start rounded-2xl bg-auth-scrim px-4 py-3">
       <Text className="text-on-green text-[11px] font-semibold tracking-[3px]">
-        BARTER, NOT BUY
+        BUY LESS, BAYLO
       </Text>
       <Text className="text-on-green text-[44px] font-bold tracking-tight mt-1">Baylo</Text>
       <Text className="text-on-green-muted text-[15px] leading-5 mt-1">{tagline}</Text>
