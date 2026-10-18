@@ -213,6 +213,7 @@ export default function HomeScreen() {
             item={row.item}
             viewerId={viewer?.id ?? null}
             onOffer={openItem}
+            onOpen={openItem}
             onLike={onLike}
             onComment={openComments}
             onShare={onShare}

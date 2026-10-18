@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { CountdownPill } from "../CountdownPill";
+import { PhotoCarousel } from "../marketplace/PhotoCarousel";
 import { clampAspect, relativeShort } from "../../lib/format";
 import { listingArea } from "../../lib/listing-area";
 import { ORG_BADGE_LABEL, ownerBadge } from "../../lib/org";
@@ -121,10 +122,13 @@ export const FeedCard = memo(function FeedCard({
   onShare,
   onMenu,
   onOwnerPress,
+  onOpen,
   offerLayout = OFFER_LAYOUT,
   viewerId = null,
 }: {
   item: Item;
+  /** A tap on the photo opens the listing. A sideways swipe does not. */
+  onOpen?: (item: Item) => void;
   onOffer?: (item: Item) => void;
   /** `next` is the state being asked for, never "toggle" — see useLike(). */
   onLike?: (item: Item, next: boolean) => void;
@@ -198,7 +202,12 @@ export const FeedCard = memo(function FeedCard({
       </View>
 
       {/* ── photo ── */}
-      <Photo images={item.images} title={item.title} perishable={perishable} />
+      <Photo
+        images={item.images}
+        title={item.title}
+        perishable={perishable}
+        onOpen={onOpen && (() => onOpen(item))}
+      />
 
       {/* ── title + value ── */}
       <View style={s.titleRow}>
@@ -263,15 +272,23 @@ export const FeedCard = memo(function FeedCard({
  * held (square, if it never got far enough to report one), so a 404 in the
  * middle of the feed does not shorten the card and jerk the scroll position of
  * everything below it. That is the spec's stated reason for the state existing.
+ *
+ * MORE THAN ONE PHOTO SWIPES (18 Oct 2026). It used to render `images[0]` and
+ * nothing else. Two or more go through PhotoCarousel with dots; the box keeps
+ * the COVER's clamped ratio for every page, so a swipe never changes the card's
+ * height under the feed. Only the visible page and its neighbours are mounted.
+ * One photo keeps the path below, with its retry.
  */
 function Photo({
   images,
   title,
   perishable,
+  onOpen,
 }: {
   images: string[];
   title: string;
   perishable: Item["perishable"];
+  onOpen?: () => void;
 }) {
   const [aspect, setAspect] = useState(size.photo.aspectDefault);
   const [failed, setFailed] = useState(false);
@@ -298,6 +315,25 @@ function Photo({
     setFailed(false);
     setAttempt((n) => n + 1);
   }, []);
+
+  const onCoverLoad = useCallback((w: number, h: number) => setAspect(clampAspect(w, h)), []);
+
+  if (images.length > 1) {
+    return (
+      <PhotoCarousel
+        images={images}
+        title={title}
+        counter={false}
+        aspectRatio={aspect}
+        hairline={false}
+        window={1}
+        onPressPhoto={onOpen}
+        onCoverLoad={onCoverLoad}
+      >
+        {countdown}
+      </PhotoCarousel>
+    );
+  }
 
   if (!cover || failed) {
     return (
@@ -333,7 +369,13 @@ function Photo({
   }
 
   return (
-    <View style={{ aspectRatio: aspect, backgroundColor: color.control }}>
+    <Pressable
+      onPress={onOpen}
+      disabled={!onOpen}
+      accessibilityRole={onOpen ? "button" : undefined}
+      accessibilityLabel={onOpen ? `Open ${title}` : undefined}
+      style={{ aspectRatio: aspect, backgroundColor: color.control }}
+    >
       <Image
         key={attempt}
         source={{ uri: cover }}
@@ -350,7 +392,7 @@ function Photo({
         the full frame is one tap away on the listing screen.
       */}
       {countdown}
-    </View>
+    </Pressable>
   );
 }
 
