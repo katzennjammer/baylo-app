@@ -32,6 +32,15 @@ function normalise(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+/**
+ * Whether this build may point anywhere but its compiled-in URL. Dev bundles
+ * and the development/preview EAS profiles (EXPO_PUBLIC_ALLOW_API_OVERRIDE=1)
+ * may; a production build may not, because a gear on the login screen there
+ * lets anyone with the phone send the next sign-in's password to their own
+ * server. Off means: no gear, and a stored override is ignored, not obeyed.
+ */
+export const apiOverrideAllowed = __DEV__ || process.env.EXPO_PUBLIC_ALLOW_API_OVERRIDE === "1";
+
 /** The value compiled into the bundle. The floor the override sits on. */
 export const defaultApiBase = normalise(process.env.EXPO_PUBLIC_API_URL ?? "");
 
@@ -72,6 +81,10 @@ export function isApiBaseHydrated(): boolean {
 /** Reads the stored override into the mirror. Called once, at boot. */
 export async function hydrateApiBase(): Promise<string> {
   const generationAtStart = changeGeneration;
+  if (!apiOverrideAllowed) {
+    hydrated = true;
+    return getApiBase();
+  }
   try {
     const stored = await SecureStore.getItemAsync(API_BASE_KEY);
     if (changeGeneration === generationAtStart) {
@@ -115,6 +128,7 @@ export function validateApiBase(raw: string): string | null {
 
 /** Persists an override and swaps the mirror. Rejects an invalid URL. */
 export async function setApiBase(raw: string): Promise<void> {
+  if (!apiOverrideAllowed) throw new Error("This build always uses its built-in server.");
   const problem = validateApiBase(raw);
   if (problem) throw new Error(problem);
 
