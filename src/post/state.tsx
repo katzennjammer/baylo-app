@@ -71,6 +71,13 @@ export interface Photo {
   match: MatchedListing | null;
   /** Set when a photo was rejected for size or type before any request went out. */
   rejected: "too-large" | "unsupported" | null;
+  /**
+   * True when the duplicate check was refused with a 429. The photo stays
+   * `running` — a rate limit is not a verdict — and this is what tells the
+   * screens to offer "Check again" instead of a check that is not happening.
+   * Optional so drafts and relists written before it read as false.
+   */
+  checkPaused?: boolean;
 }
 
 /**
@@ -120,6 +127,31 @@ export const isPostable = (p: Photo): boolean =>
  */
 export const isChecking = (p: Photo): boolean =>
   isVisible(p) && !dupSettled(p);
+
+/** Still on its way: uploading, or uploaded and waiting on its verdict. */
+export const isPending = (p: Photo): boolean =>
+  !p.rejected && (p.upload === "uploading" || isChecking(p));
+
+/**
+ * Why a photo can never be posted as it stands, or null. Each one needs the
+ * owner to act — retry or remove — so none of them may simply be left out.
+ */
+export type PhotoProblem = "rejected" | "failed" | "blocked";
+
+export const photoProblem = (p: Photo): PhotoProblem | null =>
+  p.rejected ? "rejected" : p.upload === "failed" ? "failed" : p.dup === "failed" ? "blocked" : null;
+
+/**
+ * EVERY PHOTO IS POSTABLE — the gate on the final Post.
+ *
+ * It used to post `photos.filter(isPostable)` with no gate, so a photo still
+ * uploading, still being checked, failed or blocked was dropped without a word
+ * and the listing went up one photo short. Now Post waits for the stragglers
+ * and refuses until each problem photo is retried or removed. Step 0's Next
+ * stays lenient on purpose: uploads carry on while the other steps are filled.
+ */
+export const photosReady = (photos: readonly Photo[]): boolean =>
+  photos.length > 0 && photos.every(isPostable);
 
 /* ────────────────────────── step 2, detection ───────────────────────── */
 
@@ -235,7 +267,7 @@ export interface PostState {
    * which is the spec's rule and the difference between a rate limit and an
    * outage.
    */
-  rateLimit: { action: "detect" | "duplicate" | "post"; until: number } | null;
+  rateLimit: { action: RateLimitedAction; until: number } | null;
 }
 
 export function initialState(): PostState {
@@ -274,6 +306,9 @@ export function initialState(): PostState {
 }
 
 /* ──────────────────────────── the actions ───────────────────────────── */
+
+/** Which request a 429 came from; each step disables only that control. */
+export type RateLimitedAction = "upload" | "detect" | "duplicate" | "post";
 
 export type PostAction =
   | { type: "goto"; step: number }
@@ -320,7 +355,7 @@ export type PostAction =
   | { type: "post/start" }
   | { type: "post/done" }
   | { type: "post/fail"; message: string }
-  | { type: "rate-limit"; action: "detect" | "duplicate" | "post"; seconds: number }
+  | { type: "rate-limit"; action: RateLimitedAction; seconds: number }
   | { type: "rate-limit/clear" }
   | { type: "restore"; state: PostState };
 
@@ -613,7 +648,7 @@ function sentenceCase(s: string): string {
  *
  * Three of the seven are ALWAYS enabled, and that is a decision rather than an
  * oversight: condition is prefilled, "in return" is wholly optional and hubs
- * have "Skip for now" as a real route. Value is enabled on the suggestion and
+ * have "Skip for now" as a real route. Post waits on every photo. Value is enabled on the suggestion and
  * gated only on an EMPTY typed field. The other two gates are the two where
  * continuing would produce a listing that cannot exist — no photo, or no
  * category and no title.
@@ -633,6 +668,9 @@ export function canAdvance(s: PostState): boolean {
       // it is nothing, and posting nothing would post the suggestion under a
       // heading that said the owner set it.
       return !s.ownValue || (s.valueLeaves !== null && s.valueLeaves >= 1);
+    case LAST_STEP:
+      // Post waits for every photo. See `photosReady`.
+      return photosReady(s.photos);
     default:
       return true;
   }

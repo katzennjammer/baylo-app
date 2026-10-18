@@ -518,7 +518,9 @@ export default function ItemDetailScreen() {
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
 
-          {wanted ? <SwapTicket title={item.title} wanted={wanted} lookingFor={lookingFor} /> : null}
+          {wanted ? (
+            <SwapTicket title={item.title} wanted={wanted} lookingFor={lookingFor} own={own} />
+          ) : null}
 
           {/* Sections below are separated by hairlines, not boxes. */}
           <SellerRow
@@ -830,17 +832,32 @@ function initials(name: string): string {
  * by a dashed line with the swap mark in a small forest circle. Surface fill,
  * no tint. Drawn only when the owner wrote what they want; the categories
  * they named ride along as the small line under it.
+ *
+ * On the owner's own listing it reads from their side — "You're offering" /
+ * "You want" — since "You'd get" their own item was a sentence about nobody.
  */
-function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: string; lookingFor: string }) {
+function SwapTicket({
+  title,
+  wanted,
+  lookingFor,
+  own,
+}: {
+  title: string;
+  wanted: string;
+  lookingFor: string;
+  own: boolean;
+}) {
+  const give = own ? "You're offering" : "You'd get";
+  const want = own ? "You want" : "They want";
   return (
     <View
       style={s.ticket}
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`You'd get ${title}. They want ${wanted}${lookingFor ? `, ${lookingFor}` : ""}.`}
+      accessibilityLabel={`${give} ${title}. ${want} ${wanted}${lookingFor ? `, ${lookingFor}` : ""}.`}
     >
       <View style={s.ticketHalf}>
-        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>You'd get</Text>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>{give}</Text>
         <Text style={[textStyle(type.hubName), { color: color.ink }]} numberOfLines={3}>
           {title}
         </Text>
@@ -849,7 +866,7 @@ function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: stri
       <SwapSeam />
 
       <View style={s.ticketHalf}>
-        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>They want</Text>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>{want}</Text>
         <Text style={[textStyle(type.hubName), { color: color.forest }]}>{wanted}</Text>
         {lookingFor ? (
           <Text style={[textStyle(type.gridMeta), s.ticketSub]}>{lookingFor}</Text>

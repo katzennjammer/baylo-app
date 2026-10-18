@@ -4,7 +4,7 @@ import { ScrollView, Text, useWindowDimensions, View } from "react-native";
 
 import { clampAspect } from "../../lib/format";
 import { PHOTO_ERRORS, usePhotos } from "../../post/photos";
-import { uploadProgress, usePost, type Photo } from "../../post/state";
+import { photoProblem, uploadProgress, usePost, type Photo } from "../../post/state";
 import {
   postBorder,
   postColor,
@@ -115,6 +115,20 @@ export function StepPhotos({
   const dupSeconds = useCountdown(dupLimit?.until ?? null, () =>
     dispatch({ type: "rate-limit/clear" }),
   );
+  // The upload's own 429. The failed photo's Try again is what follows it.
+  const uploadLimit = state.rateLimit?.action === "upload" ? state.rateLimit : null;
+  const uploadSeconds = useCountdown(uploadLimit?.until ?? null, () =>
+    dispatch({ type: "rate-limit/clear" }),
+  );
+
+  /**
+   * The first photo OTHER than the hero that cannot be posted as it stands.
+   * Its panel only shows when it is selected, and a gallery pick selects the
+   * last photo, so without this line a failed second photo was a thin rule on
+   * a thumbnail and nothing else.
+   */
+  const otherProblems = photos.filter((p) => p.id !== hero?.id && photoProblem(p) !== null);
+  const firstOther = otherProblems[0] ?? null;
 
   const openGallery = useCallback(async () => {
     const result = await addFromGallery();
@@ -219,13 +233,41 @@ export function StepPhotos({
 
       {/* Everything that has something to say about the SELECTED photo. Only
           one photo's panel is ever shown: five stacked warnings is a wall. */}
-      {dupLimit ? (
-        <View style={{ marginTop: 24, paddingHorizontal: board.stackX, gap: 14 }}>
+      {firstOther ? (
+        <Tappable
+          onPress={() =>
+            dispatch({ type: "photo/select", index: photos.indexOf(firstOther) })
+          }
+          accessibilityRole="button"
+          style={{ marginTop: 24, paddingHorizontal: board.stackX, minHeight: 44, justifyContent: "center" }}
+        >
+          <Text style={[textStyle(postType.helperLong), { color: postColor.warmInk }]}>
+            {`${otherProblems.length === 1 ? "1 other photo needs" : `${otherProblems.length} other photos need`} a look — it will not be posted as it is. `}
+            <Text style={{ color: postColor.forest }}>Show me</Text>
+          </Text>
+        </Tappable>
+      ) : null}
+
+      {uploadLimit ? (
+        <View style={{ marginTop: 24, paddingHorizontal: board.stackX }}>
           <RateLimitPanel
-            seconds={dupSeconds}
-            body="You have tried this a few times in a row. Wait a little and try again — nothing you filled in was lost."
+            seconds={uploadSeconds}
+            body="You have sent a lot of photos in a short time. Wait for the timer, then tap Try again on the photo."
           />
-          {hero?.url ? (
+        </View>
+      ) : null}
+
+      {/* A paused check keeps its button after the countdown ends: the photo is
+          still `running` with nothing running, and only a re-check moves it. */}
+      {dupLimit || hero?.checkPaused ? (
+        <View style={{ marginTop: 24, paddingHorizontal: board.stackX, gap: 14 }}>
+          {dupLimit ? (
+            <RateLimitPanel
+              seconds={dupSeconds}
+              body="You have tried this a few times in a row. Wait a little and try again — nothing you filled in was lost."
+            />
+          ) : null}
+          {hero?.url && hero.checkPaused ? (
             <OutlineButton
               label="Check this photo again"
               onPress={() => recheck(hero.id)}
@@ -584,6 +626,8 @@ function PhotoState({
 
   if (photo.upload === "failed") return <UploadFailed onRetry={onRetry} onRemove={onRemove} />;
   if (photo.upload === "uploading") return null;
+  // Paused by a 429: the button above is the action, not a bar that never moves.
+  if (photo.dup === "running" && photo.checkPaused) return null;
   if (photo.dup === "running") return <DuplicateRunning />;
 
   switch (photo.dup) {

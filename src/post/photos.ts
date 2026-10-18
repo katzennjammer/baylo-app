@@ -51,7 +51,9 @@ import { usePost, type Photo } from "./state";
 const ALLOWED = /\.(jpe?g|png|heic|heif)$/i;
 
 export const PHOTO_ERRORS = {
-  tooLarge: "That photo is too big to send. Baylo will make it smaller — this may take a moment.",
+  // It used to promise "Baylo will make it smaller", and nothing does: a photo
+  // over the cap is born failed and never sent.
+  tooLarge: "That photo is too big to send. Remove it and pick a smaller one.",
   unsupported: "Baylo can use JPG, PNG and HEIC photos. Pick another one.",
 } as const;
 
@@ -105,15 +107,16 @@ function usePhotoPipeline() {
     async (id: string, url: string, controller: AbortController) => {
       const patch = (p: Partial<Photo>) => dispatch({ type: "photo/patch", id, patch: p });
 
-      patch({ dup: "running" });
+      patch({ dup: "running", checkPaused: false });
       let verdict: { status: PhashStatus; hash: string | null; matchedItemId?: string };
       try {
         verdict = await checkDuplicate(url, controller.signal);
       } catch (e) {
         if (controller.signal.aborted) return;
         if (e instanceof ApiError && e.status === 429) {
-          // NOT a verdict about the photo. It stays `running` and the step
-          // shows the countdown with a re-check.
+          // NOT a verdict about the photo. It stays `running`, marked paused,
+          // and the screens show the countdown with a re-check.
+          patch({ checkPaused: true });
           dispatch({ type: "rate-limit", action: "duplicate", seconds: e.retryAfter ?? 60 });
           return;
         }
@@ -157,10 +160,12 @@ function usePhotoPipeline() {
         patch({ upload: "done", progress: 1, url });
       } catch (e) {
         if (controller.signal.aborted) return;
+        // The upload's own limit, said as one. It used to be filed under
+        // "duplicate", which showed the check's copy for a photo never sent.
         if (e instanceof ApiError && e.status === 429) {
           dispatch({
             type: "rate-limit",
-            action: "duplicate",
+            action: "upload",
             seconds: e.retryAfter ?? 60,
           });
         }
@@ -270,27 +275,25 @@ function usePhotoPipeline() {
     [dispatch, run, state.photos],
   );
 
-  /** Re-runs only the duplicate check, for a photo whose upload already landed. */
+  /**
+   * Re-runs only the duplicate check, for a photo whose upload already landed.
+   *
+   * Through `check`, so a second 429 pauses the photo again instead of being an
+   * unhandled rejection that left it `running` for good, and with a controller,
+   * so removing the photo mid-check drops the answer.
+   */
   const recheck = useCallback(
     (id: string) => {
       const photo = state.photos.find((p) => p.id === id);
       if (!photo?.url) return;
       dispatch({ type: "rate-limit/clear" });
-      dispatch({ type: "photo/patch", id, patch: { dup: "running", match: null } });
-      void (async () => {
-        const verdict = await checkDuplicate(photo.url!);
-        dispatch({
-          type: "photo/patch",
-          id,
-          patch: { dup: verdict.status, hash: verdict.hash },
-        });
-        if (verdict.matchedItemId && verdict.status !== "passed") {
-          const match = await fetchMatchedListing(verdict.matchedItemId);
-          dispatch({ type: "photo/patch", id, patch: { match } });
-        }
-      })();
+      controllers.current.get(id)?.abort();
+      const controller = new AbortController();
+      controllers.current.set(id, controller);
+      dispatch({ type: "photo/patch", id, patch: { match: null } });
+      void check(id, photo.url, controller);
     },
-    [dispatch, state.photos],
+    [dispatch, check, state.photos],
   );
 
   const remove = useCallback(

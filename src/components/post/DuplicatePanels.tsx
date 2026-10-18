@@ -458,7 +458,7 @@ export function UploadFailed({
         <TextButton label="Remove this photo" onPress={onRemove} />
       </View>
       <Text style={[textStyle(postType.helperLong), { color: postColor.inkMuted }]}>
-        Baylo keeps trying quietly in the background while you carry on with the next steps.
+        You can carry on with the next steps. Post waits until this photo is sent or removed.
       </Text>
     </View>
   );

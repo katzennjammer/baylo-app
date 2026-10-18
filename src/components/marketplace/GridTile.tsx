@@ -147,6 +147,7 @@ export const GridTile = memo(function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
+        (item.images.length > 1 ? ` ${item.images.length} photos.` : "") +
         (area ? ` In ${area}.` : "") +
         (item.owner.org
           ? ` From ${item.owner.org.name}, ${businessCategoryLabel(item.owner.org.businessCategory)}` +
@@ -183,6 +184,21 @@ export const GridTile = memo(function GridTile({
             />
           </View>
         )}
+
+        {/* More than one photo: "1/3", top-left. The grid shows the cover only —
+            a 2-up tile is too small to swipe and is a tap target already — so
+            this says there is more on the listing. Same pill as the lock. */}
+        {item.images.length > 1 ? (
+          <View style={s.countBadge} pointerEvents="none" importantForAccessibility="no-hide-descendants">
+            <Text
+              style={[textStyle(type.storefrontOverlay), { color: color.onScrim }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={size.home.overlayMaxFontScale}
+            >
+              {`1/${item.images.length}`}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Out of reach: the bracket, on a scrim so it reads on any photo. The
             screen reader already hears it in the tile's label above. */}
@@ -290,6 +306,16 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
+    borderRadius: radius.countdownPill,
+    backgroundColor: color.captionFill,
+  },
+  countBadge: {
+    position: "absolute",
+    top: space.home.tileBadgeInset,
+    left: space.home.tileBadgeInset,
+    height: size.home.countdownPill,
+    paddingHorizontal: size.home.countdownPillX - 2,
+    justifyContent: "center",
     borderRadius: radius.countdownPill,
     backgroundColor: color.captionFill,
   },
