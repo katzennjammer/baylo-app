@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import {
+  apiOverrideAllowed,
   defaultApiBase,
   getApiBase,
   isApiBaseOverridden,
@@ -39,7 +40,12 @@ import { auth } from "../theme/palette";
  * The URL is shown in the collapsed state, not hidden behind the gear. Half the
  * value here is answering "what is it pointing at" without a tap.
  */
-export function ApiUrlGear({ variant = "row" }: { variant?: "row" | "icon" | "band" } = {}) {
+export function ApiUrlGear(props: { variant?: "row" | "icon" | "band" } = {}) {
+  // Not in a production build -- see apiOverrideAllowed.
+  return apiOverrideAllowed ? <ApiUrlGearInner {...props} /> : null;
+}
+
+function ApiUrlGearInner({ variant = "row" }: { variant?: "row" | "icon" | "band" } = {}) {
   const [open, setOpen] = useState(false);
   const [base, setBase] = useState(getApiBase);
 

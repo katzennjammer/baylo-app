@@ -48,6 +48,13 @@ function googleSignInPlugin() {
 module.exports = ({ config }) => {
   const plugins = [...(config.plugins ?? []), googleSignInPlugin()];
 
+  // A store build sends passwords and tokens; it does so over TLS or not at all.
+  if (process.env.EAS_BUILD_PROFILE === "production") {
+    const url = process.env.EXPO_PUBLIC_API_URL ?? "";
+    if (!url.startsWith("https://")) throw new Error(`Production build needs an https:// EXPO_PUBLIC_API_URL, got "${url}"`);
+    if (process.env.BAYLO_ALLOW_CLEARTEXT === "1") throw new Error("Production build must not set BAYLO_ALLOW_CLEARTEXT");
+  }
+
   if (process.env.BAYLO_ALLOW_CLEARTEXT === "1") {
     plugins.push(["expo-build-properties", { android: { usesCleartextTraffic: true } }]);
   }
