@@ -16,6 +16,7 @@ import {
   type,
 } from "../../theme/tokens";
 import { useStories, type StoryAuthor } from "../../api/stories";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * The stories row across the top of Community (2 Oct 2026).
@@ -145,7 +146,7 @@ function AuthorBubble({ author, onPress }: { author: StoryAuthor; onPress: () =>
 }
 
 function Avatar({ uri, name }: { uri: string | null; name: string }) {
-  if (uri) return <Image source={{ uri }} contentFit="cover" style={s.avatarImage} />;
+  if (uri) return <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.avatarImage} />;
   return (
     <View style={[s.avatarImage, s.avatarFallback]}>
       <Text style={[textStyle(type.avatarInitials62), { color: color.forest }]}>

@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import type { SpotlightShop } from "../../api/spotlight";
 import { StoreIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
 import {
   categoryTone,
   color,
@@ -94,7 +95,7 @@ export const ShopSpotlightCard = memo(function ShopSpotlightCard({
       <View style={{ height: heroHeight, backgroundColor: tone.tint }}>
         {showHero ? (
           <Image
-            source={{ uri: heroUri }}
+            source={{ uri: sizedImage(heroUri, "card") }}
             contentFit="cover"
             style={StyleSheet.absoluteFill}
             transition={120}
@@ -124,7 +125,7 @@ export const ShopSpotlightCard = memo(function ShopSpotlightCard({
         >
           {shop.logoUrl && !logoFailed ? (
             <Image
-              source={{ uri: shop.logoUrl }}
+              source={{ uri: sizedImage(shop.logoUrl, "thumb") }}
               contentFit="cover"
               style={s.logoImage}
               onError={() => setLogoFailed(true)}

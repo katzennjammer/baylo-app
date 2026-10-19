@@ -6,6 +6,8 @@ import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, Sh
 import { Tappable } from "../Tappable";
 import { CountdownPill } from "../CountdownPill";
 import { PhotoCarousel } from "../marketplace/PhotoCarousel";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { clampAspect, relativeShort } from "../../lib/format";
 import { listingArea } from "../../lib/listing-area";
 import { ORG_BADGE_LABEL, ownerBadge } from "../../lib/org";
@@ -176,7 +178,7 @@ export const FeedCard = memo(function FeedCard({
               <View style={s.featureBadge} accessibilityLabel={`Featured achievement: ${item.owner.featuredAchievement.name}`}>
                 {item.owner.featuredAchievement.imageUrl ? (
                   <Image
-                    source={{ uri: item.owner.featuredAchievement.imageUrl }}
+                    source={{ uri: sizedImage(item.owner.featuredAchievement.imageUrl, "thumb") }}
                     style={s.featureBadgeImage}
                     contentFit="cover"
                   />
@@ -291,13 +293,10 @@ function Photo({
   onOpen?: () => void;
 }) {
   const [aspect, setAspect] = useState(size.photo.aspectDefault);
-  const [failed, setFailed] = useState(false);
-  // Bumped to retry. It is the Image's key, so incrementing it remounts the
-  // component — expo-image has no "try that URL again" call, and re-rendering
-  // with an identical source is a no-op it correctly ignores.
-  const [attempt, setAttempt] = useState(0);
-
   const cover = images[0];
+  // One automatic retry, then "Tap to reload"; a new cover starts clean. The
+  // attempt is the Image's key -- see usePhotoRetry.
+  const photo = usePhotoRetry(cover);
 
   const onLoad = useCallback((e: ImageLoadEventData) => {
     setAspect(clampAspect(e.source.width, e.source.height));
@@ -310,11 +309,6 @@ function Photo({
       <CountdownPill expiresAt={perishable.expiresAt} expired={perishable.expired} />
     </View>
   ) : null;
-
-  const retry = useCallback(() => {
-    setFailed(false);
-    setAttempt((n) => n + 1);
-  }, []);
 
   const onCoverLoad = useCallback((w: number, h: number) => setAspect(clampAspect(w, h)), []);
 
@@ -335,7 +329,7 @@ function Photo({
     );
   }
 
-  if (!cover || failed) {
+  if (!cover || photo.failed) {
     return (
       <View style={[s.photoFailed, { aspectRatio: aspect }]}>
         <ImageIcon
@@ -345,7 +339,7 @@ function Photo({
         />
         {cover ? (
           <Tappable
-            onPress={retry}
+            onPress={photo.retry}
             accessibilityRole="button"
             accessibilityLabel="Reload photo"
             style={s.reload}
@@ -377,12 +371,12 @@ function Photo({
       style={{ aspectRatio: aspect, backgroundColor: color.control }}
     >
       <Image
-        key={attempt}
-        source={{ uri: cover }}
+        key={photo.key}
+        source={{ uri: sizedImage(cover, "full") }}
         contentFit="cover"
         transition={motion.photoFadeMs}
         onLoad={onLoad}
-        onError={() => setFailed(true)}
+        onError={photo.onError}
         accessibilityLabel={title}
         style={s.photo}
       />
@@ -710,7 +704,7 @@ function KebabButton({ owner, onPress }: { owner: string; onPress?: () => void }
 
 function Avatar({ uri, name }: { uri: string | null; name: string }) {
   if (uri) {
-    return <Image source={{ uri }} contentFit="cover" style={s.avatar} />;
+    return <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.avatar} />;
   }
   return (
     <View style={[s.avatar, s.avatarFallback]}>

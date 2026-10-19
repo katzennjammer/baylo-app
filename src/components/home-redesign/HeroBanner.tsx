@@ -1,10 +1,12 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ImageIcon } from "../icons";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { color, dark, icon, radius, size, space, textStyle, type } from "../../theme/tokens";
 import type { Item } from "../../api/types";
 
@@ -40,8 +42,8 @@ export function HeroBanner({
   item: Item;
   onPress: () => void;
 }) {
-  const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const photo = usePhotoRetry(cover);
 
   // TODO(home-redesign): mocked copy. Headline follows the featured item's
   // category so it is at least true to the photo beside it.
@@ -75,13 +77,14 @@ export function HeroBanner({
       </View>
 
       <View style={s.photoBox}>
-        {cover && !failed ? (
+        {cover && !photo.failed ? (
           <Image
-            source={{ uri: cover }}
+            key={photo.key}
+            source={{ uri: sizedImage(cover, "card") }}
             contentFit="cover"
             style={StyleSheet.absoluteFill}
             transition={120}
-            onError={() => setFailed(true)}
+            onError={photo.onError}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, s.photoFailed]}>
@@ -90,6 +93,7 @@ export function HeroBanner({
               stroke={icon.failedPhoto.stroke}
               color={dark.muted}
             />
+            {cover ? <ReloadPhotoButton onPress={photo.retry} /> : null}
           </View>
         )}
       </View>
@@ -125,7 +129,7 @@ const s = StyleSheet.create({
     backgroundColor: dark.control,
     overflow: "hidden",
   },
-  photoFailed: { alignItems: "center", justifyContent: "center" },
+  photoFailed: { alignItems: "center", justifyContent: "center", gap: space.card.failedGap },
   cta: {
     alignSelf: "flex-start",
     marginTop: space.home.heroSubToCta,

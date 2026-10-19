@@ -22,6 +22,7 @@ import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
 import { fetchAchievements } from "../../src/api/achievements";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
+import { sizedImage } from "../../src/media/image-url";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -222,7 +223,7 @@ function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: {
   const logo = orgLogoUrl(logoUrl);
   return (
     <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. ${actionLabel}`}>
-      {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+      {logo ? <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
       <View style={s.shopText}>
         <Text style={[s.shopEyebrow, { color: palette.muted }]}>Acting as</Text>
         <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
@@ -268,7 +269,7 @@ function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: A
         const active = shop.id === activeId;
         return (
           <Pressable key={shop.id} onPress={() => onPick(shop.id)} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`Open ${shop.name}`}>
-            {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+            {logo ? <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
             <View style={s.shopText}>
               <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
               <Text style={[s.shopEyebrow, { color: palette.muted }]}>{"Owner"}{active ? " · Acting as" : ""}</Text>
@@ -417,7 +418,7 @@ export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean;
       </Pressable>
       {review.comment ? <Text style={[s.reviewComment, { color: palette.secondary }]}>{review.comment}</Text> : null}
       {review.item ? <Pressable onPress={onItem} style={[s.reviewItem, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Open ${review.item.title}`}>
-        {review.item.image ? <Image source={{ uri: review.item.image }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={18} color={palette.muted} /></View>}
+        {review.item.image ? <Image source={{ uri: sizedImage(review.item.image, "thumb") }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={18} color={palette.muted} /></View>}
         <View style={s.reviewItemText}><Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text><Text style={[s.reviewItemMeta, { color: palette.muted }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text></View>
       </Pressable> : null}
     </View>
@@ -427,7 +428,7 @@ export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean;
 function ReviewAvatar({ uri, name, dark }: { uri: string | null; name: string; dark: boolean }) {
   const palette = dark ? darkColors : lightColors;
   return uri
-    ? <Image source={{ uri }} contentFit="cover" style={s.reviewAvatar} />
+    ? <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.reviewAvatar} />
     : <View style={[s.reviewAvatar, s.reviewAvatarFallback, { backgroundColor: palette.control }]}><Text style={[s.reviewAvatarText, { color: palette.green }]}>{name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
 }
 
@@ -459,7 +460,7 @@ export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }, label !== null && s.dimmed]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
-    {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
+    {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
     {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
   </Pressable>;
 }
@@ -546,7 +547,7 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
             style={s.badgeItem}
           >
             <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
-              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
+              {item.imageUrl ? <Image source={{ uri: sizedImage(item.imageUrl, "thumb") }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
             </View>
             <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text>
           </Pressable>
@@ -559,7 +560,7 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
           body={dialogBody}
           icon={
             dialogBadge.imageUrl ? (
-              <Image source={{ uri: dialogBadge.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+              <Image source={{ uri: sizedImage(dialogBadge.imageUrl, "thumb") }} contentFit="cover" style={s.badgeDialogArt} />
             ) : (
               <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
@@ -580,7 +581,7 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
   if (uri) {
     return (
       <Image
-        source={{ uri }}
+        source={{ uri: sizedImage(uri, "thumb") }}
         contentFit="cover"
         style={s.avatar}
       />

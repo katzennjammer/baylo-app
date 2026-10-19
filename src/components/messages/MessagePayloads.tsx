@@ -9,6 +9,7 @@ import { giveGet } from "../../lib/trade-sides";
 import { ChatOfferCard } from "./ChatOfferCard";
 
 import { color, font, radius, textStyle, type } from "../../theme/tokens";
+import { sizedImage } from "../../media/image-url";
 
 export type MessagePayload = Record<string, unknown> & {
   type?: string;
@@ -209,7 +210,7 @@ export function renderMessageBody({
         <View style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}>
           {imageUrl ? (
             <Image
-              source={{ uri: imageUrl }}
+              source={{ uri: sizedImage(imageUrl, "card") }}
               style={[styles.sharedImage, { width: sharedWidth - 2 * MEDIA_BORDER }]}
               resizeMode="cover"
             />
@@ -242,7 +243,7 @@ export function renderMessageBody({
               accessibilityLabel="View image full screen"
             >
               <Image
-                source={{ uri: imageUrl }}
+                source={{ uri: sizedImage(imageUrl, "card") }}
                 style={[styles.messageImage, { width: imageWidth, height: imageHeight }]}
                 contentFit="cover"
                 onLoad={() => console.log("[messages/thread] image loaded", { url: imageUrl })}

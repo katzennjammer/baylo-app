@@ -9,6 +9,7 @@ import { ORG_BADGE_LABEL } from "../../lib/org";
 import { ChevronRightIcon, StoreIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { border, color, icon, radius, space, textStyle, type } from "../../theme/tokens";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * Shops whose NAME matched the search, above the item results.
@@ -72,7 +73,7 @@ export function OrgMatches({
               pressedStyle={s.bodyPressed}
             >
               {logo ? (
-                <Image source={{ uri: logo }} contentFit="cover" style={s.logo} />
+                <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.logo} />
               ) : (
                 <View style={[s.logo, s.logoFallback]}>
                   <StoreIcon size={22} stroke={1.6} color={color.forest} />

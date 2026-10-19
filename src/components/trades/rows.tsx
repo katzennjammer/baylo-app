@@ -15,6 +15,7 @@ import {
   textStyle,
 } from "../../theme/offer-tokens";
 import { font } from "../../theme/tokens";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * Every row shape §6 and the frames use, and nothing that decides what goes in
@@ -69,7 +70,7 @@ export function Thumb({
     >
       {image ? (
         <Image
-          source={{ uri: image }}
+          source={{ uri: sizedImage(image, "thumb") }}
           contentFit="cover"
           style={{ width: "100%", height: "100%" }}
           transition={120}
