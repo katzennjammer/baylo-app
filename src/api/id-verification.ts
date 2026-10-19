@@ -1,4 +1,5 @@
 import { ApiError, apiV1, request } from "./client";
+import { prepareImage } from "../media/prepare-image";
 
 /**
  * The ID gate, client side.
@@ -107,7 +108,6 @@ export interface SubmitIdInput {
   idNumber: string;
   /** A local file URI from the camera or the picker. */
   imageUri: string;
-  mimeType?: string;
 }
 
 /**
@@ -136,13 +136,16 @@ export interface SubmitIdInput {
  * exists to avoid.
  */
 export async function submitIdVerification(input: SubmitIdInput): Promise<IdVerificationState> {
+  // Resized to a JPEG with the `document` preset, so the ID's text stays
+  // readable and the request still fits under Vercel's 4.5 MB limit.
+  const image = await prepareImage(input.imageUri, "document");
   const form = new FormData();
   form.append("idType", input.idType);
   form.append("idNumber", input.idNumber);
   form.append("file", {
-    uri: input.imageUri,
+    uri: image.uri,
     name: "id.jpg",
-    type: input.mimeType ?? "image/jpeg",
+    type: image.type,
   } as unknown as Blob);
 
   const res = await request("/api/v1/id-verification", { method: "POST", body: form });

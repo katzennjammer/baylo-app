@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiV1, currentSession, request } from "./client";
 import { getApiBase } from "./config";
 import { setActingOrgId } from "./org-context";
+import { prepareImage } from "../media/prepare-image";
 
 /**
  * Organisations / MSMEs: creating one, listing the ones you may act as, and
@@ -175,14 +176,17 @@ export async function createOrganization(
     throw new ApiError(401, "UNAUTHENTICATED", "Sign in to continue");
   }
 
+  // Resized to a JPEG with the `document` preset, so the registration's text
+  // stays readable and the request still fits under Vercel's 4.5 MB limit.
+  const image = await prepareImage(input.documentUri, "document");
   const form = new FormData();
   form.append("name", input.name);
   form.append("businessCategory", input.businessCategory);
   form.append("dtiRegistrationNumber", input.dtiRegistrationNumber);
   form.append("file", {
-    uri: input.documentUri,
+    uri: image.uri,
     name: "business-document.jpg",
-    type: "image/jpeg",
+    type: image.type,
   } as unknown as Blob);
 
   // This header is what authenticates the SIGNUP call, and it works because

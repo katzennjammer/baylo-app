@@ -54,8 +54,6 @@ import { color, radius, textStyle, type } from "../src/theme/tokens";
  * file would change what a person can SEE and nothing about what they can DO.
  */
 
-const MAX_BYTES = 10 * 1024 * 1024;
-
 /**
  * A local spacing scale, and why this file does not use `space` from the theme.
  *
@@ -300,7 +298,7 @@ function SubmitForm({
 }) {
   const [idType, setIdType] = useState<string | null>(null);
   const [idNumber, setIdNumber] = useState("");
-  const [image, setImage] = useState<{ uri: string; mimeType?: string } | null>(null);
+  const [image, setImage] = useState<{ uri: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const rejected = payload.status === "rejected";
@@ -311,7 +309,6 @@ function SubmitForm({
         idType: idType!,
         idNumber: idNumber.trim(),
         imageUri: image!.uri,
-        mimeType: image!.mimeType,
       }),
     onSuccess: () => {
       setError(null);
@@ -357,14 +354,9 @@ function SubmitForm({
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
 
-    // Checked here as a courtesy so a 10 MB photo fails in a second rather than
-    // after a slow upload. The server checks it too, and the server's answer is
-    // the one that counts.
-    if (asset.fileSize && asset.fileSize > MAX_BYTES) {
-      setError("That photo is over 10 MB. Take a new one rather than sending a full-size scan.");
-      return;
-    }
-    setImage({ uri: asset.uri, mimeType: asset.mimeType });
+    // No size check on the original: submitIdVerification() shrinks it to a
+    // readable JPEG before sending, so a full-size photo is fine.
+    setImage({ uri: asset.uri });
   }
 
   const ready = !!idType && idNumber.trim().length >= payload.limits.minIdNumberLength && !!image;
