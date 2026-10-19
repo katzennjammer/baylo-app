@@ -26,6 +26,7 @@ import {
   WarmNotice,
 } from "./ui";
 import { AlertCircleIcon, RelistIcon } from "./post-icons";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * The four outcomes of /api/ai/phash, drawn.
@@ -130,7 +131,7 @@ function ListingRow({ listing, meta }: { listing: MatchedListing; meta: string }
     >
       {listing.image ? (
         <Image
-          source={{ uri: listing.image }}
+          source={{ uri: sizedImage(listing.image, "thumb") }}
           style={{
             width: postSize.draft.thumb,
             height: postSize.draft.thumb,

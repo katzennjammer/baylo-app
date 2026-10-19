@@ -12,6 +12,7 @@ import { border, color, dark as darkTokens, icon, radius, size, space, textStyle
 import { useKeyboardState } from "./auth-sheet";
 import { CheckIcon, PlusIcon, ShareIcon, VerifiedOrgIcon } from "./icons";
 import { Tappable } from "./Tappable";
+import { sizedImage } from "../media/image-url";
 
 /**
  * The MSME storefront header — the top of an organisation's profile.
@@ -126,7 +127,7 @@ export function OrgStorefrontHeader({
       {/* ── Cover, with the logo anchored on its bottom edge ── */}
       <View>
         {banner ? (
-          <Image source={{ uri: banner }} contentFit="cover" style={s.banner} accessibilityLabel={`${org.name} cover image`} />
+          <Image source={{ uri: sizedImage(banner, "full") }} contentFit="cover" style={s.banner} accessibilityLabel={`${org.name} cover image`} />
         ) : (
           // No banner yet: a token gradient, so a new shop's page still reads
           // as designed rather than as an image that failed to load.
@@ -145,7 +146,7 @@ export function OrgStorefrontHeader({
       <View style={s.body}>
         <View style={[s.logoFrame, { borderColor: palette.surface, backgroundColor: palette.surface }]}>
           {logo ? (
-            <Image source={{ uri: logo }} contentFit="cover" style={s.logo} accessibilityLabel={`${org.name} logo`} />
+            <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.logo} accessibilityLabel={`${org.name} logo`} />
           ) : (
             // No logo: the person profile's initial avatar (profile.tsx Avatar --
             // green fill, onGreen initial), squared to the logo slot.

@@ -13,6 +13,7 @@ import { MessageIcon, StoreIcon } from "../../src/components/icons";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
 import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
+import { sizedImage } from "../../src/media/image-url";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -158,7 +159,7 @@ export default function MessagesScreen() {
           return (
             <View style={styles.row}>
               <Tappable onPress={() => router.push({ pathname: "/user", params: { id: item.partnerId } })} style={styles.partnerIdentity} pressedStyle={styles.rowPressed} accessibilityRole="button" accessibilityLabel={`View ${item.partnerName}'s profile`}>
-                {item.partnerAvatar ? <Image source={{ uri: item.partnerAvatar }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text></View>}
+                {item.partnerAvatar ? <Image source={{ uri: sizedImage(item.partnerAvatar, "thumb") }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.avatarInitial}>{item.partnerName?.slice(0, 1).toUpperCase() ?? "?"}</Text></View>}
               </Tappable>
 
               <Tappable

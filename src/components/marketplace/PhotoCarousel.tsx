@@ -11,6 +11,9 @@ import {
 } from "react-native";
 
 import { ImageIcon } from "../icons";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { border, color, icon, radius, size, space, textStyle, type } from "../../theme/tokens";
 
 /**
@@ -68,7 +71,6 @@ export function PhotoCarousel({
   children?: React.ReactNode;
 }) {
   const [index, setIndex] = useState(0);
-  const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [boxWidth, setBoxWidth] = useState(0);
   const box = [s.box, { aspectRatio }, !hairline && s.noHairline];
 
@@ -112,23 +114,11 @@ export function PhotoCarousel({
       >
         {images.map((uri, i) => {
           const mounted = window === undefined || Math.abs(i - index) <= window;
-          const photo = failed[i] ? (
-            <View style={s.failed}>
-              <ImageIcon
-                size={icon.failedPhoto.size}
-                stroke={icon.failedPhoto.stroke}
-                color={color.failedIcon}
-              />
-            </View>
-          ) : mounted ? (
-            <Image
-              source={{ uri }}
-              contentFit="cover"
-              style={s.photo}
-              transition={140}
-              accessibilityLabel={`${title}, photo ${i + 1} of ${images.length}`}
-              onLoad={i === 0 && onCoverLoad ? (e) => onCoverLoad(e.source.width, e.source.height) : undefined}
-              onError={() => setFailed((prev) => ({ ...prev, [i]: true }))}
+          const photo = mounted ? (
+            <Slide
+              uri={uri}
+              label={`${title}, photo ${i + 1} of ${images.length}`}
+              onLoad={i === 0 ? onCoverLoad : undefined}
             />
           ) : null;
           const page = { width: boxWidth || undefined, height: "100%" as const };
@@ -171,6 +161,41 @@ export function PhotoCarousel({
       ) : null}
 
     </View>
+  );
+}
+
+/** One page. Its load state lives here, keyed by its own URL, not by slide index. */
+function Slide({
+  uri,
+  label,
+  onLoad,
+}: {
+  uri: string;
+  label: string;
+  onLoad?: (width: number, height: number) => void;
+}) {
+  const photo = usePhotoRetry(uri);
+  if (photo.failed) {
+    return (
+      <View style={s.failed}>
+        <ImageIcon size={icon.failedPhoto.size} stroke={icon.failedPhoto.stroke} color={color.failedIcon} />
+        <ReloadPhotoButton onPress={photo.retry} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      key={photo.key}
+      source={{ uri: sizedImage(uri, "full") }}
+      contentFit="cover"
+      style={s.photo}
+      transition={140}
+      accessibilityLabel={label}
+      // The transform keeps the aspect ratio (c_limit), so the feed's box is
+      // still sized correctly from the smaller image.
+      onLoad={onLoad ? (e) => onLoad(e.source.width, e.source.height) : undefined}
+      onError={photo.onError}
+    />
   );
 }
 

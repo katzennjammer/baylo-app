@@ -16,6 +16,7 @@ import { valueRejectionSentence } from "../src/lib/value-rejection";
 import { offerBorder, offerColor, offerRadius, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
 import { showDialog } from "../src/components/dialog";
 import { startRelist } from "../src/post/relist";
+import { sizedImage } from "../src/media/image-url";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
@@ -117,7 +118,7 @@ function ExpiredBody({ item }: { item: Item }) {
       <Section pad={{ top: 14, bottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
-            {image ? <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
+            {image ? <Image source={{ uri: sizedImage(image, "thumb") }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]} numberOfLines={2}>{item.title}</Text>
@@ -244,7 +245,7 @@ function ReviewBody({
       <Section pad={{ top: 14, bottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
-            {image ? <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
+            {image ? <Image source={{ uri: sizedImage(image, "thumb") }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]} numberOfLines={2}>{title}</Text>

@@ -11,6 +11,7 @@ import { Tappable } from "../../src/components/Tappable";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { useSession } from "../../src/auth/session";
 import { color, font, icon, space } from "../../src/theme/tokens";
+import { sizedImage } from "../../src/media/image-url";
 
 type ConnectionKind = "followers" | "following";
 
@@ -59,7 +60,7 @@ function ConnectionRow({ user, viewerId, dark, onPress }: { user: ProfileConnect
 
 function Avatar({ user, dark }: { user: ProfileConnectionUser; dark: boolean }) {
   const palette = dark ? darkColors : lightColors;
-  return user.avatar ? <Image source={{ uri: user.avatar }} style={s.avatar} /> : <View style={[s.avatar, s.fallback, { backgroundColor: palette.control }]}><Text style={[s.initial, { color: palette.green }]}>{user.name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
+  return user.avatar ? <Image source={{ uri: sizedImage(user.avatar, "thumb") }} style={s.avatar} /> : <View style={[s.avatar, s.fallback, { backgroundColor: palette.control }]}><Text style={[s.initial, { color: palette.green }]}>{user.name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
 }
 
 const s = StyleSheet.create({

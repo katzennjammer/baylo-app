@@ -1,9 +1,12 @@
 import { Image } from "expo-image";
-import { memo, useState } from "react";
+import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ImageIcon, LeafIcon, VerifiedOrgIcon } from "../icons";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { CountdownPill } from "../CountdownPill";
 import { useCountdownA11y } from "../../lib/live-clock";
 import {
@@ -79,8 +82,8 @@ export const ExclusiveCard = memo(function ExclusiveCard({
   /** Why this card is here -- Recommended's reason line. */
   note?: string;
 }) {
-  const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const photo = usePhotoRetry(cover);
   const own = viewerId !== null && item.owner.id === viewerId;
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
   const org = item.owner.org ?? null;
@@ -109,17 +112,19 @@ export const ExclusiveCard = memo(function ExclusiveCard({
       pressedStyle={s.cardPressed}
     >
       <View style={s.photoBox}>
-        {cover && !failed ? (
+        {cover && !photo.failed ? (
           <Image
-            source={{ uri: cover }}
+            key={photo.key}
+            source={{ uri: sizedImage(cover, "card") }}
             contentFit="cover"
             style={s.photo}
             transition={120}
-            onError={() => setFailed(true)}
+            onError={photo.onError}
           />
         ) : (
           <View style={s.photoFailed}>
             <ImageIcon size={icon.failedPhoto.size} stroke={icon.failedPhoto.stroke} color={color.failedIcon} />
+            {cover ? <ReloadPhotoButton onPress={photo.retry} /> : null}
           </View>
         )}
       </View>
@@ -191,7 +196,7 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
   photo: { width: "100%", height: "100%" },
-  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center" },
+  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.card.failedGap },
 
   panel: { padding: space.home.tileBody },
   posterRow: {

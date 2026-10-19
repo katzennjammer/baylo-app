@@ -1,9 +1,12 @@
 import { Image } from "expo-image";
-import { memo, useState } from "react";
+import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ImageIcon, LeafIcon, LockIcon } from "../icons";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { CountdownPill } from "../CountdownPill";
 import { useCountdownA11y } from "../../lib/live-clock";
 import { listingArea } from "../../lib/listing-area";
@@ -119,8 +122,8 @@ export const GridTile = memo(function GridTile({
    */
   showPlace?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const photo = usePhotoRetry(cover);
   const own = viewerId !== null && item.owner.id === viewerId;
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
 
@@ -167,13 +170,14 @@ export const GridTile = memo(function GridTile({
       pressedStyle={s.tilePressed}
     >
       <View style={s.photoBox}>
-        {cover && !failed ? (
+        {cover && !photo.failed ? (
           <Image
-            source={{ uri: cover }}
+            key={photo.key}
+            source={{ uri: sizedImage(cover, "card") }}
             contentFit="cover"
             style={s.photo}
             transition={120}
-            onError={() => setFailed(true)}
+            onError={photo.onError}
           />
         ) : (
           <View style={s.photoFailed}>
@@ -182,6 +186,7 @@ export const GridTile = memo(function GridTile({
               stroke={icon.failedPhoto.stroke}
               color={color.failedIcon}
             />
+            {cover ? <ReloadPhotoButton onPress={photo.retry} /> : null}
           </View>
         )}
 
@@ -294,7 +299,7 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
   photo: { width: "100%", height: "100%" },
-  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center" },
+  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.card.failedGap },
   // Both overlays share the Home tiles' badge inset and pill height, so a
   // badge on a Marketplace tile and one on a Home card are the same object.
   lockBadge: {

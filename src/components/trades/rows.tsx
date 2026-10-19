@@ -15,6 +15,8 @@ import {
   textStyle,
 } from "../../theme/offer-tokens";
 import { font } from "../../theme/tokens";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 
 /**
  * Every row shape §6 and the frames use, and nothing that decides what goes in
@@ -55,6 +57,8 @@ export function Thumb({
   /** A promise has no photo and is not a missing one. See `PromiseWell`. */
   icon?: React.ReactNode;
 }) {
+  // Too small for a Reload button: one automatic retry, then the placeholder.
+  const photo = usePhotoRetry(image ?? undefined);
   return (
     <View
       style={{
@@ -67,12 +71,14 @@ export function Thumb({
         justifyContent: "center",
       }}
     >
-      {image ? (
+      {image && !photo.failed ? (
         <Image
-          source={{ uri: image }}
+          key={photo.key}
+          source={{ uri: sizedImage(image, "thumb") }}
           contentFit="cover"
           style={{ width: "100%", height: "100%" }}
           transition={120}
+          onError={photo.onError}
         />
       ) : (
         (icon ?? (

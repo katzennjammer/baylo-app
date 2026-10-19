@@ -14,6 +14,7 @@ import { Tappable } from "./Tappable";
 import { ORG_BADGE_LABEL } from "../lib/org";
 import { CheckIcon, PersonIcon, StoreIcon, VerifiedOrgIcon } from "./icons";
 import { color, icon, radius, textStyle, type } from "../theme/tokens";
+import { sizedImage } from "../media/image-url";
 
 /**
  * Who this device is posting and trading as: you, or one of your organisations.
@@ -125,7 +126,7 @@ export function OrgSwitcher() {
           onPress={() => void switchTo(org.id)}
           leading={
             orgLogoUrl(org.logoUrl) ? (
-              <Image source={{ uri: orgLogoUrl(org.logoUrl)! }} style={rowStyles.logo} resizeMode="cover" />
+              <Image source={{ uri: sizedImage(orgLogoUrl(org.logoUrl)!, "thumb") }} style={rowStyles.logo} resizeMode="cover" />
             ) : (
               <View style={rowStyles.logoFallback}>
                 <StoreIcon size={18} stroke={1.6} color={color.forest} />

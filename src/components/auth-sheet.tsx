@@ -71,6 +71,7 @@ import {
   openAndroidDatePicker,
   partsToDate,
 } from "./native-date-dialog";
+import { sizedImage } from "../media/image-url";
 
 /**
  * The auth kit: a sheet over a video band.
@@ -649,7 +650,7 @@ function Avatar({ name, url }: { name: string; url?: string | null }) {
   } as const;
 
   if (url) {
-    return <Image source={{ uri: url }} style={box} contentFit="cover" transition={160} />;
+    return <Image source={{ uri: sizedImage(url, "thumb") }} style={box} contentFit="cover" transition={160} />;
   }
 
   return (

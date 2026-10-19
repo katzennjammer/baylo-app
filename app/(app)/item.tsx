@@ -70,6 +70,7 @@ import {
 } from "../../src/theme/tokens";
 import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
+import { sizedImage } from "../../src/media/image-url";
 
 /**
  * The listing screen. Every listing opens here, whatever its kind: a person's
@@ -790,7 +791,7 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
       pressedStyle={s.pressed}
     >
       {photo ? (
-        <Image source={{ uri: photo }} contentFit="cover" style={[s.avatar, org && s.avatarSquare]} />
+        <Image source={{ uri: sizedImage(photo, "thumb") }} contentFit="cover" style={[s.avatar, org && s.avatarSquare]} />
       ) : (
         <View style={[s.avatar, s.monogram, org && s.avatarSquare]}>
           <Text style={[textStyle(type.avatarInitials40), { color: categoryTone.sand.ink }]}>

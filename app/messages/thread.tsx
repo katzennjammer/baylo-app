@@ -36,6 +36,7 @@ import { renderMessageBody } from "../../src/components/messages/MessagePayloads
 import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
+import { sizedImage } from "../../src/media/image-url";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -321,7 +322,7 @@ export default function MessagesThreadScreen() {
                   time={relativeTime(message.createdAt)}
                   avatar={
                     otherAvatar ? (
-                      <Image source={{ uri: otherAvatar }} style={styles.messageAvatar} />
+                      <Image source={{ uri: sizedImage(otherAvatar, "thumb") }} style={styles.messageAvatar} />
                     ) : (
                       <View style={styles.messageAvatarFallback}>
                         <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
@@ -420,7 +421,7 @@ export default function MessagesThreadScreen() {
       />
       <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
         <Pressable style={styles.lightbox} onPress={() => setLightboxUrl(null)} accessibilityLabel="Close full-screen image">
-          {lightboxUrl ? <Image source={{ uri: lightboxUrl }} style={styles.fullImage} resizeMode="contain" /> : null}
+          {lightboxUrl ? <Image source={{ uri: sizedImage(lightboxUrl, "full") }} style={styles.fullImage} resizeMode="contain" /> : null}
         </Pressable>
       </Modal>
     </View>

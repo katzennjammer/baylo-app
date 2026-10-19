@@ -13,6 +13,7 @@ import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { CheckIcon, StarIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { border, color, icon as iconToken, radius, size, space, textStyle, type } from "../src/theme/tokens";
+import { sizedImage } from "../src/media/image-url";
 
 /**
  * Achievements: every badge, which of the earned ones show on the profile, and
@@ -53,7 +54,7 @@ function BadgeIcon({
   if (imageUrl) {
     return (
       <Image
-        source={{ uri: imageUrl }}
+        source={{ uri: sizedImage(imageUrl, "thumb") }}
         style={{ width: box, height: box, borderRadius: box / 4, opacity: dimmed ? 0.4 : 1 }}
         resizeMode="cover"
       />
