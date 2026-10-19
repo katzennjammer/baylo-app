@@ -40,6 +40,7 @@ import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
 import { openMailApp } from "../../src/lib/open-mail";
 import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
 import { OrgDetailsStep } from "../../src/components/auth-org-details";
+import { PasswordStrengthMeter } from "../../src/components/PasswordStrengthMeter";
 import { rememberSignedUpAsOrganization } from "../../src/auth/signup-kind";
 
 /**
@@ -510,6 +511,8 @@ function RegisterForm({
         submitBehavior="submit"
         reveal={reveal}
       />
+      {/* Advice only; the field's own error (under 8) takes its place. */}
+      {fieldErrors.password ? null : <PasswordStrengthMeter password={form.password} />}
 
       <View style={{ height: gap.betweenInputs }} />
       <Field
