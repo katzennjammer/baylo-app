@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, legacyFailure, malformedResponse, readJson, request } from "./client";
 import { getApiBase } from "./config";
+import { prepareImage, type PreparedImage } from "../media/prepare-image";
 import type { SafeZoneHub } from "./types";
 
 /**
@@ -147,20 +148,28 @@ export interface UploadResult {
  * serialise one. See sendMultipart() in ./client. Until that routing existed
  * this function was quietly broken, which nobody noticed because the only
  * caller is the 401 fallback below.
+ *
+ * The photo is shrunk to a JPEG first (see prepareImage()), so what is sent is
+ * never the original file and always fits under Vercel's 4.5 MB request limit.
  */
 export async function uploadPhoto(
   uri: string,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
-  const form = new FormData();
-  const name = uri.split("/").pop() || "photo.jpg";
-  const ext = name.split(".").pop()?.toLowerCase();
-  const type =
-    ext === "png" ? "image/png" : ext === "heic" || ext === "heif" ? "image/heic" : "image/jpeg";
+  return sendPhoto(await prepareImage(uri, "photo"), signal);
+}
 
+/** Throws the cancellation an abort during the resize would otherwise skip. */
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new ApiError(0, "ABORTED", "Upload cancelled.");
+}
+
+async function sendPhoto(image: PreparedImage, signal?: AbortSignal): Promise<UploadResult> {
+  throwIfAborted(signal);
+  const form = new FormData();
   // The cast is React Native's file descriptor, which the DOM FormData types do
   // not describe. The runtime accepts it; TypeScript's lib.dom does not know it.
-  form.append("file", { uri, name, type } as unknown as Blob);
+  form.append("file", { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
 
   const res = await request("/api/upload", { method: "POST", body: form, signal });
   if (!res.ok) return legacyFailure(res, "Upload failed");
@@ -187,7 +196,7 @@ export async function uploadPhoto(
  * The Bearer token here is read straight from the session mirror, so this path
  * does NOT have `request()`'s refresh-on-401. Rather than reimplement the
  * refresh — two copies of that logic is how a token family ends up killed by a
- * replay — a 401 falls through to `uploadPhoto()`, which is the fetch path and
+ * replay — a 401 falls through to `sendPhoto()`, which is the fetch path and
  * does refresh. The bar stops moving for that one retry. That is honest: the
  * upload genuinely restarted.
  *
@@ -199,26 +208,26 @@ export async function uploadPhoto(
 /** The most a request's sent bytes may claim. The server's reply is the last 1%. */
 const SENT_CEILING = 0.99;
 
-export function uploadPhotoWithProgress(
+export async function uploadPhotoWithProgress(
   uri: string,
   onProgress: (fraction: number) => void,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
+  // Resized before the bar starts: the percentage is of the bytes actually sent.
+  const image = await prepareImage(uri, "photo");
+  throwIfAborted(signal);
+
   const base = getApiBase();
   const token = currentSession()?.accessToken ?? null;
 
   // No base or no token: there is nothing this path can do that the fetch path
   // cannot do better, including producing the CONFIG_ERROR with the gear in it.
-  if (!base || !token) return uploadPhoto(uri, signal);
+  if (!base || !token) return sendPhoto(image, signal);
 
   return new Promise<UploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const form = new FormData();
-    const name = uri.split("/").pop() || "photo.jpg";
-    const ext = name.split(".").pop()?.toLowerCase();
-    const type =
-      ext === "png" ? "image/png" : ext === "heic" || ext === "heif" ? "image/heic" : "image/jpeg";
-    form.append("file", { uri, name, type } as unknown as Blob);
+    form.append("file", { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
 
     const abort = () => xhr.abort();
     signal?.addEventListener("abort", abort);
@@ -259,7 +268,7 @@ export function uploadPhotoWithProgress(
       done();
       if (xhr.status === 401) {
         // The token aged out mid-upload. Hand it to the path that can refresh.
-        uploadPhoto(uri, signal).then(resolve, reject);
+        sendPhoto(image, signal).then(resolve, reject);
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300) {

@@ -51,9 +51,10 @@ import { usePost, type Photo } from "./state";
 const ALLOWED = /\.(jpe?g|png|heic|heif)$/i;
 
 export const PHOTO_ERRORS = {
-  // It used to promise "Baylo will make it smaller", and nothing does: a photo
-  // over the cap is born failed and never sent.
-  tooLarge: "That photo is too big to send. Remove it and pick a smaller one.",
+  // Every photo IS made smaller before it is sent (prepareImage()), so this is
+  // only for one that is still over the limit afterwards, which a phone photo
+  // never is.
+  tooLarge: "That photo is too big to send, even made smaller. Remove it and pick another one.",
   unsupported: "Baylo can use JPG, PNG and HEIC photos. Pick another one.",
 } as const;
 
@@ -61,8 +62,12 @@ let seq = 0;
 /** Stable within a wizard session, which is all a list key needs. */
 const nextId = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-function makePhoto(uri: string, source: Photo["source"], size: number | undefined): Photo {
-  const tooLarge = size !== undefined && size > rules.uploadMaxBytes;
+/**
+ * No size check on the ORIGINAL: it is resized and re-encoded before upload, so
+ * a 12 MB photo goes up as well under 1 MB. The size that matters is checked
+ * after that, in prepareImage(), and comes back to `run` as IMAGE_TOO_LARGE.
+ */
+function makePhoto(uri: string, source: Photo["source"]): Photo {
   const unsupported = !ALLOWED.test(uri.split("?")[0]);
   return {
     id: nextId(),
@@ -71,13 +76,13 @@ function makePhoto(uri: string, source: Photo["source"], size: number | undefine
     // A rejected photo is born failed. It is still SHOWN — the row explains
     // itself and offers a removal — because a photo that vanishes on being
     // picked reads as the picker not working.
-    upload: tooLarge || unsupported ? "failed" : "uploading",
+    upload: unsupported ? "failed" : "uploading",
     progress: 0,
     url: null,
     dup: "idle",
     hash: null,
     match: null,
-    rejected: tooLarge ? "too-large" : unsupported ? "unsupported" : null,
+    rejected: unsupported ? "unsupported" : null,
   };
 }
 
@@ -160,6 +165,16 @@ function usePhotoPipeline() {
         patch({ upload: "done", progress: 1, url });
       } catch (e) {
         if (controller.signal.aborted) return;
+        // The resize's verdicts are about the photo, not the network: a retry
+        // would get the same answer, so the row is rejected rather than failed.
+        if (e instanceof ApiError && e.code === "IMAGE_TOO_LARGE") {
+          patch({ upload: "failed", rejected: "too-large" });
+          return;
+        }
+        if (e instanceof ApiError && e.code === "IMAGE_UNREADABLE") {
+          patch({ upload: "failed", rejected: "unsupported" });
+          return;
+        }
         // The upload's own limit, said as one. It used to be filed under
         // "duplicate", which showed the check's copy for a photo never sent.
         if (e instanceof ApiError && e.status === 429) {
@@ -207,11 +222,11 @@ function usePhotoPipeline() {
   /* ── adding ── */
 
   const add = useCallback(
-    (uri: string, source: Photo["source"], size?: number) => {
+    (uri: string, source: Photo["source"]) => {
       if (state.photos.length >= rules.maxPhotos) return;
-      const photo = makePhoto(uri, source, size);
+      const photo = makePhoto(uri, source);
       dispatch({ type: "photo/add", photo });
-      // A photo rejected on size or type never reaches the network. The row
+      // A photo rejected on type never reaches the network. The row
       // explains itself; there is nothing to upload.
       if (!photo.rejected) void run(photo);
     },
@@ -243,7 +258,7 @@ function usePhotoPipeline() {
     if (result.canceled) return "cancelled" as const;
 
     for (const asset of result.assets.slice(0, remaining)) {
-      add(asset.uri, "gallery", asset.fileSize);
+      add(asset.uri, "gallery");
     }
     return "added" as const;
   }, [add, state.photos.length]);

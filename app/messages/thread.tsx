@@ -23,6 +23,7 @@ import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { ActiveTrade } from "../../src/api/types";
 import { useBlockUser } from "../../src/api/item";
 import { request } from "../../src/api/client";
+import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
@@ -178,15 +179,8 @@ export default function MessagesThreadScreen() {
     setUploadingImage(true);
     setSendError(null);
     try {
-      const form = new FormData();
-      form.append("file", {
-        uri: asset.uri,
-        name: asset.fileName ?? "photo.jpg",
-        type: asset.mimeType ?? "image/jpeg",
-      } as unknown as Blob);
-      const upload = await request("/api/upload", { method: "POST", body: form });
-      if (!upload.ok) throw new Error("Photo upload failed.");
-      const { url } = (await upload.json()) as { url: string };
+      // uploadPhoto() resizes to a JPEG first, like every other photo.
+      const { url } = await uploadPhoto(asset.uri);
       await sendMessage.mutateAsync({
         partnerId: partner,
         content: JSON.stringify({ type: "image", url, caption: null }),
