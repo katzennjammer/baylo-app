@@ -14,7 +14,9 @@ import {
 
 import { Tappable } from "../Tappable";
 import { ApiError } from "../../api/client";
-import { EDIT_LIMITS, useUpdateItem } from "../../api/item";
+import { EDIT_LIMITS, useDeleteItem, useUpdateItem } from "../../api/item";
+import { useActiveTrades } from "../../api/trades";
+import { listingRemovalCheck } from "../../lib/listing-removal";
 import {
   border,
   color,
@@ -72,6 +74,11 @@ export function EditListingSheet({
   const [wanted, setWanted] = useState("");
 
   const update = useUpdateItem(item?.id ?? null);
+  const remove = useDeleteItem();
+  // The owner's pending offers and active trades, for the remove guard. The
+  // same cached query as the Trades tab, fetched only while the sheet is open:
+  // the sheet stays mounted, hidden, on the feed and the listing screen.
+  const active = useActiveTrades(item !== null);
 
   // Reseeded on each open, keyed on the item's id rather than on the object —
   // a background refetch of /home hands this component a NEW item object with
@@ -99,10 +106,11 @@ export function EditListingSheet({
   // A listing with no title is not a listing. Everything else may be empty:
   // `wanted` is optional, and the server fills an empty description from the
   // title the same way it does on create.
-  const blocked = trimmedTitle.length === 0 || !dirty || update.isPending;
+  const busy = update.isPending || remove.isPending;
+  const blocked = trimmedTitle.length === 0 || !dirty || busy;
 
   const close = () => {
-    if (!dirty || update.isPending) {
+    if (!dirty || busy) {
       onClose();
       return;
     }
@@ -142,6 +150,33 @@ export function EditListingSheet({
           ),
       },
     );
+  };
+
+  // The same soft delete as the listing's ⋯ menu, guarded: never while the
+  // listing is in a trade, and always confirmed first. See lib/listing-removal.
+  const confirmRemove = () => {
+    if (busy) return;
+    const check = listingRemovalCheck(item, active.data);
+    if (check.kind === "blocked") {
+      showDialog(check.title, check.body);
+      return;
+    }
+    showDialog(check.title, check.body, [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () =>
+          remove.mutate(item.id, {
+            onSuccess: onClose,
+            onError: (e) =>
+              showDialog(
+                "Could not remove that",
+                e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+              ),
+          }),
+      },
+    ]);
   };
 
   return (
@@ -198,6 +233,25 @@ export function EditListingSheet({
               Photos, category, condition and the Leaf value are not edited here — changing
               any of them re-prices the listing, which happens in the posting flow.
             </Text>
+
+            {/*
+              A text button at the end of the form, away from Save, so it cannot
+              be hit on the way to saving an edit. The dialog does the asking.
+            */}
+            <Tappable
+              onPress={confirmRemove}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Remove listing"
+              style={s.remove}
+              pressedStyle={s.removePressed}
+            >
+              {remove.isPending ? (
+                <ActivityIndicator color={color.urgent} />
+              ) : (
+                <Text style={[textStyle(type.secondaryButton), { color: color.urgent }]}>Remove listing</Text>
+              )}
+            </Tappable>
           </ScrollView>
 
           <View style={s.actions}>
@@ -333,6 +387,16 @@ const s = StyleSheet.create({
   inputMulti: { minHeight: 96, textAlignVertical: "top" },
 
   note: { color: color.inkMuted },
+  remove: {
+    alignSelf: "center",
+    marginTop: space.sheet.groupGap,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: radius.primaryButton,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removePressed: { backgroundColor: color.urgentWash },
 
   actions: {
     flexDirection: "row",

@@ -108,12 +108,13 @@ export const TRADES_HISTORY_KEY = ["trades", "history"] as const;
  */
 const LIST_STALE_MS = 30_000;
 
-export function useActiveTrades() {
+export function useActiveTrades(enabled = true) {
   return useQuery({
     queryKey: TRADES_ACTIVE_KEY,
     queryFn: () => apiV1<TradesPayload>("/api/v1/trades?tab=active&limit=50"),
     select: (r) => r.data,
     staleTime: LIST_STALE_MS,
+    enabled,
   });
 }
 

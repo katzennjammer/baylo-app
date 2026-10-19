@@ -63,6 +63,7 @@
     "verify:meetup": "node --require ./scripts/rn-stub.cjs --import tsx scripts/verify-meetup-chat.ts",
     "verify:images": "node --import tsx scripts/verify-image-delivery.ts",
     "verify:password": "node --import tsx scripts/verify-password-strength.ts",
+    "verify:removal": "node --import tsx scripts/verify-listing-removal.ts",
     "vendor:leaflet": "node scripts/vendor-leaflet.mjs",
     "build:apk": "eas build --platform android --profile preview",
     "build:aab": "eas build --platform android --profile production",
