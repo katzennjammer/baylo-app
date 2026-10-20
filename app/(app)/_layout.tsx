@@ -7,6 +7,7 @@ import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
 import { useSession } from "../../src/auth/session";
 import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
+import { usePushNotifications } from "../../src/notifications/push";
 
 /**
  * The (app) group: everything behind the session gate.
@@ -78,6 +79,9 @@ export default function AppLayout() {
   // The opening film's cached tier, for the NEXT launch. Background only: by
   // the time this layout mounts the film has already played. See the hook.
   useOpeningTierSync(!!session);
+  // Phone notifications: registers this phone once signed in, and opens the
+  // right screen when one is tapped. See src/notifications/push.ts.
+  usePushNotifications(session?.user.id);
 
   // tone="boot": this is the initial session read, on the cold-start path.
   if (isLoading) return <Splash tone="boot" waitingOn="Reading your saved session from secure storage" />;

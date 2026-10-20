@@ -49,3 +49,7 @@ yarn-error.*
 crash*.txt
 adb
 findstr
+
+# Firebase config for push. NOT committed: the repo is public. EAS builds get it
+# from the secret file variable GOOGLE_SERVICES_JSON (see app.config.js).
+/google-services.json

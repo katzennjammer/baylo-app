@@ -15,6 +15,7 @@ import { hydrateApiBase } from "../api/config";
 import { resetOpeningTier } from "../media/opening-tier-store";
 import { TimeoutError, withTimeout } from "../api/timeout";
 import { registerClearSessionDevItem } from "../dev/dev-menu";
+import { unregisterPush } from "../notifications/push";
 import type { StoredSession } from "./storage";
 
 /**
@@ -213,6 +214,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async (options?: { revoke?: boolean }) => {
     try {
+      // This phone stops getting the account's pushes. FIRST, while the session
+      // that authorises the request still exists; capped at 3 s so a bad
+      // connection never holds up signing out. Skipped when the server has
+      // already revoked the session (account deletion): it would only 401.
+      if (options?.revoke !== false) await unregisterPush();
       await apiSignOut(options);
     } finally {
       // The acting organisation goes with the session it qualified. Leaving it
