@@ -15,7 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
 import { getActingOrgId } from "../api/org-context";
-import { BellIcon, LeafIcon, MessageIcon, QuestIcon } from "./icons";
+import { LeafIcon, MessageIcon, QuestIcon } from "./icons";
 import { Divider } from "./Divider";
 import { OfflineBar } from "./home/OfflineBar";
 import { formatBadge, formatLeaves } from "../lib/format";
@@ -216,23 +216,11 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               </HeaderIconButton>
             ) : null}
 
-            <HeaderIconButton
-              label="Notifications"
-              count={unread?.notifications ?? 0}
-              tight={tight}
-              // It opens something now. This was `() => {}` for the life of the
-              // client while the badge beside it reported a real, accurate,
-              // unreachable number — see the note at the top of
-              // `app/notifications.tsx`.
-              onPress={() => router.push("/notifications")}
-            >
-              <BellIcon
-                size={icon.headerAction.size}
-                stroke={icon.headerAction.stroke}
-                color={color.ink}
-              />
-            </HeaderIconButton>
-
+            {/*
+              No bell (20 Oct 2026). Notifications are the phone's own, outside
+              the app (src/notifications/push.ts); the in-app list was removed
+              at the team's request. A tapped push opens its screen directly.
+            */}
             <HeaderIconButton
               label="Messages"
               count={unread?.messageConversations ?? 0}

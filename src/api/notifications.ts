@@ -1,41 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { apiV1, legacyFailure, request } from "./client";
-import { getActingOrgId } from "./org-context";
-import type { NotificationItem, NotificationsPayload } from "./types";
+import { legacyFailure, request } from "./client";
+import type { NotificationItem } from "./types";
 
 /**
- * The bell's list, and where each row goes when it is tapped.
+ * Where a tapped push notification opens, and marking it read.
  *
- * ══ WHY THIS FILE ARRIVED LATE ═════════════════════════════════════════════
- *
- * Notification rows have been written since long before this client existed and
- * the header bell has been rendering an accurate unread count the whole time —
- * it just had `onPress={() => {}}` behind it. A badge that reports an obligation
- * and then refuses to say what it is, is worse than no badge: it trains people
- * to ignore the one signal the app has.
+ * NO IN-APP LIST (20 Oct 2026). Notifications are the phone's own, outside the
+ * app (src/notifications/push.ts); the bell and its screen were removed at the
+ * team's request. The server still writes a row per notification -- that row
+ * is what triggers the push -- and a tap marks just that row read.
  */
 
 export const NOTIFICATIONS_KEY = ["notifications"] as const;
-
-/** Matches the trades lists: a minute-old copy is fine while a fresh one loads. */
-const NOTIFICATIONS_STALE_MS = 30_000;
-
-/**
- * GET /api/v1/notifications — newest first, one page of 50.
- *
- * Acting as a shop the server answers with the SHOP's rows (X-Baylo-Org), so
- * the acting org is part of the key: one identity's bell never renders under
- * the other. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
- */
-export function useNotifications() {
-  return useQuery({
-    queryKey: [...NOTIFICATIONS_KEY, getActingOrgId() ?? "self"],
-    queryFn: () => apiV1<NotificationsPayload>("/api/v1/notifications?limit=50"),
-    select: (r) => r.data,
-    staleTime: NOTIFICATIONS_STALE_MS,
-  });
-}
 
 /**
  * Where a notification opens.
@@ -194,57 +171,10 @@ export function notificationTarget(n: NotificationItem): string | null {
 }
 
 /**
- * PATCH /api/notifications — everything unread, at once.
- *
- * ══ ON OPEN, NOT ON TAP ════════════════════════════════════════════════════
- *
- * The bell's badge counts unread rows, so "I opened the list" is the same
- * statement as "I have seen these". Clearing per-row instead would leave the
- * badge showing a number for rows the person has already scrolled past and
- * decided about, which is the failure mode that makes people stop trusting a
- * count.
- *
- * The honest cost, named rather than hidden: a row scrolled past without being
- * read is marked read all the same. That is the accepted trade in exchange for a
- * badge whose number means something, and it is why the rows keep their unread
- * DOT for the life of the screen — see the note in `app/notifications.tsx`.
- *
- * A LEGACY ROUTE, like the offer decision: it predates /api/v1, answers a bare
- * `{ ok: true }`, and already goes through `resolveSession()` so a Bearer token
- * authenticates it. There is nothing to gain from a v1 twin of a route that
- * takes no arguments.
- */
-export function useMarkAllNotificationsRead() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const res = await request("/api/notifications", { method: "PATCH" });
-      if (!res.ok) return legacyFailure(res, "We could not mark those as read.");
-      return (await res.json()) as unknown;
-    },
-    /*
-     * `home` as well as the list. The bell's count comes from /api/v1/home's
-     * `unread.notifications`, so a list that cleared itself without invalidating
-     * home would leave a 24 sitting on an icon whose screen is demonstrably
-     * empty — the same disagreement between a badge and its contents that this
-     * whole screen exists to end.
-     */
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-      void qc.invalidateQueries({ queryKey: ["home"] });
-    },
-  });
-}
-
-/**
  * PATCH /api/notifications/[id] — one row.
  *
- * Not used by the list, which clears everything on open. It exists for the
- * arrival this client cannot make yet: a push notification opened straight into
- * its target, where exactly one row has been seen and marking the other
- * twenty-three read would be a lie. Kept small and unused rather than written
- * later under time pressure.
+ * Called when a push is tapped (src/notifications/push.ts): exactly that one
+ * row has been seen.
  */
 export function useMarkNotificationRead() {
   const qc = useQueryClient();

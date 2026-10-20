@@ -5,7 +5,7 @@
  *
  *   1. Each kind of push opens the same screen as the bell's row for it,
  *      built from the fields baylo-api's @/lib/push puts in the data.
- *   2. Anything missing or malformed opens the notifications list.
+ *   2. Anything missing or malformed opens Home (the in-app list is gone).
  *   3. The notification id is read back for marking the row read.
  */
 // The API client reads React Native's __DEV__ at load; plain Node has none.
@@ -35,10 +35,10 @@ eq("trade completed", pushTarget({ type: "TRADE_COMPLETED", entityType: "trade",
 eq("meetup", pushTarget({ type: "MEETUP_PROPOSED", entityType: "meetup", entityId: "t1", actorId: "u2" }), "/trade?id=t1");
 
 // 2. Fallbacks
-eq("no data", pushTarget(undefined), "/notifications");
-eq("no type", pushTarget({ entityType: "trade", entityId: "t1" }), "/notifications");
-eq("wrong types", pushTarget({ type: 42 as unknown, entityType: {} as unknown }), "/notifications");
-eq("unplaceable", pushTarget({ type: "SUSPENSION_LIFTED", entityType: null, entityId: null, actorId: null }), "/notifications");
+eq("no data", pushTarget(undefined), "/(app)/home");
+eq("no type", pushTarget({ entityType: "trade", entityId: "t1" }), "/(app)/home");
+eq("wrong types", pushTarget({ type: 42 as unknown, entityType: {} as unknown }), "/(app)/home");
+eq("unplaceable", pushTarget({ type: "SUSPENSION_LIFTED", entityType: null, entityId: null, actorId: null }), "/(app)/home");
 
 // 3.
 eq("id", pushNotificationId({ notificationId: "n1" }), "n1");
