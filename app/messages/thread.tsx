@@ -15,6 +15,7 @@ import {
   useColorScheme,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import { NOTIFICATIONS_KEY } from "../../src/api/notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
@@ -112,6 +113,10 @@ export default function MessagesThreadScreen() {
       if (!current || current.messages.some((item) => item.id === message.id)) return current;
       return { ...current, messages: [...current.messages, { ...message, read: true }] };
     });
+    // Drawn as read above, but only the thread GET marks it read on the
+    // server, so refetch: without this a message that arrived while the chat
+    // was open stayed unread until the chat was opened again.
+    void queryClient.invalidateQueries({ queryKey: threadQueryKey(partner) });
     listRef.current?.scrollToEnd({ animated: true });
   }, [partner, queryClient]);
 
@@ -138,9 +143,14 @@ export default function MessagesThreadScreen() {
     return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
   }, [onNewMessage, onOfferUpdated, onTyping, inboxId]);
 
+  // Every thread fetch marks it read on the server (messages, and since 20 Oct
+  // the bell's message row), so everything counting unread is refreshed: the
+  // list, and the header badges, which come from /home.
   useEffect(() => {
     if (thread.data) {
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
     }
   }, [queryClient, thread.data]);
 
