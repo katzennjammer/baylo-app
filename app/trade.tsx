@@ -322,7 +322,7 @@ export default function TradeScreen() {
       key="profile"
       glyph={rowIcon(PersonIcon)}
       label={copy.tradeScreen.viewProfile(partner)}
-      onPress={close(() => router.push(`/user?id=${encodeURIComponent(counterparty.id)}`))}
+      onPress={close(() => router.push(`/view-profile?id=${encodeURIComponent(counterparty.id)}`))}
     />,
   );
   if (offer && !trade && offer.direction === "sent") {
@@ -411,7 +411,7 @@ export default function TradeScreen() {
         {/* A finished trade's way back to the person, as on the old summary. */}
         {trade && !live && trade.status !== "PENDING" && !keyboardUp ? (
           <Tappable
-            onPress={() => router.push(`/user?id=${encodeURIComponent(counterparty.id)}`)}
+            onPress={() => router.push(`/view-profile?id=${encodeURIComponent(counterparty.id)}`)}
             accessibilityRole="button"
             accessibilityLabel={copy.tradeScreen.viewProfile(partner)}
             style={s.profileRow}
