@@ -167,8 +167,11 @@ function NotificationRow({
   const name = item.actor?.name?.trim() || null;
 
   // The actor's name is the sentence's subject; the server's `message` is its
-  // predicate. A system row is already whole and gets no prefix.
-  const line = name ? `${name} ${item.message}` : item.message;
+  // predicate. A system row is already whole and gets no prefix -- and so does
+  // a message that already names them (TRADE_CANCELLED: "Aj cancelled the
+  // trade for ..."), which read "Aj Aj cancelled ..." until 20 Oct 2026. The
+  // push uses the same rule (baylo-api @/lib/push).
+  const line = name && !item.message.startsWith(name) ? `${name} ${item.message}` : item.message;
 
   const body = (
     <View
