@@ -71,7 +71,10 @@ export default function ProfileScreen() {
   }, [profile?.user.name, user?.id, user?.name]);
 
   // The shop this device is ACTING AS, if any. getActingOrgId() is read per
-  // render, not mirrored: see OrgSwitcher.
+  // render, not mirrored into state: it is a module variable the request layer
+  // reads synchronously on every call, so it is the one source of truth, and a
+  // state copy would disagree the moment anything else cleared it -- which the
+  // 403 handler does on a revoked membership.
   //
   // WHILE ACTING AS A SHOP, THIS TAB IS THE SHOP -- for everybody, not just
   // shop-only accounts. Until 25 Sep 2026 somebody with a personal history
@@ -110,8 +113,14 @@ export default function ProfileScreen() {
 
   // Viewing a shop here also ACTS AS it. Otherwise the Post button would list
   // things on a personal shelf this person has never used, and the first one
-  // would quietly bring back the personal profile. Same steps as OrgSwitcher:
-  // switch, drop every cache fetched as the previous identity, re-render.
+  // would quietly bring back the personal profile. Switch, then drop EVERY
+  // cache: each list was fetched as somebody, and serving the previous
+  // identity's shelf, offers or trades under the new one is how an owner sees
+  // the shop's listings labelled as their own. invalidateQueries() with no key
+  // is heavy-handed and correct for a rare action -- anything cheaper means
+  // auditing every query key for identity-dependence forever. Then re-render.
+  // (Settings' "Posting as" card was removed on 20 Oct 2026; this tab and the
+  // post flow's "Post as myself" are where an owner switches now.)
   const selectShop = useCallback(async (organizationId: string | null) => {
     setPickingShop(false);
     if (organizationId !== getActingOrgId()) {
