@@ -18,9 +18,8 @@
     "android": {
       "package": "com.baylo.app",
       "adaptiveIcon": {
-        "backgroundColor": "#032206",
+        "backgroundColor": "#1B4D2B",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
