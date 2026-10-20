@@ -295,8 +295,8 @@ function formatDuration(seconds: number) {
 const styles = StyleSheet.create({
   text: {
     fontFamily: font.sans,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 21,
   },
   mineText: {
     color: color.surface,

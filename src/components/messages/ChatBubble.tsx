@@ -4,7 +4,9 @@ import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { color, type } from "../../theme/tokens";
 
 /**
- * One chat message's row: the avatar (received only), the bubble, its time.
+ * One chat message's row: the avatar (received only) and the bubble. Times are
+ * not per bubble any more: the thread draws a centred separator when the gap
+ * between two messages is long, as Messenger does.
  * EVERY message in a thread goes through this, so sent and received, text and
  * media, follow one width rule:
  *
@@ -35,20 +37,32 @@ import { color, type } from "../../theme/tokens";
  * therefore wrapped in a view that stretches to the column, which gives the
  * card itself the definite width. Text bubbles keep their content sizing.
  */
-export type BubbleKind = "bubble" | "card" | "status";
+export type BubbleKind = "bubble" | "card" | "media" | "status";
+
+/**
+ * Where a message sits in a run of consecutive messages from one sender
+ * (Messenger's grouping). The corners on the joined side tighten, the gap
+ * between joined bubbles shrinks, and only the LAST bubble of a received run
+ * carries the face.
+ */
+export type GroupPosition = "single" | "first" | "middle" | "last";
 
 export function ChatBubble({
   mine,
   kind,
   avatar,
-  time,
+  position = "single",
+  footer,
   children,
 }: {
   mine: boolean;
+  /** "media" is a photo drawn bare, with no bubble round it. */
   kind: BubbleKind;
-  /** Drawn left of a received bubble or card; ignored on sent and status rows. */
+  /** Drawn left of a received run's last bubble; ignored on sent and status rows. */
   avatar: ReactNode;
-  time: string;
+  position?: GroupPosition;
+  /** A line under the bubble: "Seen" / "Sent" on your newest message. */
+  footer?: string | null;
   children: ReactNode;
 }) {
   const { width } = useWindowDimensions();
@@ -57,28 +71,38 @@ export function ChatBubble({
   if (kind === "status") {
     return (
       <View style={[s.row, s.rowStatus]}>
-        <View style={[s.column, s.columnCentre, { maxWidth: caps.status }]}>
-          {children}
-          <Text style={s.time}>{time}</Text>
-        </View>
+        <View style={[s.column, s.columnCentre, { maxWidth: caps.status }]}>{children}</View>
       </View>
     );
   }
 
+  const endsRun = position === "single" || position === "last";
   const size = kind === "card" ? { width: caps.card } : { maxWidth: caps.bubble };
   return (
-    <View style={[s.row, mine ? s.rowMine : s.rowTheir]}>
-      {!mine ? <View style={s.avatarColumn}>{avatar}</View> : null}
+    <View style={[s.row, mine ? s.rowMine : s.rowTheir, endsRun ? s.rowRunEnd : s.rowJoined]}>
+      {!mine ? <View style={s.avatarColumn}>{endsRun ? avatar : null}</View> : null}
       <View style={[s.column, mine ? s.columnMine : s.columnTheir, size]}>
         {kind === "card" ? (
           <View style={s.cardFill}>{children}</View>
+        ) : kind === "media" ? (
+          children
         ) : (
-          <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheir]}>{children}</View>
+          <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheir, cornerStyle(mine, position)]}>{children}</View>
         )}
-        <Text style={s.time}>{time}</Text>
+        {footer ? <Text style={s.footer}>{footer}</Text> : null}
       </View>
     </View>
   );
+}
+
+/** The joined side's corners: tight where the run continues, round where it ends. */
+function cornerStyle(mine: boolean, position: GroupPosition) {
+  if (position === "single") return null;
+  const joinsAbove = position === "middle" || position === "last";
+  const joinsBelow = position === "first" || position === "middle";
+  return mine
+    ? { borderTopRightRadius: joinsAbove ? JOINED_RADIUS : RADIUS, borderBottomRightRadius: joinsBelow ? JOINED_RADIUS : RADIUS }
+    : { borderTopLeftRadius: joinsAbove ? JOINED_RADIUS : RADIUS, borderBottomLeftRadius: joinsBelow ? JOINED_RADIUS : RADIUS };
 }
 
 /** The three widths, in px, for a screen `width` wide. */
@@ -95,8 +119,11 @@ const CARD_MIN = 260;
 const CARD_MAX = 360;
 
 export const AVATAR_SIZE = 28;
-const BUBBLE_PADDING = 10;
-const BUBBLE_BORDER = 1;
+const BUBBLE_PADDING = 12;
+/** No visible border any more (Messenger has none); kept so the content cap below stays one formula. */
+const BUBBLE_BORDER = 0;
+const RADIUS = 18;
+const JOINED_RADIUS = 4;
 
 /**
  * The room INSIDE a bubble, in px: the 75% cap less the bubble's own padding
@@ -115,11 +142,12 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    marginBottom: 12,
   },
+  rowRunEnd: { marginBottom: 10 },
+  rowJoined: { marginBottom: 2 },
   rowMine: { justifyContent: "flex-end" },
   rowTheir: { justifyContent: "flex-start" },
-  rowStatus: { justifyContent: "center" },
+  rowStatus: { justifyContent: "center", marginVertical: 6 },
   avatarColumn: {
     width: AVATAR_SIZE,
   },
@@ -133,21 +161,21 @@ const s = StyleSheet.create({
   columnCentre: { alignItems: "center" },
   cardFill: { alignSelf: "stretch" },
   bubble: {
-    borderRadius: 16,
-    padding: BUBBLE_PADDING,
+    borderRadius: RADIUS,
+    paddingHorizontal: BUBBLE_PADDING,
+    paddingVertical: 8,
     borderWidth: BUBBLE_BORDER,
   },
   bubbleMine: {
     backgroundColor: color.forest,
-    borderColor: color.forest,
   },
   bubbleTheir: {
     backgroundColor: color.control,
-    borderColor: color.divider,
   },
-  time: {
+  footer: {
     ...type.gridMeta,
     color: color.inkSecondary,
-    marginTop: 4,
+    marginTop: 3,
+    marginRight: 2,
   },
 });

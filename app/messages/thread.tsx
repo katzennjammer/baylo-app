@@ -28,27 +28,45 @@ import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { BlockIcon, ChevronLeftIcon, ImageIcon, KebabIcon } from "../../src/components/icons";
+import { Ionicons } from "@expo/vector-icons";
+import { BlockIcon, ChevronLeftIcon, ChevronRightIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
-import { ChatBubble, useBubbleContentMax } from "../../src/components/messages/ChatBubble";
+import { ChatBubble, useBubbleContentMax, type GroupPosition } from "../../src/components/messages/ChatBubble";
 import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
 
-function relativeTime(dateIso: string): string {
-  const date = new Date(dateIso);
-  const diffMs = Date.now() - date.getTime();
-  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+/** Consecutive messages from one sender closer than this are one run. */
+const GROUP_GAP_MS = 5 * 60 * 1000;
+/** A gap at least this long gets a centred time, as in Messenger. */
+const SEPARATOR_GAP_MS = 15 * 60 * 1000;
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  if (diffSec < 60) return `${diffSec}s`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
-  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d`;
-  return `${Math.floor(diffSec / 604800)}w`;
+/** "12:13 PM" today, "Mon 12:13 PM" this week, "Oct 3, 12:13 PM" before that. */
+function separatorLabel(dateIso: string): string {
+  const date = new Date(dateIso);
+  const now = new Date();
+  const hours = date.getHours();
+  const clock = `${hours % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (date.getTime() >= startOfToday) return clock;
+  if (date.getTime() >= startOfToday - 6 * 86400000) return `${WEEKDAYS[date.getDay()]} ${clock}`;
+  const year = date.getFullYear() === now.getFullYear() ? "" : ` ${date.getFullYear()}`;
+  return `${MONTHS[date.getMonth()]} ${date.getDate()}${year}, ${clock}`;
+}
+
+/** The JSON payload's `type`, or undefined for plain text. */
+function payloadTypeOf(content: string): string | undefined {
+  try {
+    return (JSON.parse(content) as { type?: string }).type;
+  } catch {
+    return undefined;
+  }
 }
 
 export default function MessagesThreadScreen() {
@@ -69,6 +87,8 @@ export default function MessagesThreadScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [typingName, setTypingName] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // While typing, the camera/gallery buttons fold behind a chevron (Messenger).
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const listRef = useRef<ScrollView | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for typing indication
@@ -172,18 +192,22 @@ export default function MessagesThreadScreen() {
     }, 250);
   };
 
-  const pickImage = async () => {
+  const pickImage = async (source: "camera" | "library") => {
     if (!partner || uploadingImage) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permission = source === "camera"
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setSendError("Photo access is needed to attach an image.");
+      setSendError(source === "camera" ? "Camera access is needed to take a photo." : "Photo access is needed to attach an image.");
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.85,
-      selectionLimit: 1,
-    });
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ quality: 0.85, exif: false })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          quality: 0.85,
+          selectionLimit: 1,
+        });
     if (result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
@@ -205,15 +229,20 @@ export default function MessagesThreadScreen() {
     }
   };
 
-  const onSend = async () => {
-    if (!partner || !draft.trim()) return;
+  /** Sends the draft, or `quick` (the thumbs-up) without touching the draft. */
+  const onSend = async (quick?: string) => {
+    const content = quick ?? draft.trim();
+    if (!partner || !content) return;
     setSending(true);
     setSendError(null);
 
     try {
-      await sendMessage.mutateAsync({ partnerId: partner, content: draft.trim() });
-      setDraft("");
-      Keyboard.dismiss();
+      await sendMessage.mutateAsync({ partnerId: partner, content });
+      if (!quick) {
+        setDraft("");
+        setToolsOpen(false);
+        Keyboard.dismiss();
+      }
       setTimeout(() => {
         listRef.current?.scrollToEnd({ animated: true });
       }, 50);
@@ -253,26 +282,79 @@ export default function MessagesThreadScreen() {
     );
   };
 
+  // Messenger's layout, computed once per message list: a centred time where
+  // the gap is long, runs of one sender's messages (only the run's last bubble
+  // carries the face), and "Seen"/"Sent" under your newest message.
+  const layout = useMemo(() => {
+    const types = sortedMessages.map((message) => payloadTypeOf(message.content));
+    const isSystemAt = (index: number) => types[index] === "offer_update" || types[index] === "trade_completed";
+    const separatorAt = (index: number) =>
+      index === 0 ||
+      new Date(sortedMessages[index].createdAt).getTime() - new Date(sortedMessages[index - 1].createdAt).getTime() >= SEPARATOR_GAP_MS;
+    const joins = (above: number, below: number) =>
+      above >= 0 &&
+      below < sortedMessages.length &&
+      !isSystemAt(above) &&
+      !isSystemAt(below) &&
+      !separatorAt(below) &&
+      sortedMessages[above].senderId === sortedMessages[below].senderId &&
+      new Date(sortedMessages[below].createdAt).getTime() - new Date(sortedMessages[above].createdAt).getTime() < GROUP_GAP_MS;
+    let lastMine = -1;
+    sortedMessages.forEach((message, index) => {
+      if (message.senderId === currentUserId && !isSystemAt(index)) lastMine = index;
+    });
+    return sortedMessages.map((message, index) => {
+      const up = joins(index - 1, index);
+      const down = joins(index, index + 1);
+      const position: GroupPosition = up && down ? "middle" : up ? "last" : down ? "first" : "single";
+      return {
+        separator: separatorAt(index) ? separatorLabel(message.createdAt) : null,
+        position,
+        footer: index === lastMine ? (message.read ? "Seen" : "Sent") : null,
+      };
+    });
+  }, [sortedMessages, currentUserId]);
+
+  const composing = draft.trim().length > 0;
+  const showTools = !composing || toolsOpen;
+  const openProfile = () => {
+    // /view-profile is a ROOT-stack route, so it opens on top of this chat and
+    // Back returns here. `/user` is a tab and cannot. See app/view-profile.tsx.
+    if (partner) router.push({ pathname: "/view-profile", params: { id: partner } });
+  };
+  const avatarNode = (size: number) =>
+    otherAvatar ? (
+      <Image source={{ uri: sizedImage(otherAvatar, "thumb") }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+    ) : (
+      <View style={[styles.avatarFallback, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={[styles.avatarInitial, { fontSize: Math.round(size * 0.42) }]}>{otherName.slice(0, 1).toUpperCase()}</Text>
+      </View>
+    );
+
   return (
     <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
-      <View style={[styles.header, { height: insets.top + 52, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
-        <Tappable onPress={() => router.back()} style={styles.backButton} pressedStyle={styles.backButtonPressed}>
-          <ChevronLeftIcon size={22} stroke={1.8} color={palette.ink} />
+      <View style={[styles.header, { paddingTop: insets.top, height: insets.top + HEADER_HEIGHT, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
+        <Tappable onPress={() => router.back()} style={styles.iconButton} pressedStyle={{ backgroundColor: palette.control }} accessibilityLabel="Go back">
+          <ChevronLeftIcon size={24} stroke={2} color={palette.forest} />
         </Tappable>
         <Tappable
-          onPress={() => partner && router.push(`/user?id=${encodeURIComponent(partner)}`)}
-          style={styles.titleButton}
-          pressedStyle={styles.backButtonPressed}
+          onPress={openProfile}
+          style={styles.identity}
+          pressedStyle={{ backgroundColor: palette.control }}
           accessibilityRole="button"
           accessibilityLabel={`View ${otherName}'s profile`}
         >
-          <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+          {avatarNode(36)}
+          <View style={styles.identityText}>
+            <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+            {typingName ? <Text style={[styles.subtitle, { color: palette.forest }]} numberOfLines={1}>typing…</Text> : null}
+          </View>
         </Tappable>
         {/* The menu's only action is Block (hiding conversations was removed in
             schema v2), and blocking is not offered while acting as a shop. */}
         {getActingOrgId() ? null : (
-          <Tappable onPress={() => setMenuOpen(true)} style={styles.menuButton} pressedStyle={styles.backButtonPressed} accessibilityLabel="Conversation options">
-            <KebabIcon size={20} color={palette.ink} />
+          <Tappable onPress={() => setMenuOpen(true)} style={styles.iconButton} pressedStyle={{ backgroundColor: palette.control }} accessibilityLabel="Conversation options">
+            <Ionicons name="information-circle-outline" size={24} color={palette.forest} />
           </Tappable>
         )}
       </View>
@@ -291,9 +373,18 @@ export default function MessagesThreadScreen() {
             ref={listRef}
             style={styles.list}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           >
-            {sortedMessages.map((message) => {
+            {/* Messenger's thread opener: who you are talking to. */}
+            <View style={styles.intro}>
+              {avatarNode(72)}
+              <Text style={[styles.introName, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+              <Tappable onPress={openProfile} style={[styles.introButton, { backgroundColor: palette.control }]} pressedStyle={styles.pressedDim} accessibilityRole="button">
+                <Text style={[styles.introButtonText, { color: palette.ink }]}>View profile</Text>
+              </Tappable>
+            </View>
+            {sortedMessages.map((message, index) => {
               const mine = message.senderId === currentUserId;
               let displayContent = message.content;
               let offerTradeId: string | null = null;
@@ -315,109 +406,115 @@ export default function MessagesThreadScreen() {
               }
               // System rows ("You declined the offer", "Trade completed") are
               // centred pills belonging to neither side.
-              const payloadType = (() => {
-                try {
-                  return (JSON.parse(displayContent) as { type?: string }).type;
-                } catch {
-                  return undefined;
-                }
-              })();
+              const payloadType = payloadTypeOf(displayContent);
               const isOfferUpdate = payloadType === "offer_update";
               const isSystem = isOfferUpdate || payloadType === "trade_completed";
+              const { separator, position, footer } = layout[index];
               return (
-                <ChatBubble
-                  key={message.id}
-                  mine={mine}
-                  kind={isSystem ? "status" : isOffer ? "card" : "bubble"}
-                  time={relativeTime(message.createdAt)}
-                  avatar={
-                    otherAvatar ? (
-                      <Image source={{ uri: sizedImage(otherAvatar, "thumb") }} style={styles.messageAvatar} />
-                    ) : (
-                      <View style={styles.messageAvatarFallback}>
-                        <Text style={styles.messageAvatarInitial}>{otherName.slice(0, 1).toUpperCase()}</Text>
-                      </View>
-                    )
-                  }
-                >
-                  {renderMessageBody({
-                    content: displayContent,
-                    mine,
-                    contentMax: bubbleContentMax,
-                    onImagePress: setLightboxUrl,
-                    // An offer opens its trade screen; an offer_update's
-                    // "Open trade" passes the trade id it carries.
-                    onOfferPress: (id) => {
-                      router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
-                    },
-                    onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
-                    offerTradeId,
-                    offerTrade,
-                    partnerName: otherName,
-                    onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
-                    offerDetails: (() => {
-                      try {
-                        const payload = JSON.parse(message.content) as { offerId?: unknown };
-                        return typeof payload.offerId === "string"
-                          ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
-                          : undefined;
-                      } catch {
-                        return undefined;
-                      }
-                    })(),
-                    tradeDetails: (() => {
-                      try {
-                        const payload = JSON.parse(message.content) as { tradeId?: unknown };
-                        return typeof payload.tradeId === "string"
-                          ? tradesById.get(payload.tradeId)
-                          : undefined;
-                      } catch {
-                        return undefined;
-                      }
-                    })(),
-                  })}
-                </ChatBubble>
+                <View key={message.id}>
+                  {separator ? <Text style={[styles.separator, { color: palette.inkSecondary }]}>{separator}</Text> : null}
+                  <ChatBubble
+                    mine={mine}
+                    kind={isSystem ? "status" : isOffer ? "card" : payloadType === "image" ? "media" : "bubble"}
+                    position={position}
+                    footer={footer}
+                    avatar={avatarNode(28)}
+                  >
+                    {renderMessageBody({
+                      content: displayContent,
+                      mine,
+                      contentMax: bubbleContentMax,
+                      onImagePress: setLightboxUrl,
+                      // An offer opens its trade screen; an offer_update's
+                      // "Open trade" passes the trade id it carries.
+                      onOfferPress: (id) => {
+                        router.push(isOfferUpdate ? tradeHref(id) : offerHref(id));
+                      },
+                      onOpenTrade: (tradeId) => router.push(tradeHref(tradeId)),
+                      offerTradeId,
+                      offerTrade,
+                      partnerName: otherName,
+                      onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
+                      offerDetails: (() => {
+                        try {
+                          const payload = JSON.parse(message.content) as { offerId?: unknown };
+                          return typeof payload.offerId === "string"
+                            ? activeTrades.data?.offers.find((offer) => offer.id === payload.offerId)
+                            : undefined;
+                        } catch {
+                          return undefined;
+                        }
+                      })(),
+                      tradeDetails: (() => {
+                        try {
+                          const payload = JSON.parse(message.content) as { tradeId?: unknown };
+                          return typeof payload.tradeId === "string"
+                            ? tradesById.get(payload.tradeId)
+                            : undefined;
+                        } catch {
+                          return undefined;
+                        }
+                      })(),
+                    })}
+                  </ChatBubble>
+                </View>
               );
             })}
           </ScrollView>
 
           {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
 
-          <View
-            style={[
-              styles.composer,
-              {
-                marginBottom: keyboardUp ? Math.max(imeHeight, 12) : 12,
-              },
-            ]}
-          >
-            <Tappable
-              onPress={() => void pickImage()}
-              disabled={sending || uploadingImage}
-              style={styles.attachButton}
-              pressedStyle={styles.attachButtonPressed}
-              accessibilityLabel="Attach a photo"
-            >
-              <ImageIcon size={20} stroke={1.8} color={palette.forest} />
-            </Tappable>
+          {/* Messenger's composer: photo tools on the left, a pill field, and a
+              thumbs-up that becomes Send once something is typed. While typing,
+              the tools fold behind a chevron to give the field room. */}
+          <View style={[styles.composer, { backgroundColor: palette.surface, marginBottom: keyboardUp ? Math.max(imeHeight, 8) : 8 }]}>
+            {showTools ? (
+              <>
+                <Tappable
+                  onPress={() => void pickImage("camera")}
+                  disabled={sending || uploadingImage}
+                  style={styles.toolButton}
+                  pressedStyle={{ backgroundColor: palette.control }}
+                  accessibilityLabel="Take a photo"
+                >
+                  <Ionicons name="camera-outline" size={24} color={palette.forest} />
+                </Tappable>
+                <Tappable
+                  onPress={() => void pickImage("library")}
+                  disabled={sending || uploadingImage}
+                  style={styles.toolButton}
+                  pressedStyle={{ backgroundColor: palette.control }}
+                  accessibilityLabel="Attach a photo"
+                >
+                  {uploadingImage ? <ActivityIndicator size="small" color={palette.forest} /> : <Ionicons name="image-outline" size={24} color={palette.forest} />}
+                </Tappable>
+              </>
+            ) : (
+              <Tappable onPress={() => setToolsOpen(true)} style={styles.toolButton} pressedStyle={{ backgroundColor: palette.control }} accessibilityLabel="Show photo options">
+                <ChevronRightIcon size={24} stroke={2} color={palette.forest} />
+              </Tappable>
+            )}
             <TextInput
               value={draft}
-              onChangeText={notifyTyping}
-              placeholder="Type a message…"
+              onChangeText={(value) => {
+                if (toolsOpen) setToolsOpen(false);
+                notifyTyping(value);
+              }}
+              placeholder="Message"
               multiline
-              style={styles.input}
+              style={[styles.input, { backgroundColor: palette.control, color: palette.ink }]}
               placeholderTextColor={palette.inkSecondary}
             />
             <Tappable
-              onPress={() => void onSend()}
-              disabled={sending || !draft.trim()}
-              style={[styles.sendButton, (!draft.trim() || sending) && styles.sendButtonDisabled]}
-              pressedStyle={styles.sendButtonPressed}
+              onPress={() => void (composing ? onSend() : onSend("\u{1F44D}"))}
+              disabled={sending}
+              style={[styles.toolButton, sending && styles.sendButtonDisabled]}
+              pressedStyle={{ backgroundColor: palette.control }}
+              accessibilityLabel={composing ? "Send" : "Send a thumbs up"}
             >
-              <Text style={styles.sendButtonText}>{sending ? "…" : "Send"}</Text>
+              {composing ? <Ionicons name="send" size={24} color={palette.forest} /> : <Ionicons name="thumbs-up" size={24} color={palette.forest} />}
             </Tappable>
           </View>
-          {typingName ? <Text style={styles.typing}>{typingName} is typing…</Text> : null}
         </>
       )}
       <ConversationMenu
@@ -473,6 +570,8 @@ const darkColors = {
   urgent: "#F08A69",
 };
 
+const HEADER_HEIGHT = 60;
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -481,44 +580,51 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingTop: 0,
-    paddingBottom: 0,
-    borderBottomWidth: 1,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: color.divider,
     backgroundColor: color.surface,
   },
-  backButton: {
+  iconButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 0,
-    transform: [{ translateY: 16 }],
   },
-  backButtonPressed: {
-    backgroundColor: color.control,
-  },
-  titleButton: {
+  identity: {
     flex: 1,
-    minHeight: 44,
-    justifyContent: "center",
-    transform: [{ translateY: 16 }],
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    transform: [{ translateY: 16 }],
+    gap: 10,
+    minHeight: 48,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+  },
+  identityText: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
-    ...textStyle({ fontFamily: font.displaySemi, fontSize: 18 }),
+    ...textStyle({ fontFamily: font.displaySemi, fontSize: 17 }),
     color: color.ink,
-    flex: 1,
-    transform: [{ translateY: 16 }],
+  },
+  subtitle: {
+    fontFamily: font.sans,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.forest,
+  },
+  avatarInitial: {
+    fontFamily: font.displaySemi,
+    color: color.surface,
+  },
+  pressedDim: {
+    opacity: 0.8,
   },
   centered: {
     flex: 1,
@@ -534,95 +640,73 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
-    backgroundColor: color.surface,
   },
   listContent: {
     paddingHorizontal: 12,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
-  messageAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  intro: {
+    alignItems: "center",
+    paddingTop: 12,
+    paddingBottom: 20,
+    gap: 8,
   },
-  messageAvatarFallback: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  introName: {
+    ...textStyle({ fontFamily: font.displaySemi, fontSize: 18 }),
+    maxWidth: "80%",
+  },
+  introButton: {
+    minHeight: 36,
+    paddingHorizontal: 16,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.forest,
   },
-  messageAvatarInitial: {
-    fontFamily: font.displaySemi,
-    fontSize: 12,
-    color: color.surface,
+  introButtonText: {
+    fontFamily: font.sansSemi,
+    fontSize: 13,
+  },
+  separator: {
+    alignSelf: "center",
+    fontFamily: font.sansSemi,
+    fontSize: 11,
+    marginTop: 8,
+    marginBottom: 10,
   },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: color.divider,
-    backgroundColor: color.surface,
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingTop: 6,
   },
-  attachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: color.greenLine,
+  toolButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-  },
-  attachButtonPressed: {
-    backgroundColor: color.greenWash,
   },
   input: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     maxHeight: 120,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: color.controlLine,
+    marginHorizontal: 4,
+    marginBottom: 1,
+    borderRadius: 20,
     backgroundColor: color.control,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingTop: 9,
+    paddingBottom: 9,
     fontFamily: font.sans,
-    fontSize: 14,
+    fontSize: 15,
     color: color.ink,
-  },
-  sendButton: {
-    minWidth: 72,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: color.forest,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
   },
   sendButtonDisabled: {
     opacity: 0.5,
   },
-  sendButtonPressed: {
-    opacity: 0.9,
-  },
-  sendButtonText: {
-    fontFamily: font.sansSemi,
-    fontSize: 14,
-    color: color.surface,
-  },
   sendError: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    color: color.inkSecondary,
-    fontFamily: font.sans,
-    fontSize: 12,
-  },
-  typing: {
     marginHorizontal: 12,
     marginBottom: 8,
     color: color.inkSecondary,
