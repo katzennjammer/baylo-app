@@ -130,7 +130,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   // Same query, same refreshes as the person's balance -- no second fetch.
   //
   // A SWITCH IS IMMEDIATE BECAUSE IT INVALIDATES THIS QUERY: every switch path
-  // (OrgSwitcher, Profile's shop picker and "Switch to Myself", the post
+  // (Profile's shop picker and "Switch to Myself", the post
   // flow's "Post as myself") calls invalidateQueries() straight after, so
   // /home refetches as the new identity. Until it lands, the cached answer
   // belongs to the OLD identity, so while it disagrees with this device's
@@ -140,7 +140,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   // then who a boost would charge.
   //
   // getActingOrgId() is read fresh, not held: the switch re-renders this via
-  // the query's fetching state. See OrgSwitcher on why the context is not state.
+  // the query's fetching state. See (app)/profile.tsx on why the context is not state.
   const answeredFor = acting?.organizationId ?? null;
   const pillStale = answeredFor !== getActingOrgId() && isFetching;
   const pillValue =

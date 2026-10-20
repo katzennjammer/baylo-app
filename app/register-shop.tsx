@@ -30,7 +30,7 @@ import { showDialog } from "../src/components/dialog";
  *
  * `useCreateOrganization()` switches this device to act as the new shop, the
  * same as signup. Every cached list was fetched as the person, so the whole
- * cache is dropped — the rule OrgSwitcher states for any switch. The shop
+ * cache is dropped — the rule selectShop() in (app)/profile.tsx states for any switch. The shop
  * starts PENDING: it cannot post until an admin has checked the document, and
  * the dialog says so rather than leaving the first refused post to explain it.
  */

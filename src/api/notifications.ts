@@ -158,13 +158,15 @@ export function notificationTarget(n: NotificationItem): string | null {
         ? `/item?id=${encodeURIComponent(id)}`
         : `/item?id=${encodeURIComponent(id)}&comments=1`;
     /*
-     * A business-document decision. The id is the Organization's, and there is
-     * no org screen in the app yet -- so this lands on the person's own profile
-     * and settings, where the organisation they now own or were refused is
-     * reachable. Better than null, which renders an untappable row.
+     * A business-document decision ("Mckayeat is now a verified organisation.
+     * The badge is on your profile ..."). The id is the Organization's. It
+     * opened Settings, for the "Posting as" card; that card was deleted on
+     * 20 Oct 2026, and the shop -- its badge, its "Get verified" step, the
+     * switch to act as it -- is on the Profile tab now, which is also where
+     * the message says to look.
      */
     case "organization":
-      return "/settings";
+      return "/(app)/profile";
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
     case "review":

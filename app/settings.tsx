@@ -19,7 +19,6 @@ import { showDialog } from "../src/components/dialog";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { ChevronRightIcon } from "../src/components/icons";
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
-import { OrgSwitcher } from "../src/components/OrgSwitcher";
 import { Tappable } from "../src/components/Tappable";
 import { openPremium } from "../src/lib/premium";
 import { resetReachExplainerSeen } from "../src/lib/reach-flag";
@@ -161,15 +160,12 @@ export default function SettingsScreen() {
           />
         ) : null}
         {/*
-          Renders nothing at all unless this person owns an organisation --
-          which is almost everybody. See the note
-          on OrgSwitcher: a card explaining a feature you are not using, on a
-          screen you opened to do something else, is worse than no card.
+          No "Posting as" card (removed 20 Oct 2026). A shop owner switches
+          between themselves and the shop on the Profile tab (the shop card,
+          "Switch to Myself") and in the post flow ("Post as myself"); a shop's
+          verification state is on its storefront ("Get verified") and in the
+          post flow ("under review").
         */}
-        <View style={styles.gutter}>
-          <OrgSwitcher />
-        </View>
-
         <SectionHeader accent="Profile and security" />
         <SettingsRow
           label="Edit profile"
@@ -382,7 +378,6 @@ function premiumLine(rep: ViewerReputation | undefined): string {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
 
-  gutter: { paddingHorizontal: space.screenX },
 
   // The finished-trades row: on the canvas, the gutter inside it so the held
   // fill runs edge to edge, a hairline underneath.

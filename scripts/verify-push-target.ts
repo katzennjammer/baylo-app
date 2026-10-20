@@ -33,6 +33,7 @@ eq("follow", pushTarget({ type: "FOLLOW_REQUEST", entityType: null, entityId: nu
 eq("trade accepted", pushTarget({ type: "TRADE_ACCEPTED", entityType: "trade", entityId: "t1", actorId: "u2" }), "/trade?id=t1&handoff=1");
 eq("trade completed", pushTarget({ type: "TRADE_COMPLETED", entityType: "trade", entityId: "t1", actorId: "u2" }), "/rate-trade?id=t1");
 eq("meetup", pushTarget({ type: "MEETUP_PROPOSED", entityType: "meetup", entityId: "t1", actorId: "u2" }), "/trade?id=t1");
+eq("shop verified -> Profile (Posting as is gone)", pushTarget({ type: "ID_VERIFICATION_APPROVED", entityType: "organization", entityId: "o1", actorId: null }), "/(app)/profile");
 
 // 2. Fallbacks
 eq("no data", pushTarget(undefined), "/notifications");
