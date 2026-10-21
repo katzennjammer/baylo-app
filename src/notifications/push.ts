@@ -40,7 +40,20 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const CHANNEL = "default";
+/**
+ * The Android channel every push lands in; the server names it in each
+ * message's channelId (baylo-api @/lib/push), so the two must match.
+ *
+ * MAX + sound + vibration is what makes Android drop a heads-up banner over
+ * whatever app is open. A channel's importance, sound and vibration are fixed
+ * by Android the first time it is created on a phone -- calling
+ * setNotificationChannelAsync again only updates its name -- so raising them
+ * meant a NEW id. "default" (HIGH, no vibration; 20 Oct 2026) is deleted
+ * below so Settings shows one channel; a push still naming it lands in Expo's
+ * fallback channel, never nowhere.
+ */
+const CHANNEL = "alerts";
+const OLD_CHANNELS = ["default"];
 
 function projectId(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
@@ -58,9 +71,13 @@ async function currentToken(askPermission: boolean): Promise<string | null> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Messages and updates",
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
+      sound: "default",
+      enableVibrate: true,
+      vibrationPattern: [0, 250, 250, 250],
       lightColor: "#3DBE5A",
     });
+    for (const old of OLD_CHANNELS) await Notifications.deleteNotificationChannelAsync(old);
   }
 
   let { status } = await Notifications.getPermissionsAsync();

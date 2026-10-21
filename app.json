@@ -23,7 +23,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -66,7 +70,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Baylo needs your photo library so you can choose pictures of the item you are listing."
+          "photosPermission": "Baylo needs your photo library so you can choose pictures of the item you are listing.",
+          "microphonePermission": false
         }
       ],
       [
