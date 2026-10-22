@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -18,6 +18,7 @@ import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
 import { FilterButton, SearchField } from "../../src/components/marketplace/BrowseControls";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
+import { useTabReselect } from "../../src/lib/tab-reselect";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
@@ -167,6 +168,10 @@ export default function HomeScreen() {
     void refetchRecommended();
   }, [refetchBrowse, refetchExclusive, refetchSpotlight, refetchRecommended]);
 
+  // Tapping Home while on it: back to the top, or refresh when already there.
+  const scroller = useRef<ScrollView>(null);
+  const onScroll = useTabReselect(() => scroller.current?.scrollTo({ y: 0, animated: true }), refetch);
+
   // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
   // to "Ended" at zero and the card stays put; refetching here would pull it
   // out of the row under the person's thumb. Pull-to-refresh and the next
@@ -227,6 +232,9 @@ export default function HomeScreen() {
   return (
     <View style={s.screen}>
       <ScrollView
+        ref={scroller}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         style={s.screen}
         // The extra bottom room keeps the last row of tiles clear of the search
         // helper button, which floats over this corner.
