@@ -92,9 +92,9 @@ export function valueNeedsPremium(valueLeaves: number | null): boolean {
 }
 
 /**
- * The first bracket that needs VIP specifically. Mirrors the server's
- * VIP_MIN_BRACKET: a live Premium subscription alone does NOT clear it, which
- * is why the Premium screen says "Bracket 7 and 8" and never "7 and above"
- * without the qualifier. The server's is the one enforced.
+ * LEGACY: the server dropped its VIP-only bracket on 22 Oct 2026 (Premium now
+ * opens every bracket from PREMIUM_MIN_BRACKET up) and no longer sends
+ * `offerLock: "vip"` or VIP_REQUIRED. Kept only for the copy that answers an
+ * older server that still does.
  */
 export const VIP_MIN_BRACKET: Bracket = 9;

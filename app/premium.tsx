@@ -91,9 +91,9 @@ const PERKS: readonly { key: string; Icon: (p: IconProps) => React.JSX.Element; 
     key: "brackets",
     Icon: UnlockIcon,
     title: `Trade in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above`,
-    body:
-      `Propose on and accept items in Brackets ${PREMIUM_MIN_BRACKET} and ${VIP_MIN_BRACKET - 1}. ` +
-      `Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which comes later.`,
+    // Every bracket from PREMIUM_MIN_BRACKET up since 22 Oct 2026, when the
+    // server dropped the VIP-only bracket (9+), a tier nobody could buy.
+    body: `Propose on and accept items in Bracket ${PREMIUM_MIN_BRACKET} and every bracket above it.`,
   },
   {
     key: "bridge",
