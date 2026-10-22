@@ -8,7 +8,7 @@ import { LockIcon } from "../src/components/offer/icons";
 import { OfferSheet } from "../src/components/offer/OfferSheet";
 import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
-import { bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
+import { BRACKET_COUNT, bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
 import {
   hasPremiumAccess,
   PREMIUM_BETA_NOTE,
@@ -359,7 +359,7 @@ function Mascot({ size }: { size: number }) {
 
 /**
  * The one plan: its term, a BETA tag where a discount tag would sit, the
- * price, and the beta note — so nobody reads ₱199 as the final figure.
+ * price, and the beta note — so nobody reads the beta price as the final figure.
  */
 function PlanCard() {
   return (
@@ -491,7 +491,7 @@ function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: numb
   const where = Number.isFinite(bracket) ? `That listing is in ${bracketLabel(bracket)}. ` : "";
   const text =
     reason === "vip"
-      ? `${where}Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which isn't part of Premium and isn't available yet.`
+      ? `${where}Brackets ${VIP_MIN_BRACKET} and ${BRACKET_COUNT} need VIP, which isn't part of Premium and isn't available yet.`
       : `${where}Trading at ${bracketLabel(PREMIUM_MIN_BRACKET)} and above opens with Premium.`;
 
   return (
