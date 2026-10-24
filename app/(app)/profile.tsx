@@ -59,6 +59,7 @@ export default function ProfileScreen() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isLoadingError: reviewsLoadError,
     isRefetching: reviewsRefetching,
   } = useProfileReviews(user?.id, tab === "reviews");
 
@@ -207,7 +208,7 @@ export default function ProfileScreen() {
       ListHeaderComponent={<>
         <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-        {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} loadError={reviewsLoadError} onRetry={() => void refetchReviews()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
@@ -218,7 +219,9 @@ export default function ProfileScreen() {
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "posts" ? profileRefetching : reviewsRefetching} onRefresh={onRefresh} tintColor={dark ? darkColors.green : color.green} />}
       ListFooterComponent={tab === "reviews" && isFetchingNextPage ? <ActivityIndicator color={dark ? darkColors.green : color.green} style={s.footer} /> : null}
-      ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
+      ListEmptyComponent={tab === "reviews" && reviewsLoadError
+        ? <ReviewLoadError dark={dark} onRetry={() => void refetchReviews()} />
+        : <Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
     />
   );
 }
@@ -348,7 +351,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
           onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
         />
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier /> : null}
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
@@ -359,9 +362,11 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={() => { if (tab === "reviews") void reviewQuery.refetch(); else void refetch(); }} tintColor={palette.green} />}
       ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
-      ListEmptyComponent={tab === "reviews"
-        ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
-        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
+      ListEmptyComponent={tab === "reviews" && reviewQuery.isLoadingError
+        ? <ReviewLoadError dark={dark} onRetry={() => void reviewQuery.refetch()} />
+        : tab === "reviews"
+          ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
+          : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
     />
   );
 }
@@ -404,14 +409,29 @@ export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active:
  * ladder, so the server's trustTier is null for one, and the fallback below
  * would label a sari-sari store "New Trader".
  */
-export function ReviewSummary({ dark, summary, hideTier = false }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean }) {
+export function ReviewSummary({ dark, summary, hideTier = false, loadError = false, onRetry }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean; loadError?: boolean; onRetry?: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  if (loadError) return <ReviewLoadError dark={dark} onRetry={onRetry} />;
   if (!summary) return <View style={s.summaryLoading}><ActivityIndicator color={palette.green} /></View>;
   return (
     <View style={[s.summary, { backgroundColor: palette.surface }]}>
       <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "-"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>average rating</Text></View>
       <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.totalReviews}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>reviews</Text></View>
       {hideTier ? null : <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>}
+    </View>
+  );
+}
+
+export function ReviewLoadError({ dark, onRetry }: { dark: boolean; onRetry?: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 8 }}>
+      <Text style={[s.empty, { color: palette.secondary }]}>Could not load reviews.</Text>
+      {onRetry ? (
+        <Pressable onPress={onRetry} accessibilityRole="button">
+          <Text style={[s.shopLink, { color: palette.green }]}>Try again</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

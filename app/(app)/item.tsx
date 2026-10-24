@@ -19,6 +19,7 @@ import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
 import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
 import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
+import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { Splash } from "../../src/components/Splash";
 import { useBlockUser, useItem, useReport } from "../../src/api/item";
 import { useLike } from "../../src/api/social";
@@ -131,7 +132,8 @@ export default function ItemDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id, comments } = useLocalSearchParams<{ id?: string; comments?: string }>();
-  const { data, isPending, isError, error, refetch } = useItem(id);
+  const { data, isPending, isError, error, refetch, isFetching } = useItem(id);
+  useRefetchOnFocus(refetch);
 
   /*
    * §7 of the offer spec, fetched HERE rather than below the early returns:
@@ -596,6 +598,8 @@ export default function ItemDetailScreen() {
         <BottomBar
           own={own}
           action={viewer.action}
+          canOffer={viewer.canOffer}
+          checkingAvailability={isFetching}
           existingOfferId={viewer.existingOfferId}
           ended={ended}
           lock={
@@ -955,6 +959,8 @@ async function directionsTo(hub: SafeZoneHub) {
 function BottomBar({
   own,
   action,
+  canOffer,
+  checkingAvailability,
   existingOfferId,
   ended,
   lock,
@@ -964,7 +970,9 @@ function BottomBar({
   onOffer,
 }: {
   own: boolean;
-  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
+  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE";
+  canOffer: boolean;
+  checkingAvailability: boolean;
   existingOfferId: string | null;
   ended: boolean;
   lock: { kind: PremiumReason; bracket: number; owner: string; onPress: () => void } | null;
@@ -1017,6 +1025,24 @@ function BottomBar({
       <View style={s.barRow}>
         {heart}
         {inert(action === "IN_TRADE" ? "In trade" : "Traded")}
+      </View>
+    );
+  }
+
+  if (checkingAvailability && action === "SEND_OFFER") {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("Checking availability…")}
+      </View>
+    );
+  }
+
+  if (!canOffer || action === "UNAVAILABLE") {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("Not available")}
       </View>
     );
   }

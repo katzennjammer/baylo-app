@@ -192,7 +192,7 @@ export function subscribeToUserChannel(
  */
 export type TradeEvent =
   | { name: "meetup-changed"; tradeId: string; kind: "proposed" | "agreed"; actorId: string }
-  | { name: "trade-status-changed"; tradeId: string; newStatus?: string };
+  | { name: "trade-status-changed"; tradeId: string; newStatus?: string; itemIds?: string[] };
 
 export function subscribeToTradeEvents(
   userId: string,

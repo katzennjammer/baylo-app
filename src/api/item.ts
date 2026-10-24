@@ -31,6 +31,7 @@ export function useItem(id: string | undefined) {
     // A screen reached without an id has nothing to fetch. Guarding here rather
     // than at the call site keeps the hook order stable across renders.
     enabled: !!id,
+    refetchOnMount: "always",
     select: (r) => r.data,
   });
 }
