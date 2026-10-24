@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { followButtonLabel, useFollow, usePublicProfile, useUnfollow } from "../../src/api/profile";
 import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
-import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
+import { Avatar, Badges, ProfileTabs, ProfileTile, ReviewLoadError, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
 import { ChevronLeftIcon } from "../../src/components/icons";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { getApiBase } from "../../src/api/config";
@@ -124,14 +124,16 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
       </View>
       )}
       <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-      {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} /> : null}
+      {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
     </>}
     renderItem={({ item: row }) => row.kind === "posts" ? <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View> : <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { if (row.review.item) router.push({ pathname: "/item", params: { id: row.review.item.id } }); }} />}
     onEndReached={() => { if (tab === "reviews" && reviewQuery.hasNextPage && !reviewQuery.isFetchingNextPage) void reviewQuery.fetchNextPage(); }}
     onEndReachedThreshold={0.6}
     refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={onRefresh} tintColor={palette.green} />}
     ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
-    ListEmptyComponent={emptyList}
+    ListEmptyComponent={tab === "reviews" && reviewQuery.isLoadingError
+      ? <ReviewLoadError dark={dark} onRetry={() => void reviewQuery.refetch()} />
+      : emptyList}
   />;
 }
 

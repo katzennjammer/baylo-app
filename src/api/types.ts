@@ -286,7 +286,7 @@ export interface ItemDetailPayload {
   viewer: {
     isOwner: boolean;
     state: string;
-    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
+    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE";
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
     /**
