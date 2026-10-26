@@ -589,38 +589,40 @@ export default function ItemDetailScreen() {
         style={[s.statusBackdrop, { height: insets.top, opacity: backdropOpacity }]}
       />
 
-      <View
-        style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
-        onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
-      >
-        <BottomBar
-          own={own}
-          action={viewer.action}
-          existingOfferId={viewer.existingOfferId}
-          ended={ended}
-          lock={
-            locked && item.valueLeaves !== null
-              ? {
-                  kind: viewer.offerLock ?? "premium",
-                  bracket: bracketOf(item.valueLeaves),
-                  owner: firstName(item.owner.name),
-                  onPress: () =>
-                    openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
-                }
-              : null
-          }
-          liked={item.stats.liked}
-          onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
-          onEdit={() => setEditing(true)}
-          onOffer={() => {
-            if (cannotOffer) {
-              setReachDialogOpen(true);
-              return;
+      {!editing ? (
+        <View
+          style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
+          onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+        >
+          <BottomBar
+            own={own}
+            action={viewer.action}
+            existingOfferId={viewer.existingOfferId}
+            ended={ended}
+            lock={
+              locked && item.valueLeaves !== null
+                ? {
+                    kind: viewer.offerLock ?? "premium",
+                    bracket: bracketOf(item.valueLeaves),
+                    owner: firstName(item.owner.name),
+                    onPress: () =>
+                      openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
+                  }
+                : null
             }
-            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
-          }}
-        />
-      </View>
+            liked={item.stats.liked}
+            onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
+            onEdit={() => setEditing(true)}
+            onOffer={() => {
+              if (cannotOffer) {
+                setReachDialogOpen(true);
+                return;
+              }
+              router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
+            }}
+          />
+        </View>
+      ) : null}
 
       {/*
         THE ONE-BRACKET RULE, STATED THE RIGHT WAY ROUND.

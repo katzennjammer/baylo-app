@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Image,
   Keyboard,
   Modal,
@@ -95,6 +96,7 @@ export default function MessagesThreadScreen() {
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const lastReadRefreshMessageId = useRef<string | null>(null);
   const activeTrades = useActiveTrades();
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
@@ -167,12 +169,41 @@ export default function MessagesThreadScreen() {
   // the bell's message row), so everything counting unread is refreshed: the
   // list, and the header badges, which come from /home.
   useEffect(() => {
-    if (thread.data) {
-      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["home"] });
-      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-    }
+    const latestMessageId = thread.data?.messages.at(-1)?.id ?? null;
+    if (latestMessageId === lastReadRefreshMessageId.current) return;
+    lastReadRefreshMessageId.current = latestMessageId;
+    if (!thread.data) return;
+    void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    void queryClient.invalidateQueries({ queryKey: ["home"] });
+    void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
   }, [queryClient, thread.data]);
+
+  // Pusher is the fast path. Keep the visible conversation current if the
+  // socket drops, the phone misses an event, or the channel is still authorizing.
+  // The thread GET also marks incoming messages read, which is correct while
+  // this conversation is actively open.
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner) return;
+      let inFlight = false;
+      const syncThread = () => {
+        if (AppState.currentState !== "active" || inFlight) return;
+        inFlight = true;
+        void thread.refetch({ cancelRefetch: false }).finally(() => {
+          inFlight = false;
+        });
+      };
+
+      const interval = setInterval(syncThread, 5_000);
+      const appState = AppState.addEventListener("change", (state) => {
+        if (state === "active") syncThread();
+      });
+      return () => {
+        clearInterval(interval);
+        appState.remove();
+      };
+    }, [partner, thread.refetch]),
+  );
 
   useEffect(() => () => {
     if (typingTimer.current) clearTimeout(typingTimer.current);
