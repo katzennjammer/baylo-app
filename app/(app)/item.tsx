@@ -682,7 +682,14 @@ export default function ItemDetailScreen() {
           )}
         </SheetShell>
       ) : null}
-      <EditListingSheet item={editing ? item : null} onClose={() => setEditing(false)} />
+      <EditListingSheet
+        item={editing ? item : null}
+        onClose={() => setEditing(false)}
+        onEditHubs={(listing) => {
+          setEditing(false);
+          router.push({ pathname: "/edit-hubs", params: { itemId: listing.id } });
+        }}
+      />
       <CommentsSheet item={commentsOpen ? item : null} onClose={() => setCommentsOpen(false)} />
     </View>
   );

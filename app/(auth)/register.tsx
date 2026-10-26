@@ -343,6 +343,7 @@ function RegisterForm({
   }, [onBack]);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -456,7 +457,14 @@ function RegisterForm({
     }
   }
 
-  const reveal = { visible: showPassword, onToggle: () => setShowPassword((v) => !v) };
+  const passwordReveal = {
+    visible: showPassword,
+    onToggle: () => setShowPassword((visible) => !visible),
+  };
+  const confirmPasswordReveal = {
+    visible: showConfirmPassword,
+    onToggle: () => setShowConfirmPassword((visible) => !visible),
+  };
 
   const fields = (
     <>
@@ -509,7 +517,7 @@ function RegisterForm({
         returnKeyType="next"
         onSubmitEditing={() => confirmRef.current?.focus()}
         submitBehavior="submit"
-        reveal={reveal}
+        reveal={passwordReveal}
       />
       {/* Advice only; the field's own error (under 8) takes its place. */}
       {fieldErrors.password ? null : <PasswordStrengthMeter password={form.password} />}
@@ -522,7 +530,7 @@ function RegisterForm({
         onChangeText={edit("confirm", "confirm")}
         onFocus={() => setFocusedField(4)}
         error={fieldErrors.confirm}
-        secureTextEntry={!showPassword}
+        secureTextEntry={!showConfirmPassword}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="new-password"
@@ -532,7 +540,7 @@ function RegisterForm({
         // The check replaces "Show" once the two agree, per the spec — a state
         // the eye can read without tapping anything.
         matched={form.confirm.length > 0 && form.confirm === form.password}
-        reveal={reveal}
+        reveal={confirmPasswordReveal}
       />
 
       <View style={{ height: gap.betweenInputs }} />

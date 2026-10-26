@@ -53,7 +53,7 @@ export function HeroBanner({
 
   return (
     <LinearGradient
-      colors={[color.forest, dark.surface]}
+      colors={[color.forest, color.accentGreen]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={s.card}

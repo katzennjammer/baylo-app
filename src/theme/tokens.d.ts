@@ -11,6 +11,7 @@ import type { DimensionValue, TextStyle } from "react-native";
 
 export type ColorName =
   | "surface"
+  | "searchSurface"
   | "inset"
   | "control"
   | "storyPost"

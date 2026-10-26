@@ -26,6 +26,8 @@ const color = {
      are separated by dividers, never by elevation. That is the direction's
      whole premise, so `surface` intentionally serves both roles. */
   surface: "#FAFAF7",
+  /** Search fields sit above the warm canvas as a clean white control. */
+  searchSurface: "#FFFFFF",
   /** Inset surface — the "Matches for you" interstitial sits in this. */
   inset: "#F5F3EC",
   /** Chip / control fill — trending chips, the New/Rising tier badge, failed photo. */
@@ -558,8 +560,8 @@ const radius = {
   offerPill: 22,
 
   /* Marketplace and detail. */
-  searchField: 10,
-  filterButton: 10,
+  searchField: 24,
+  filterButton: 16,
   gridTile: 10,
   gridPhoto: 10,
   sheet: 18,
@@ -680,9 +682,9 @@ const size = {
 
   /* ── Marketplace and item detail ──────────────────────────────────────── */
   browse: {
-    /** Both 44 — the spec's minimum target, and they sit on one row. */
-    searchField: 44,
-    filterButton: 44,
+    /** Search and filter share a row and stay comfortably tappable. */
+    searchField: 48,
+    filterButton: 48,
     /** The category rail's chips reuse the trending chip's geometry. */
     chip: 36,
     chipX: 14,

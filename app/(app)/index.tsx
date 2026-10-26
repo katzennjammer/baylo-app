@@ -344,7 +344,14 @@ export default function HomeScreen() {
         }}
       />
 
-      <EditListingSheet item={editingItem} onClose={() => setEditingId(null)} />
+      <EditListingSheet
+        item={editingItem}
+        onClose={() => setEditingId(null)}
+        onEditHubs={(item) => {
+          setEditingId(null);
+          router.push({ pathname: "/edit-hubs", params: { itemId: item.id } });
+        }}
+      />
 
       <CommentsSheet item={commentsItem} onClose={() => setCommentsId(null)} />
     </>

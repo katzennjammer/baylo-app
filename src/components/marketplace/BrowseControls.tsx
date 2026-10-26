@@ -465,8 +465,8 @@ const s = StyleSheet.create({
     paddingRight: 4,
     borderRadius: radius.searchField,
     borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    borderColor: color.divider,
+    backgroundColor: color.searchSurface,
   },
   // `padding: 0` because Android's TextInput carries its own and would push the
   // text off the vertical centre of a fixed-height field.
@@ -486,8 +486,8 @@ const s = StyleSheet.create({
     paddingHorizontal: FILTER_X,
     borderRadius: radius.filterButton,
     borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    borderColor: color.divider,
+    backgroundColor: color.searchSurface,
   },
   filterButtonActive: { borderColor: color.greenLine, backgroundColor: color.greenWash },
   filterButtonPressed: { opacity: 0.75 },
