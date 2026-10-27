@@ -58,6 +58,17 @@ export interface ThreadMessage {
   createdAt: string;
 }
 
+export interface ImageMessagePayload {
+  type: "image";
+  url?: string;
+  imageUrl?: string;
+  caption?: string | null;
+  width?: number;
+  height?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+}
+
 export interface LegacyThreadResponse {
   partnerId: string;
   partnerName: string;
@@ -139,9 +150,15 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
     messages: messages.map((msg) => {
       let content = msg.content;
       try {
-        const payload = JSON.parse(content) as { type?: unknown; url?: unknown; imageUrl?: unknown };
-        if (payload?.type === "image" && typeof payload.url !== "string" && typeof payload.imageUrl === "string") {
-          content = JSON.stringify({ ...payload, url: payload.imageUrl });
+        const payload = JSON.parse(content) as ImageMessagePayload;
+        if (payload?.type === "image") {
+          const normalized = {
+            ...payload,
+            ...(typeof payload.url !== "string" && typeof payload.imageUrl === "string" ? { url: payload.imageUrl } : {}),
+            ...(typeof payload.width !== "number" && typeof payload.imageWidth === "number" ? { width: payload.imageWidth } : {}),
+            ...(typeof payload.height !== "number" && typeof payload.imageHeight === "number" ? { height: payload.imageHeight } : {}),
+          };
+          if (JSON.stringify(normalized) !== content) content = JSON.stringify(normalized);
         }
       } catch {
         // Plain text messages stay untouched.
@@ -273,4 +290,3 @@ export function useSendMessage() {
     },
   });
 }
-

@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
   useColorScheme,
+  useWindowDimensions,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { NOTIFICATIONS_KEY } from "../../src/api/notifications";
@@ -42,6 +43,7 @@ import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
+import { cacheMeasuredChatImageSize } from "../../src/components/messages/chat-image-sizing";
 
 /** Consecutive messages from one sender closer than this are one run. */
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -81,6 +83,7 @@ export default function MessagesThreadScreen() {
     partnerAvatar?: string;
   }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
+  const { width: screenWidth } = useWindowDimensions();
   const { session } = useSession();
   const dark = useColorScheme() === "dark";
   const queryClient = useQueryClient();
@@ -372,13 +375,30 @@ export default function MessagesThreadScreen() {
     setSendError(null);
     try {
       // uploadPhoto() resizes to a JPEG first, like every other photo.
-      const { url } = await uploadPhoto(asset.uri);
+      const { url, width, height } = await uploadPhoto(asset.uri);
+      cacheMeasuredChatImageSize(url, width, height);
+      const content = JSON.stringify({ type: "image", url, caption: null, width, height });
+      const optimisticId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const optimisticMessage: ThreadMessage = {
+        id: optimisticId,
+        senderId: currentUserId,
+        receiverId: partner,
+        content,
+        read: true,
+        createdAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) =>
+        current ? { ...current, messages: [...current.messages, optimisticMessage] } : current,
+      );
       requestBottomScroll("animated");
-      await sendMessage.mutateAsync({
-        partnerId: partner,
-        content: JSON.stringify({ type: "image", url, caption: null }),
-      });
-      await thread.refetch();
+      try {
+        await sendMessage.mutateAsync({ partnerId: partner, content });
+        await thread.refetch();
+      } finally {
+        queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) =>
+          current ? { ...current, messages: current.messages.filter((message) => message.id !== optimisticId) } : current,
+        );
+      }
     } catch (error) {
       setSendError(error instanceof Error ? error.message : "Photo could not be sent.");
     } finally {
@@ -585,7 +605,11 @@ export default function MessagesThreadScreen() {
                       content: displayContent,
                       mine,
                       contentMax: bubbleContentMax,
+                      screenWidth,
                       onImagePress: setLightboxUrl,
+                      onImageSizeChange: () => {
+                        if (nearBottomRef.current) requestBottomScroll("animated");
+                      },
                       // An offer opens its trade screen; an offer_update's
                       // "Open trade" passes the trade id it carries.
                       onOfferPress: (id) => {

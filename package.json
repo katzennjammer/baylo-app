@@ -68,6 +68,7 @@
     "verify:password": "node --import tsx scripts/verify-password-strength.ts",
     "verify:removal": "node --import tsx scripts/verify-listing-removal.ts",
     "verify:push": "node --require ./scripts/rn-stub.cjs --require ./scripts/securestore-fake.cjs --import tsx scripts/verify-push-target.ts",
+    "verify:chat-image": "node --import tsx scripts/verify-chat-image-sizing.ts",
     "vendor:leaflet": "node scripts/vendor-leaflet.mjs",
     "build:apk": "eas build --platform android --profile preview",
     "build:aab": "eas build --platform android --profile production",
