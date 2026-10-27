@@ -13,11 +13,31 @@ export interface PushData {
   entityType?: unknown;
   entityId?: unknown;
   actorId?: unknown;
+  partnerId?: unknown;
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
 
+export function pushMessagePartnerId(data: PushData | null | undefined): string | null {
+  const type = str(data?.type);
+  const entityType = str(data?.entityType);
+  if (type !== "NEW_MESSAGE" && entityType !== "conversation") return null;
+  return str(data?.partnerId) ?? str(data?.entityId) ?? (type === "NEW_MESSAGE" ? str(data?.actorId) : null);
+}
+
+export function shouldSuppressMessageNotification(
+  data: PushData | null | undefined,
+  activePartnerId: string | null,
+  appIsActive: boolean,
+): boolean {
+  if (!appIsActive || !activePartnerId || str(data?.type) !== "NEW_MESSAGE") return false;
+  return pushMessagePartnerId(data) === activePartnerId;
+}
+
 export function pushTarget(data: PushData | null | undefined): string {
+  const partnerId = pushMessagePartnerId(data);
+  if (partnerId) return `/messages/thread?partner=${encodeURIComponent(partnerId)}`;
+
   const type = str(data?.type);
   if (!type) return "/notifications";
   const actorId = str(data?.actorId);

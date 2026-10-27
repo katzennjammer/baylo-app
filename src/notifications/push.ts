@@ -2,13 +2,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { AppState, Platform } from "react-native";
 
 import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
-import { pushNotificationId, pushTarget } from "./push-target";
+import { getActiveConversationPartnerId } from "./active-conversation";
+import { pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
 
 /**
  * Phone notifications for everything the bell shows (20 Oct 2026).
@@ -30,14 +31,20 @@ import { pushNotificationId, pushTarget } from "./push-target";
  * request just means no pushes. Nothing here can block sign-in or sign-out.
  */
 
-// Shown while the app is open too: the header badge alone is easy to miss.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const suppressed = shouldSuppressMessageNotification(
+      notification.request.content.data,
+      getActiveConversationPartnerId(),
+      AppState.currentState === "active",
+    );
+    return {
+      shouldShowBanner: !suppressed,
+      shouldShowList: !suppressed,
+      shouldPlaySound: !suppressed,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /**
@@ -54,6 +61,7 @@ Notifications.setNotificationHandler({
  */
 const CHANNEL = "alerts";
 const OLD_CHANNELS = ["default"];
+const handledResponseIds = new Set<string>();
 
 function projectId(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
@@ -109,9 +117,13 @@ export async function unregisterPush(): Promise<void> {
 /** Mounted in the signed-in layout. `userId` undefined = signed out, do nothing. */
 export function usePushNotifications(userId: string | undefined) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ partner?: string }>();
+  const navigationState = useRootNavigationState();
   const qc = useQueryClient();
   const markRead = useMarkNotificationRead();
-  const handled = useRef<string | null>(null);
+  const [pendingMessagePartner, setPendingMessagePartner] = useState<string | null>(null);
+  const replacingWithMessages = useRef(false);
   const last = Notifications.useLastNotificationResponse();
 
   useEffect(() => {
@@ -136,13 +148,47 @@ export function usePushNotifications(userId: string | undefined) {
   }, [qc]);
 
   useEffect(() => {
-    if (!userId || !last) return;
+    if (!userId || !last || !navigationState.key) return;
     const key = last.notification.request.identifier;
-    if (handled.current === key) return;
-    handled.current = key;
+    if (handledResponseIds.has(key)) return;
+    handledResponseIds.add(key);
+    if (handledResponseIds.size > 100) {
+      const oldest = handledResponseIds.values().next().value;
+      if (oldest) handledResponseIds.delete(oldest);
+    }
+
     const data = last.notification.request.content.data;
     const id = pushNotificationId(data);
     if (id) markRead.mutate(id);
+    const partnerId = pushMessagePartnerId(data);
+    if (partnerId) {
+      if (pathname === "/messages/thread" && params.partner === partnerId) return;
+      replacingWithMessages.current = false;
+      setPendingMessagePartner(partnerId);
+      return;
+    }
     router.push(pushTarget(data) as never);
-  }, [last, userId, router, markRead]);
+  }, [last, userId, navigationState.key, pathname, params.partner, router, markRead]);
+
+  useEffect(() => {
+    if (!pendingMessagePartner || !userId || !navigationState.key) return;
+    if (pathname === "/messages/thread" && params.partner === pendingMessagePartner) {
+      setPendingMessagePartner(null);
+      replacingWithMessages.current = false;
+      return;
+    }
+    if (pathname === "/messages") {
+      router.push({
+        pathname: "/messages/thread",
+        params: { partner: pendingMessagePartner },
+      });
+      setPendingMessagePartner(null);
+      replacingWithMessages.current = false;
+      return;
+    }
+    if (!replacingWithMessages.current) {
+      replacingWithMessages.current = true;
+      router.replace("/messages");
+    }
+  }, [navigationState.key, params.partner, pathname, pendingMessagePartner, router, userId]);
 }

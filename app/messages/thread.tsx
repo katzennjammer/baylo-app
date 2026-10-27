@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -29,6 +29,8 @@ import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
+import { clearActiveConversationPartnerId, setActiveConversationPartnerId } from "../../src/notifications/active-conversation";
+import { dismissNotificationsForPartner } from "../../src/notifications/conversation-notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { BlockIcon, ChevronLeftIcon, ChevronRightIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
@@ -91,16 +93,34 @@ export default function MessagesThreadScreen() {
   // While typing, the camera/gallery buttons fold behind a chevron (Messenger).
   const [toolsOpen, setToolsOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const [initialScrollComplete, setInitialScrollComplete] = useState(false);
   const listRef = useRef<ScrollView | null>(null);
+  const contentHeightRef = useRef(0);
+  const viewportHeightRef = useRef(0);
+  const scrollYRef = useRef(0);
+  const nearBottomRef = useRef(true);
+  const pendingScrollRef = useRef<"initial" | "animated" | null>("initial");
+  const knownMessageIdsRef = useRef(new Set<string>());
+  const trackedPartnerRef = useRef(partner);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for typing indication
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const unavailableHandled = useRef(false);
   const lastReadRefreshMessageId = useRef<string | null>(null);
   const activeTrades = useActiveTrades();
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
   const block = useBlockUser();
+  const currentUserId = thread.data?.currentUserId ?? "";
+  useEffect(() => {
+    if (unavailableHandled.current || thread.isPending || (!thread.isError && thread.data?.messages.length !== 0)) return;
+    unavailableHandled.current = true;
+    showDialog("Conversation unavailable", "This conversation could not be opened.");
+    router.replace("/messages");
+  }, [router, thread.data?.messages.length, thread.isError, thread.isPending]);
+
   const sortedMessages = useMemo(
     () => collapseSystemPairs(
       Array.from(
@@ -110,6 +130,91 @@ export default function MessagesThreadScreen() {
     ),
     [thread.data, partner],
   );
+
+  const updateNearBottom = () => {
+    const distance = contentHeightRef.current - viewportHeightRef.current - scrollYRef.current;
+    nearBottomRef.current = distance <= 120;
+    if (nearBottomRef.current) setNewMessageCount(0);
+  };
+
+  const performPendingScroll = () => {
+    const mode = pendingScrollRef.current;
+    if (!mode || !listRef.current || viewportHeightRef.current <= 0 || contentHeightRef.current <= 0) return;
+    listRef.current.scrollToEnd({ animated: mode === "animated" });
+    scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+    pendingScrollRef.current = null;
+    nearBottomRef.current = true;
+    setNewMessageCount(0);
+    if (mode === "initial") setInitialScrollComplete(true);
+  };
+
+  const requestBottomScroll = (mode: "initial" | "animated") => {
+    if (pendingScrollRef.current !== "initial") pendingScrollRef.current = mode;
+  };
+
+  useLayoutEffect(() => {
+    if (trackedPartnerRef.current !== partner) {
+      trackedPartnerRef.current = partner;
+      knownMessageIdsRef.current = new Set();
+      pendingScrollRef.current = "initial";
+      nearBottomRef.current = true;
+      contentHeightRef.current = 0;
+      viewportHeightRef.current = 0;
+      scrollYRef.current = 0;
+      setInitialScrollComplete(false);
+      setNewMessageCount(0);
+    }
+
+    if (!partner || thread.isPending || thread.isError || thread.data?.partnerId !== partner) return;
+
+    const ids = new Set(sortedMessages.map((message) => message.id));
+    if (pendingScrollRef.current === "initial" && knownMessageIdsRef.current.size === 0) {
+      knownMessageIdsRef.current = ids;
+      performPendingScroll();
+      return;
+    }
+
+    const additions = sortedMessages.filter((message) => !knownMessageIdsRef.current.has(message.id));
+    knownMessageIdsRef.current = ids;
+    if (additions.length === 0) return;
+
+    if (additions.some((message) => message.senderId === currentUserId)) {
+      setNewMessageCount(0);
+      requestBottomScroll("animated");
+    } else if (nearBottomRef.current) {
+      requestBottomScroll("animated");
+    } else {
+      setNewMessageCount((count) => count + additions.length);
+    }
+  }, [currentUserId, partner, sortedMessages, thread.data?.partnerId, thread.isError, thread.isPending]);
+
+  const onMessageListContentSizeChange = (_width: number, height: number) => {
+    const wasNearBottom = nearBottomRef.current;
+    contentHeightRef.current = height;
+    if (pendingScrollRef.current) {
+      performPendingScroll();
+    } else if (wasNearBottom) {
+      listRef.current?.scrollToEnd({ animated: false });
+      scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+      updateNearBottom();
+    } else {
+      updateNearBottom();
+    }
+  };
+
+  const onMessageListLayout = (height: number) => {
+    const wasNearBottom = nearBottomRef.current;
+    viewportHeightRef.current = height;
+    if (pendingScrollRef.current) {
+      performPendingScroll();
+    } else if (wasNearBottom) {
+      listRef.current?.scrollToEnd({ animated: false });
+      scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+      updateNearBottom();
+    } else {
+      updateNearBottom();
+    }
+  };
   // The newest offer_update per offer: its status, and the trade it became.
   const offerStatuses = useMemo(() => {
     const statuses = new Map<string, { status: string; tradeId: string | null }>();
@@ -139,7 +244,6 @@ export default function MessagesThreadScreen() {
     // server, so refetch: without this a message that arrived while the chat
     // was open stayed unread until the chat was opened again.
     void queryClient.invalidateQueries({ queryKey: threadQueryKey(partner) });
-    listRef.current?.scrollToEnd({ animated: true });
   }, [partner, queryClient]);
 
   const onOfferUpdated = useCallback((event: {
@@ -182,6 +286,28 @@ export default function MessagesThreadScreen() {
   // socket drops, the phone misses an event, or the channel is still authorizing.
   // The thread GET also marks incoming messages read, which is correct while
   // this conversation is actively open.
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner) return;
+      const updateActivePartner = (state: string) => {
+        if (state === "active") {
+          setActiveConversationPartnerId(partner);
+        } else {
+          clearActiveConversationPartnerId(partner);
+        }
+      };
+      updateActivePartner(AppState.currentState);
+      void dismissNotificationsForPartner(partner).catch((error: unknown) => {
+        console.warn("Could not dismiss notifications for the open conversation.", error);
+      });
+      const appState = AppState.addEventListener("change", updateActivePartner);
+      return () => {
+        appState.remove();
+        clearActiveConversationPartnerId(partner);
+      };
+    }, [partner]),
+  );
+
   useFocusEffect(
     useCallback(() => {
       if (!partner) return;
@@ -247,12 +373,12 @@ export default function MessagesThreadScreen() {
     try {
       // uploadPhoto() resizes to a JPEG first, like every other photo.
       const { url } = await uploadPhoto(asset.uri);
+      requestBottomScroll("animated");
       await sendMessage.mutateAsync({
         partnerId: partner,
         content: JSON.stringify({ type: "image", url, caption: null }),
       });
       await thread.refetch();
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (error) {
       setSendError(error instanceof Error ? error.message : "Photo could not be sent.");
     } finally {
@@ -268,15 +394,13 @@ export default function MessagesThreadScreen() {
     setSendError(null);
 
     try {
+      requestBottomScroll("animated");
       await sendMessage.mutateAsync({ partnerId: partner, content });
       if (!quick) {
         setDraft("");
         setToolsOpen(false);
         Keyboard.dismiss();
       }
-      setTimeout(() => {
-        listRef.current?.scrollToEnd({ animated: true });
-      }, 50);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Your message could not be sent.";
       setSendError(message);
@@ -285,7 +409,6 @@ export default function MessagesThreadScreen() {
     }
   };
 
-  const currentUserId = thread.data?.currentUserId ?? "";
   const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
   const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
   const bubbleContentMax = useBubbleContentMax();
@@ -400,13 +523,20 @@ export default function MessagesThreadScreen() {
         </View>
       ) : (
         <>
-          <ScrollView
-            ref={listRef}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          >
+          <View style={styles.listContainer}>
+            <ScrollView
+              ref={listRef}
+              style={[styles.list, !initialScrollComplete && styles.listUnpositioned]}
+              contentContainerStyle={styles.listContent}
+              keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={16}
+              onScroll={(event) => {
+                scrollYRef.current = event.nativeEvent.contentOffset.y;
+                updateNearBottom();
+              }}
+              onContentSizeChange={onMessageListContentSizeChange}
+              onLayout={(event) => onMessageListLayout(event.nativeEvent.layout.height)}
+            >
             {/* Messenger's thread opener: who you are talking to. */}
             <View style={styles.intro}>
               {avatarNode(72)}
@@ -491,7 +621,26 @@ export default function MessagesThreadScreen() {
                 </View>
               );
             })}
-          </ScrollView>
+            </ScrollView>
+            {newMessageCount > 0 ? (
+              <Tappable
+                onPress={() => {
+                  pendingScrollRef.current = "animated";
+                  setNewMessageCount(0);
+                  performPendingScroll();
+                }}
+                style={styles.newMessageButton}
+                pressedStyle={styles.newMessageButtonPressed}
+                accessibilityRole="button"
+                accessibilityLabel={newMessageCount === 1 ? "Scroll to new message" : `Scroll to ${newMessageCount} new messages`}
+              >
+                <Ionicons name="arrow-down" size={16} color={color.surface} />
+                <Text style={styles.newMessageButtonText}>
+                  {newMessageCount === 1 ? "New message" : `New messages · ${newMessageCount}`}
+                </Text>
+              </Tappable>
+            ) : null}
+          </View>
 
           {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
 
@@ -671,6 +820,38 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+  },
+  listContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  listUnpositioned: {
+    opacity: 0,
+  },
+  newMessageButton: {
+    position: "absolute",
+    right: 16,
+    bottom: 12,
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: color.forest,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  newMessageButtonPressed: {
+    opacity: 0.9,
+  },
+  newMessageButtonText: {
+    fontFamily: font.sansSemi,
+    fontSize: 13,
+    color: color.surface,
   },
   listContent: {
     paddingHorizontal: 12,
