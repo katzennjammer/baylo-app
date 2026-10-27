@@ -11,8 +11,10 @@ import {
 } from "react-native";
 
 import { useBrowse } from "../../src/api/browse";
+import { useHome } from "../../src/api/home";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
+import { useActiveTrades } from "../../src/api/trades";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
@@ -40,7 +42,7 @@ import {
  * Browse-first, top to bottom (30 Sep 2026):
  *
  *   Search row   → Marketplace, carrying what was typed.
- *   Hero         → the newest listing with a photo; opens its category.
+ *   Hero         → a contextual mascot greeting with shortcuts to Trades and Food.
  *   Categories   → SHORTCUTS: a circle opens Marketplace on that category.
  *                  They no longer switch a section on this screen.
  *   Exclusive    → perishables, every category, soonest to expire first, as a
@@ -124,15 +126,18 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { session } = useSession();
   const viewerId = session?.user.id ?? null;
+  const homeData = useHome();
+  const activeTrades = useActiveTrades();
 
   const [draftQuery, setDraftQuery] = useState("");
 
-  // Unfiltered: the category circles (facets) and the hero come from it.
-  //
-  // TODO(home-redesign): the hero is still the first listing with a photo.
+  // Unfiltered: the category circles (facets) come from it.
   const browse = useBrowse({ categories: [] });
   const { items, facets, isPending, isError, isRefetching } = browse;
-  const hero = useMemo(() => items.find((i) => i.images.length > 0) ?? null, [items]);
+  const pendingTradeCount = activeTrades.data
+    ? activeTrades.data.offers.filter((offer) => offer.direction === "received").length +
+      activeTrades.data.trades.filter((trade) => trade.status === "PENDING" && trade.direction === "received").length
+    : null;
 
   // Server-ordered by expiry. The client-side filter stays as a guard: an
   // item can lapse between the server's sweep and this render, and a server
@@ -161,12 +166,16 @@ export default function HomeScreen() {
   const { refetch: refetchExclusive } = exclusiveQuery;
   const { refetch: refetchSpotlight } = spotlightQuery;
   const { refetch: refetchRecommended } = recommendedQuery;
+  const { refetch: refetchHome } = homeData;
+  const { refetch: refetchTrades } = activeTrades;
   const refetch = useCallback(() => {
     void refetchBrowse();
     void refetchExclusive();
     void refetchSpotlight();
     void refetchRecommended();
-  }, [refetchBrowse, refetchExclusive, refetchSpotlight, refetchRecommended]);
+    void refetchHome();
+    void refetchTrades();
+  }, [refetchBrowse, refetchExclusive, refetchHome, refetchRecommended, refetchSpotlight, refetchTrades]);
 
   // Tapping Home while on it: back to the top, or refresh when already there.
   const scroller = useRef<ScrollView>(null);
@@ -208,6 +217,7 @@ export default function HomeScreen() {
     [router],
   );
   const openMarketplace = useCallback(() => router.push("/(app)/marketplace"), [router]);
+  const openTrades = useCallback(() => router.navigate("/(app)/trades"), [router]);
   // A shop's storefront is its backing account's profile.
   const openShop = useCallback(
     (shop: SpotlightShop) => router.push({ pathname: "/user", params: { id: shop.orgUserId } }),
@@ -243,6 +253,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={
               isRefetching ||
+              homeData.isRefetching ||
+              activeTrades.isRefetching ||
               exclusiveQuery.isRefetching ||
               spotlightQuery.isRefetching ||
               recommendedQuery.isRefetching
@@ -273,6 +285,16 @@ export default function HomeScreen() {
           <FilterButton count={0} onPress={openMarketplace} />
         </View>
 
+        <View style={{ marginTop: space.home.headerToHero }}>
+          <HeroBanner
+            pendingTradeCount={pendingTradeCount}
+            leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
+            firstName={homeData.viewer?.name ?? session?.user.name}
+            onViewTrades={openTrades}
+            onExploreFood={() => browseInMarketplace("FOOD")}
+          />
+        </View>
+
         {isPending && items.length === 0 ? (
           <ActivityIndicator color={color.green} style={s.loading} />
         ) : isError && items.length === 0 ? (
@@ -286,13 +308,6 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            {/* 2. Hero */}
-            {hero ? (
-              <View style={{ marginTop: space.home.headerToHero }}>
-                <HeroBanner item={hero} onPress={() => browseInMarketplace(hero.category)} />
-              </View>
-            ) : null}
-
             {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}

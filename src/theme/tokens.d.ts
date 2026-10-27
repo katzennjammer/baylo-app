@@ -21,6 +21,7 @@ export type ColorName =
   | "inkStale"
   | "forest"
   | "green"
+  | "mascotGreen"
   | "onGreen"
   | "greenWash"
   | "greenLine"

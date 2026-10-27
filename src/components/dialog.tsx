@@ -1,6 +1,17 @@
-import { useSyncExternalStore } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Image } from "expo-image";
 
+import { MASCOT, type MascotPose } from "../media/mascots";
 import { usePostedNotice } from "../post/posted-notice";
 import { border, color, radius, size, textStyle, type } from "../theme/tokens";
 import { Tappable } from "./Tappable";
@@ -63,6 +74,7 @@ interface Dialog {
   title: string;
   message?: string;
   buttons: DialogButton[];
+  pose?: MascotPose;
 }
 
 /**
@@ -83,9 +95,14 @@ function emit() {
   for (const l of listeners) l();
 }
 
-export function showDialog(title: string, message?: string, buttons?: DialogButton[]) {
+export function showDialog(
+  title: string,
+  message?: string,
+  buttons?: DialogButton[],
+  options?: { pose?: MascotPose },
+) {
   const list = buttons && buttons.length > 0 ? buttons : [{ text: "OK" }];
-  queue = [...queue, { id: nextId++, title, message, buttons: list }];
+  queue = [...queue, { id: nextId++, title, message, buttons: list, pose: options?.pose }];
   emit();
 }
 
@@ -111,6 +128,45 @@ export function DialogHost() {
   const head = useSyncExternalStore(subscribe, readHead, readHead);
   const postedUp = usePostedNotice() !== null;
   const dialog = postedUp ? null : head;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const mascotScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (alive) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      alive = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!dialog?.pose || reduceMotion) {
+      mascotScale.setValue(1);
+      return;
+    }
+
+    mascotScale.setValue(0.8);
+    const animation = Animated.sequence([
+      Animated.timing(mascotScale, {
+        toValue: 1.05,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(mascotScale, {
+        toValue: 1,
+        speed: 20,
+        bounciness: 5,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [dialog?.id, dialog?.pose, mascotScale, reduceMotion]);
 
   const dismissal = dialog
     ? dialog.buttons.find((b) => b.style === "cancel") ??
@@ -141,7 +197,24 @@ export function DialogHost() {
         accessibilityLabel={dismissal ? dismissal.text : undefined}
       >
         {dialog ? (
-          <Pressable onPress={() => {}} style={s.card} accessible={false} accessibilityViewIsModal>
+          <Pressable
+            onPress={() => {}}
+            style={[s.card, dialog.pose && s.posedCard]}
+            accessible={false}
+            accessibilityViewIsModal
+          >
+            {dialog.pose ? (
+              <Animated.View
+                pointerEvents="none"
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={[s.mascot, { transform: [{ scale: mascotScale }] }]}
+              >
+                <View style={s.mascotWash} />
+                <Image source={MASCOT[dialog.pose]} contentFit="contain" style={s.mascotImage} />
+              </Animated.View>
+            ) : null}
             <Text style={[textStyle(type.errorHeadline), s.title]} accessibilityRole="header">
               {dialog.title}
             </Text>
@@ -229,6 +302,30 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 28,
     paddingBottom: 24,
+  },
+  posedCard: {
+    paddingTop: 88,
+  },
+  mascot: {
+    position: "absolute",
+    top: -50,
+    left: 0,
+    right: 0,
+    height: 120,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  mascotWash: {
+    position: "absolute",
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: color.greenWash,
+  },
+  mascotImage: {
+    width: 120,
+    height: 120,
   },
   title: { color: color.ink, textAlign: "center" },
   body: { color: color.inkSecondary, textAlign: "center", marginTop: 8 },

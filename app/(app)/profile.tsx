@@ -361,7 +361,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
       ListEmptyComponent={tab === "reviews"
         ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
-        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
+        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." pose="box" />}
     />
   );
 }
@@ -574,6 +574,7 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
               <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
           }
+          pose={own && !!selected?.unlockedAt ? "celebrate" : undefined}
           onDismiss={() => setSelectedId(null)}
         />
       ) : null}

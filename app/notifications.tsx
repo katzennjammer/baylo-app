@@ -279,6 +279,8 @@ function RelistButton({ itemId }: { itemId: string }) {
         e instanceof ApiError && e.status === 404
           ? "This listing no longer exists."
           : "Something went wrong. Please try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
       );
     } finally {
       setBusy(false);

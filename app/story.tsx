@@ -267,9 +267,12 @@ export default function StoryViewer() {
             deleteStory(story.id, {
               onSuccess: close,
               onError: () => {
-                showDialog("Couldn't delete the story", "Check your connection and try again.", [
-                  { text: "OK", onPress: resume },
-                ]);
+                showDialog(
+                  "Couldn't delete the story",
+                  "Check your connection and try again.",
+                  [{ text: "Got it", onPress: resume }],
+                  { pose: "worry" },
+                );
               },
             }),
         },

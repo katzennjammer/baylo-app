@@ -171,6 +171,8 @@ export function EditListingSheet({
           showDialog(
             "Could not save that",
             e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+            [{ text: "Got it" }],
+            { pose: "worry" },
           ),
       },
     );

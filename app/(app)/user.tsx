@@ -93,7 +93,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
   const emptyList = org ? (
     tab === "reviews"
       ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." />
-      : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} />
+      : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} pose="box" />
   ) : <Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "No posts yet."}</Text>;
 
   return <FlatList<ProfileRow>

@@ -20,6 +20,7 @@ import { openDirections } from "../../src/components/map/directions";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
 import { HubTypeGlyph } from "../../src/components/map/MapLegend";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import {
   BrowseError,
   BrowseSkeleton,
@@ -262,12 +263,11 @@ export default function HubScreen() {
               onRetry={refetch}
             />
           ) : (
-            <View style={s.empty}>
-              <Text style={[textStyle(type.emptyBody), s.emptyText]}>
-                Nothing is being offered here yet. Listings appear when their
-                owners choose this safe hub.
-              </Text>
-            </View>
+            <MascotEmptyState
+              pose="search"
+              title="Nothing is being offered here yet."
+              message="Listings appear when their owners choose this safe hub."
+            />
           )
         }
         ListFooterComponent={

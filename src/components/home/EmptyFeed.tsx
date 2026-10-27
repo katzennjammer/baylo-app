@@ -1,9 +1,8 @@
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { LeafIcon } from "../icons";
-import { border, color, icon, radius, size, space, textStyle, type } from "../../theme/tokens";
-import { Tappable } from "../Tappable";
+import { color, size, space, textStyle, type } from "../../theme/tokens";
+import { MascotEmptyState } from "../MascotEmptyState";
 
 /**
  * What a verified account starts with, as the copy names it.
@@ -34,36 +33,17 @@ export function EmptyFeed({ location }: { location: string | null }) {
   const place = location?.trim();
 
   return (
-    <View style={s.wrap}>
-      <View style={s.circle}>
-        <LeafIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-      </View>
-
-      <Text style={[textStyle(type.emptyHeadline), s.headline]}>
-        Your feed starts with one item
-      </Text>
-
-      <Text style={[textStyle(type.emptyBody), s.body]}>
-        Post something you no longer use. We&apos;ll estimate its worth in Leaves and show it to
-        {/* `location` is the viewer's OWN stated location — their claim about
-            themselves, not a claim about who is in the feed — so naming it here
-            is safe where naming it over a nationwide count would not be. It is
-            also nullable, and the sentence has to end cleanly without it. */}
-        {place ? ` traders near you in ${place}.` : " traders near you."}
-      </Text>
-
-      <Tappable
-        onPress={() => router.push("/post")}
-        accessibilityRole="button"
-        accessibilityLabel="Post your first item"
-        style={s.primary}
-        pressedStyle={s.primaryPressed}
-      >
-        <Text style={[textStyle(type.emptyPrimaryButton), { color: color.onGreen }]}>
-          Post your first item
-        </Text>
-      </Tappable>
-
+    <View style={s.surface}>
+    <MascotEmptyState
+      pose="box"
+      title="Your feed starts with one item"
+      message={`Post something you no longer use. We'll estimate its worth in Leaves and show it to traders near you${place ? ` in ${place}` : ""}.`}
+      action={{
+        label: "Post your first item",
+        accessibilityLabel: "Post your first item",
+        onPress: () => router.push("/post"),
+      }}
+    >
       <Pressable
         onPress={() => router.push("/marketplace")}
         accessibilityRole="button"
@@ -78,47 +58,13 @@ export function EmptyFeed({ location }: { location: string | null }) {
         You start with {VERIFY_CREDIT_LEAVES} Leaves once your email is verified. You earn more by
         completing trades, never by paying.
       </Text>
+    </MascotEmptyState>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: {
-    alignItems: "center",
-    backgroundColor: color.surface,
-    paddingHorizontal: space.empty.x,
-    paddingVertical: space.empty.bodyToButton,
-  },
-  circle: {
-    width: size.emptyIconCircle,
-    height: size.emptyIconCircle,
-    borderRadius: size.emptyIconCircle / 2,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headline: {
-    marginTop: space.empty.iconToHeadline,
-    textAlign: "center",
-    color: color.ink,
-  },
-  body: {
-    marginTop: space.empty.headlineToBody,
-    textAlign: "center",
-    color: color.inkSecondary,
-  },
-  primary: {
-    marginTop: space.empty.bodyToButton,
-    width: "100%",
-    height: size.control.emptyPrimaryButton,
-    borderRadius: radius.emptyPrimaryButton,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryPressed: { opacity: 0.85 },
+  surface: { backgroundColor: color.surface },
   // Full width and no fill, per the spec — it is a 48 px target that happens to
   // look like a line of text, which is what a secondary action should be here.
   secondary: {

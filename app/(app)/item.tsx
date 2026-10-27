@@ -944,7 +944,14 @@ function HubBlock({ hub, children }: { hub: SafeZoneHub; children?: React.ReactN
  */
 async function directionsTo(hub: SafeZoneHub) {
   const outcome = await openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name });
-  if (outcome === "failed") showDialog("Could not open maps", "No maps app or browser is available on this phone.");
+  if (outcome === "failed") {
+    showDialog(
+      "Could not open maps",
+      "No maps app or browser is available on this phone.",
+      [{ text: "Got it" }],
+      { pose: "worry" },
+    );
+  }
 }
 
 /**

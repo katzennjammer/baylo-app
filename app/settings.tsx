@@ -102,6 +102,8 @@ export default function SettingsScreen() {
       showDialog(
         "Could not send the email",
         e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
       );
     } finally {
       setResending(false);

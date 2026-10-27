@@ -15,10 +15,10 @@ import { NoticeDialog } from "./NoticeDialog";
  *
  * ── ONE ACTION ──────────────────────────────────────────────────────────────
  *
- * The only control is OK. The listing is already in the feed and the grid
+ * The only control is Nice. The listing is already in the feed and the grid
  * behind this card (the post invalidated both caches before it closed), so
  * "see it in the feed" would be a button that dismisses the dialog and then
- * scrolls nowhere. The scrim and the hardware back are the same OK, so there
+ * scrolls nowhere. The scrim and the hardware back dismiss it, so there
  * is no way to be stuck behind it.
  *
  * A centred card rather than a bottom sheet because it is not a menu and asks
@@ -51,6 +51,8 @@ export function PostedDialog() {
           <CheckIcon size={24} stroke={2} color={color.forest} />
         )
       }
+      pose={review ? undefined : "box"}
+      buttonLabel={review ? undefined : "Nice"}
       onDismiss={dismissPostedNotice}
     />
   );

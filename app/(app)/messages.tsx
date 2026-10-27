@@ -10,6 +10,7 @@ import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
 import { MessageIcon, StoreIcon } from "../../src/components/icons";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
 import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
@@ -132,13 +133,15 @@ export default function MessagesScreen() {
       <View style={styles.screen}>
         {shopStrip}
         <View style={styles.centered}>
-          <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-          <Text style={styles.headline}>No conversations yet.</Text>
-          <Text style={styles.body}>
-            {shopName
-              ? `Messages to ${shopName} will appear here.`
-              : "Messages will appear here when someone starts a conversation."}
-          </Text>
+          <MascotEmptyState
+            pose="search"
+            title="No conversations yet."
+            message={
+              shopName
+                ? `Messages to ${shopName} will appear here.`
+                : "Messages will appear here when someone starts a conversation."
+            }
+          />
         </View>
       </View>
     );

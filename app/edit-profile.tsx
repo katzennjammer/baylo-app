@@ -51,7 +51,12 @@ export default function EditProfileScreen() {
       const uploaded = await uploadPhoto(result.assets[0].uri);
       setAvatar(uploaded.url);
     } catch {
-      showDialog("Could not upload photo", "Check your connection and try again.");
+      showDialog(
+        "Could not upload photo",
+        "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
+      );
     } finally {
       setUploadingAvatar(false);
     }
@@ -84,6 +89,8 @@ export default function EditProfileScreen() {
       showDialog(
         "Could not save profile",
         e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
       );
     } finally {
       setSaving(false);

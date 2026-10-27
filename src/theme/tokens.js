@@ -45,6 +45,8 @@ const color = {
   /* Greens */
   forest: "#1B4D2B",
   green: "#3DBE5A",
+  /** Temporary Home greeting card green; tune after sampling the video. */
+  mascotGreen: "#1E6B35",
   onGreen: "#0B2A15",
   greenWash: "#EAF6EC",
   greenLine: "#D2EAD8",

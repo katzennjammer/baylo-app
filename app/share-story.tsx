@@ -87,13 +87,23 @@ export default function ShareStoryScreen() {
           } else if (code === "PERSONAL_ONLY") {
             showDialog("Stories are personal", "Switch to your own account to share a story.");
           } else if (e instanceof ApiError && e.status === 404) {
-            showDialog("Can't share this listing", "It's no longer available. Pick another one.");
+            showDialog(
+              "Can't share this listing",
+              "It's no longer available. Pick another one.",
+              [{ text: "Got it" }],
+              { pose: "worry" },
+            );
             setSelected(null);
             void me.refetch();
           } else if (e instanceof ApiError && e.status === 429) {
             showDialog("Slow down a little", "You're sharing too fast. Try again in a few minutes.");
           } else {
-            showDialog("Couldn't share", "Check your connection and try again.");
+            showDialog(
+              "Couldn't share",
+              "Check your connection and try again.",
+              [{ text: "Got it" }],
+              { pose: "worry" },
+            );
           }
         },
       },

@@ -174,7 +174,12 @@ function ReviewBody({
   const typedOk = Number.isFinite(typed) && typed > 0 && (cap === null || bracketOf(typed) <= cap);
 
   const fail = (heading: string, e: unknown) =>
-    showDialog(heading, e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
+    showDialog(
+      heading,
+      e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+      [{ text: "Got it" }],
+      { pose: "worry" },
+    );
 
   /** PATCH the value; say what the server decided. */
   const setValue = (valueLeaves: number, what: string) =>
@@ -189,7 +194,9 @@ function ReviewBody({
             );
             return;
           }
-          showDialog("Listed", `${what}. Your listing is live.`, [{ text: "OK", onPress: onGone }]);
+          showDialog("Listed", `${what}. Your listing is live.`, [{ text: "Nice", onPress: onGone }], {
+            pose: "box",
+          });
         },
         onError: (e) => fail("Could not change the value", e),
       },
