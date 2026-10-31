@@ -9,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 
 import { useBrowse } from "../../src/api/browse";
 import { useHome } from "../../src/api/home";
@@ -18,13 +19,12 @@ import { useActiveTrades } from "../../src/api/trades";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
-import { FilterButton, SearchField } from "../../src/components/marketplace/BrowseControls";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { useTabReselect } from "../../src/lib/tab-reselect";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
-import { HeroBanner } from "../../src/components/home-redesign/HeroBanner";
+import { HomePinnedHeader, HomeTopSection } from "../../src/components/home-redesign/HomeTopSection";
 import { ShopSpotlightCard } from "../../src/components/home-redesign/ShopSpotlightCard";
 import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
@@ -77,21 +77,8 @@ import {
  * NO LISTING IS ON SCREEN TWICE: Recommended excludes perishables on the
  * server, and Exclusive is perishables only.
  *
- * THE LEAVES BALANCE IS NOT ON THIS SCREEN. It is in AppHeader, once, as it is
- * on every other tab. It was briefly in the search row as well, which put the
- * same number twice on one screen about 60px apart — two figures that are read
- * as two facts, and the moment one of them lagged a refetch they would have
- * been.
- *
- * THE SEARCH ROW IS THE SECOND ROW, NOT THE FIRST. `AppHeader` — wordmark,
- * Leaves, bell, messages — renders above this screen exactly as it does on
- * every other tab, and the search row sits under it. The reference this screen
- * follows has no wordmark to place, which is the only reason it starts with a
- * search field; dropping ours would have cost Home the app's chrome and the two
- * unread counts that live in it.
- *
- * So no safe-area padding is taken here: AppHeader paints behind the status bar
- * and insets its own contents. `space.home.top` is the gap under it.
+ * Home owns its pinned header and scrollable top section. AppHeader remains
+ * unchanged on every other route.
  */
 type PerishableItem = Item & { perishable: NonNullable<Item["perishable"]> };
 
@@ -241,6 +228,8 @@ export default function HomeScreen() {
 
   return (
     <View style={s.screen}>
+      <StatusBar style="light" />
+      <HomePinnedHeader />
       <ScrollView
         ref={scroller}
         onScroll={onScroll}
@@ -248,7 +237,7 @@ export default function HomeScreen() {
         style={s.screen}
         // The extra bottom room keeps the last row of tiles clear of the search
         // helper button, which floats over this corner.
-        contentContainerStyle={{ paddingTop: space.home.top, paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
+        contentContainerStyle={{ paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
         refreshControl={
           <RefreshControl
             refreshing={
@@ -265,35 +254,24 @@ export default function HomeScreen() {
         }
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Search + filter, BELOW AppHeader's wordmark row. */}
-        <View style={s.searchRow}>
-          <SearchField
-            value={draftQuery}
-            onChange={setDraftQuery}
-            // Carried over as `q`, with the same nonce the category links use,
-            // so Marketplace searches it (shop names included) rather than
-            // opening blank. An empty box just opens Marketplace.
-            onSubmit={() =>
-              draftQuery.trim()
-                ? router.push({
-                    pathname: "/(app)/marketplace",
-                    params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
-                  })
-                : openMarketplace()
-            }
-          />
-          <FilterButton count={0} onPress={openMarketplace} />
-        </View>
-
-        <View style={{ marginTop: space.home.headerToHero }}>
-          <HeroBanner
-            pendingTradeCount={pendingTradeCount}
-            leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
-            firstName={homeData.viewer?.name ?? session?.user.name}
-            onViewTrades={openTrades}
-            onExploreFood={() => browseInMarketplace("FOOD")}
-          />
-        </View>
+        <HomeTopSection
+          searchValue={draftQuery}
+          onSearchChange={setDraftQuery}
+          onSearchSubmit={() =>
+            draftQuery.trim()
+              ? router.push({
+                  pathname: "/(app)/marketplace",
+                  params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
+                })
+              : openMarketplace()
+          }
+          onFilterPress={openMarketplace}
+          pendingTradeCount={pendingTradeCount}
+          leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
+          firstName={homeData.viewer?.name ?? session?.user.name}
+          onViewTrades={openTrades}
+          onExploreFood={() => browseInMarketplace("FOOD")}
+        />
 
         {isPending && items.length === 0 ? (
           <ActivityIndicator color={color.green} style={s.loading} />
@@ -425,12 +403,6 @@ export default function HomeScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.home.searchGap,
-    paddingHorizontal: space.screenX,
-  },
   loading: { marginTop: space.home.sectionTop * 2 },
   sectionLoading: { marginTop: space.home.sectionTop },
   stateBox: { alignItems: "center", marginTop: space.home.sectionTop * 2, gap: 12 },

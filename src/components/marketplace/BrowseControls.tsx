@@ -31,6 +31,7 @@ export function SearchField({
   onSubmit,
   placeholder = "Search",
   accessibilityLabel = "Search items by title or description",
+  variant = "default",
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -38,10 +39,15 @@ export function SearchField({
   /** Map mode searches hubs, not listings, and says so. */
   placeholder?: string;
   accessibilityLabel?: string;
+  variant?: "default" | "home";
 }) {
   return (
-    <View style={s.field}>
-      <SearchIcon size={icon.search.size} stroke={icon.search.stroke} color={color.inkMuted} />
+    <View style={[s.field, variant === "home" && s.homeField]}>
+      <SearchIcon
+        size={icon.search.size}
+        stroke={icon.search.stroke}
+        color={variant === "home" ? color.homeOnGreenMuted : color.inkMuted}
+      />
 
       <TextInput
         value={value}
@@ -53,12 +59,12 @@ export function SearchField({
         autoCapitalize="none"
         autoCorrect={false}
         placeholder={placeholder}
-        placeholderTextColor={color.inkMuted}
+        placeholderTextColor={variant === "home" ? color.homeOnGreenMuted : color.inkMuted}
         // The field shares its row with the Grid/Map toggle and the filter
         // button, so it is narrower than it was; uncapped, 2x text clips the
         // placeholder hard at 320 dp.
         maxFontSizeMultiplier={size.home.headingMaxFontScale}
-        style={[textStyle(type.searchInput), s.input]}
+        style={[textStyle(type.searchInput), s.input, variant === "home" && s.homeInput]}
         accessibilityLabel={accessibilityLabel}
       />
 
@@ -72,7 +78,11 @@ export function SearchField({
           style={s.clear}
           hitSlop={8}
         >
-          <CloseIcon size={icon.clear.size} stroke={icon.clear.stroke} color={color.inkMuted} />
+          <CloseIcon
+            size={icon.clear.size}
+            stroke={icon.clear.stroke}
+            color={variant === "home" ? color.homeOnGreen : color.inkMuted}
+          />
         </Tappable>
       ) : null}
     </View>
@@ -86,22 +96,24 @@ const FILTER_X = 13;
 export function FilterButton({
   count,
   onPress,
+  variant = "default",
 }: {
   count: number;
   onPress: () => void;
+  variant?: "default" | "home";
 }) {
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={count > 0 ? `Filters, ${count} active` : "Filters"}
-      style={[s.filterButton, count > 0 && s.filterButtonActive]}
-      pressedStyle={s.filterButtonPressed}
+      style={[s.filterButton, variant === "home" && s.homeFilter, count > 0 && s.filterButtonActive]}
+      pressedStyle={variant === "home" ? s.homeFilterPressed : s.filterButtonPressed}
     >
       <FilterIcon
         size={icon.filter.size}
         stroke={icon.filter.stroke}
-        color={count > 0 ? color.forest : color.inkSecondary}
+        color={count > 0 ? color.forest : variant === "home" ? color.homeOnGreen : color.inkSecondary}
       />
       {count > 0 ? (
         <Text style={[textStyle(type.gridLeaves), { color: color.forest }]}>{count}</Text>
@@ -471,6 +483,13 @@ const s = StyleSheet.create({
   // `padding: 0` because Android's TextInput carries its own and would push the
   // text off the vertical centre of a fixed-height field.
   input: { flex: 1, padding: 0, color: color.ink },
+  homeField: {
+    height: 56,
+    borderRadius: 28,
+    borderColor: color.homeFieldLine,
+    backgroundColor: color.homeFieldSurface,
+  },
+  homeInput: { color: color.homeOnGreen },
   clear: {
     width: size.browse.searchField,
     height: size.browse.searchField,
@@ -491,6 +510,16 @@ const s = StyleSheet.create({
   },
   filterButtonActive: { borderColor: color.greenLine, backgroundColor: color.greenWash },
   filterButtonPressed: { opacity: 0.75 },
+  homeFilter: {
+    width: 56,
+    height: 56,
+    paddingHorizontal: 0,
+    justifyContent: "center",
+    borderRadius: 28,
+    borderColor: color.homeFieldLine,
+    backgroundColor: color.homeIconSurface,
+  },
+  homeFilterPressed: { opacity: 0.75 },
 
   railOuter: { flexGrow: 0 },
   rail: {
