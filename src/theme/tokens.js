@@ -1,11 +1,9 @@
 /**
  * Direction 1 — "Quiet Feed". Every value in the implementation spec, once.
  *
- * This file is the only place a colour, a type role, a gap, a radius, a control
- * height, an icon size or a stroke width is written down. Components import
- * from here and compose; nothing below is duplicated into a StyleSheet literal.
- * That is the point of the file — the spec is a tuning surface, and tuning it
- * has to be an edit here rather than a search across twenty components.
+ * Components import token roles and measurements from here and compose;
+ * Direction 1's canonical colour values live in palette.js. This is the tuning
+ * surface for type roles, gaps, radii, control heights, icons and strokes.
  *
  * PLAIN COMMONJS, deliberately. `tailwind.config.js` requires it, and Tailwind
  * loads that config through Node before any TypeScript transform runs — a .ts
@@ -13,72 +11,107 @@
  * what gives the app its types. Same arrangement as `palette.js`, and for the
  * same reason.
  *
- * RELATIONSHIP TO `palette.js`: none. That file is the older Forest/Cream port
- * and still dresses the (auth) group and the Profile tab, neither of which this
- * task touches. Everything in the Home tab and the chrome around it reads from
- * here. The two are not merged because merging them would mean editing (auth).
+ * The legacy `color` roles stay unchanged for existing callers. Direction 1's
+ * canonical colours live separately in `dColor` and palette.js.
  */
+
+const { direction1: d } = require("./palette");
 
 /* ────────────────────────────── 1. COLOR ────────────────────────────── */
 
-const color = {
-  /* Surfaces. Cards are NOT tinted — they are the same value as the canvas and
-     are separated by dividers, never by elevation. That is the direction's
-     whole premise, so `surface` intentionally serves both roles. */
-  surface: "#FAFAF7",
-  /** Search fields sit above the warm canvas as a clean white control. */
-  searchSurface: "#FFFFFF",
-  /** Inset surface — the "Matches for you" interstitial sits in this. */
-  inset: "#F5F3EC",
-  /** Chip / control fill — trending chips, the New/Rising tier badge, failed photo. */
-  control: "#F1EFE8",
-  /** The stories "+ Post" circle. A hair off `control`, and the spec means it. */
-  storyPost: "#F3F2EC",
+const dColor = {
+  primary: d.primary,
+  primaryText: d.primaryText,
+  accent: d.accent,
+  accentText: d.accentText,
+  accentSoft: d.accentSoft,
+  background: d.background,
+  surface: d.surface,
+  tint: d.tint,
+  text: d.text,
+  mutedText: d.mutedText,
+  border: d.border,
+  success: d.success,
+  warning: d.warning,
+  danger: d.danger,
 
-  /* Text */
+  /* Direction 1 semantic aliases retained by existing d-* utility classes. */
+  searchSurface: d.surface,
+  inset: d.accentSoft,
+  control: d.tint,
+  storyPost: d.tint,
+  ink: d.text,
+  inkSecondary: d.mutedText,
+  inkMuted: d.mutedText,
+  inkStale: d.mutedText,
+  forest: d.primary,
+  green: d.primary,
+  mascotGreen: d.primary,
+  onGreen: d.primaryText,
+  greenWash: d.accentSoft,
+  greenLine: d.border,
+  accentGreen: d.primary,
+  accentGold: d.accentText,
+  like: d.danger,
+  urgent: d.warning,
+  urgentWash: d.tint,
+  urgentLine: d.border,
+  divider: d.border,
+  controlLine: d.border,
+  controlLineStrong: d.border,
+  dashed: d.border,
+  skeleton: d.tint,
+  skeletonSoft: d.accentSoft,
+  failedIcon: d.mutedText,
+  captionFill: "rgba(28, 36, 32, 0.55)",
+  onScrim: d.primaryText,
+};
+
+const color = {
+  /** Existing palette roles. Keep these values stable for unmigrated screens. */
+  surface: "#FAFAF7",
+  searchSurface: "#FFFFFF",
+  inset: "#F5F3EC",
+  control: "#F1EFE8",
+  storyPost: "#F3F2EC",
   ink: "#14140F",
   inkSecondary: "#5C5B52",
   inkMuted: "#8C8A7E",
-  /** Disabled / stale — the Leaves pill while offline, the "last synced" line. */
   inkStale: "#A8A69A",
-
-  /* Greens */
   forest: "#1B4D2B",
   green: "#3DBE5A",
-  /** Temporary Home greeting card green; tune after sampling the video. */
   mascotGreen: "#1E6B35",
   onGreen: "#0B2A15",
   greenWash: "#EAF6EC",
   greenLine: "#D2EAD8",
-
-  /* Section-title accents (30 Sep 2026). Text colours, so they are measured
-     as text on `surface` (#FAFAF7): accentGreen 4.55:1 (brand green's hue,
-     darkened until it passes; `green` itself is 2.31:1), accentGold 4.02:1.
-     Both clear WCAG's 3:1 for large text; accentGreen also clears 4.5:1. */
   accentGreen: "#2A833E",
   accentGold: "#A0740D",
-
-  /* Warm accent. Likes and urgency only — see the spec's own note. */
   like: "#C56A4B",
   urgent: "#B0553A",
   urgentWash: "#FBEEE9",
   urgentLine: "#F0D8CE",
-
-  /* Borders and dividers */
   divider: "#EDEBE3",
   controlLine: "#E2E0D6",
   controlLineStrong: "#D8D6CC",
   dashed: "#C9C7BC",
-
-  /* Skeleton and failure */
   skeleton: "#EBE9E0",
   skeletonSoft: "#EFEDE5",
   failedIcon: "#B4B2A6",
-
-  /** The scrim behind the "expand" label on a cropped photo. */
   captionFill: "rgba(20, 20, 15, 0.55)",
-  /** Text and glyphs drawn ON `captionFill` — the storefront's "Change cover". */
   onScrim: "#FFFFFF",
+  homeTop: "#064B25",
+  homeMiddle: "#0B5B2C",
+  homeBottom: "#627E38",
+  homeYellow: "#F6CF43",
+  homeCream: "#FAFAF7",
+  homeOnGreen: "#FFFDF5",
+  homeOnGreenMuted: "rgba(255, 253, 245, 0.78)",
+  homePattern: "rgba(255, 255, 255, 0.07)",
+  homeIconSurface: "rgba(255, 255, 255, 0.12)",
+  homeFieldSurface: "rgba(255, 255, 255, 0.14)",
+  homeFieldLine: "rgba(255, 255, 255, 0.22)",
+  homeBadge: "#F15D3D",
+  homeOutline: "#0D2817",
 };
 
 /**
@@ -115,7 +148,8 @@ const dark = {
 /* ────────────────────────────── 2. TYPE ─────────────────────────────── */
 
 /**
- * The seven static instances, addressed by their PostScript names.
+ * Font faces are addressed by their PostScript names. Each static weight is
+ * its own family, so Android never has to synthesize a face.
  *
  * Each weight is its OWN family rather than one family plus `fontWeight`.
  * These are static instances cut from variable sources: asking Android for
@@ -124,9 +158,8 @@ const dark = {
  * bundled file's basename equals its PostScript name (checked against each
  * font's `name` table), so one string resolves on both platforms.
  *
- * Bricolage Grotesque is a three-axis variable font upstream (opsz, wdth,
- * wght). React Native has no variable-axis support, so what is bundled is the
- * default optical size at full width, cut at each weight the spec asks for.
+ * The existing legacy families remain unchanged. Figtree faces are used only
+ * by the Direction 1 roles.
  */
 const font = {
   /** Display — wordmark, empty/error headlines. */
@@ -148,6 +181,10 @@ const font = {
    * auth work, and this is the name that reaches it.
    */
   monoMedium: "JetBrainsMono-Medium",
+  figtreeRegular: "Figtree_400Regular",
+  figtreeMedium: "Figtree_500Medium",
+  figtreeSemi: "Figtree_600SemiBold",
+  figtreeBold: "Figtree_700Bold",
 };
 
 /**
@@ -171,6 +208,16 @@ const font = {
  * larger than it was drawn.
  */
 const type = {
+  dDisplay: { fontFamily: font.figtreeBold, fontSize: 22, lineHeight: 26.4, letterSpacing: -0.22 },
+  dSheetTitle: { fontFamily: font.figtreeBold, fontSize: 20, lineHeight: 25 },
+  dSectionTitle: { fontFamily: font.figtreeBold, fontSize: 17, lineHeight: 20.4 },
+  dCardTitle: { fontFamily: font.figtreeSemi, fontSize: 15, lineHeight: 19.5 },
+  dButton: { fontFamily: font.figtreeSemi, fontSize: 15, lineHeight: 19.5 },
+  dBody: { fontFamily: font.figtreeRegular, fontSize: 14, lineHeight: 19.6 },
+  dCaption: { fontFamily: font.figtreeMedium, fontSize: 12, lineHeight: 15.6 },
+  dSmall: { fontFamily: font.figtreeMedium, fontSize: 11, lineHeight: 13.2 },
+  dCount: { fontFamily: font.figtreeSemi, fontSize: 9, lineHeight: 11 },
+
   wordmark: { fontFamily: font.displayBold, fontSize: 24, letterSpacing: -0.48 },
   wordmarkTight: { fontFamily: font.displayBold, fontSize: 22, letterSpacing: -0.44 },
 
@@ -310,6 +357,12 @@ const lines = {
 /* ───────────────────────────── 3. SPACING ───────────────────────────── */
 
 const space = {
+  design: {
+    scale: { xxs: 4, xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32 },
+    page: 20,
+    section: 32,
+    cardGap: 12,
+  },
   /** Screen gutter. Every row carries it: header, owner row, titles, rails. */
   screenX: 16,
   screenXTight: 12,
@@ -538,6 +591,12 @@ const space = {
 };
 
 const radius = {
+  dButton: 12,
+  dCard: 12,
+  dPhoto: 8,
+  dBadge: 6,
+  dSheet: 16,
+  dCategoryCircle: 28,
   card: 0,
   primaryButton: 10,
   emptyPrimaryButton: 11,
@@ -598,6 +657,16 @@ const radius = {
 /* ──────────────────────────── 4. COMPONENTS ─────────────────────────── */
 
 const size = {
+  design: {
+    button: 48,
+    secondaryButton: 44,
+    input: 44,
+    categoryCircle: 56,
+    categoryItem: 68,
+    categoryIcon: 22,
+    inputIcon: 18,
+    notification: 16,
+  },
   avatar: {
     owner: 40,
     /** Outer box. Ring is 2 px of fill, then a 2 px surface gap, then 54 image. */
@@ -906,6 +975,7 @@ const icon = {
 };
 
 const border = {
+  d: 1,
   hairline: 1,
   chip: 1,
   /** The stories "+ Post" ring. */
@@ -915,12 +985,22 @@ const border = {
   fabRing: 4,
 };
 
-/**
- * Cards have no shadow at all — the direction separates them with dividers, and
- * an elevation here is the single change that would make the whole screen read
- * as a different design. The FAB is the only raised thing in the app.
- */
+/** Direction 1 card and raised shadows; `fab` remains for existing callers. */
 const shadow = {
+  card: {
+    shadowColor: dColor.text,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  raised: {
+    shadowColor: dColor.text,
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
   fab: {
     shadowColor: color.green,
     shadowOpacity: 0.42,
@@ -981,6 +1061,7 @@ function textStyle(role) {
 
 module.exports = {
   color,
+  dColor,
   dark,
   font,
   type,

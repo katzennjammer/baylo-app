@@ -1,5 +1,5 @@
 const { colors, auth } = require("./src/theme/palette");
-const { color, font } = require("./src/theme/tokens");
+const { dColor, font } = require("./src/theme/tokens");
 
 /**
  * Tailwind v3 — required by NativeWind v4, which does not support v4's
@@ -7,14 +7,11 @@ const { color, font } = require("./src/theme/tokens");
  * `@theme`; here they come from files under `src/theme/` so the two never drift
  * by way of a second hand-typed copy.
  *
- * TWO TOKEN SETS, AND THEY ARE NOT MERGED.
+ * The legacy palette and Direction 1 remain isolated.
  *
- *   `tokens.js`  — Direction 1 ("Quiet Feed"). The Home tab and all the chrome
- *                  around it. Exposed with a `d-` prefix: `bg-d-surface`,
- *                  `text-d-ink`, `border-d-divider`.
- *   `palette.js` — the older Forest/Cream port. Still dresses the (auth) group
- *                  and the Profile tab, which this task does not touch. Keeps
- *                  its unprefixed names so not one line of (auth) has to change.
+ *   `tokens.js`  — Direction 1 roles exposed with a `d-` prefix.
+ *   `palette.js` — unchanged legacy colors for auth and Profile; Direction 1
+ *                  colors are separately exported and never overwrite them.
  *
  * The prefix is what makes the boundary visible in the markup: a `d-` class in
  * an (auth) screen, or a bare `bg-card` inside the feed, is a mistake you can
@@ -29,8 +26,8 @@ const { color, font } = require("./src/theme/tokens");
  * there is still exactly one place to tune.
  */
 
-/** `{ surface: … }` → `{ "d-surface": … }`, so the two sets cannot collide. */
-const prefixed = Object.fromEntries(Object.entries(color).map(([k, v]) => [`d-${k}`, v]));
+/** `{ surface: … }` → `{ "d-surface": … }`, isolated from legacy colors. */
+const prefixed = Object.fromEntries(Object.entries(dColor).map(([k, v]) => [`d-${k}`, v]));
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -40,7 +37,12 @@ module.exports = {
     extend: {
       colors: { ...colors, ...auth, ...prefixed },
       fontFamily: {
-        // ── Direction 1. Three families, seven static instances, bundled and
+        // Direction 1 uses Figtree faces loaded by app/_layout.tsx at runtime.
+        "d-regular": [font.figtreeRegular],
+        "d-medium": [font.figtreeMedium],
+        "d-semibold": [font.figtreeSemi],
+        "d-bold": [font.figtreeBold],
+        // ── Existing mobile font faces. The static instances are bundled and
         // embedded at BUILD time by the expo-font config plugin (app.json)
         // rather than fetched by useFonts at runtime — SDK 57 recommends the
         // plugin for native, and it means there is no frame where the app

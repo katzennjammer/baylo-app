@@ -1,6 +1,12 @@
 import "../global.css";
 
 import { useFonts } from "expo-font";
+import {
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+} from "@expo-google-fonts/figtree";
 import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -55,6 +61,10 @@ void readOpeningTier();
  * breaks the next time the scale is retuned.
  */
 const FONTS = {
+  "Figtree_400Regular": Figtree_400Regular,
+  "Figtree_500Medium": Figtree_500Medium,
+  "Figtree_600SemiBold": Figtree_600SemiBold,
+  "Figtree_700Bold": Figtree_700Bold,
   "BricolageGrotesque-Bold": require("../assets/fonts/BricolageGrotesque-Bold.ttf"),
   "BricolageGrotesque-SemiBold": require("../assets/fonts/BricolageGrotesque-SemiBold.ttf"),
   "PublicSans-Regular": require("../assets/fonts/PublicSans-Regular.ttf"),

@@ -39,9 +39,42 @@ export type ColorName =
   | "skeletonSoft"
   | "failedIcon"
   | "captionFill"
-  | "onScrim";
+  | "onScrim"
+  | "homeTop"
+  | "homeMiddle"
+  | "homeBottom"
+  | "homeYellow"
+  | "homeCream"
+  | "homeOnGreen"
+  | "homeOnGreenMuted"
+  | "homePattern"
+  | "homeIconSurface"
+  | "homeFieldSurface"
+  | "homeFieldLine"
+  | "homeBadge"
+  | "homeOutline";
 
 export declare const color: Readonly<Record<ColorName, string>>;
+
+export type DColorName =
+  | "primary"
+  | "primaryText"
+  | "accent"
+  | "accentText"
+  | "accentSoft"
+  | "background"
+  | "surface"
+  | "tint"
+  | "text"
+  | "mutedText"
+  | "border"
+  | "success"
+  | "warning"
+  | "danger"
+  | ColorName;
+
+/** Direction 1 colors, isolated from the legacy `color` roles. */
+export declare const dColor: Readonly<Record<DColorName, string>>;
 
 export type DarkColorName =
   | "surface"
@@ -68,7 +101,11 @@ export type FontName =
   | "sansSemi"
   | "sansBold"
   | "mono"
-  | "monoMedium";
+  | "monoMedium"
+  | "figtreeRegular"
+  | "figtreeMedium"
+  | "figtreeSemi"
+  | "figtreeBold";
 
 export declare const font: Readonly<Record<FontName, string>>;
 
@@ -79,6 +116,15 @@ export type TypeRole = Pick<
 >;
 
 export type TypeRoleName =
+  | "dDisplay"
+  | "dSheetTitle"
+  | "dSectionTitle"
+  | "dCardTitle"
+  | "dButton"
+  | "dBody"
+  | "dCaption"
+  | "dSmall"
+  | "dCount"
   | "wordmark"
   | "wordmarkTight"
   | "itemTitle"
@@ -166,6 +212,12 @@ export declare const lines: Readonly<{
 }>;
 
 export declare const space: Readonly<{
+  design: Readonly<{
+    scale: Readonly<{ xxs: number; xs: number; sm: number; md: number; lg: number; xl: number; xxl: number }>;
+    page: number;
+    section: number;
+    cardGap: number;
+  }>;
   screenX: number;
   screenXTight: number;
   header: Readonly<{ row: number; bottom: number; gap: number; gapTight: number }>;
@@ -305,6 +357,12 @@ export declare const space: Readonly<{
 }>;
 
 export type RadiusName =
+  | "dButton"
+  | "dCard"
+  | "dPhoto"
+  | "dBadge"
+  | "dSheet"
+  | "dCategoryCircle"
   | "card"
   | "primaryButton"
   | "emptyPrimaryButton"
@@ -353,6 +411,16 @@ export type RadiusName =
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
 export declare const size: Readonly<{
+  design: Readonly<{
+    button: number;
+    secondaryButton: number;
+    input: number;
+    categoryCircle: number;
+    categoryItem: number;
+    categoryIcon: number;
+    inputIcon: number;
+    notification: number;
+  }>;
   avatar: Readonly<{
     owner: number;
     story: number;
@@ -547,6 +615,7 @@ export type IconName =
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 
 export declare const border: Readonly<{
+  d: number;
   hairline: number;
   chip: number;
   dashed: number;
@@ -556,6 +625,20 @@ export declare const border: Readonly<{
 }>;
 
 export declare const shadow: Readonly<{
+  card: Readonly<{
+    shadowColor: string;
+    shadowOpacity: number;
+    shadowRadius: number;
+    shadowOffset: Readonly<{ width: number; height: number }>;
+    elevation: number;
+  }>;
+  raised: Readonly<{
+    shadowColor: string;
+    shadowOpacity: number;
+    shadowRadius: number;
+    shadowOffset: Readonly<{ width: number; height: number }>;
+    elevation: number;
+  }>;
   fab: Readonly<{
     shadowColor: string;
     shadowOpacity: number;
