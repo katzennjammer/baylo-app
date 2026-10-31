@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useBrowse } from "../../src/api/browse";
 import { useHome } from "../../src/api/home";
@@ -166,7 +168,16 @@ export default function HomeScreen() {
 
   // Tapping Home while on it: back to the top, or refresh when already there.
   const scroller = useRef<ScrollView>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const onScroll = useTabReselect(() => scroller.current?.scrollTo({ y: 0, animated: true }), refetch);
+  const handleScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: onScroll,
+      }),
+    [onScroll, scrollY],
+  );
 
   // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
   // to "Ended" at zero and the card stays put; refetching here would pull it
@@ -229,12 +240,20 @@ export default function HomeScreen() {
   return (
     <View style={s.screen}>
       <StatusBar style="light" />
-      <HomePinnedHeader />
-      <ScrollView
+      <LinearGradient
+        colors={[color.homeTop, color.homeMiddle, color.homeBottom]}
+        locations={[0, 0.58, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.homeGradient}
+        pointerEvents="none"
+      />
+      <HomePinnedHeader scrollY={scrollY} />
+      <Animated.ScrollView
         ref={scroller}
-        onScroll={onScroll}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
-        style={s.screen}
+        style={s.scrollView}
         // The extra bottom room keeps the last row of tiles clear of the search
         // helper button, which floats over this corner.
         contentContainerStyle={{ paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
@@ -273,19 +292,20 @@ export default function HomeScreen() {
           onExploreFood={() => browseInMarketplace("FOOD")}
         />
 
-        {isPending && items.length === 0 ? (
-          <ActivityIndicator color={color.green} style={s.loading} />
-        ) : isError && items.length === 0 ? (
-          <View style={s.stateBox}>
-            <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
-              Could not load listings.
-            </Text>
-            <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
-              <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
-            </Tappable>
-          </View>
-        ) : (
-          <>
+        <View style={s.contentSurface}>
+          {isPending && items.length === 0 ? (
+            <ActivityIndicator color={color.green} style={s.loading} />
+          ) : isError && items.length === 0 ? (
+            <View style={s.stateBox}>
+              <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
+                Could not load listings.
+              </Text>
+              <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
+                <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
+              </Tappable>
+            </View>
+          ) : (
+            <>
             {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}
@@ -391,9 +411,10 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-          </>
-        )}
-      </ScrollView>
+            </>
+          )}
+        </View>
+      </Animated.ScrollView>
 
       {/* The free search helper. Over the scroll view, not in it, so it stays put. */}
       <SearchHelper />
@@ -403,6 +424,15 @@ export default function HomeScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
+  homeGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: space.home.gradientHeight,
+  },
+  scrollView: { flex: 1, backgroundColor: "transparent" },
+  contentSurface: { backgroundColor: color.surface },
   loading: { marginTop: space.home.sectionTop * 2 },
   sectionLoading: { marginTop: space.home.sectionTop },
   stateBox: { alignItems: "center", marginTop: space.home.sectionTop * 2, gap: 12 },

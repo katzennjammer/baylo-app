@@ -186,8 +186,9 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               { color: color.ink, flexShrink: 1 },
             ]}
             numberOfLines={1}
+            accessibilityLabel="Baylo"
           >
-            Baylo
+            baylo<Text style={s.wordmarkDot}>.</Text>
           </Text>
 
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>
@@ -522,10 +523,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
+    backgroundColor: color.homeYellow,
+    borderWidth: 0,
+    borderColor: color.homeYellow,
   },
+  wordmarkDot: { color: color.homeYellow },
   badge: {
     position: "absolute",
     alignItems: "center",

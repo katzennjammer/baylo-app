@@ -484,8 +484,8 @@ const s = StyleSheet.create({
   // text off the vertical centre of a fixed-height field.
   input: { flex: 1, padding: 0, color: color.ink },
   homeField: {
-    height: 56,
-    borderRadius: 28,
+    height: size.home.searchControl,
+    borderRadius: size.home.searchControl / 2,
     borderColor: color.homeFieldLine,
     backgroundColor: color.homeFieldSurface,
   },
@@ -511,11 +511,11 @@ const s = StyleSheet.create({
   filterButtonActive: { borderColor: color.greenLine, backgroundColor: color.greenWash },
   filterButtonPressed: { opacity: 0.75 },
   homeFilter: {
-    width: 56,
-    height: 56,
+    width: size.home.searchControl,
+    height: size.home.searchControl,
     paddingHorizontal: 0,
     justifyContent: "center",
-    borderRadius: 28,
+    borderRadius: size.home.searchControl / 2,
     borderColor: color.homeFieldLine,
     backgroundColor: color.homeIconSurface,
   },

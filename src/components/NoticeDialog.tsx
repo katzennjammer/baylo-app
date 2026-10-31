@@ -1,22 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from "react-native";
 import { Image } from "expo-image";
+import { StyleSheet, Text, View } from "react-native";
 
-import { preloadMascotImages, MASCOT, type MascotPose } from "../media/mascots";
-import { color, dark, radius, size, textStyle, type } from "../theme/tokens";
-import { Tappable } from "./Tappable";
-
-void preloadMascotImages();
+import type { MascotPose } from "../media/mascots";
+import { border, color, popup, radius, space, textStyle, type } from "../theme/tokens";
+import { PopupActions, PopupButton, PopupSheet } from "./PopupSheet";
 
 export function NoticeDialog({
   visible,
@@ -26,6 +13,8 @@ export function NoticeDialog({
   onDismiss,
   pose,
   buttonLabel = "OK",
+  listingPreview,
+  onViewListing,
 }: {
   visible: boolean;
   title: string;
@@ -34,171 +23,91 @@ export function NoticeDialog({
   onDismiss: () => void;
   pose?: MascotPose;
   buttonLabel?: string;
+  listingPreview?: { title: string | null; photoUrl: string | null };
+  onViewListing?: () => void;
 }) {
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const mascotScale = useRef(new Animated.Value(1)).current;
-  const isDark = useColorScheme() === "dark";
-
-  useEffect(() => {
-    let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (alive) setReduceMotion(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    return () => {
-      alive = false;
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!visible || !pose || reduceMotion) {
-      mascotScale.setValue(1);
-      return;
-    }
-
-    mascotScale.setValue(0.8);
-    const animation = Animated.sequence([
-      Animated.timing(mascotScale, {
-        toValue: 1.05,
-        duration: 180,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.spring(mascotScale, {
-        toValue: 1,
-        speed: 20,
-        bounciness: 5,
-        useNativeDriver: true,
-      }),
-    ]);
-    animation.start();
-    return () => animation.stop();
-  }, [mascotScale, pose, reduceMotion, visible]);
-
-  const posed = pose !== undefined;
-  const surfaceColor = isDark ? dark.surface : color.surface;
-  const titleColor = isDark ? dark.ink : color.ink;
-  const bodyColor = isDark ? dark.secondary : color.inkSecondary;
-
   return (
-    <Modal
+    <PopupSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
+      title={title}
+      message={body}
+      icon={icon}
+      pose={pose}
+      liveSticker={listingPreview !== undefined}
+      onDismiss={onDismiss}
+      dismissLabel="Close"
     >
-      <Pressable
-        style={s.scrim}
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-      >
-        <Pressable
-          onPress={() => {}}
-          style={[s.card, posed && s.posedCard, posed && { backgroundColor: surfaceColor }]}
-          accessible={false}
-        >
-          {pose ? (
-            <Animated.View
-              pointerEvents="none"
+      {listingPreview ? (
+        <View style={s.preview}>
+          {listingPreview.photoUrl ? (
+            <Image
+              source={{ uri: listingPreview.photoUrl }}
+              contentFit="cover"
+              style={s.previewImage}
               accessible={false}
               accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={[s.mascot, { transform: [{ scale: mascotScale }] }]}
-            >
-              <View style={[s.mascotWash, { backgroundColor: isDark ? dark.greenWash : color.greenWash }]} />
-              <Image source={MASCOT[pose]} contentFit="contain" style={s.mascotImage} />
-            </Animated.View>
-          ) : (
-            <View style={s.badge}>{icon}</View>
-          )}
+              importantForAccessibility="no"
+            />
+          ) : null}
+          <View style={s.previewCopy}>
+            {listingPreview.title ? (
+              <Text style={[textStyle(type.itemTitle), s.previewTitle]} numberOfLines={1}>
+                {listingPreview.title}
+              </Text>
+            ) : null}
+            <Text style={[textStyle(type.metadata), s.previewStatus]}>
+              Live in the marketplace
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
-          <Text
-            style={[textStyle(type.errorHeadline), s.title, posed && { color: titleColor }]}
-            accessibilityRole="header"
-          >
-            {title}
-          </Text>
-          <Text style={[textStyle(type.emptyBody), s.body, posed && { color: bodyColor }]}>{body}</Text>
-
-          <Tappable
+      {onViewListing ? (
+        <PopupActions layout="row">
+          <PopupButton
+            label="Later"
+            tone="secondary"
             onPress={onDismiss}
-            accessibilityRole="button"
-            style={s.ok}
-            pressedStyle={s.okPressed}
-          >
-            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>{buttonLabel}</Text>
-          </Tappable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            containerStyle={s.secondarySlot}
+          />
+          <PopupButton
+            label="See my listing"
+            tone="primary"
+            onPress={onViewListing}
+            containerStyle={s.primarySlot}
+          />
+        </PopupActions>
+      ) : (
+        <PopupActions layout="single">
+          <PopupButton label={buttonLabel} tone="primary" onPress={onDismiss} />
+        </PopupActions>
+      )}
+    </PopupSheet>
   );
 }
 
 const s = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: color.captionFill,
+  preview: {
+    minHeight: popup.previewThumbnail + popup.previewPadding * 2,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    gap: popup.previewPadding,
+    marginTop: space.sheet.groupGap,
+    padding: popup.previewPadding,
+    borderWidth: border.dashed,
+    borderColor: color.homeOutline,
+    borderStyle: "dashed",
+    borderRadius: popup.previewRadius,
+    backgroundColor: color.inset,
   },
-  card: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: color.surface,
-    borderRadius: radius.sheet,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
-    alignItems: "center",
+  previewImage: {
+    width: popup.previewThumbnail,
+    height: popup.previewThumbnail,
+    borderRadius: radius.dPhoto,
   },
-  posedCard: {
-    paddingTop: 88,
-  },
-  badge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: color.greenWash,
-    borderWidth: 1,
-    borderColor: color.greenLine,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-  },
-  mascot: {
-    position: "absolute",
-    top: -50,
-    left: 0,
-    right: 0,
-    height: 120,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1,
-  },
-  mascotWash: {
-    position: "absolute",
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-  },
-  mascotImage: {
-    width: 120,
-    height: 120,
-  },
-  title: { color: color.ink, textAlign: "center" },
-  body: { color: color.inkSecondary, textAlign: "center", marginTop: 8 },
-  ok: {
-    alignSelf: "stretch",
-    height: size.control.primaryButton,
-    borderRadius: radius.primaryButton,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  okPressed: { opacity: 0.85 },
+  previewCopy: { flex: 1, minWidth: 0 },
+  previewTitle: { color: color.homeOutline },
+  previewStatus: { color: color.inkSecondary, marginTop: 2 },
+  secondarySlot: { flex: 35 },
+  primarySlot: { flex: 65 },
 });

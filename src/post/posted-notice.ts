@@ -22,6 +22,8 @@ import { useSyncExternalStore } from "react";
 
 interface PostedNotice {
   itemId: string;
+  listingTitle: string | null;
+  photoUrl: string | null;
   /**
    * Non-null when the listing is waiting for a person to approve its value —
    * the server's own sentence. The dialog then says "waiting", not "up",
@@ -38,8 +40,17 @@ function emit() {
 }
 
 /** Called by the wizard on the way out. */
-export function announcePosted(itemId: string, reviewNotice: string | null = null) {
-  current = { itemId, reviewNotice };
+export function announcePosted(
+  itemId: string,
+  reviewNotice: string | null = null,
+  listing?: { title?: string | null; photoUrl?: string | null },
+) {
+  current = {
+    itemId,
+    listingTitle: listing?.title ?? null,
+    photoUrl: listing?.photoUrl ?? null,
+    reviewNotice,
+  };
   emit();
 }
 

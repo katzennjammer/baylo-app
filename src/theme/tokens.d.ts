@@ -318,6 +318,13 @@ export declare const space: Readonly<{
   }>;
   home: Readonly<{
     top: number;
+    gradientHeight: number;
+    headerFadeDistance: number;
+    mascotVisibleHeight: number;
+    archHeight: number;
+    archRise: number;
+    archButtonOffset: number;
+    actionTop: number;
     searchGap: number;
     headerToHero: number;
     heroX: number;
@@ -525,6 +532,7 @@ export declare const size: Readonly<{
     squiggleStroke: number;
     headingMaxFontScale: number;
     overlayMaxFontScale: number;
+    searchControl: number;
     spotlightPerScreen: number;
     spotlightAspect: number;
     spotlightHeroFraction: number;
@@ -622,6 +630,26 @@ export declare const border: Readonly<{
   storyRing: number;
   unreadRing: number;
   fabRing: number;
+}>;
+
+export declare const popup: Readonly<{
+  sheetMaxWidth: number;
+  sheetRadius: number;
+  outlineWidth: number;
+  shadowOffset: number;
+  mascotDiameter: number;
+  mascotOvalHeight: number;
+  mascotImageSize: number;
+  mascotTop: number;
+  contentTop: number;
+  buttonHeight: number;
+  buttonRadius: number;
+  buttonGap: number;
+  previewRadius: number;
+  previewPadding: number;
+  previewThumbnail: number;
+  stickerX: number;
+  stickerY: number;
 }>;
 
 export declare const shadow: Readonly<{

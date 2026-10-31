@@ -702,12 +702,16 @@ function Wizard() {
     // Back to wherever the FAB was pressed, and the popup over it. The
     // mutation's onSuccess has already marked the marketplace, the feed and
     // profile/me stale, so the screen underneath is refetching by now and the
-    // listing is in it before the card says so. Nothing here navigates TO the
-    // item: a success screen was a page for one sentence. Outside the try on
-    // purpose — the item exists, and a navigation hiccup must not be reported
-    // as "we could not post this".
+    // listing is in it before the card says so. This returns to the prior
+    // screen; the separate "See my listing" action on the posted notice opens
+    // the item. Outside the try on purpose — the item exists, and a navigation
+    // hiccup must not be reported as "we could not post this".
     router.back();
-    announcePosted(created.id, created.valueReview?.pending ? created.valueReview.notice : null);
+    announcePosted(
+      created.id,
+      created.valueReview?.pending ? created.valueReview.notice : null,
+      { title: created.title, photoUrl: photos[0]?.url },
+    );
   }, [createItem, dispatch, router, state]);
 
   /* ── the footer ── */

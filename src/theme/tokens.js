@@ -511,6 +511,14 @@ const space = {
   home: {
     /** Safe-area top + this, then the search row. */
     top: 8,
+    /** One shared gradient behind the pinned header and the scrolling hero. */
+    gradientHeight: 520,
+    headerFadeDistance: 24,
+    mascotVisibleHeight: 180,
+    archHeight: 160,
+    archRise: 44,
+    archButtonOffset: 14,
+    actionTop: 38,
     searchGap: 10,
     headerToHero: 16,
     heroX: 18,
@@ -836,6 +844,7 @@ const size = {
      * it keeps scaling.
      */
     headingMaxFontScale: 1.3,
+    searchControl: 52,
     /**
      * Largest font scale a badge ON A PHOTO follows (the lock badge, the
      * countdown pill on a grid tile). Measured 30 Sep 2026: at 320 dp a tile
@@ -985,6 +994,26 @@ const border = {
   fabRing: 4,
 };
 
+const popup = {
+  sheetMaxWidth: 560,
+  sheetRadius: 28,
+  outlineWidth: 2.5,
+  shadowOffset: 6,
+  mascotDiameter: 150,
+  mascotOvalHeight: 132,
+  mascotImageSize: 140,
+  mascotTop: -76,
+  contentTop: 112,
+  buttonHeight: 52,
+  buttonRadius: 26,
+  buttonGap: 10,
+  previewRadius: 18,
+  previewPadding: 12,
+  previewThumbnail: 48,
+  stickerX: 10,
+  stickerY: 5,
+};
+
 /** Direction 1 card and raised shadows; `fab` remains for existing callers. */
 const shadow = {
   card: {
@@ -1071,6 +1100,7 @@ module.exports = {
   size,
   icon,
   border,
+  popup,
   shadow,
   motion,
   categoryTone,

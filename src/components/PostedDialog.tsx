@@ -1,3 +1,5 @@
+import { useRouter } from "expo-router";
+
 import { dismissPostedNotice, usePostedNotice } from "../post/posted-notice";
 import { color } from "../theme/tokens";
 import { CheckIcon } from "./icons";
@@ -13,18 +15,11 @@ import { NoticeDialog } from "./NoticeDialog";
  * screen was a blank page with one sentence on it, and a sentence is a popup's
  * worth of information, not a screen's.
  *
- * ── ONE ACTION ──────────────────────────────────────────────────────────────
+ * ── LIVE POSTS CAN BE OPENED; REVIEW POSTS CANNOT CLAIM TO BE LIVE ──────────
  *
- * The only control is Nice. The listing is already in the feed and the grid
- * behind this card (the post invalidated both caches before it closed), so
- * "see it in the feed" would be a button that dismisses the dialog and then
- * scrolls nowhere. The scrim and the hardware back dismiss it, so there
- * is no way to be stuck behind it.
- *
- * A centred card rather than a bottom sheet because it is not a menu and asks
- * for no decision. `SheetShell` is for a column of rows with a Cancel; this is
- * a statement with an acknowledgement, and a sheet would make it look like it
- * wanted something.
+ * The notice carries the title, lead photo and id from the post that just
+ * completed. A live listing can open its existing `/item` route; a value under
+ * review keeps the server's waiting copy and acknowledgement instead.
  *
  * ── THE REVIEW VARIANT SAYS "WAITING", NOT "UP" ─────────────────────────────
  *
@@ -35,14 +30,22 @@ import { NoticeDialog } from "./NoticeDialog";
  * server's own sentence, and does not claim a listing is live when it is not.
  */
 export function PostedDialog() {
+  const router = useRouter();
   const notice = usePostedNotice();
-
   const review = notice?.reviewNotice ?? null;
+  const live = notice !== null && review === null;
+
+  const seeListing = () => {
+    if (!notice) return;
+    const itemId = notice.itemId;
+    dismissPostedNotice();
+    router.push({ pathname: "/item", params: { id: itemId } });
+  };
 
   return (
     <NoticeDialog
       visible={notice !== null}
-      title={review ? "Your listing is waiting for a check." : "Your listing is up."}
+      title={review ? "Your listing is waiting for a check." : "Quack! Your listing's out there."}
       body={review ?? "It's live in the marketplace and feed now."}
       icon={
         review ? (
@@ -53,6 +56,15 @@ export function PostedDialog() {
       }
       pose={review ? undefined : "box"}
       buttonLabel={review ? undefined : "Nice"}
+      listingPreview={
+        live
+          ? {
+              title: notice.listingTitle,
+              photoUrl: notice.photoUrl,
+            }
+          : undefined
+      }
+      onViewListing={live ? seeListing : undefined}
       onDismiss={dismissPostedNotice}
     />
   );

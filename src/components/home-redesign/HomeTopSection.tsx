@@ -9,9 +9,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
-import Svg, { Circle, Defs, Pattern, Rect } from "react-native-svg";
+import Svg, { Circle, Defs, Path, Pattern, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -41,7 +40,7 @@ type HomeTopSectionProps = {
   onExploreFood: () => void;
 };
 
-export function HomePinnedHeader() {
+export function HomePinnedHeader({ scrollY }: { scrollY: Animated.Value }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -81,9 +80,18 @@ export function HomePinnedHeader() {
   const offline =
     home.isError && !(home.error instanceof ApiError && home.error.code === "UNAUTHENTICATED");
   const tight = width <= breakpoint.tight;
+  const backgroundOpacity = scrollY.interpolate({
+    inputRange: [0, space.home.headerFadeDistance],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
 
   return (
     <View style={[s.pinnedHeader, { paddingTop: insets.top }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, s.pinnedHeaderFill, { opacity: backgroundOpacity }]}
+      />
       <View style={[s.headerRow, { paddingHorizontal: tight ? space.screenXTight : space.screenX }]}>
         <Text style={s.wordmark} accessibilityLabel="Baylo">
           baylo<Text style={s.wordmarkDot}>.</Text>
@@ -94,7 +102,6 @@ export function HomePinnedHeader() {
             owner={home.acting && !pillStale ? home.acting.name : undefined}
             stale={offline}
             tight={tight}
-            style={s.leavesPill}
           />
           <HomeHeaderButton label="Quests" count={questCount} onPress={() => router.push("/quests")}>
             <QuestIcon size={icon.headerAction.size} stroke={icon.headerAction.stroke} color={color.homeOnGreen} />
@@ -171,7 +178,8 @@ export function HomeTopSection({
   const monthDay = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
   const hour = now.getHours();
   const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
-  const duckSize = width <= breakpoint.tight ? 132 : 148;
+  const duckHeight = space.home.mascotVisibleHeight;
+  const duckWidth = (duckHeight * 262) / 319;
 
   useEffect(() => {
     let active = true;
@@ -207,13 +215,7 @@ export function HomeTopSection({
   const pending = pendingTradeCount !== null && pendingTradeCount > 0;
 
   return (
-    <LinearGradient
-      colors={[color.homeTop, color.homeMiddle, color.homeBottom]}
-      locations={[0, 0.58, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={s.topBackground}
-    >
+    <View style={s.topBackground}>
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
         <Defs>
           <Pattern id="homeDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
@@ -235,7 +237,7 @@ export function HomeTopSection({
           <FilterButton count={0} onPress={onFilterPress} variant="home" />
         </View>
 
-        <View style={[s.greetingRow, { minHeight: duckSize + 16 }]}>
+        <View style={[s.greetingRow, { minHeight: duckHeight }]}>
           <View style={s.greetingCopy}>
             <Text style={s.dateLine} numberOfLines={1}>
               {weekday} · {monthDay}
@@ -264,8 +266,8 @@ export function HomeTopSection({
             style={[
               s.duckFrame,
               {
-                width: duckSize,
-                height: duckSize + 16,
+                width: duckWidth,
+                height: duckHeight,
                 transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
               },
             ]}
@@ -273,17 +275,33 @@ export function HomeTopSection({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            <Image source={MASCOT.celebrate} contentFit="contain" style={{ width: duckSize, height: duckSize + 16 }} />
+            <Image
+              source={MASCOT.celebrateTrimmed}
+              contentFit="contain"
+              style={{ width: duckWidth, height: duckHeight }}
+            />
           </Animated.View>
         </View>
 
-        <View style={s.actionRow}>
-          <HomeActionButton label="View trades" onPress={onViewTrades} count={pendingTradeCount ?? 0} primary />
-          <HomeActionButton label="Explore food" onPress={onExploreFood} />
+        <View style={s.actionArea}>
+          <Svg
+            width={width}
+            height={space.home.archHeight}
+            style={s.arch}
+            pointerEvents="none"
+          >
+            <Path
+              d={`M 0 ${space.home.archRise} Q ${width / 2} ${-space.home.archRise} ${width} ${space.home.archRise} L ${width} ${space.home.archHeight} L 0 ${space.home.archHeight} Z`}
+              fill={color.surface}
+            />
+          </Svg>
+          <View style={s.actionRow}>
+            <HomeActionButton label="View trades" onPress={onViewTrades} count={pendingTradeCount ?? 0} primary />
+            <HomeActionButton label="Explore food" onPress={onExploreFood} />
+          </View>
         </View>
       </View>
-      <View pointerEvents="none" style={s.curvedCreamEdge} />
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -327,14 +345,14 @@ function HomeActionButton({
 }
 
 const s = StyleSheet.create({
-  pinnedHeader: { backgroundColor: color.homeTop },
+  pinnedHeader: { backgroundColor: "transparent" },
+  pinnedHeaderFill: { backgroundColor: color.homeTop },
   headerRow: {
     height: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
-    backgroundColor: color.homeTop,
   },
   wordmark: {
     color: color.homeOnGreen,
@@ -345,11 +363,6 @@ const s = StyleSheet.create({
   },
   wordmarkDot: { color: color.homeYellow },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  leavesPill: {
-    backgroundColor: color.homeYellow,
-    borderColor: color.homeYellow,
-    borderWidth: 0,
-  },
   headerIconButton: {
     width: size.control.headerIcon,
     height: size.control.headerIcon,
@@ -378,7 +391,7 @@ const s = StyleSheet.create({
     fontSize: 10,
     includeFontPadding: false,
   },
-  topBackground: { position: "relative", overflow: "visible", paddingBottom: 68 },
+  topBackground: { position: "relative", overflow: "visible" },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -387,12 +400,12 @@ const s = StyleSheet.create({
   },
   greetingRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 6,
     marginTop: 24,
     marginHorizontal: space.screenX,
   },
-  greetingCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
+  greetingCopy: { flex: 1, minWidth: 0, justifyContent: "flex-end" },
   dateLine: {
     color: color.homeOnGreenMuted,
     fontFamily: font.sansSemi,
@@ -417,13 +430,15 @@ const s = StyleSheet.create({
     includeFontPadding: false,
   },
   subtitleEmphasis: { color: color.homeYellow, fontFamily: font.sansBold },
-  duckFrame: { flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  duckFrame: { flexShrink: 0, alignItems: "center", justifyContent: "flex-end" },
+  actionArea: { position: "relative", marginTop: space.home.actionTop },
+  arch: { position: "absolute", top: -space.home.archButtonOffset, left: 0, zIndex: 0 },
   actionRow: {
     height: 51,
     flexDirection: "row",
     gap: 8,
-    marginTop: 18,
     marginHorizontal: space.screenX,
+    zIndex: 1,
   },
   actionSlot: { height: 48, position: "relative" },
   primaryActionSlot: { flex: 1.16 },
@@ -467,13 +482,4 @@ const s = StyleSheet.create({
     backgroundColor: color.homeBadge,
   },
   tradeCountText: { color: color.homeOnGreen, fontFamily: font.sansBold, fontSize: 10, includeFontPadding: false },
-  curvedCreamEdge: {
-    position: "absolute",
-    left: -20,
-    right: -20,
-    bottom: -36,
-    height: 68,
-    borderRadius: 40,
-    backgroundColor: color.homeCream,
-  },
 });
