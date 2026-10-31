@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
@@ -9,6 +8,7 @@ import { AppState, Platform } from "react-native";
 import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
 import { getActiveConversationPartnerId } from "./active-conversation";
+import { Notifications, notificationsAvailable } from "./notifications-safe";
 import { pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
 
 /**
@@ -71,7 +71,7 @@ function projectId(): string | undefined {
 /** Null when this build cannot receive pushes at all, or the user said no. */
 async function currentToken(askPermission: boolean): Promise<string | null> {
   // Expo Go cannot receive remote pushes on Android, and emulators have no token.
-  if (!Device.isDevice || Constants.executionEnvironment === "storeClient") return null;
+  if (!notificationsAvailable || !Device.isDevice || Constants.executionEnvironment === "storeClient") return null;
   const id = projectId();
   if (!id) return null;
 

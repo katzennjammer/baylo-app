@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -11,7 +11,7 @@ import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel } from "../../src/lib/brackets";
-import { color, font } from "../../src/theme/tokens";
+import { color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
 import { StoreIcon } from "../../src/components/icons";
@@ -22,6 +22,7 @@ import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
 import { fetchAchievements } from "../../src/api/achievements";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
 
 /**
@@ -40,7 +41,7 @@ import { sizedImage } from "../../src/media/image-url";
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { data: profile, refetch, isRefetching: profileRefetching, isLoading: profileLoading } = useProfileMe();
+  const { data: profile, refetch, isError: profileError, isRefetching: profileRefetching, isPending: profileLoading } = useProfileMe();
   const dark = useColorScheme() === "dark";
   const [tab, setTab] = useState<"posts" | "reviews">("posts");
 
@@ -167,7 +168,11 @@ export default function ProfileScreen() {
   // see its empty personal profile flash first. `isLoading` is false while a
   // query is paused offline, so with no signal this still falls through to the
   // personal layout drawn from the stored session, as the header promises.
-  if (profileLoading || orgsLoading) {
+  if (profileLoading) {
+    return <ProfileSkeleton dark={dark} />;
+  }
+
+  if (orgsLoading) {
     return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
   }
 
@@ -199,6 +204,19 @@ export default function ProfileScreen() {
     );
   }
 
+  if (profileError && !profile) {
+    return (
+      <View style={[s.screen, s.centred]}>
+        <MascotEmptyState
+          pose="worry"
+          title="Couldn't load your profile"
+          message="Check your connection and try again."
+          action={{ label: "Try again", onPress: () => void refetch() }}
+        />
+      </View>
+    );
+  }
+
   return (
     <FlatList<ProfileListRow>
       style={s.screen}
@@ -221,6 +239,104 @@ export default function ProfileScreen() {
       ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
     />
   );
+}
+
+export function ProfileSkeleton({ dark }: { dark: boolean }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
+
+    pulse.setValue(0);
+    const half = motion.skeletonPulseMs / 2;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: half,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: half,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion]);
+
+  const opacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [motion.skeletonFrom, motion.skeletonTo],
+  });
+
+  return (
+    <View
+      style={[s.screen, { backgroundColor: dark ? darkColors.surface : color.surface }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View style={s.skeletonHeader}>
+        <SkeletonBlock opacity={opacity} style={s.skeletonAvatar} />
+        <View style={s.skeletonStats}>
+          {[0, 1, 2].map((index) => (
+            <View key={index} style={s.skeletonStat}>
+              <SkeletonBlock opacity={opacity} style={s.skeletonStatValue} />
+              <SkeletonBlock opacity={opacity} style={s.skeletonStatLabel} soft />
+            </View>
+          ))}
+        </View>
+        <SkeletonBlock opacity={opacity} style={s.skeletonName} />
+        <View style={s.skeletonActions}>
+          <SkeletonBlock opacity={opacity} style={s.skeletonButton} />
+          <SkeletonBlock opacity={opacity} style={s.skeletonButton} />
+        </View>
+      </View>
+      <View style={s.skeletonTabs}>
+        <SkeletonBlock opacity={opacity} style={s.skeletonTab} />
+        <SkeletonBlock opacity={opacity} style={s.skeletonTab} />
+      </View>
+      {[0, 1].map((row) => (
+        <View key={row} style={s.gridRow}>
+          {[0, 1, 2].map((column) => (
+            <SkeletonBlock key={column} opacity={opacity} style={s.skeletonTile} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SkeletonBlock({
+  opacity,
+  style,
+  soft = false,
+}: {
+  opacity: Animated.AnimatedInterpolation<number>;
+  style: ViewStyle;
+  soft?: boolean;
+}) {
+  return <Animated.View style={[s.skeletonBlock, style, { backgroundColor: soft ? color.skeletonSoft : color.skeleton, opacity }]} />;
 }
 
 /**
@@ -468,9 +584,13 @@ export function shelfLabel(item: Item): string | null {
 export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
-  return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }, label !== null && s.dimmed]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
-    {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
+  const inTrade = item.status === "IN_TRADE";
+  return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
+    <View style={[s.tileContent, inTrade && s.dimmed]}>
+      {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
+    </View>
     {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
+    {item.valueLeaves !== null ? <View style={s.leavesPill}><Ionicons name="leaf-outline" size={12} color="#FFFFFF" /><Text style={s.leavesText}>{item.valueLeaves}</Text></View> : null}
   </Pressable>;
 }
 
@@ -555,8 +675,14 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
             accessibilityLabel={item.more ? "More achievements" : `${item.label}, view details`}
             style={s.badgeItem}
           >
-            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
-              {item.imageUrl ? <Image source={{ uri: sizedImage(item.imageUrl, "thumb") }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
+            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : palette.green }, item.more && s.moreBadge]}>
+              {item.more ? (
+                <Ionicons name={item.icon} size={24} color={palette.muted} />
+              ) : (
+                <View style={[s.badgeInner, { backgroundColor: palette.surface }]}>
+                  {item.imageUrl ? <Image source={{ uri: sizedImage(item.imageUrl, "thumb") }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={palette.green} />}
+                </View>
+              )}
             </View>
             <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text>
           </Pressable>
@@ -608,6 +734,19 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
+  skeletonHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+  skeletonAvatar: { width: 76, height: 76, borderRadius: 38 },
+  skeletonStats: { position: "absolute", left: 112, right: 12, top: 20, flexDirection: "row", justifyContent: "space-evenly" },
+  skeletonStat: { alignItems: "center" },
+  skeletonStatValue: { width: 28, height: 18, borderRadius: 4 },
+  skeletonStatLabel: { width: 42, height: 10, borderRadius: 4, marginTop: 6 },
+  skeletonName: { width: 140, height: 16, borderRadius: 4, marginTop: 10 },
+  skeletonActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  skeletonButton: { flex: 1, height: 44, borderRadius: 8 },
+  skeletonTabs: { height: 45, flexDirection: "row", alignItems: "center", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.divider },
+  skeletonTab: { flex: 1, height: 20, marginHorizontal: 48, borderRadius: 4 },
+  skeletonTile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
+  skeletonBlock: { backgroundColor: color.skeleton },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   centred: { alignItems: "center", justifyContent: "center" },
   retry: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 16 },
@@ -644,10 +783,11 @@ const s = StyleSheet.create({
   badges: { marginTop: 8, marginHorizontal: -16 },
   badgesContent: { paddingHorizontal: 16, gap: 18 },
   badgeItem: { width: 76, alignItems: "center" },
-  badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, padding: 3, alignItems: "center", justifyContent: "center" },
+  badgeInner: { width: "100%", height: "100%", borderRadius: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   badgeArt: { width: "100%", height: "100%" },
   badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
-  moreBadge: { borderStyle: "dashed" },
+  moreBadge: { borderStyle: "dashed", borderWidth: 1, padding: 0 },
   badgeLabel: { width: 76, fontFamily: font.sans, fontSize: 11, lineHeight: 14, marginTop: 4, textAlign: "center" },
   tabs: { height: 45, flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", position: "relative" },
@@ -676,11 +816,14 @@ const s = StyleSheet.create({
   footer: { paddingVertical: 18 },
   gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 },
   tile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
+  tileContent: { flex: 1 },
   tileImage: { width: "100%", height: "100%" },
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },
-  dimmed: { opacity: 0.6 },
+  dimmed: { opacity: 0.55 },
   statusPill: { position: "absolute", top: 6, left: 6, maxWidth: "88%", backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
   statusText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 11 },
+  leavesPill: { position: "absolute", bottom: 6, left: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3 },
+  leavesText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 10 },
   empty: { color: color.inkMuted, fontFamily: font.sans, fontSize: 14, textAlign: "center", paddingVertical: 48 },
 });
 
