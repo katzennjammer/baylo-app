@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import * as Location from "expo-location";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -23,6 +23,7 @@ import {
   isFiltered,
   MAX_CATEGORIES,
   useBrowse,
+  useBrowseSuggestions,
   usePerishablesInScope,
   type BrowseFilters,
 } from "../../src/api/browse";
@@ -31,11 +32,14 @@ import {
   CategoryRail,
   FilterButton,
   SearchField,
+  SearchModeToggle,
   SortToggle,
   ViewToggle,
   type BrowseSort,
   type BrowseView,
+  type SearchMode,
 } from "../../src/components/marketplace/BrowseControls";
+import { useUserSearch } from "../../src/api/users";
 import { useHubs } from "../../src/api/hubs";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
@@ -53,6 +57,8 @@ import {
   BrowseSkeleton,
 } from "../../src/components/marketplace/BrowseStates";
 import { GridTile } from "../../src/components/marketplace/GridTile";
+import { PeopleResults } from "../../src/components/marketplace/PeopleResults";
+import { ItemSearchSuggestions } from "../../src/components/marketplace/ItemSearchSuggestions";
 import { OrgMatches } from "../../src/components/marketplace/OrgMatches";
 import { useReach, tileOutOfReach } from "../../src/api/offer";
 import { useSession } from "../../src/auth/session";
@@ -122,13 +128,13 @@ const LOCATION_FIX_TIMEOUT_MS = 10_000;
  * for LISTINGS. Hub distance is computed on-device once the map has a position,
  * so listing search never receives coordinates.
  *
- * ── SEARCH IS SUBMITTED, NOT LIVE ───────────────────────────────────────────
+ * ── SEARCH PREVIEWS, RESULTS ON SUBMIT ──────────────────────────────────────
  *
  * The field holds its own text and only becomes a query on submit or on clear.
- * A keystroke-per-request search would fire five queries for "chair", four of
- * which are for prefixes nobody wants, and each one is a keyset-paginated page
- * from a table scan. The category chips ARE live, because a chip is one
- * complete decision and a half-typed word is not.
+ * A short, debounced request returns at most four item suggestions while the
+ * user types; the full grid still changes only on submit. This avoids turning
+ * every prefix into a full browse query. The category chips ARE live, because
+ * a chip is one complete decision and a half-typed word is not.
  */
 /**
  * Hidden tabs a search result leads into. Focus moving to one of these keeps
@@ -140,14 +146,120 @@ const SEARCH_DRILL_DOWNS = new Set(["item", "user", "hub", "hubs", "connections"
 export default function MarketplaceScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const [listScrolling, setListScrolling] = useState(false);
+  const isListScrolling = useRef(false);
+  const scrollStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearScrollStopTimer = useCallback(() => {
+    if (scrollStopTimer.current !== null) {
+      clearTimeout(scrollStopTimer.current);
+      scrollStopTimer.current = null;
+    }
+  }, []);
+
+  const setScrolling = useCallback(
+    (scrolling: boolean) => {
+      clearScrollStopTimer();
+      if (isListScrolling.current === scrolling) return;
+      isListScrolling.current = scrolling;
+      setListScrolling(scrolling);
+    },
+    [clearScrollStopTimer],
+  );
+
+  const finishDragAfterPause = useCallback(() => {
+    clearScrollStopTimer();
+    scrollStopTimer.current = setTimeout(() => {
+      scrollStopTimer.current = null;
+      setScrolling(false);
+    }, 160);
+  }, [clearScrollStopTimer, setScrolling]);
+
+  useEffect(
+    () => () => {
+      clearScrollStopTimer();
+    },
+    [clearScrollStopTimer],
+  );
 
   /** The text in the box, which is not yet the text being searched for. */
   const [draftQuery, setDraftQuery] = useState("");
   const [filters, setFilters] = useState<BrowseFilters>({});
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>("items");
+  const [debouncedItemQuery, setDebouncedItemQuery] = useState("");
+  const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState("");
 
   /** Grid or map. See the note in the header on why this is a mode, not a skin. */
   const [view, setView] = useState<BrowseView>("grid");
+  const peopleQuery = searchMode === "people" ? draftQuery.trim().replace(/^@/, "").trim() : "";
+
+  useEffect(() => {
+    if (searchMode !== "people" || peopleQuery.length < 2) {
+      setDebouncedPeopleQuery("");
+      return;
+    }
+
+    const timer = setTimeout(() => setDebouncedPeopleQuery(peopleQuery), 300);
+    return () => clearTimeout(timer);
+  }, [peopleQuery, searchMode]);
+
+  const isPeopleDebouncing =
+    searchMode === "people" &&
+    peopleQuery.length >= 2 &&
+    peopleQuery !== debouncedPeopleQuery;
+  const userSearch = useUserSearch(
+    debouncedPeopleQuery,
+    searchMode === "people" &&
+      peopleQuery.length >= 2 &&
+      peopleQuery === debouncedPeopleQuery,
+  );
+  const people = userSearch.data?.pages.flatMap((page) => page.users) ?? [];
+  const itemQuery = draftQuery.trim();
+  const showItemSuggestions =
+    searchMode === "items" &&
+    itemQuery.length >= 2 &&
+    itemQuery !== (filters.q?.trim() ?? "");
+
+  useEffect(() => {
+    if (searchMode !== "items" || itemQuery.length < 2) {
+      setDebouncedItemQuery("");
+      return;
+    }
+
+    const timer = setTimeout(() => setDebouncedItemQuery(itemQuery), 350);
+    return () => clearTimeout(timer);
+  }, [itemQuery, searchMode]);
+
+  const itemSuggestionFilters = useMemo(
+    () => ({ ...filters, q: debouncedItemQuery }),
+    [filters, debouncedItemQuery],
+  );
+  const itemSuggestions = useBrowseSuggestions(
+    itemSuggestionFilters,
+    showItemSuggestions && itemQuery === debouncedItemQuery,
+  );
+  const isItemSuggestionLoading =
+    showItemSuggestions &&
+    (itemQuery !== debouncedItemQuery || itemSuggestions.isPending);
+
+  const changeSearchMode = useCallback((nextMode: SearchMode) => {
+    setSearchMode(nextMode);
+    if (nextMode === "people") {
+      setView("grid");
+      return;
+    }
+    setDraftQuery((current) => (current.startsWith("@") ? current.slice(1) : current));
+  }, []);
+
+  const changeSearchText = useCallback((next: string) => {
+    const value = next.slice(0, next.startsWith("@") ? 101 : 100);
+    setDraftQuery(value);
+    if (value.startsWith("@")) {
+      setSearchMode("people");
+      setView("grid");
+    }
+  }, []);
 
   // ── Arriving from Home ────────────────────────────────────────────────────
   //
@@ -188,6 +300,7 @@ export default function MarketplaceScreen() {
     if (whole) {
       setFilters(whole);
       setDraftQuery(whole.q ?? "");
+      setSearchMode(whole.q?.trim().startsWith("@") ? "people" : "items");
       setView("grid");
       return;
     }
@@ -195,6 +308,7 @@ export default function MarketplaceScreen() {
     const q = arrivingQuery?.trim().slice(0, 100) || undefined;
     setFilters({ ...(known ? { categories: [arrivingCategory!] } : {}), ...(q ? { q } : {}) });
     setDraftQuery(q ?? "");
+    setSearchMode(q?.startsWith("@") ? "people" : "items");
     setView("grid");
     // The arriving params are read with the nonce they came with, never on their own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -533,6 +647,7 @@ export default function MarketplaceScreen() {
 
   const submitSearch = useCallback(() => {
     setFilters((f) => ({ ...f, q: draftQuery.trim() || undefined }));
+    Keyboard.dismiss();
   }, [draftQuery]);
 
   const toggleCategory = useCallback((category: string) => {
@@ -721,66 +836,101 @@ export default function MarketplaceScreen() {
   /** The controls stay mounted in every state — they are how you leave one. */
   const header = (
     <View>
-      {/* One row: search (flexible), Grid/Map, filters. */}
       <View style={s.searchRow}>
-        <SearchField value={draftQuery} onChange={setDraftQuery} onSubmit={submitSearch} />
-        <ViewToggle view={view} onChange={setView} />
-        <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} />
-      </View>
-
-      <View style={s.rail}>
-        <CategoryRail
-          facets={facets}
-          selected={filters.categories ?? []}
-          onToggle={toggleCategory}
-          onClearCategories={clearCategories}
-          max={MAX_CATEGORIES}
-          orgsOnly={filters.orgsOnly ?? false}
-          onToggleOrgs={toggleOrgsOnly}
+        <SearchField
+          value={draftQuery}
+          onChange={changeSearchText}
+          onSubmit={searchMode === "people" ? Keyboard.dismiss : submitSearch}
+          placeholder={searchMode === "people" ? "Search people by name" : "Search items or @people"}
+          accessibilityLabel={
+            searchMode === "people"
+              ? "Search people by name"
+              : "Search items by title or description, or start with @ to search people"
+          }
+          variant="marketplace"
         />
-        {filters.orgsOnly ? (
-          <View style={s.subRail}>
-            <BusinessCategoryRail
-              facets={businessFacets}
-              selected={filters.businessCategories ?? []}
-              onToggle={toggleBusinessCategory}
-            />
-          </View>
+        {searchMode === "items" ? (
+          <>
+            <ViewToggle view={view} onChange={setView} />
+            <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} />
+          </>
         ) : null}
       </View>
 
-      {/* Perishable has no control on the rail -- it only arrives from outside
-          (the search helper). Shown so it is never on invisibly. */}
-      {filters.perishable != null ? (
-        <View style={s.activeRow}>
-          <RemovableChip
-            label={filters.perishable ? "Perishables only" : "No perishables"}
-            // The sort goes with it: "Ending soon" is only valid on perishables.
-            onRemove={() => setFilters((f) => ({ ...f, perishable: null, sort: undefined }))}
-          />
-        </View>
+      {showItemSuggestions ? (
+        <ItemSearchSuggestions
+          query={itemQuery}
+          items={itemSuggestions.data ?? []}
+          loading={isItemSuggestionLoading}
+          error={
+            itemSuggestions.isError
+              ? itemSuggestions.error instanceof ApiError
+                ? itemSuggestions.error.message
+                : "Could not load item suggestions."
+              : null
+          }
+          onSearch={submitSearch}
+          onOpen={(item) => {
+            Keyboard.dismiss();
+            openItem(item);
+          }}
+          onRetry={() => void itemSuggestions.refetch()}
+        />
       ) : null}
 
-      <OrgMatches
-        orgs={orgMatches}
-        onOpen={(org) => router.push({ pathname: "/user", params: { id: org.orgUserId } })}
-      />
+      <SearchModeToggle mode={searchMode} onChange={changeSearchMode} />
 
-      {/* The sort shows even on an empty page: "Ending soon" on a moment with
-          no perishables is how you get back to "Newest". */}
-      {items.length > 0 || sort !== "newest" ? (
-        <View style={s.countRow}>
-          <Text
-            style={[textStyle(type.metadata), s.countText]}
-            numberOfLines={1}
-            // Shares the row with the sort control; see headingMaxFontScale.
-            maxFontSizeMultiplier={size.home.headingMaxFontScale}
-            accessibilityLiveRegion="polite"
-          >
-            {items.length > 0 ? countLabel : ""}
-          </Text>
-          {sortAvailable ? <SortToggle sort={sort} onChange={setSort} /> : null}
-        </View>
+      {searchMode === "items" ? (
+        <>
+          <View style={s.rail}>
+            <CategoryRail
+              facets={facets}
+              selected={filters.categories ?? []}
+              onToggle={toggleCategory}
+              onClearCategories={clearCategories}
+              max={MAX_CATEGORIES}
+              orgsOnly={filters.orgsOnly ?? false}
+              onToggleOrgs={toggleOrgsOnly}
+            />
+            {filters.orgsOnly ? (
+              <View style={s.subRail}>
+                <BusinessCategoryRail
+                  facets={businessFacets}
+                  selected={filters.businessCategories ?? []}
+                  onToggle={toggleBusinessCategory}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          {filters.perishable != null ? (
+            <View style={s.activeRow}>
+              <RemovableChip
+                label={filters.perishable ? "Perishables only" : "No perishables"}
+                onRemove={() => setFilters((f) => ({ ...f, perishable: null, sort: undefined }))}
+              />
+            </View>
+          ) : null}
+
+          <OrgMatches
+            orgs={orgMatches}
+            onOpen={(org) => router.push({ pathname: "/user", params: { id: org.orgUserId } })}
+          />
+
+          {items.length > 0 || sort !== "newest" ? (
+            <View style={s.countRow}>
+              <Text
+                style={[textStyle(type.metadata), s.countText]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={size.home.headingMaxFontScale}
+                accessibilityLiveRegion="polite"
+              >
+                {items.length > 0 ? countLabel : ""}
+              </Text>
+              {sortAvailable ? <SortToggle sort={sort} onChange={setSort} /> : null}
+            </View>
+          ) : null}
+        </>
       ) : null}
     </View>
   );
@@ -832,6 +982,7 @@ export default function MarketplaceScreen() {
             onSubmit={() => Keyboard.dismiss()}
             placeholder="Search safe hubs"
             accessibilityLabel="Search safe hubs by name"
+            variant="marketplace"
           />
           <ViewToggle view={view} onChange={setView} />
         </View>
@@ -965,81 +1116,117 @@ export default function MarketplaceScreen() {
 
   return (
     <View style={s.screen}>
-      <FlatList
-        data={items}
-        keyExtractor={keyOf}
-        renderItem={renderItem}
-        numColumns={2}
-        columnWrapperStyle={s.column}
-        contentContainerStyle={s.content}
-        ListHeaderComponent={header}
-        ListEmptyComponent={
-          isPending ? (
-            <BrowseSkeleton tileWidth={tileWidth} />
-          ) : isError ? (
-            <BrowseError
-              message={
-                apiError?.message ??
-                "Check your mobile data or Wi-Fi and try again. Nothing you posted was lost."
-              }
-              onRetry={refetch}
+      {searchMode === "people" ? (
+        <PeopleResults
+          header={header}
+          query={peopleQuery}
+          users={isPeopleDebouncing ? [] : people}
+          isLoading={
+            isPeopleDebouncing ||
+            (peopleQuery.length >= 2 && userSearch.isPending)
+          }
+          isError={userSearch.isError}
+          errorMessage={
+            userSearch.error instanceof ApiError
+              ? userSearch.error.message
+              : "Check your mobile data or Wi-Fi and try again."
+          }
+          onRetry={() => void userSearch.refetch()}
+          hasNextPage={!!userSearch.hasNextPage}
+          isFetchingNextPage={userSearch.isFetchingNextPage}
+          onEndReached={() => {
+            if (userSearch.hasNextPage && !userSearch.isFetchingNextPage) {
+              void userSearch.fetchNextPage();
+            }
+          }}
+          onOpen={(userId) => router.push({ pathname: "/user", params: { id: userId } })}
+        />
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={keyOf}
+          renderItem={renderItem}
+          numColumns={2}
+          columnWrapperStyle={s.column}
+          contentContainerStyle={s.content}
+          ListHeaderComponent={header}
+          ListEmptyComponent={
+            isPending ? (
+              <BrowseSkeleton tileWidth={tileWidth} />
+            ) : isError ? (
+              <BrowseError
+                message={
+                  apiError?.message ??
+                  "Check your mobile data or Wi-Fi and try again. Nothing you posted was lost."
+                }
+                onRetry={refetch}
+              />
+            ) : filtering ? (
+              <BrowseNoMatches
+                query={filters.q ?? ""}
+                filterCount={filterCount}
+                orgsOnly={filters.orgsOnly ?? false}
+                shopsMatched={orgMatches.length > 0}
+                onClear={clearEverything}
+              />
+            ) : (
+              <BrowseEmpty onPost={() => router.push("/post")} />
+            )
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={s.footer}>
+                <ActivityIndicator color={color.green} />
+              </View>
+            ) : (
+              <View style={s.footerSpacer} />
+            )
+          }
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.6}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={color.green}
+              colors={[color.green]}
+              progressBackgroundColor={color.surface}
             />
-          ) : filtering ? (
-            <BrowseNoMatches
-              query={filters.q ?? ""}
-              filterCount={filterCount}
-              orgsOnly={filters.orgsOnly ?? false}
-              shopsMatched={orgMatches.length > 0}
-              onClear={clearEverything}
-            />
-          ) : (
-            <BrowseEmpty onPost={() => router.push("/post")} />
-          )
-        }
-        ListFooterComponent={
-          isFetchingNextPage ? (
-            <View style={s.footer}>
-              <ActivityIndicator color={color.green} />
-            </View>
-          ) : (
-            <View style={s.footerSpacer} />
-          )
-        }
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.6}
-        refreshControl={
-          <RefreshControl
-            // The pull, and only the pull. Background refetches (focus, foreground,
-            // invalidation) update the list without spinning this.
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={color.green}
-            colors={[color.green]}
-            progressBackgroundColor={color.surface}
-          />
-        }
-        keyboardShouldPersistTaps="handled"
-      />
+          }
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => setScrolling(true)}
+          onScrollEndDrag={finishDragAfterPause}
+          onMomentumScrollBegin={() => setScrolling(true)}
+          onMomentumScrollEnd={() => setScrolling(false)}
+        />
+      )}
 
-      <FilterSheet
-        visible={sheetOpen}
-        filters={filters}
-        facets={facets}
-        onApply={(next) => {
-          setFilters(next);
-          setSheetOpen(false);
-        }}
-        onClose={() => setSheetOpen(false)}
-      />
+      {searchMode === "items" ? (
+        <FilterSheet
+          visible={sheetOpen}
+          filters={filters}
+          facets={facets}
+          onApply={(next) => {
+            setFilters(next);
+            setSheetOpen(false);
+          }}
+          onClose={() => setSheetOpen(false)}
+        />
+      ) : null}
 
       {/* The free search helper. "See all" sets this grid's filters in place
           rather than navigating to the screen that is already open. */}
-      <SearchHelper
-        onSeeAll={(next) => {
-          setFilters(next);
-          setDraftQuery(next.q ?? "");
-        }}
-      />
+      {searchMode === "items" ? (
+        <SearchHelper
+          collapsed={listScrolling}
+          onSeeAll={(next) => {
+            setFilters(next);
+            setDraftQuery(next.q ?? "");
+            setSearchMode(next.q?.trim().startsWith("@") ? "people" : "items");
+            if (next.q?.trim().startsWith("@")) setView("grid");
+          }}
+        />
+      ) : null}
 
       {/* Mounted last so it sits over the grid and the filter button. It renders
           nothing until both conditions above hold; the Modal inside it is

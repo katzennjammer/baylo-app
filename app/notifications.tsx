@@ -19,7 +19,7 @@ import { PersonIcon, StoreIcon } from "../src/components/icons";
 import { orgLogoUrl } from "../src/api/organizations";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { RowChevron, Thumb } from "../src/components/trades/rows";
-import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
+import { TradesErrorPanel } from "../src/components/trades/states";
 import { Tappable } from "../src/components/Tappable";
 import { relativeShort } from "../src/lib/format";
 import {
@@ -119,7 +119,7 @@ export default function NotificationsScreen() {
       {list.isError ? (
         <TradesErrorPanel onRetry={() => void list.refetch()} />
       ) : list.isPending ? (
-        <TradesSkeleton />
+        <NotificationSkeleton />
       ) : rows.length === 0 ? (
         <Gutter style={{ paddingTop: 18 }}>
           <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
@@ -142,6 +142,67 @@ export default function NotificationsScreen() {
         </ScrollView>
       )}
     </OfferScreenHost>
+  );
+}
+
+function NotificationSkeleton() {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 30 }}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Hairline />
+      {Array.from({ length: 5 }, (_, index) => (
+        <View key={index}>
+          <View
+            style={{
+              minHeight: 82,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              paddingHorizontal: offerSpace.screenX,
+              paddingVertical: 14,
+            }}
+          >
+            <View
+              style={{
+                width: offerSize.tradeRow.thumb,
+                height: offerSize.tradeRow.thumb,
+                borderRadius: offerSize.tradeRow.thumb / 2,
+                backgroundColor: offerColor.sunk,
+              }}
+            />
+            <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+              <SkeletonLine width="88%" height={14} />
+              <SkeletonLine width="64%" height={14} />
+              <SkeletonLine width="24%" height={10} />
+            </View>
+            <View style={{ width: 8 }} />
+          </View>
+          <Hairline />
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function SkeletonLine({
+  width,
+  height,
+}: {
+  width: `${number}%`;
+  height: number;
+}) {
+  return (
+    <View
+      style={{
+        width,
+        height,
+        borderRadius: height / 2,
+        backgroundColor: offerColor.sunk,
+      }}
+    />
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -32,6 +32,7 @@ type HomeTopSectionProps = {
   searchValue: string;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;
+  searchSuggestions: ReactNode;
   onFilterPress: () => void;
   pendingTradeCount: number | null;
   leavesBalance: number | null;
@@ -166,6 +167,7 @@ export function HomeTopSection({
   searchValue,
   onSearchChange,
   onSearchSubmit,
+  searchSuggestions,
   onFilterPress,
   pendingTradeCount,
   leavesBalance,
@@ -232,16 +234,23 @@ export function HomeTopSection({
       </Svg>
 
       <View style={{ paddingTop: space.home.top }}>
-        <View style={s.searchRow}>
-          <SearchField
-            value={searchValue}
-            onChange={onSearchChange}
-            onSubmit={onSearchSubmit}
-            placeholder="Search items or @people"
-            accessibilityLabel="Search items, or start with @ to search people"
-            variant="home"
-          />
-          <FilterButton count={0} onPress={onFilterPress} variant="home" />
+        <View style={s.searchContainer}>
+          <View style={s.searchRow}>
+            <SearchField
+              value={searchValue}
+              onChange={onSearchChange}
+              onSubmit={onSearchSubmit}
+              placeholder="Search items or traders"
+              accessibilityLabel="Search items or traders"
+              variant="home"
+            />
+            <FilterButton count={0} onPress={onFilterPress} variant="home" />
+          </View>
+          {searchSuggestions ? (
+            <View pointerEvents="box-none" style={s.searchSuggestions}>
+              {searchSuggestions}
+            </View>
+          ) : null}
         </View>
 
         <View style={[s.greetingRow, { minHeight: duckHeight }]}>
@@ -412,6 +421,15 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: space.home.searchGap,
     paddingHorizontal: space.screenX,
+  },
+  searchContainer: { zIndex: 10, elevation: 10 },
+  searchSuggestions: {
+    position: "absolute",
+    top: size.home.searchControl + 6,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 20,
   },
   greetingRow: {
     flexDirection: "row",

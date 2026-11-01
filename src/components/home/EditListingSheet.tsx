@@ -33,6 +33,10 @@ import { relookingFor } from "../../post/wanted-keywords";
 import { rules } from "../../theme/post-tokens";
 import { showDialog } from "../dialog";
 
+function normalizeListingText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /**
  * Editing a listing you own — safe text edits, with a route to manage hubs.
  *
@@ -93,8 +97,7 @@ export function EditListingSheet({
     setTitle(item.title);
     // The server falls back to the title when a listing is created without a
     // description, so the two are often the same string. Shown as stored: an
-    // empty box here would read as "no description" and Save would then write
-    // one, which is a change the owner did not ask for.
+    // empty box here would read as "no description" and Save would clear it.
     setDescription(item.description);
     setWanted(item.wanted ?? "");
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -147,10 +150,14 @@ export function EditListingSheet({
   const save = () => {
     if (blocked) return;
     const wantedChanged = wanted.trim() !== (item.wanted ?? "");
+    const descriptionIsUnchangedTitle =
+      description.trim() === item.description &&
+      normalizeListingText(item.description) === normalizeListingText(item.title);
     update.mutate(
       {
         title: trimmedTitle,
-        description: description.trim(),
+        description:
+          trimmedTitle !== item.title && descriptionIsUnchangedTitle ? "" : description.trim(),
         wantedItems: wanted.trim(),
         // The matcher reads the categories, not this text, so a rewritten want
         // has to move them too or the listing keeps matching its ORIGINAL

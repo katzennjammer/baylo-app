@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,14 +14,17 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { useBrowse } from "../../src/api/browse";
+import { ApiError } from "../../src/api/client";
+import { useBrowse, useBrowseSuggestions } from "../../src/api/browse";
 import { useHome } from "../../src/api/home";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
 import { useActiveTrades } from "../../src/api/trades";
+import { useUserSearchSuggestions } from "../../src/api/users";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { useTabReselect } from "../../src/lib/tab-reselect";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
@@ -28,6 +32,8 @@ import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard"
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
 import { HomePinnedHeader, HomeTopSection } from "../../src/components/home-redesign/HomeTopSection";
 import { ShopSpotlightCard } from "../../src/components/home-redesign/ShopSpotlightCard";
+import { TraderSearchSuggestions } from "../../src/components/home-redesign/TraderSearchSuggestions";
+import { ItemSearchSuggestions } from "../../src/components/marketplace/ItemSearchSuggestions";
 import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
   categoryTone,
@@ -119,6 +125,33 @@ export default function HomeScreen() {
   const activeTrades = useActiveTrades();
 
   const [draftQuery, setDraftQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const trimmedSearchQuery = draftQuery.trim();
+  const isTraderSearch = trimmedSearchQuery.startsWith("@");
+  const traderSearchQuery = isTraderSearch ? trimmedSearchQuery.replace(/^@+/, "").trim() : "";
+  const suggestionQuery = isTraderSearch ? traderSearchQuery : trimmedSearchQuery;
+  const showSearchSuggestions = suggestionQuery.length >= 2;
+
+  useEffect(() => {
+    if (!showSearchSuggestions) {
+      setDebouncedSearchQuery("");
+      return;
+    }
+
+    const timer = setTimeout(() => setDebouncedSearchQuery(suggestionQuery), 350);
+    return () => clearTimeout(timer);
+  }, [showSearchSuggestions, suggestionQuery]);
+
+  const isSearchDebouncing =
+    showSearchSuggestions && suggestionQuery !== debouncedSearchQuery;
+  const itemSuggestions = useBrowseSuggestions(
+    { q: debouncedSearchQuery },
+    showSearchSuggestions && !isTraderSearch && !isSearchDebouncing,
+  );
+  const traderSuggestions = useUserSearchSuggestions(
+    debouncedSearchQuery,
+    showSearchSuggestions && isTraderSearch && !isSearchDebouncing,
+  );
 
   // Unfiltered: the category circles (facets) come from it.
   const browse = useBrowse({ categories: [] });
@@ -221,6 +254,68 @@ export default function HomeScreen() {
     (shop: SpotlightShop) => router.push({ pathname: "/user", params: { id: shop.orgUserId } }),
     [router],
   );
+  const submitSearch = useCallback(
+    (query = draftQuery) => {
+      const value = query.trim();
+      setDraftQuery("");
+      Keyboard.dismiss();
+      if (value) {
+        router.push({
+          pathname: "/(app)/marketplace",
+          params: { q: value, applyAt: String(Date.now()) },
+        });
+      } else {
+        openMarketplace();
+      }
+    },
+    [draftQuery, openMarketplace, router],
+  );
+
+  const searchSuggestions = showSearchSuggestions ? (
+    isTraderSearch ? (
+      <TraderSearchSuggestions
+        query={traderSearchQuery}
+        users={isSearchDebouncing ? [] : traderSuggestions.data ?? []}
+        loading={isSearchDebouncing || traderSuggestions.isPending}
+        compact
+        error={
+          !isSearchDebouncing && traderSuggestions.isError
+            ? traderSuggestions.error instanceof ApiError
+              ? traderSuggestions.error.message
+              : "Could not load trader suggestions."
+            : null
+        }
+        onSearch={() => submitSearch(`@${traderSearchQuery}`)}
+        onOpen={(user) => {
+          setDraftQuery("");
+          Keyboard.dismiss();
+          router.push({ pathname: "/user", params: { id: user.id } });
+        }}
+        onRetry={() => void traderSuggestions.refetch()}
+      />
+    ) : (
+      <ItemSearchSuggestions
+        query={trimmedSearchQuery}
+        items={isSearchDebouncing ? [] : (itemSuggestions.data ?? []).slice(0, 3)}
+        loading={isSearchDebouncing || itemSuggestions.isPending}
+        compact
+        error={
+          !isSearchDebouncing && itemSuggestions.isError
+            ? itemSuggestions.error instanceof ApiError
+              ? itemSuggestions.error.message
+              : "Could not load item suggestions."
+            : null
+        }
+        onSearch={() => submitSearch()}
+        onOpen={(item) => {
+          setDraftQuery("");
+          Keyboard.dismiss();
+          openItem(item);
+        }}
+        onRetry={() => void itemSuggestions.refetch()}
+      />
+    )
+  ) : null;
 
   /**
    * Marketplace, with its category chips set to `forCategory` — or cleared,
@@ -276,14 +371,8 @@ export default function HomeScreen() {
         <HomeTopSection
           searchValue={draftQuery}
           onSearchChange={setDraftQuery}
-          onSearchSubmit={() =>
-            draftQuery.trim()
-              ? router.push({
-                  pathname: "/(app)/marketplace",
-                  params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
-                })
-              : openMarketplace()
-          }
+          onSearchSubmit={() => submitSearch()}
+          searchSuggestions={searchSuggestions}
           onFilterPress={openMarketplace}
           pendingTradeCount={pendingTradeCount}
           leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
@@ -350,7 +439,12 @@ export default function HomeScreen() {
                 Could not load perishables. Pull down to try again.
               </Text>
             ) : (
-              <Text style={[textStyle(type.emptyBody), s.empty]}>No perishable listings right now.</Text>
+              <MascotEmptyState
+                pose="search"
+                title="No perishable listings right now."
+                message="Check back soon for fresh finds."
+                size={150}
+              />
             )}
 
             {/* 5. Shop Spotlights. Left out when there are none; an error

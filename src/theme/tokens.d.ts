@@ -180,6 +180,7 @@ export type TypeRoleName =
   | "heroSubhead"
   | "heroCta"
   | "categoryLabel"
+  | "homeCategoryTileLabel"
   | "exclusiveTitle"
   | "exclusiveMeta"
   | "countdownPill"
@@ -430,6 +431,7 @@ export declare const size: Readonly<{
   }>;
   avatar: Readonly<{
     owner: number;
+    peopleSearch: number;
     story: number;
     storyRing: number;
     storyGap: number;
@@ -650,6 +652,65 @@ export declare const popup: Readonly<{
   previewThumbnail: number;
   stickerX: number;
   stickerY: number;
+}>;
+
+export declare const marketplaceUi: Readonly<{
+  size: Readonly<{
+    controlHeight: number;
+    chipHeight: number;
+    sheetHandleWidth: number;
+    sheetHandleHeight: number;
+    sheetFooterButton: number;
+    conditionHeight: number;
+    bracketSize: number;
+    activeFilterDot: number;
+    initialCategories: number;
+    helperExpanded: number;
+    helperCollapsed: number;
+  }>;
+  radius: Readonly<{
+    control: number;
+    chip: number;
+    sheet: number;
+    bracket: number;
+    helperCollapsed: number;
+  }>;
+  space: Readonly<{
+    controlGap: number;
+    chipGap: number;
+    chipX: number;
+    dividerHeight: number;
+    sheetX: number;
+    sheetTop: number;
+    titleToBody: number;
+    groupGap: number;
+    labelToOptions: number;
+    optionGap: number;
+    bracketGap: number;
+    footerTop: number;
+    footerBottom: number;
+  }>;
+  type: Readonly<{
+    chip: number;
+    sheetTitle: number;
+    conditionLabel: number;
+  }>;
+}>;
+
+export declare const homeCategoryTile: Readonly<{
+  size: Readonly<{
+    tile: number;
+    icon: number;
+    itemWidth: number;
+  }>;
+  radius: Readonly<{
+    tile: number;
+  }>;
+  space: Readonly<{
+    labelGap: number;
+    itemGap: number;
+    rowGap: number;
+  }>;
 }>;
 
 export declare const shadow: Readonly<{

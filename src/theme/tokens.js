@@ -310,6 +310,7 @@ const type = {
   heroSubhead: { fontFamily: font.sans, fontSize: 13, lineHeight: 17.6 },
   heroCta: { fontFamily: font.sansBold, fontSize: 13 },
   categoryLabel: { fontFamily: font.sansMedium, fontSize: 11 },
+  homeCategoryTileLabel: { fontFamily: font.figtreeMedium, fontSize: 12, lineHeight: 16 },
   exclusiveTitle: { fontFamily: font.displaySemi, fontSize: 16, lineHeight: 20 },
   exclusiveMeta: { fontFamily: font.sans, fontSize: 11, lineHeight: 14.3 },
   /** The live countdown beside "Exclusive". Mono, so the digits never jitter. */
@@ -677,6 +678,7 @@ const size = {
   },
   avatar: {
     owner: 40,
+    peopleSearch: 52,
     /** Outer box. Ring is 2 px of fill, then a 2 px surface gap, then 54 image. */
     story: 62,
     storyRing: 2,
@@ -1014,6 +1016,65 @@ const popup = {
   stickerY: 5,
 };
 
+const marketplaceUi = {
+  size: {
+    controlHeight: 44,
+    chipHeight: 36,
+    sheetHandleWidth: 36,
+    sheetHandleHeight: 4,
+    sheetFooterButton: 48,
+    conditionHeight: 40,
+    bracketSize: 36,
+    activeFilterDot: 6,
+    initialCategories: 8,
+    helperExpanded: 48,
+    helperCollapsed: 44,
+  },
+  radius: {
+    control: 12,
+    chip: 10,
+    sheet: 16,
+    bracket: 8,
+    helperCollapsed: 22,
+  },
+  space: {
+    controlGap: 8,
+    chipGap: 8,
+    chipX: 12,
+    dividerHeight: 20,
+    sheetX: 20,
+    sheetTop: 12,
+    titleToBody: 16,
+    groupGap: 20,
+    labelToOptions: 10,
+    optionGap: 8,
+    bracketGap: 4,
+    footerTop: 12,
+    footerBottom: 16,
+  },
+  type: {
+    chip: 13,
+    sheetTitle: 20,
+    conditionLabel: 11,
+  },
+};
+
+const homeCategoryTile = {
+  size: {
+    tile: 60,
+    icon: 26,
+    itemWidth: 68,
+  },
+  radius: {
+    tile: 16,
+  },
+  space: {
+    labelGap: 4,
+    itemGap: 12,
+    rowGap: 12,
+  },
+};
+
 /** Direction 1 card and raised shadows; `fab` remains for existing callers. */
 const shadow = {
   card: {
@@ -1101,6 +1162,8 @@ module.exports = {
   icon,
   border,
   popup,
+  marketplaceUi,
+  homeCategoryTile,
   shadow,
   motion,
   categoryTone,

@@ -13,6 +13,7 @@ import { MessageIcon, StoreIcon } from "../../src/components/icons";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
+import { useRealtimeLiveness } from "../../src/lib/trade-liveness";
 import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
 import { sizedImage } from "../../src/media/image-url";
 
@@ -71,6 +72,7 @@ export default function MessagesScreen() {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const { data, error, isPending, isError, refetch } = useConversations(params.partner ?? null);
+  useRealtimeLiveness(refetch);
   const conversations = useMemo(
     () => [...(data?.conversations ?? [])].sort(
       (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),

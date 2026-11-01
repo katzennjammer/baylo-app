@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import { Image } from "expo-image";
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
 import { useProfileMe } from "../src/api/profile";
 import { LockIcon } from "../src/components/offer/icons";
@@ -9,6 +10,7 @@ import { OfferSheet } from "../src/components/offer/OfferSheet";
 import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { BRACKET_COUNT, bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
+import { MASCOT } from "../src/media/mascots";
 import {
   hasPremiumAccess,
   PREMIUM_BETA_NOTE,
@@ -51,7 +53,7 @@ import {
  * ── THE LAYOUT ───────────────────────────────────────────────────────────────
  *
  * A storefront paywall, top to bottom: a green-wash hero with a cloud-shaped
- * top, sparkles and Baylo's leaf mascot as a white-edged sticker; a large
+ * top, sparkles and Baylo's leaf-holding duck; a large
  * two-line Bricolage headline with its payoff in forest green; one plan card
  * (term, a BETA tag, the price, the beta note); `What's included for you`; and
  * a dark pill button pinned at the bottom with one centred line under it.
@@ -253,7 +255,7 @@ export default function PremiumScreen() {
 /**
  * The top of the sheet: a green wash with a scalloped, cloud-like top edge
  * that fades into paper, a smiling cloud, a scatter of sparkles, and the
- * mascot standing in the middle.
+ * leaf-holding duck standing in the middle.
  */
 function Hero() {
   return (
@@ -310,50 +312,18 @@ function Sparkle({ size, style }: { size: number; style: { left?: `${number}%`; 
   );
 }
 
-/**
- * Baylo's leaf, given a face and a wave, drawn as a sticker: a thick white
- * edge around the whole figure and a soft shadow under it.
- */
 function Mascot({ size }: { size: number }) {
-  const body =
-    "M80 22 C122 34 140 74 128 110 C118 138 96 146 80 146 C64 146 42 138 32 110 C20 74 38 34 80 22 Z";
-  const leftArm = "M38 106 Q24 104 20 90";
-  const rightArm = "M122 100 Q138 92 138 74";
+  const duckHeight = size;
+  const duckWidth = (duckHeight * 240) / 346;
   return (
-    <Svg width={size} height={size} viewBox="0 0 160 170">
-      <Ellipse cx={80} cy={160} rx={46} ry={7} fill={offerColor.ink} opacity={0.08} />
-
-      {/* The sticker edge: every part, stroked thick in white, underneath. */}
-      <G stroke="#FFFFFF" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round" fill="#FFFFFF">
-        <Path d={body} />
-        <Path d={leftArm} fill="none" />
-        <Path d={rightArm} fill="none" />
-        <Path d="M80 22 C82 12 90 6 100 6" fill="none" />
-        <Ellipse cx={66} cy={148} rx={11} ry={6} />
-        <Ellipse cx={94} cy={148} rx={11} ry={6} />
-      </G>
-
-      {/* Stem, feet, arms. */}
-      <Path d="M80 22 C82 12 90 6 100 6" stroke={offerColor.deep} strokeWidth={4} fill="none" strokeLinecap="round" />
-      <Ellipse cx={66} cy={148} rx={11} ry={6} fill={offerColor.deep} />
-      <Ellipse cx={94} cy={148} rx={11} ry={6} fill={offerColor.deep} />
-      <Path d={leftArm} stroke={offerColor.deep} strokeWidth={7} fill="none" strokeLinecap="round" />
-      <Path d={rightArm} stroke={offerColor.deep} strokeWidth={7} fill="none" strokeLinecap="round" />
-
-      {/* Body, its midrib, and a pale belly. */}
-      <Path d={body} fill={offerColor.green} />
-      <Path d="M80 30 V62" stroke={offerColor.deep} strokeWidth={2.5} strokeLinecap="round" opacity={0.35} />
-      <Ellipse cx={80} cy={124} rx={26} ry={17} fill={offerColor.soft} />
-
-      {/* Face. */}
-      <Circle cx={64} cy={84} r={7.5} fill={offerColor.ink} />
-      <Circle cx={96} cy={84} r={7.5} fill={offerColor.ink} />
-      <Circle cx={66.5} cy={81.5} r={2.6} fill="#FFFFFF" />
-      <Circle cx={98.5} cy={81.5} r={2.6} fill="#FFFFFF" />
-      <Ellipse cx={52} cy={98} rx={6.5} ry={4} fill={offerColor.warm} opacity={0.4} />
-      <Ellipse cx={108} cy={98} rx={6.5} ry={4} fill={offerColor.warm} opacity={0.4} />
-      <Path d="M71 97 Q80 106 89 97" stroke={offerColor.ink} strokeWidth={3} fill="none" strokeLinecap="round" />
-    </Svg>
+    <Image
+      source={MASCOT.leaf}
+      contentFit="contain"
+      style={{ width: duckWidth, height: duckHeight }}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
   );
 }
 

@@ -72,6 +72,10 @@ import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
 
+function normalizeListingText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /**
  * The listing screen. Every listing opens here, whatever its kind: a person's
  * or a shop's, perishable or not, in reach or not, yours or someone else's.
@@ -476,7 +480,8 @@ export default function ItemDetailScreen() {
 
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
-          {item.description.trim() ? (
+          {item.description.trim() &&
+          normalizeListingText(item.description) !== normalizeListingText(item.title) ? (
             <Text style={[textStyle(type.detailBody), s.description]}>{item.description}</Text>
           ) : null}
 

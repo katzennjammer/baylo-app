@@ -42,7 +42,7 @@ export function MascotEmptyState({
   const mascotScale = useRef(new Animated.Value(1)).current;
   const isDark = useColorScheme() === "dark";
   const { width } = useWindowDimensions();
-  const imageSize = Math.min(size, width < 380 ? 110 : size);
+  const imageSize = Math.min(size, width < 380 ? 140 : size);
 
   useEffect(() => {
     let alive = true;
@@ -93,17 +93,6 @@ export function MascotEmptyState({
           { width: imageSize, height: imageSize, transform: [{ scale: mascotScale }] },
         ]}
       >
-        <View
-          style={[
-            s.wash,
-            {
-              width: imageSize * 0.88,
-              height: imageSize * 0.88,
-              borderRadius: imageSize * 0.44,
-              backgroundColor: isDark ? dark.greenWash : color.greenWash,
-            },
-          ]}
-        />
         <Image source={MASCOT[pose]} contentFit="contain" style={{ width: imageSize, height: imageSize }} />
       </Animated.View>
 
@@ -141,9 +130,6 @@ const s = StyleSheet.create({
   mascot: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  wash: {
-    position: "absolute",
   },
   title: {
     marginTop: space.empty.iconToHeadline,

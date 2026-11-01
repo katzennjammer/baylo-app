@@ -48,7 +48,7 @@ React Native can't do negative-spread shadows: approximate with shadow props plu
 - Primary button: 44-48 tall, green fill, white text, Semibold 14-15, radius 12.
 - Secondary button: 44 tall, 1px outline, green text. Use the white version on the green hero.
 - Text button: no fill, green Semibold text.
-- Category chip: 56px circle in Tint, 22px green icon, label in Caption below, 68px wide.
+- Category tile: 60px rounded square (radius 16), 26px duotone icon in Primary green, 12px medium label below (up to two lines), 68px item width, one shared Tint #E8F0EC background for all categories. Unmapped categories use a generic fallback icon.
 - Card: white, 1px border, small shadow, radius 12. Photo on top, 12-14px padding, fixed height so cards line up. Shop cards 78% of screen width; listing cards 44%.
 - Input: 44 tall, white, radius 12, 18px icon in muted text.
 - Badge: Leaves and Bracket use Accent soft background with Accent text, Semibold 11-12, radius 6. Notification counts are 16px Danger dots.

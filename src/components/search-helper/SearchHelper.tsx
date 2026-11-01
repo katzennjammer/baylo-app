@@ -32,7 +32,9 @@ import { setHelperState, useHelperState } from "../../search-helper/store";
 import {
   border,
   color,
+  dColor,
   icon,
+  marketplaceUi,
   radius,
   size,
   space,
@@ -70,12 +72,14 @@ import { Tappable } from "../Tappable";
  */
 export function SearchHelper({
   onSeeAll,
+  collapsed = false,
 }: {
   /**
    * What "See all" does. Marketplace passes its own setter so the grid under
    * the sheet changes in place; elsewhere it navigates to Marketplace.
    */
   onSeeAll?: (filters: BrowseFilters) => void;
+  collapsed?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   // "HELP ME FIND", WITH A MAGNIFIER (1 Oct 2026). Deliberately modest: the
@@ -91,17 +95,19 @@ export function SearchHelper({
         accessibilityRole="button"
         accessibilityLabel="Help me find"
         accessibilityHint="Opens the search helper. Type what you're looking for in simple words"
-        style={s.fab}
+        style={[s.fab, collapsed && s.fabCollapsed]}
         pressedStyle={s.fabPressed}
       >
-        <SearchIcon size={FAB_ICON} stroke={2.1} color={color.onGreen} />
-        <Text
-          style={[textStyle(type.heroCta), { color: color.onGreen }]}
-          maxFontSizeMultiplier={size.home.headingMaxFontScale}
-          numberOfLines={1}
-        >
-          Help me find
-        </Text>
+        <SearchIcon size={FAB_ICON} stroke={2.1} color={dColor.primaryText} />
+        {!collapsed ? (
+          <Text
+            style={[textStyle(type.heroCta), { color: dColor.primaryText }]}
+            maxFontSizeMultiplier={size.home.headingMaxFontScale}
+            numberOfLines={1}
+          >
+            Help me find
+          </Text>
+        ) : null}
       </Tappable>
       {open ? <HelperSheet onClose={() => setOpen(false)} onSeeAll={onSeeAll} /> : null}
     </>
@@ -124,6 +130,9 @@ function HelperSheet({
 
   const [draft, setDraft] = useState(last.text);
   const inputRef = useRef<TextInput>(null);
+  const peopleQuery = draft.trim();
+  const isPeopleSearch = peopleQuery.startsWith("@");
+  const canSearchPeople = peopleQuery.slice(1).trim().length >= 2;
 
   // Straight to the keyboard on a fresh sheet; a sheet reopened on an earlier
   // search shows that search instead.
@@ -145,6 +154,21 @@ function HelperSheet({
     },
     [viewerId],
   );
+
+  const searchPeople = useCallback(() => {
+    const query = draft.trim().slice(0, 101);
+    if (!query.startsWith("@") || query.slice(1).trim().length < 2) return;
+
+    onClose();
+    if (onSeeAll) {
+      onSeeAll({ q: query });
+    } else {
+      router.push({
+        pathname: "/(app)/marketplace",
+        params: { q: query, applyAt: String(Date.now()) },
+      });
+    }
+  }, [draft, onClose, onSeeAll, router]);
 
   const setFilters = useCallback(
     (filters: HelperFilters) => {
@@ -203,26 +227,31 @@ function HelperSheet({
               ref={inputRef}
               value={draft}
               onChangeText={setDraft}
-              onSubmitEditing={() => run(draft)}
+              onSubmitEditing={() => (isPeopleSearch ? searchPeople() : run(draft))}
               returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
               maxLength={200}
-              placeholder="e.g. books under bracket 2"
+              placeholder="e.g. bike or @name"
               placeholderTextColor={color.inkMuted}
               style={[textStyle(type.searchInput), s.input]}
               accessibilityLabel="What are you looking for?"
             />
           </View>
           <Tappable
-            onPress={() => run(draft)}
+            onPress={() => (isPeopleSearch ? searchPeople() : run(draft))}
             accessibilityRole="button"
-            accessibilityLabel="Search"
-            disabled={!draft.trim()}
-            style={[s.go, !draft.trim() && s.goDisabled]}
+            accessibilityLabel={isPeopleSearch ? "Search people" : "Search"}
+            disabled={isPeopleSearch ? !canSearchPeople : !draft.trim()}
+            style={[
+              s.go,
+              (isPeopleSearch ? !canSearchPeople : !draft.trim()) && s.goDisabled,
+            ]}
             pressedStyle={s.goPressed}
           >
-            <Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>Search</Text>
+            <Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>
+              {isPeopleSearch ? "Find people" : "Search"}
+            </Text>
           </Tappable>
         </View>
 
@@ -231,7 +260,13 @@ function HelperSheet({
           contentContainerStyle={s.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
-          {!match ? (
+          {isPeopleSearch ? (
+            <Text style={[textStyle(type.emptyBody), s.muted]}>
+              {canSearchPeople
+                ? "Search public profiles by display name. Open a profile to see their listings and contact options."
+                : "Add at least two characters after @ to search for people."}
+            </Text>
+          ) : !match ? (
             <Intro onExample={run} />
           ) : !match.understood ? (
             <NotUnderstood onExample={run} />
@@ -435,7 +470,8 @@ function Results({
 }
 
 /** The extended pill's height, and its magnifier. */
-const FAB = 48;
+const FAB = marketplaceUi.size.helperExpanded;
+const COLLAPSED_FAB = marketplaceUi.size.helperCollapsed;
 const FAB_ICON = 18;
 
 /**
@@ -457,15 +493,21 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     borderRadius: FAB / 2,
-    backgroundColor: color.green,
+    backgroundColor: dColor.primary,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 5,
     elevation: 6,
-    shadowColor: "#000",
+    shadowColor: dColor.text,
     shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
+  },
+  fabCollapsed: {
+    width: COLLAPSED_FAB,
+    height: COLLAPSED_FAB,
+    paddingHorizontal: 0,
+    borderRadius: marketplaceUi.radius.helperCollapsed,
   },
   fabPressed: { opacity: 0.85 },
 

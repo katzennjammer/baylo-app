@@ -83,6 +83,18 @@ export interface OrgBadge {
   verified: boolean;
 }
 
+export interface UserSearchResult {
+  id: string;
+  name: string;
+  avatar: string | null;
+  location: string | null;
+  rating: number;
+  reviewCount: number;
+  totalTrades: number;
+  trustTier: TrustTier | null;
+  org: OrgBadge | null;
+}
+
 /** A curated public meetup point. Coordinates here are public and precise. */
 export interface SafeZoneHub {
   id: string;
