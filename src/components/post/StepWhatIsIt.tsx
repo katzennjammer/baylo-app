@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { TagIcon } from "phosphor-react-native";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
@@ -87,15 +88,41 @@ export function StepWhatIsIt({
 }) {
   const { state, dispatch } = usePost();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [brandAdded, setBrandAdded] = useState(false);
 
   const lead = leadPhoto(state.photos);
   const phase = state.detection.phase;
+  const brand = state.detection.original?.brand;
+  const brandEvidence = state.detection.original?.brandEvidence;
+  const showBrand = Boolean(brand && brandEvidence);
+  const titleAlreadyHasBrand = Boolean(
+    brand && state.title.toLowerCase().includes(brand.toLowerCase()),
+  );
+  const titleWithBrand = brand
+    ? state.title
+      ? `${brand} ${state.title}`
+      : brand
+    : state.title;
+  const brandTitleTooLong = Boolean(
+    brand && !titleAlreadyHasBrand && titleWithBrand.length > rules.titleMax,
+  );
   const error = titleError(state);
+
+  useEffect(() => {
+    setBrandAdded(false);
+  }, [brand, brandEvidence]);
 
   const limit = state.rateLimit?.action === "detect" ? state.rateLimit : null;
   const secondsLeft = useCountdown(limit?.until ?? null, () =>
     dispatch({ type: "rate-limit/clear" }),
   );
+
+  const addBrandToTitle = () => {
+    if (brand && !titleAlreadyHasBrand && !brandTitleTooLong) {
+      dispatch({ type: "field/title", value: titleWithBrand });
+    }
+    setBrandAdded(true);
+  };
 
   const chooseCategory = (category: Category) => {
     setPickerOpen(false);
@@ -119,6 +146,15 @@ export function StepWhatIsIt({
             condition={state.condition}
             onChange={() => setPickerOpen(true)}
           />
+          {showBrand && brand && brandEvidence ? (
+            <BrandEvidenceRow
+              brand={brand}
+              evidence={brandEvidence}
+              added={brandAdded}
+              tooLong={brandTitleTooLong}
+              onAdd={addBrandToTitle}
+            />
+          ) : null}
           <View style={{ height: 20 }} />
           <Text
             style={[
@@ -209,6 +245,16 @@ export function StepWhatIsIt({
                   )}
                 </View>
               </View>
+
+              {showBrand && brand && brandEvidence ? (
+                <BrandEvidenceRow
+                  brand={brand}
+                  evidence={brandEvidence}
+                  added={brandAdded}
+                  tooLong={brandTitleTooLong}
+                  onAdd={addBrandToTitle}
+                />
+              ) : null}
 
               {phase === "detecting" ? (
                 <View
@@ -375,7 +421,7 @@ type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
  * "Trade within" reads as a promise the poster is making, which it is not: it
  * is when the listing stops being shown. Nobody is penalised for a perishable
  * that expires unsold. The helper says that, because the alternative is people
- * choosing 24 out of caution on a thing that is genuinely good for six hours.
+ * choosing 24 out of caution on a thing that is still suitable for six hours.
  */
 function ItemTypeBlock({
   keyboardUp,
@@ -767,6 +813,78 @@ function FailedForm({
             A photo taken in brighter light usually helps us guess, but you do not have to
             retake it.
           </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+function BrandEvidenceRow({
+  brand,
+  evidence,
+  added,
+  tooLong,
+  onAdd,
+}: {
+  brand: string;
+  evidence: string;
+  added: boolean;
+  tooLong: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <View
+      style={{
+        marginTop: postSpace.what.resultToEyebrow,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: postSpace.what.eyebrowGap,
+      }}
+    >
+      <TagIcon size={16} color={postColor.inkMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={[textStyle(postType.tag), { color: postColor.inkSecondary }]}>
+          Brand seen: {brand}
+        </Text>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
+          {evidence}
+        </Text>
+      </View>
+      {added ? (
+        <Text
+          style={[textStyle(postType.smallTextLabel), { color: postColor.inkMuted }]}
+          accessibilityLabel={`Brand ${brand} added to title`}
+        >
+          Added
+        </Text>
+      ) : (
+        <>
+          <Tappable
+            onPress={tooLong ? undefined : onAdd}
+            disabled={tooLong}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: tooLong }}
+            accessibilityLabel={`Add ${brand} to title`}
+            style={{ minHeight: postSize.button.smallText, justifyContent: "center" }}
+          >
+            <Text
+              style={[
+                textStyle(postType.smallTextLabel),
+                { color: tooLong ? postColor.inkDisabled : postColor.forest },
+              ]}
+            >
+              Add to title
+            </Text>
+          </Tappable>
+          {tooLong ? (
+            <Text
+              style={[textStyle(postType.helper), { color: postColor.inkMuted, flexBasis: "100%" }]}
+              accessibilityLabel="Title is too long to add the brand."
+            >
+              Title is too long to add the brand.
+            </Text>
+          ) : null}
         </>
       )}
     </View>

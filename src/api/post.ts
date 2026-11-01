@@ -319,6 +319,8 @@ export interface IdentifyResult {
   category: Category;
   condition: Condition;
   tags: string[];
+  brand?: string | null;
+  brandEvidence?: string | null;
 }
 
 /**
