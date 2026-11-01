@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
 /**
  * Where the app points, and how that survives a reload.
@@ -33,13 +34,15 @@ function normalise(url: string): string {
 }
 
 /**
- * Whether this build may point anywhere but its compiled-in URL. Dev bundles
- * and the development/preview EAS profiles (EXPO_PUBLIC_ALLOW_API_OVERRIDE=1)
- * may; a production build may not, because a gear on the login screen there
+ * Whether this build may point anywhere but its compiled-in URL. Local
+ * development and dev bundles may; preview and production EAS profiles may
+ * not, because a gear on the login screen there
  * lets anyone with the phone send the next sign-in's password to their own
  * server. Off means: no gear, and a stored override is ignored, not obeyed.
  */
-export const apiOverrideAllowed = __DEV__ || process.env.EXPO_PUBLIC_ALLOW_API_OVERRIDE === "1";
+export const apiOverrideAllowed =
+  (typeof __DEV__ !== "undefined" && __DEV__) ||
+  Constants?.expoConfig?.extra?.apiOverrideAllowed === true;
 
 /** The value compiled into the bundle. The floor the override sits on. */
 export const defaultApiBase = normalise(process.env.EXPO_PUBLIC_API_URL ?? "");

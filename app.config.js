@@ -64,6 +64,8 @@ module.exports = ({ config }) => {
   const plugins = [...(config.plugins ?? []), googleSignInPlugin()];
   const servicesFile = googleServicesFile();
   if (servicesFile) config = { ...config, android: { ...config.android, googleServicesFile: servicesFile } };
+  const isLocalDevelopment =
+    !process.env.EAS_BUILD_PROFILE && process.env.NODE_ENV !== "production";
 
   // A store build sends passwords and tokens; it does so over TLS or not at all.
   if (process.env.EAS_BUILD_PROFILE === "production") {
@@ -76,5 +78,12 @@ module.exports = ({ config }) => {
     plugins.push(["expo-build-properties", { android: { usesCleartextTraffic: true } }]);
   }
 
-  return { ...config, plugins };
+  return {
+    ...config,
+    extra: {
+      ...config.extra,
+      apiOverrideAllowed: isLocalDevelopment,
+    },
+    plugins,
+  };
 };
