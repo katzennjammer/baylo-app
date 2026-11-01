@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -39,6 +39,10 @@ type HomeTopSectionProps = {
   onViewTrades: () => void;
   onExploreFood: () => void;
 };
+
+const DUCK_WAVE_CANVAS_SIZE = 400;
+const DUCK_WAVE_CONTENT_BOUNDS = { left: 92, top: 48, right: 318, bottom: 374 };
+const DUCK_TEXT_GAP = 8;
 
 export function HomePinnedHeader({ scrollY }: { scrollY: Animated.Value }) {
   const insets = useSafeAreaInsets();
@@ -171,7 +175,7 @@ export function HomeTopSection({
 }: HomeTopSectionProps) {
   const { width } = useWindowDimensions();
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
-  const float = useRef(new Animated.Value(0)).current;
+  const [waveFailed, setWaveFailed] = useState(false);
   const resolvedName = firstName?.trim().split(/\s+/)[0] || "there";
   const now = new Date();
   const weekday = now.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
@@ -180,6 +184,22 @@ export function HomeTopSection({
   const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
   const duckHeight = space.home.mascotVisibleHeight;
   const duckWidth = (duckHeight * 262) / 319;
+  const duckBoxSize =
+    duckHeight /
+    ((DUCK_WAVE_CONTENT_BOUNDS.bottom - DUCK_WAVE_CONTENT_BOUNDS.top) / DUCK_WAVE_CANVAS_SIZE);
+  const showWave = reduceMotion === false && !waveFailed;
+  const duckVisibleWidth = showWave
+    ? duckBoxSize *
+      ((DUCK_WAVE_CONTENT_BOUNDS.right - DUCK_WAVE_CONTENT_BOUNDS.left) / DUCK_WAVE_CANVAS_SIZE)
+    : duckWidth;
+  const duckFrameStyle = showWave
+    ? {
+        width: duckBoxSize,
+        height: duckBoxSize,
+        right: -duckBoxSize * (1 - DUCK_WAVE_CONTENT_BOUNDS.right / DUCK_WAVE_CANVAS_SIZE),
+        bottom: -duckBoxSize * (1 - DUCK_WAVE_CONTENT_BOUNDS.bottom / DUCK_WAVE_CANVAS_SIZE),
+      }
+    : { width: duckWidth, height: duckHeight, right: 0, bottom: 0 };
 
   useEffect(() => {
     let active = true;
@@ -197,20 +217,6 @@ export function HomeTopSection({
       subscription.remove();
     };
   }, []);
-
-  useEffect(() => {
-    float.stopAnimation();
-    float.setValue(0);
-    if (reduceMotion !== false) return;
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2100, useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 2100, useNativeDriver: true }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [float, reduceMotion]);
 
   const pending = pendingTradeCount !== null && pendingTradeCount > 0;
 
@@ -231,14 +237,15 @@ export function HomeTopSection({
             value={searchValue}
             onChange={onSearchChange}
             onSubmit={onSearchSubmit}
-            placeholder={'Search items, e.g. "bike"'}
+            placeholder="Search items or @people"
+            accessibilityLabel="Search items, or start with @ to search people"
             variant="home"
           />
           <FilterButton count={0} onPress={onFilterPress} variant="home" />
         </View>
 
         <View style={[s.greetingRow, { minHeight: duckHeight }]}>
-          <View style={s.greetingCopy}>
+          <View style={[s.greetingCopy, { paddingRight: duckVisibleWidth + DUCK_TEXT_GAP }]}>
             <Text style={s.dateLine} numberOfLines={1}>
               {weekday} · {monthDay}
             </Text>
@@ -262,25 +269,33 @@ export function HomeTopSection({
               )}
             </Text>
           </View>
-          <Animated.View
-            style={[
-              s.duckFrame,
-              {
-                width: duckWidth,
-                height: duckHeight,
-                transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
-              },
-            ]}
+          <View
+            style={[s.duckFrame, duckFrameStyle]}
             accessible={false}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
             <Image
-              source={MASCOT.celebrateTrimmed}
+              source={showWave ? MASCOT.waveWebp : MASCOT.celebrateTrimmed}
               contentFit="contain"
-              style={{ width: duckWidth, height: duckHeight }}
+              autoplay={showWave}
+              onError={
+                showWave
+                  ? (event) => {
+                      console.warn(
+                        "[home] animated duck failed to load; falling back to static mascot:",
+                        event.error,
+                      );
+                      setWaveFailed(true);
+                    }
+                  : undefined
+              }
+              style={{
+                width: showWave ? duckBoxSize : duckWidth,
+                height: showWave ? duckBoxSize : duckHeight,
+              }}
             />
-          </Animated.View>
+          </View>
         </View>
 
         <View style={s.actionArea}>
@@ -430,7 +445,7 @@ const s = StyleSheet.create({
     includeFontPadding: false,
   },
   subtitleEmphasis: { color: color.homeYellow, fontFamily: font.sansBold },
-  duckFrame: { flexShrink: 0, alignItems: "center", justifyContent: "flex-end" },
+  duckFrame: { position: "absolute", alignItems: "center", justifyContent: "flex-end" },
   actionArea: { position: "relative", marginTop: space.home.actionTop },
   arch: { position: "absolute", top: -space.home.archButtonOffset, left: 0, zIndex: 0 },
   actionRow: {
