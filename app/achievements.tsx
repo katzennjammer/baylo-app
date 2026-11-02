@@ -70,13 +70,20 @@ export default function AchievementsScreen() {
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: updateDisplayedAchievements,
-    onSuccess: () => {
-      setSaveMessage({ ok: true, text: "Saved to your profile." });
-      void queryClient.invalidateQueries({ queryKey: ["achievements"] });
-      void queryClient.invalidateQueries({ queryKey: ["profile", "me"] });
+    onMutate: () => setSaveMessage(null),
+    onSuccess: async () => {
+      setSaveMessage({ ok: true, text: "Your Home and Profile badges are updated." });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["achievements"] }),
+        queryClient.invalidateQueries({ queryKey: ["profile"] }),
+        queryClient.invalidateQueries({ queryKey: ["home"] }),
+      ]);
     },
-    onError: () => {
-      setSaveMessage({ ok: false, text: "Could not save your changes." });
+    onError: (error) => {
+      setSaveMessage({
+        ok: false,
+        text: error instanceof Error ? error.message : "Could not save your changes.",
+      });
     },
   });
   const [selected, setSelected] = useState<string[]>([]);
@@ -84,6 +91,17 @@ export default function AchievementsScreen() {
   const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string } | null>(null);
   // The server decides the shelf size; the app just honours it.
   const maxSlots = query.data?.maxProfileBadges ?? DEFAULT_MAX_PROFILE_BADGES;
+
+  const savedSelected = (query.data?.achievements ?? [])
+    .filter((item) => item.displayOrder !== null)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+    .map((item) => item.id);
+  const savedFeatured =
+    query.data?.achievements.find((item) => item.homeDisplayOrder !== null)?.id ?? null;
+  const hasChanges =
+    selected.length !== savedSelected.length ||
+    selected.some((id, index) => id !== savedSelected[index]) ||
+    featured !== savedFeatured;
 
   useEffect(() => {
     if (query.data) {
@@ -98,6 +116,12 @@ export default function AchievementsScreen() {
       setFeatured(featuredBadge?.id ?? null);
     }
   }, [query.data]);
+
+  useEffect(() => {
+    if (!saveMessage?.ok) return;
+    const timeout = setTimeout(() => setSaveMessage(null), 2_000);
+    return () => clearTimeout(timeout);
+  }, [saveMessage]);
 
   function toggleSelected(id: string) {
     setSelected((current) =>
@@ -168,6 +192,9 @@ export default function AchievementsScreen() {
                       <Text style={[textStyle(type.trendingChip), isFeatured ? styles.forest : styles.ink]}>
                         {achievement.name}
                       </Text>
+                      {isFeatured ? (
+                        <CheckIcon size={iconToken.check.size} stroke={iconToken.check.stroke} color={color.forest} />
+                      ) : null}
                     </Tappable>
                   );
                 })}
@@ -177,8 +204,13 @@ export default function AchievementsScreen() {
             <SectionHeader
               accent="Profile badges"
               subtitle={`Tap an earned badge to show it on your profile. Up to ${maxSlots}; an empty slot is not shown.`}
-              count={selected.length}
             />
+            <Text
+              style={[textStyle(type.metadata), styles.selectionCount]}
+              accessibilityLiveRegion="polite"
+            >
+              {`${selected.length} of ${maxSlots} selected`}
+            </Text>
             <View style={styles.list}>
               {achievements.map((achievement) => {
                 const progress = Math.min(achievement.progress, achievement.threshold);
@@ -196,7 +228,7 @@ export default function AchievementsScreen() {
                     style={[styles.row, isSelected && styles.rowOn]}
                     pressedStyle={styles.held}
                   >
-                    <View style={styles.badge}>
+                    <View style={[styles.badge, isSelected && styles.badgeSelected]}>
                       <BadgeIcon
                         icon={achievement.icon}
                         imageUrl={achievement.imageUrl}
@@ -242,23 +274,31 @@ export default function AchievementsScreen() {
 
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.home.tileBody) }]}>
             {saveMessage ? (
-              <Text
-                style={[textStyle(type.metadata), saveMessage.ok ? styles.earned : styles.urgent]}
-                accessibilityLiveRegion="polite"
-              >
-                {saveMessage.text}
-              </Text>
+              <View accessibilityLiveRegion="polite">
+                {saveMessage.ok ? (
+                  <Text style={[textStyle(type.username), styles.earned]}>Saved</Text>
+                ) : null}
+                <Text style={[textStyle(type.metadata), saveMessage.ok ? styles.earned : styles.urgent]}>
+                  {saveMessage.text}
+                </Text>
+              </View>
             ) : null}
             <Tappable
-              disabled={save.isPending}
+              disabled={!hasChanges || save.isPending}
               onPress={() => save.mutate({ achievementIds: selected, featuredAchievementId: featured })}
               accessibilityRole="button"
-              style={[styles.save, save.isPending && styles.buttonHeld]}
+              accessibilityState={{ disabled: !hasChanges || save.isPending }}
+              style={[styles.save, (!hasChanges || save.isPending) && styles.buttonHeld]}
               pressedStyle={styles.buttonHeld}
             >
-              <Text style={[textStyle(type.primaryButton), styles.onGreen]}>
-                {save.isPending ? "Saving..." : "Save"}
-              </Text>
+              {save.isPending ? (
+                <View style={styles.saving}>
+                  <ActivityIndicator size="small" color={color.onGreen} />
+                  <Text style={[textStyle(type.primaryButton), styles.onGreen]}>Saving...</Text>
+                </View>
+              ) : (
+                <Text style={[textStyle(type.primaryButton), styles.onGreen]}>Save</Text>
+              )}
             </Tappable>
           </View>
         </>
@@ -308,7 +348,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: color.control,
   },
+  badgeSelected: { borderWidth: border.chip, borderColor: color.forest },
   rowBody: { flex: 1, minWidth: 0, gap: 2 },
+  selectionCount: { paddingHorizontal: space.screenX, paddingBottom: space.home.tileBody, color: color.inkSecondary },
 
   footer: {
     gap: space.home.searchGap,
@@ -325,6 +367,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: color.green,
   },
+  saving: { flexDirection: "row", alignItems: "center", gap: space.home.searchGap },
   buttonHeld: { opacity: 0.7 },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28 },
