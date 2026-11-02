@@ -601,6 +601,8 @@ export default function ItemDetailScreen() {
         >
           <BottomBar
             own={own}
+            available={item.status === "AVAILABLE" && !item.hiddenByModerator}
+            status={item.status}
             action={viewer.action}
             existingOfferId={viewer.existingOfferId}
             ended={ended}
@@ -975,6 +977,8 @@ async function directionsTo(hub: SafeZoneHub) {
  */
 function BottomBar({
   own,
+  available,
+  status,
   action,
   existingOfferId,
   ended,
@@ -985,6 +989,8 @@ function BottomBar({
   onOffer,
 }: {
   own: boolean;
+  available: boolean;
+  status: string;
   action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
   existingOfferId: string | null;
   ended: boolean;
@@ -1033,11 +1039,17 @@ function BottomBar({
     </Tappable>
   );
 
-  if (action === "IN_TRADE" || action === "TRADED") {
+  if (!available) {
+    const message =
+      status === "IN_TRADE"
+        ? "This item is in a trade"
+        : status === "TRADED" || status === "SWAPPED"
+          ? "This item has been traded"
+          : "This item is no longer available";
     return (
       <View style={s.barRow}>
         {heart}
-        {inert(action === "IN_TRADE" ? "In trade" : "Traded")}
+        {inert(message)}
       </View>
     );
   }

@@ -446,7 +446,7 @@ export default function StoryViewer() {
                   View listing
                 </Text>
               </Tappable>
-              {author.isOwn ? null : (
+              {author.isOwn || item.status !== "AVAILABLE" || item.hiddenByModerator ? null : (
                 <Tappable
                   onPress={openListing}
                   accessibilityRole="button"

@@ -157,7 +157,10 @@ export const FeedCard = memo(function FeedCard({
   const wanted = item.wanted?.trim();
   const perishable = item.perishable ?? null;
   const isOwnListing = viewerId !== null && item.owner.id === viewerId;
-  const offerAction = isOwnListing ? undefined : () => onOffer?.(item);
+  const offerAction =
+    isOwnListing || item.status !== "AVAILABLE" || item.hiddenByModerator
+      ? undefined
+      : () => onOffer?.(item);
 
   return (
     <View style={s.card}>
