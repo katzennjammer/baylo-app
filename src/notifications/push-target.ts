@@ -14,6 +14,7 @@ export interface PushData {
   entityId?: unknown;
   actorId?: unknown;
   partnerId?: unknown;
+  messageId?: unknown;
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
@@ -23,6 +24,10 @@ export function pushMessagePartnerId(data: PushData | null | undefined): string 
   const entityType = str(data?.entityType);
   if (type !== "NEW_MESSAGE" && entityType !== "conversation") return null;
   return str(data?.partnerId) ?? str(data?.entityId) ?? (type === "NEW_MESSAGE" ? str(data?.actorId) : null);
+}
+
+export function pushMessageId(data: PushData | null | undefined): string | null {
+  return str(data?.messageId);
 }
 
 export function shouldSuppressMessageNotification(
@@ -36,7 +41,11 @@ export function shouldSuppressMessageNotification(
 
 export function pushTarget(data: PushData | null | undefined): string {
   const partnerId = pushMessagePartnerId(data);
-  if (partnerId) return `/messages/thread?partner=${encodeURIComponent(partnerId)}`;
+  if (partnerId) {
+    const messageId = pushMessageId(data);
+    return `/messages/thread?partner=${encodeURIComponent(partnerId)}` +
+      (messageId ? `&messageId=${encodeURIComponent(messageId)}` : "");
+  }
 
   const type = str(data?.type);
   if (!type) return "/notifications";

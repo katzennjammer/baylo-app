@@ -8,6 +8,7 @@ import {
   Keyboard,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -77,10 +78,11 @@ function payloadTypeOf(content: string): string | undefined {
 export default function MessagesThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { partner, partnerName, partnerAvatar } = useLocalSearchParams<{
+  const { partner, partnerName, partnerAvatar, messageId } = useLocalSearchParams<{
     partner?: string;
     partnerName?: string;
     partnerAvatar?: string;
+    messageId?: string;
   }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
   const { width: screenWidth } = useWindowDimensions();
@@ -255,6 +257,10 @@ export default function MessagesThreadScreen() {
     if (event.systemMessage) onNewMessage(event.systemMessage);
   }, [onNewMessage]);
 
+  const refreshThread = useCallback(() => {
+    void thread.refetch({ cancelRefetch: false });
+  }, [thread.refetch]);
+
   const onTyping = useCallback((event: { senderId: string; senderName: string; isTyping: boolean }) => {
     if (event.senderId !== partner) return;
     setTypingName(event.isTyping ? event.senderName : null);
@@ -269,8 +275,15 @@ export default function MessagesThreadScreen() {
   const inboxId = thread.data?.currentUserId || session?.user.id;
   useEffect(() => {
     if (!inboxId) return;
-    return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
-  }, [onNewMessage, onOfferUpdated, onTyping, inboxId]);
+    return subscribeToUserChannel(
+      inboxId,
+      onNewMessage,
+      onTyping,
+      onOfferUpdated,
+      undefined,
+      refreshThread,
+    ) ?? undefined;
+  }, [onNewMessage, onOfferUpdated, onTyping, inboxId, refreshThread]);
 
   // Every thread fetch marks it read on the server (messages, and since 20 Oct
   // the bell's message row), so everything counting unread is refreshed: the
@@ -315,23 +328,38 @@ export default function MessagesThreadScreen() {
     useCallback(() => {
       if (!partner) return;
       let inFlight = false;
-      const syncThread = () => {
-        if (AppState.currentState !== "active" || inFlight) return;
+      const syncThread = (appIsActive = AppState.currentState === "active") => {
+        if (!appIsActive || inFlight) return;
         inFlight = true;
         void thread.refetch({ cancelRefetch: false }).finally(() => {
           inFlight = false;
         });
       };
 
+      syncThread();
       const interval = setInterval(syncThread, 5_000);
       const appState = AppState.addEventListener("change", (state) => {
-        if (state === "active") syncThread();
+        if (state === "active") syncThread(true);
       });
       return () => {
         clearInterval(interval);
         appState.remove();
       };
     }, [partner, thread.refetch]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner || !messageId) return;
+      const retries = [1_500, 4_000].map((delay) =>
+        setTimeout(() => {
+          const cached = queryClient.getQueryData<LegacyThreadResponse>(threadQueryKey(partner));
+          if (cached?.messages.some((message) => message.id === messageId)) return;
+          void thread.refetch({ cancelRefetch: false });
+        }, delay),
+      );
+      return () => retries.forEach(clearTimeout);
+    }, [messageId, partner, queryClient, thread.refetch]),
   );
 
   useEffect(() => () => {

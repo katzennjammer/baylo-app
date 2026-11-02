@@ -1,6 +1,6 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo } from "react";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo } from "react";
+import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../../src/api/client";
@@ -71,7 +71,12 @@ export default function MessagesScreen() {
   const params = useLocalSearchParams<{ partner?: string }>();
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const { data, error, isPending, isError, refetch } = useConversations(params.partner ?? null);
+  const { data, error, isPending, isError, isRefetching, refetch } = useConversations(params.partner ?? null);
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
   useRealtimeLiveness(refetch);
   const conversations = useMemo(
     () => [...(data?.conversations ?? [])].sort(
@@ -134,17 +139,24 @@ export default function MessagesScreen() {
     return (
       <View style={styles.screen}>
         {shopStrip}
-        <View style={styles.centered}>
-          <MascotEmptyState
-            pose="search"
-            title="No conversations yet."
-            message={
-              shopName
-                ? `Messages to ${shopName} will appear here.`
-                : "Messages will appear here when someone starts a conversation."
-            }
-          />
-        </View>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={color.green} />
+          }
+        >
+          <View style={styles.centered}>
+            <MascotEmptyState
+              pose="search"
+              title="No conversations yet."
+              message={
+                shopName
+                  ? `Messages to ${shopName} will appear here.`
+                  : "Messages will appear here when someone starts a conversation."
+              }
+            />
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -157,6 +169,9 @@ export default function MessagesScreen() {
         keyExtractor={(item) => item.partnerId}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={color.green} />
+        }
         renderItem={({ item }) => {
           const preview = previewFromContent(item.content, item.fromMe);
           const label = item.fromMe ? `You: ${preview}` : preview;

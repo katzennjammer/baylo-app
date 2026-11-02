@@ -9,7 +9,7 @@ import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
 import { getActiveConversationPartnerId } from "./active-conversation";
 import { Notifications, notificationsAvailable } from "./notifications-safe";
-import { pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
+import { pushMessageId, pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
 
 /**
  * Phone notifications for everything the bell shows (20 Oct 2026).
@@ -118,11 +118,11 @@ export async function unregisterPush(): Promise<void> {
 export function usePushNotifications(userId: string | undefined) {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useGlobalSearchParams<{ partner?: string }>();
+  const params = useGlobalSearchParams<{ partner?: string; messageId?: string }>();
   const navigationState = useRootNavigationState();
   const qc = useQueryClient();
   const markRead = useMarkNotificationRead();
-  const [pendingMessagePartner, setPendingMessagePartner] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<{ partnerId: string; messageId: string | null } | null>(null);
   const replacingWithMessages = useRef(false);
   const last = Notifications.useLastNotificationResponse();
 
@@ -162,27 +162,34 @@ export function usePushNotifications(userId: string | undefined) {
     if (id) markRead.mutate(id);
     const partnerId = pushMessagePartnerId(data);
     if (partnerId) {
-      if (pathname === "/messages/thread" && params.partner === partnerId) return;
+      const messageId = pushMessageId(data);
+      if (pathname === "/messages/thread" && params.partner === partnerId) {
+        if (messageId) router.setParams({ messageId });
+        return;
+      }
       replacingWithMessages.current = false;
-      setPendingMessagePartner(partnerId);
+      setPendingMessage({ partnerId, messageId });
       return;
     }
     router.push(pushTarget(data) as never);
   }, [last, userId, navigationState.key, pathname, params.partner, router, markRead]);
 
   useEffect(() => {
-    if (!pendingMessagePartner || !userId || !navigationState.key) return;
-    if (pathname === "/messages/thread" && params.partner === pendingMessagePartner) {
-      setPendingMessagePartner(null);
+    if (!pendingMessage || !userId || !navigationState.key) return;
+    if (pathname === "/messages/thread" && params.partner === pendingMessage.partnerId) {
+      setPendingMessage(null);
       replacingWithMessages.current = false;
       return;
     }
     if (pathname === "/messages") {
       router.push({
         pathname: "/messages/thread",
-        params: { partner: pendingMessagePartner },
+        params: {
+          partner: pendingMessage.partnerId,
+          ...(pendingMessage.messageId ? { messageId: pendingMessage.messageId } : {}),
+        },
       });
-      setPendingMessagePartner(null);
+      setPendingMessage(null);
       replacingWithMessages.current = false;
       return;
     }
@@ -190,5 +197,5 @@ export function usePushNotifications(userId: string | undefined) {
       replacingWithMessages.current = true;
       router.replace("/messages");
     }
-  }, [navigationState.key, params.partner, pathname, pendingMessagePartner, router, userId]);
+  }, [navigationState.key, params.partner, pathname, pendingMessage, router, userId]);
 }

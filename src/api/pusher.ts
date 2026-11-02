@@ -163,6 +163,7 @@ export function subscribeToUserChannel(
     };
   }) => void,
   onNotificationCreated?: () => void,
+  onSubscribed?: () => void,
 ): (() => void) | null {
   const held = acquire(userChannel(userId));
   if (!held) return null;
@@ -171,12 +172,17 @@ export function subscribeToUserChannel(
   if (onTyping) held.channel.bind("typing", onTyping);
   if (onOfferUpdated) held.channel.bind("offer-updated", onOfferUpdated);
   if (onNotificationCreated) held.channel.bind("notification-created", onNotificationCreated);
+  if (onSubscribed) {
+    if (held.channel.subscribed) onSubscribed();
+    else held.channel.bind("pusher:subscription_succeeded", onSubscribed);
+  }
 
   return () => {
     held.channel.unbind("new-message", onNewMessage);
     if (onTyping) held.channel.unbind("typing", onTyping);
     if (onOfferUpdated) held.channel.unbind("offer-updated", onOfferUpdated);
     if (onNotificationCreated) held.channel.unbind("notification-created", onNotificationCreated);
+    if (onSubscribed) held.channel.unbind("pusher:subscription_succeeded", onSubscribed);
     held.release();
   };
 }
