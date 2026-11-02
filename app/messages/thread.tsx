@@ -22,11 +22,12 @@ import { NOTIFICATIONS_KEY } from "../../src/api/notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { ApiError, request } from "../../src/api/client";
+import { usePublicProfile } from "../../src/api/profile";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { ActiveTrade } from "../../src/api/types";
 import { useBlockUser } from "../../src/api/item";
-import { request } from "../../src/api/client";
 import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
@@ -52,6 +53,13 @@ const GROUP_GAP_MS = 5 * 60 * 1000;
 const SEPARATOR_GAP_MS = 15 * 60 * 1000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function isUnavailableConversationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 403 || error.status === 404 || /blocked/i.test(`${error.code} ${error.message}`))
+  );
+}
 
 /** "12:13 PM" today, "Mon 12:13 PM" this week, "Oct 3, 12:13 PM" before that. */
 function separatorLabel(dateIso: string): string {
@@ -112,6 +120,7 @@ export default function MessagesThreadScreen() {
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const partnerProfile = usePublicProfile(partner);
   const unavailableHandled = useRef(false);
   const lastReadRefreshMessageId = useRef<string | null>(null);
   const activeTrades = useActiveTrades();
@@ -120,11 +129,14 @@ export default function MessagesThreadScreen() {
   const block = useBlockUser();
   const currentUserId = thread.data?.currentUserId ?? "";
   useEffect(() => {
-    if (unavailableHandled.current || thread.isPending || (!thread.isError && thread.data?.messages.length !== 0)) return;
+    unavailableHandled.current = false;
+  }, [partner]);
+  useEffect(() => {
+    if (unavailableHandled.current || !thread.isError || !isUnavailableConversationError(thread.error)) return;
     unavailableHandled.current = true;
     showDialog("Conversation unavailable", "This conversation could not be opened.");
     router.replace("/messages");
-  }, [router, thread.data?.messages.length, thread.isError, thread.isPending]);
+  }, [router, thread.error, thread.isError]);
 
   const sortedMessages = useMemo(
     () => collapseSystemPairs(
@@ -457,8 +469,18 @@ export default function MessagesThreadScreen() {
     }
   };
 
-  const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
-  const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
+  const otherName =
+    partnerName ||
+    (thread.data?.partnerName && thread.data.partnerName !== "Conversation" ? thread.data.partnerName : null) ||
+    partnerProfile.data?.user.org?.name ||
+    partnerProfile.data?.user.name ||
+    "Conversation";
+  const otherAvatar =
+    partnerAvatar ||
+    thread.data?.partnerAvatar ||
+    partnerProfile.data?.user.org?.logoUrl ||
+    partnerProfile.data?.user.avatar ||
+    "";
   const bubbleContentMax = useBubbleContentMax();
   const tradesById = new Map([
     ...(activeTrades.data?.trades ?? []),
@@ -567,7 +589,21 @@ export default function MessagesThreadScreen() {
         </View>
       ) : thread.isError ? (
         <View style={styles.centered}>
-            <Text style={[styles.emptyTitle, { color: palette.ink }]}>This conversation failed to load.</Text>
+            <Text style={[styles.emptyTitle, { color: palette.ink }]}>
+              {isUnavailableConversationError(thread.error)
+                ? "This conversation is unavailable."
+                : "This conversation failed to load."}
+            </Text>
+            {!isUnavailableConversationError(thread.error) ? (
+              <Tappable
+                onPress={() => void thread.refetch()}
+                style={styles.newMessageButton}
+                pressedStyle={styles.newMessageButtonPressed}
+                accessibilityRole="button"
+              >
+                <Text style={styles.newMessageButtonText}>Try again</Text>
+              </Tappable>
+            ) : null}
         </View>
       ) : (
         <>
@@ -576,6 +612,13 @@ export default function MessagesThreadScreen() {
               ref={listRef}
               style={[styles.list, !initialScrollComplete && styles.listUnpositioned]}
               contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={thread.isRefetching}
+                  onRefresh={() => thread.refetch({ cancelRefetch: false })}
+                  tintColor={palette.forest}
+                />
+              }
               keyboardShouldPersistTaps="handled"
               scrollEventThrottle={16}
               onScroll={(event) => {

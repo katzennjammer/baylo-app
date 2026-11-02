@@ -1120,16 +1120,19 @@ export default function MarketplaceScreen() {
         <PeopleResults
           header={header}
           query={peopleQuery}
-          users={isPeopleDebouncing ? [] : people}
+          users={isPeopleDebouncing || userSearch.isError ? [] : people}
           isLoading={
             isPeopleDebouncing ||
             (peopleQuery.length >= 2 && userSearch.isPending)
           }
           isError={userSearch.isError}
           errorMessage={
-            userSearch.error instanceof ApiError
-              ? userSearch.error.message
-              : "Check your mobile data or Wi-Fi and try again."
+            userSearch.error instanceof ApiError &&
+            (userSearch.error.status === 404 || userSearch.error.status >= 500)
+              ? "Search isn't available right now"
+              : userSearch.error instanceof ApiError
+                ? userSearch.error.message
+                : "Check your mobile data or Wi-Fi and try again."
           }
           onRetry={() => void userSearch.refetch()}
           hasNextPage={!!userSearch.hasNextPage}
