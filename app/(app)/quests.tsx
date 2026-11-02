@@ -48,7 +48,7 @@ const QUEST_ACTION: Record<string, { route: string; label: string }> = {
   SEND_OFFER: { route: "/marketplace", label: "Browse listings" },
   SEND_BRIDGE_OFFER: { route: "/marketplace", label: "Browse listings" },
   FOLLOW_TRADER: { route: "/marketplace", label: "Find traders" },
-  LEAVE_REVIEW: { route: "/trades", label: "Review a trade" },
+  LEAVE_REVIEW: { route: "/trades-history", label: "Review a trade" },
   LIST_ITEM: { route: "/post-item", label: "List an item" },
   RECEIVE_OFFER: { route: "/profile", label: "View your shelf" },
   COMPLETE_TRADE: { route: "/trades", label: "View your trades" },

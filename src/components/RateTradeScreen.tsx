@@ -161,8 +161,16 @@ export default function RateTradeScreen() {
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           />
-          <Text accessibilityRole="header" style={[textStyle(offerType.screenHeading), { color: colors.ink }]}>How was trading with {partnerName}?</Text>
-          <Text style={[textStyle(offerType.body), { color: colors.secondary }]}>Your review helps keep Baylo trustworthy.</Text>
+          <Text accessibilityRole="header" style={[textStyle(offerType.screenHeading), { color: colors.ink }]}>
+            {alreadyRated ? "You’ve already reviewed this trade." : `How was trading with ${partnerName}?`}
+          </Text>
+          <Text style={[textStyle(offerType.body), { color: colors.secondary }]}>
+            {alreadyRated
+              ? trade.myReview
+                ? `You rated ${partnerName} ${trade.myReview.rating}/5.`
+                : "This trade has already been reviewed."
+              : "Your review helps keep Baylo trustworthy."}
+          </Text>
         </View>
 
         <View style={{ alignItems: "center", paddingTop: 28, paddingBottom: 20 }}>
@@ -185,37 +193,44 @@ export default function RateTradeScreen() {
             ))}
           </View>
           <Text style={[textStyle(offerType.buttonSecondary), { color: colors.gold, minHeight: 22, marginTop: 8 }]}>
-            {trade?.myReview?.rating ? `${trade.myReview.rating} stars` : stars ? labels[stars] : "Select a rating"}
+            {trade.myReview?.rating
+              ? `${trade.myReview.rating} stars`
+              : alreadyRated
+                ? "Already reviewed"
+                : stars
+                  ? labels[stars]
+                  : "Select a rating"}
           </Text>
         </View>
 
-        <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          <Text style={[textStyle(offerType.buttonTertiary), { color: colors.ink }]}>Comment <Text style={{ color: colors.tertiary }}>(optional)</Text></Text>
-          <TextInput
-            value={comment}
-            onChangeText={setComment}
-            editable={!alreadyRated}
-            maxLength={400}
-            multiline
-            numberOfLines={4}
-            placeholder="Describe your experience"
-            placeholderTextColor={colors.tertiary}
-            textAlignVertical="top"
-            style={{
-              minHeight: 112,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              backgroundColor: colors.field,
-              color: colors.ink,
-              padding: 14,
-              fontFamily: font.sans,
-              fontSize: 15,
-              lineHeight: 22,
-            }}
-          />
-          <Text style={[textStyle(offerType.helper), { color: colors.tertiary, textAlign: "right" }]}>{comment.length}/400</Text>
-        </View>
+        {!alreadyRated ? (
+          <View style={{ paddingHorizontal: 20, gap: 8 }}>
+            <Text style={[textStyle(offerType.buttonTertiary), { color: colors.ink }]}>Comment <Text style={{ color: colors.tertiary }}>(optional)</Text></Text>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              maxLength={400}
+              multiline
+              numberOfLines={4}
+              placeholder="Describe your experience"
+              placeholderTextColor={colors.tertiary}
+              textAlignVertical="top"
+              style={{
+                minHeight: 112,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                backgroundColor: colors.field,
+                color: colors.ink,
+                padding: 14,
+                fontFamily: font.sans,
+                fontSize: 15,
+                lineHeight: 22,
+              }}
+            />
+            <Text style={[textStyle(offerType.helper), { color: colors.tertiary, textAlign: "right" }]}>{comment.length}/400</Text>
+          </View>
+        ) : null}
 
         {error ? (
           <Text accessibilityLiveRegion="polite" style={[textStyle(offerType.errorText), { color: colors.gold, paddingHorizontal: 20, paddingTop: 18 }]}>{error}</Text>
