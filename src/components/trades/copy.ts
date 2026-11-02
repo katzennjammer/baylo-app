@@ -345,21 +345,13 @@ export const tradeCard = {
 /* ─────────────────────────── §10.6 empty ────────────────────────────── */
 
 /**
- * §10.6's empty state, plus frame 9k's three numbered lines.
- *
- * §10.6 gives the heading, the body and the button. The frame adds three
- * numbered steps in the post flow's own `01 / 02 / 03` shape, which §5.2's "No
- * items" state already uses — so they are the same component, not a new idea.
+ * §10.6's empty state: the heading, body and browse action.
  */
 export const empty = {
   heading: "No trades yet",
   body:
     "When you send or accept an offer it shows up here, along with anything " +
     "that needs doing on the day.",
-  step1: "Offers you send and receive, with three days to reply.",
-  /** NOT VERBATIM — reason 1. The frame writes "four-digit". */
-  step2: `The ${spellCount(CODE_LENGTH)}-digit codes you swap at the hub.`,
-  step3: "Anything you promised to settle later.",
   primary: "Browse the marketplace",
 } as const;
 

@@ -6,7 +6,6 @@ import { SectionHeader } from "../home-redesign/SectionHeader";
 import { Hairline, PrimaryButton } from "../offer/chrome";
 import { color, radius, space, type } from "../../theme/tokens";
 import { WarningTriangleIcon } from "../offer/icons";
-import { NumberedStep } from "../offer/rows";
 import { RowAction } from "./rows";
 import { MascotEmptyState } from "../MascotEmptyState";
 import {
@@ -33,9 +32,7 @@ import {
  * "No trades yet". A new user's first sight of this tab, with the approved
  * search mascot above the copy.
  *
- * §10.6 gives the heading, the body and the button; frame 9k adds three numbered
- * lines in the `01 / 02 / 03` shape §5.2's "No items" state already uses — so
- * `NumberedStep` is imported from the offer flow rather than rebuilt.
+ * The screen keeps the mascot, heading, body and marketplace action.
  *
  * NO SECTION LABELS. Frame 9k's own note: no labels for sections that do not
  * exist. A `Needs you today` heading over nothing would read as a list that
@@ -47,6 +44,8 @@ export function TradesEmpty({ onBrowse }: { onBrowse: () => void }) {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
           paddingTop: 12,
           paddingBottom: offerSpace.paragraphToControl,
         }}
@@ -56,13 +55,7 @@ export function TradesEmpty({ onBrowse }: { onBrowse: () => void }) {
           pose="search"
           title={copy.empty.heading}
           message={copy.empty.body}
-        >
-          <View style={{ paddingTop: 16, gap: 12 }}>
-            <NumberedStep n={1}>{copy.empty.step1}</NumberedStep>
-            <NumberedStep n={2}>{copy.empty.step2}</NumberedStep>
-            <NumberedStep n={3}>{copy.empty.step3}</NumberedStep>
-          </View>
-        </MascotEmptyState>
+        />
       </ScrollView>
 
       {/* §3.2's bar geometry, minus the footnote. The button is the only thing
