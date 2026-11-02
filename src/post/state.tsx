@@ -196,6 +196,7 @@ export interface PostState {
 
   category: Category | null;
   title: string;
+  titleEdited: boolean;
   condition: Condition;
   /** True until the user touches step 3 — drives "We filled this in…". */
   conditionPrefilled: boolean;
@@ -278,6 +279,7 @@ export function initialState(): PostState {
     detection: { phase: "idle", original: null, slow: false },
     category: null,
     title: "",
+    titleEdited: false,
     // GOOD, not null. Step 3 is prefilled by design and its Next is always
     // enabled; a null here would make "always" a lie on the one path where
     // detection failed and the user skipped straight past.
@@ -423,7 +425,8 @@ export function reduce(s: PostState, a: PostAction): PostState {
         // back anything from "Denim jacket" to "DENIM JACKET". The field is what
         // the user will edit, so it is normalised once here rather than at every
         // place that renders it.
-        title: s.title.trim() ? s.title : sentenceCase(a.result.name),
+        // Older persisted drafts may have a title but no titleEdited flag.
+        title: s.titleEdited || s.title.length > 0 ? s.title : sentenceCase(a.result.name),
         condition,
         conditionPrefilled: true,
       };
@@ -459,7 +462,7 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // Clamped at the boundary rather than validated after. The server's cap is
       // 200 and the design's is 70; the tighter one is the one a user can see,
       // so it is the one enforced.
-      return { ...s, title: a.value.slice(0, rules.titleMax) };
+      return { ...s, title: a.value.slice(0, rules.titleMax), titleEdited: true };
 
     case "field/category":
       // A category change invalidates the valuation — the suggestion is a

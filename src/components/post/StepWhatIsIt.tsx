@@ -128,6 +128,7 @@ export function StepWhatIsIt({
     setPickerOpen(false);
     if (phase === "failed") dispatch({ type: "field/category", value: category });
     else dispatch({ type: "detect/correct", category, title: state.title });
+    requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   // Only the TOP of the step changes with the keyboard. See the note on the
@@ -156,29 +157,6 @@ export function StepWhatIsIt({
             />
           ) : null}
           <View style={{ height: 20 }} />
-          <Text
-            style={[
-              textStyle(postType.smallTextLabel),
-              { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
-            ]}
-          >
-            Give it a title
-          </Text>
-          <Field
-            label="Give it a title"
-            value={state.title}
-            placeholder="What is it? Brand and size help"
-            onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-            onBlur={onFieldBlur}
-            error={error}
-            maxLength={rules.titleMax}
-            inputRef={titleRef}
-          />
-          <View style={{ height: postSpace.what.fieldToHelper }} />
-          <HelperCounterRow
-            helper="Say the brand and size if you know them."
-            counter={`${state.title.length}/${rules.titleMax}`}
-          />
         </Fragment>
       ) : (
         /* ── the full step ── */
@@ -212,10 +190,7 @@ export function StepWhatIsIt({
 
           {phase === "failed" ? (
             <FailedForm
-              keyboardUp={keyboardUp}
               onOpenPicker={() => setPickerOpen(true)}
-              titleRef={titleRef}
-              onFieldBlur={onFieldBlur}
             />
           ) : (
             <>
@@ -309,38 +284,50 @@ export function StepWhatIsIt({
               )}
 
               <Divider style={{ marginTop: postSpace.what.confirmToDivider }} />
-
-              <Text
-                style={[
-                  textStyle(postType.smallTextLabel),
-                  {
-                    color: postColor.inkSecondary,
-                    marginTop: postSpace.what.dividerToLabel,
-                    marginBottom: postSpace.what.labelToField,
-                  },
-                ]}
-              >
-                Give it a title
-              </Text>
-              <Field
-                label="Give it a title"
-                value={state.title}
-                placeholder="What is it? Brand and size help"
-                onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-                onBlur={onFieldBlur}
-                error={error}
-                maxLength={rules.titleMax}
-                inputRef={titleRef}
-              />
-              <View style={{ height: postSpace.what.fieldToHelper }} />
-              <HelperCounterRow
-                helper="Say the brand and size if you know them. That is what people search for."
-                counter={`${state.title.length}/${rules.titleMax}`}
-              />
             </>
           )}
         </Fragment>
       )}
+      <Text
+        style={[
+          textStyle(postType.smallTextLabel),
+          {
+            color: postColor.inkSecondary,
+            marginTop: compact || phase === "failed" ? 0 : postSpace.what.dividerToLabel,
+            marginBottom: postSpace.what.labelToField,
+          },
+        ]}
+      >
+        Give it a title
+      </Text>
+      <Field
+        label="Give it a title"
+        value={state.title}
+        placeholder="What is it? Brand and size help"
+        onChangeText={(v) => dispatch({ type: "field/title", value: v })}
+        onBlur={onFieldBlur}
+        error={error}
+        maxLength={rules.titleMax}
+        inputRef={titleRef}
+      />
+      <View style={{ height: postSpace.what.fieldToHelper }} />
+      <HelperCounterRow
+        helper={
+          phase === "failed" && keyboardUp
+            ? "Say the brand and size if you know them."
+            : "Say the brand and size if you know them. That is what people search for."
+        }
+        counter={`${state.title.length}/${rules.titleMax}`}
+      />
+      {phase === "failed" && !keyboardUp ? (
+        <>
+          <View style={{ height: 22 }} />
+          <Text style={[textStyle(postType.helperLong), { color: postColor.inkMuted }]}>
+            A photo taken in brighter light usually helps us guess, but you do not have to
+            retake it.
+          </Text>
+        </>
+      ) : null}
 
       {/*
         THE PERISHABLE BLOCK HAS A SLOT OF ITS OWN, outside the switch above,
@@ -737,18 +724,11 @@ function CorrectionBlock({ onChangeAgain }: { onChangeAgain: () => void }) {
 /* ───────────────────── the detection-failed form ────────────────────── */
 
 function FailedForm({
-  keyboardUp,
   onOpenPicker,
-  titleRef,
-  onFieldBlur,
 }: {
-  keyboardUp: boolean;
   onOpenPicker: () => void;
-  titleRef: React.RefObject<TextInput | null>;
-  onFieldBlur: () => void;
 }) {
-  const { state, dispatch } = usePost();
-  const error = titleError(state);
+  const { state } = usePost();
 
   return (
     <View>
@@ -778,43 +758,6 @@ function FailedForm({
       />
 
       <View style={{ height: postSpace.what.fieldToLabel }} />
-      <Text
-        style={[
-          textStyle(postType.smallTextLabel),
-          { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
-        ]}
-      >
-        Give it a title
-      </Text>
-      <Field
-        label="Give it a title"
-        value={state.title}
-        placeholder="What is it? Brand and size help"
-        onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-        onBlur={onFieldBlur}
-        error={error}
-        maxLength={rules.titleMax}
-        inputRef={titleRef}
-      />
-      <View style={{ height: postSpace.what.fieldToHelper }} />
-      <HelperCounterRow
-        helper={
-          keyboardUp
-            ? "Say the brand and size if you know them."
-            : "Say the brand and size if you know them. That is what people search for."
-        }
-        counter={`${state.title.length}/${rules.titleMax}`}
-      />
-
-      {keyboardUp ? null : (
-        <>
-          <View style={{ height: 22 }} />
-          <Text style={[textStyle(postType.helperLong), { color: postColor.inkMuted }]}>
-            A photo taken in brighter light usually helps us guess, but you do not have to
-            retake it.
-          </Text>
-        </>
-      )}
     </View>
   );
 }
