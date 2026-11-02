@@ -227,7 +227,10 @@ export function useCreateOrganization() {
       // say it a second time is the kind of step that gets a feature
       // abandoned between screens.
       await setActingOrgId(created.organizationId);
-      await qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY }),
+        qc.invalidateQueries({ queryKey: ["profile"] }),
+      ]);
     },
   });
 }

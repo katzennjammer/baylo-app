@@ -10,7 +10,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError, resendVerificationSignedIn } from "../src/api/client";
 import { getApiBase } from "../src/api/config";
 import { fetchIdVerification, type IdVerificationStatus } from "../src/api/id-verification";
-import { useOrganizations } from "../src/api/organizations";
+import { useOrganizations, type ActingOrg } from "../src/api/organizations";
+import { getActingOrgId } from "../src/api/org-context";
 import { useProfileMe } from "../src/api/profile";
 import type { ViewerReputation } from "../src/api/types";
 import { useSession } from "../src/auth/session";
@@ -81,7 +82,12 @@ export default function SettingsScreen() {
   });
 
   const { data: profile, refetch: refetchProfile } = useProfileMe();
-  const organizations = useOrganizations().data?.data.organizations;
+  const organizationsQuery = useOrganizations();
+  const organizations = organizationsQuery.data?.data.organizations ?? [];
+  const myShop =
+    organizations.find((organization) => organization.id === getActingOrgId()) ??
+    organizations[0] ??
+    null;
 
   const email = profile?.user.email ?? session?.user.email ?? "";
   const version = Constants.expoConfig?.version ?? "unknown";
@@ -151,10 +157,21 @@ export default function SettingsScreen() {
             />
           )
         ) : null}
-        {/* Only once the list has loaded and is empty: somebody who owns a shop
-            has the switcher below instead, and a row that flashes in while the
-            list loads would be a row that then disappears under a thumb. */}
-        {organizations && organizations.length === 0 ? (
+        {myShop ? (
+          <SettingsRow
+            label="My shop"
+            sub={`${myShop.name} · ${organizationStatusLine(myShop)}`}
+            onPress={() =>
+              router.push({
+                pathname: "/edit-org",
+                params: {
+                  id: myShop.id,
+                  userId: myShop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "",
+                },
+              })
+            }
+          />
+        ) : organizationsQuery.isSuccess && organizations.length === 0 ? (
           <SettingsRow
             label="Register your shop"
             sub="For MSMEs: trade as a shop, co-op or non-profit"
@@ -164,9 +181,8 @@ export default function SettingsScreen() {
         {/*
           No "Posting as" card (removed 20 Oct 2026). A shop owner switches
           between themselves and the shop on the Profile tab (the shop card,
-          "Switch to Myself") and in the post flow ("Post as myself"); a shop's
-          verification state is on its storefront ("Get verified") and in the
-          post flow ("under review").
+          "Switch to Myself") and in the post flow ("Post as myself"). The row
+          above shows the shop's review status and opens its existing manage screen.
         */}
         <SectionHeader accent="Profile and security" />
         <SettingsRow
@@ -364,6 +380,17 @@ function idStatusLine(status: IdVerificationStatus | undefined, verified: boolea
  * known this, and a guess here would be a wrong statement about somebody's own
  * account.
  */
+function organizationStatusLine(organization: ActingOrg): string {
+  switch (organization.verificationStatus ?? (organization.verified ? "VERIFIED" : "PENDING")) {
+    case "PENDING":
+      return "Under review";
+    case "VERIFIED":
+      return "Verified";
+    case "REJECTED":
+      return "Rejected";
+  }
+}
+
 function signInLine(hasPassword: boolean | undefined): string | null {
   if (hasPassword === undefined) return null;
   return hasPassword ? "Signs in with a password" : "Signs in with Google";
