@@ -21,18 +21,30 @@ export const NOTIFICATIONS_KEY = ["notifications"] as const;
 /** Matches the trades lists: a minute-old copy is fine while a fresh one loads. */
 const NOTIFICATIONS_STALE_MS = 30_000;
 
+export function isMessageNotification(notification: NotificationItem): boolean {
+  return (
+    notification.type === "NEW_MESSAGE" ||
+    notification.entityType === "conversation" ||
+    notificationTarget(notification)?.startsWith("/messages") === true
+  );
+}
+
 /**
  * GET /api/v1/notifications — newest first, one page of 50.
  *
  * Acting as a shop the server answers with the SHOP's rows (X-Baylo-Org), so
  * the acting org is part of the key: one identity's bell never renders under
- * the other. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
+ * the other. Message notifications open in the conversation list, not this
+ * activity list. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
  */
 export function useNotifications() {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, getActingOrgId() ?? "self"],
     queryFn: () => apiV1<NotificationsPayload>("/api/v1/notifications?limit=50"),
-    select: (r) => r.data,
+    select: (r) => ({
+      ...r.data,
+      notifications: r.data.notifications.filter((notification) => !isMessageNotification(notification)),
+    }),
     staleTime: NOTIFICATIONS_STALE_MS,
   });
 }
@@ -225,14 +237,24 @@ export function useMarkAllNotificationsRead() {
       if (!res.ok) return legacyFailure(res, "We could not mark those as read.");
       return (await res.json()) as unknown;
     },
-    /*
-     * `home` as well as the list. The bell's count comes from /api/v1/home's
-     * `unread.notifications`, so a list that cleared itself without invalidating
-     * home would leave a 24 sitting on an icon whose screen is demonstrably
-     * empty — the same disagreement between a badge and its contents that this
-     * whole screen exists to end.
-     */
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
+/**
+ * Marks the visible activity rows without touching hidden message notifications.
+ * The legacy API has only an all-unread PATCH or a per-notification PATCH.
+ */
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) =>
+      Promise.all(ids.map((id) => patchNotificationRead(id))),
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
     },
@@ -242,26 +264,24 @@ export function useMarkAllNotificationsRead() {
 /**
  * PATCH /api/notifications/[id] — one row.
  *
- * Not used by the list, which clears everything on open. It exists for the
- * arrival this client cannot make yet: a push notification opened straight into
- * its target, where exactly one row has been seen and marking the other
- * twenty-three read would be a lie. Kept small and unused rather than written
- * later under time pressure.
+ * Shared by the visible-row batch above and direct notification arrivals.
  */
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await request(`/api/notifications/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-      });
-      if (!res.ok) return legacyFailure(res, "We could not mark that as read.");
-      return (await res.json()) as unknown;
-    },
+    mutationFn: patchNotificationRead,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
     },
   });
+}
+
+async function patchNotificationRead(id: string): Promise<unknown> {
+  const res = await request(`/api/notifications/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+  });
+  if (!res.ok) return legacyFailure(res, "We could not mark that as read.");
+  return (await res.json()) as unknown;
 }

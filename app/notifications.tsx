@@ -7,7 +7,7 @@ import { ApiError, apiV1 } from "../src/api/client";
 import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
-  useMarkAllNotificationsRead,
+  useMarkNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
 import type { ItemDetailPayload, NotificationItem } from "../src/api/types";
@@ -57,11 +57,12 @@ import {
  * shop is what the row is about, and the owner is usually photo-less, which
  * drew a blank grey tile. No logo draws the store glyph, never a blank.
  *
- * ══ EVERY ROW IS READ ON OPEN. THE DOTS STAY ANYWAY. ═══════════════════════
+ * ══ VISIBLE ROWS ARE READ ON OPEN. THE DOTS STAY ANYWAY. ══════════════════
  *
- * Opening the list marks the whole thing read — see `useMarkAllNotificationsRead`
- * for why that, and not per-row. But the unread DOT is drawn from a snapshot
- * taken on the first render and does not move while the screen is up.
+ * Opening the list marks its visible activity rows read. Message notifications
+ * are excluded here and are marked read by fetching their conversation thread.
+ * The unread DOT is drawn from a snapshot taken on the first render and does
+ * not move while the screen is up.
  *
  * If it cleared live, the screen would blank its own dots a beat after opening
  * and the reader would never learn which rows were the new ones — the single
@@ -73,11 +74,11 @@ import {
 export default function NotificationsScreen() {
   const router = useRouter();
   const list = useNotifications();
-  const markAll = useMarkAllNotificationsRead();
+  const markVisible = useMarkNotificationsRead();
 
   /*
    * The snapshot behind the dots. Captured the first time rows arrive and never
-   * rewritten — `markAll` invalidates the query a moment later and the refetched
+   * rewritten — `markVisible` invalidates the query a moment later and the refetched
    * rows all come back `read: true`, which is correct data and the wrong thing
    * to render. See the note above.
    */
@@ -89,21 +90,27 @@ export default function NotificationsScreen() {
   }
 
   /*
-   * Fire once, and only when there is something to clear.
+   * Fire once, and only for visible unread activity rows.
    *
-   * `markAll.mutate` is deliberately NOT in the dependency array: the mutation
+   * `markVisible.mutate` is deliberately NOT in the dependency array: the mutation
    * object is a new reference on every render, and depending on it would fire
-   * this effect on each one — a PATCH per render for as long as the screen is
-   * open. The ref guard is what makes "once" true rather than merely likely.
+   * this effect on each one. The ref guard is what makes "once" true rather
+   * than merely likely.
    */
   const cleared = useRef(false);
-  const unreadCount = list.data?.unreadCount ?? 0;
+  const visibleUnreadIds = list.data?.notifications.filter((n) => !n.read).map((n) => n.id) ?? [];
   useEffect(() => {
-    if (cleared.current || unreadCount === 0) return;
+    if (cleared.current || visibleUnreadIds.length === 0) return;
     cleared.current = true;
-    markAll.mutate();
+    markVisible.mutate(visibleUnreadIds, {
+      onError: (error: unknown) =>
+        showDialog(
+          "Could not mark those as read",
+          error instanceof ApiError ? error.message : "Something went wrong. Try again.",
+        ),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unreadCount]);
+  }, [visibleUnreadIds]);
 
   const apiError = list.error instanceof ApiError ? list.error : null;
   if (apiError?.code === "UNAUTHENTICATED") {
@@ -123,7 +130,7 @@ export default function NotificationsScreen() {
       ) : rows.length === 0 ? (
         <Gutter style={{ paddingTop: 18 }}>
           <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-            Nothing yet. Offers, trades and messages you need to know about land here.
+            Nothing yet. Updates about your activity will appear here.
           </Text>
         </Gutter>
       ) : (
