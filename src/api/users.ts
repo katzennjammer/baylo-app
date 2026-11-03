@@ -1,9 +1,40 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { apiV1 } from "./client";
+import { ApiError, apiV1 } from "./client";
 import type { UserSearchResult } from "./types";
 
 const USER_SEARCH_PAGE_SIZE = 20;
+
+export interface UserSearchErrorPresentation {
+  message: string;
+  canRetry: boolean;
+}
+
+export function userSearchErrorPresentation(error: unknown): UserSearchErrorPresentation {
+  if (error instanceof ApiError) {
+    if (error.status === 404 || error.status === 405) {
+      return { message: "People search isn't available yet.", canRetry: false };
+    }
+    if (error.status === 429) {
+      return { message: "Too many searches. Wait a moment.", canRetry: true };
+    }
+    if (error.status === 401 || error.code === "UNAUTHENTICATED") {
+      return { message: "Please sign in again.", canRetry: true };
+    }
+    if (error.status >= 500 && error.status < 600) {
+      return { message: "Something went wrong on our side. Try again.", canRetry: true };
+    }
+    if (error.status === 0 && error.code === "NETWORK_ERROR") {
+      return { message: "Check your connection and try again.", canRetry: true };
+    }
+  }
+
+  const detail = error instanceof Error ? error.message : String(error ?? "");
+  if (/network|timeout|timed out/i.test(detail)) {
+    return { message: "Check your connection and try again.", canRetry: true };
+  }
+  return { message: "Something went wrong on our side. Try again.", canRetry: true };
+}
 
 interface UserSearchPage {
   users: UserSearchResult[];

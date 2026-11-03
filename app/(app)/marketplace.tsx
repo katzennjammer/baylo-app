@@ -39,7 +39,7 @@ import {
   type BrowseView,
   type SearchMode,
 } from "../../src/components/marketplace/BrowseControls";
-import { useUserSearch } from "../../src/api/users";
+import { useUserSearch, userSearchErrorPresentation } from "../../src/api/users";
 import { useHubs } from "../../src/api/hubs";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
@@ -1126,14 +1126,8 @@ export default function MarketplaceScreen() {
             (peopleQuery.length >= 2 && userSearch.isPending)
           }
           isError={userSearch.isError}
-          errorMessage={
-            userSearch.error instanceof ApiError &&
-            (userSearch.error.status === 404 || userSearch.error.status >= 500)
-              ? "Search isn't available right now"
-              : userSearch.error instanceof ApiError
-                ? userSearch.error.message
-                : "Check your mobile data or Wi-Fi and try again."
-          }
+          errorMessage={userSearchErrorPresentation(userSearch.error).message}
+          canRetry={userSearchErrorPresentation(userSearch.error).canRetry}
           onRetry={() => void userSearch.refetch()}
           hasNextPage={!!userSearch.hasNextPage}
           isFetchingNextPage={userSearch.isFetchingNextPage}

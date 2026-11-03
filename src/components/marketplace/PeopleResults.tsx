@@ -9,7 +9,6 @@ import { businessCategoryLabel } from "../../lib/business-category";
 import { TIER_LABEL } from "../../lib/trust";
 import { border, color, icon, radius, space, textStyle, type } from "../../theme/tokens";
 import { MascotEmptyState } from "../MascotEmptyState";
-import { BrowseError } from "./BrowseStates";
 import { ChevronRightIcon, PinIcon, StoreIcon, SwapIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
 
@@ -20,6 +19,7 @@ export function PeopleResults({
   isLoading,
   isError,
   errorMessage,
+  canRetry,
   onRetry,
   hasNextPage,
   isFetchingNextPage,
@@ -32,6 +32,7 @@ export function PeopleResults({
   isLoading: boolean;
   isError: boolean;
   errorMessage: string;
+  canRetry: boolean;
   onRetry: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -43,24 +44,32 @@ export function PeopleResults({
       return <ActivityIndicator color={color.green} style={s.loading} />;
     }
     if (isError) {
-      return <BrowseError headline="Could not search people" message={errorMessage} onRetry={onRetry} />;
+      return (
+        <MascotEmptyState
+          pose="worry"
+          size={80}
+          title="Could not search people"
+          message={errorMessage}
+          action={canRetry ? { label: "Try again", onPress: onRetry } : undefined}
+        />
+      );
     }
     if (query.length < 2) {
       return (
         <Text style={[textStyle(type.emptyBody), s.prompt]}>
-          Enter at least two characters to search for traders.
+          Type at least 2 letters to search.
         </Text>
       );
     }
     return (
       <MascotEmptyState
         pose="search"
-        size={48}
+        size={80}
         title="No people found"
         message="Try a different name or spelling."
       />
     );
-  }, [errorMessage, isError, isLoading, onRetry, query.length]);
+  }, [canRetry, errorMessage, isError, isLoading, onRetry, query.length]);
 
   const listHeader = (
     <View>

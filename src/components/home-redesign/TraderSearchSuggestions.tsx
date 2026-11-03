@@ -15,6 +15,7 @@ export function TraderSearchSuggestions({
   users,
   loading,
   error,
+  canRetry = true,
   onSearch,
   onOpen,
   onRetry,
@@ -24,6 +25,7 @@ export function TraderSearchSuggestions({
   users: UserSearchResult[];
   loading: boolean;
   error: string | null;
+  canRetry?: boolean;
   onSearch: () => void;
   onOpen: (user: UserSearchResult) => void;
   onRetry: () => void;
@@ -55,14 +57,16 @@ export function TraderSearchSuggestions({
       ) : error ? (
         <View style={s.status}>
           <Text style={[textStyle(type.metadata), s.secondary]} numberOfLines={2}>{error}</Text>
-          <Tappable
-            onPress={onRetry}
-            accessibilityRole="button"
-            style={s.retry}
-            pressedStyle={s.rowPressed}
-          >
-            <Text style={[textStyle(type.chip), { color: dColor.primary }]}>Retry</Text>
-          </Tappable>
+          {canRetry ? (
+            <Tappable
+              onPress={onRetry}
+              accessibilityRole="button"
+              style={s.retry}
+              pressedStyle={s.rowPressed}
+            >
+              <Text style={[textStyle(type.chip), { color: dColor.primary }]}>Try again</Text>
+            </Tappable>
+          ) : null}
         </View>
       ) : users.length > 0 ? (
         users.slice(0, compact ? 3 : users.length).map((user) => (

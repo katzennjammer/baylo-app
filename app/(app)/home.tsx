@@ -20,7 +20,7 @@ import { useHome } from "../../src/api/home";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
 import { useActiveTrades } from "../../src/api/trades";
-import { useUserSearchSuggestions } from "../../src/api/users";
+import { useUserSearchSuggestions, userSearchErrorPresentation } from "../../src/api/users";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
 import { Tappable } from "../../src/components/Tappable";
@@ -152,6 +152,9 @@ export default function HomeScreen() {
     debouncedSearchQuery,
     showSearchSuggestions && isTraderSearch && !isSearchDebouncing,
   );
+  const traderSearchError = traderSuggestions.isError
+    ? userSearchErrorPresentation(traderSuggestions.error)
+    : null;
 
   // Unfiltered: the category circles (facets) come from it.
   const browse = useBrowse({ categories: [] });
@@ -278,13 +281,8 @@ export default function HomeScreen() {
         users={isSearchDebouncing ? [] : traderSuggestions.data ?? []}
         loading={isSearchDebouncing || traderSuggestions.isPending}
         compact
-        error={
-          !isSearchDebouncing && traderSuggestions.isError
-            ? traderSuggestions.error instanceof ApiError
-              ? traderSuggestions.error.message
-              : "Could not load trader suggestions."
-            : null
-        }
+        error={!isSearchDebouncing ? traderSearchError?.message ?? null : null}
+        canRetry={traderSearchError?.canRetry ?? true}
         onSearch={() => submitSearch(`@${traderSearchQuery}`)}
         onOpen={(user) => {
           setDraftQuery("");
