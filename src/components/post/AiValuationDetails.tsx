@@ -4,14 +4,15 @@ import { ActivityIndicator, Linking, Text, View } from "react-native";
 import { ApiError } from "../../api/client";
 import { fetchAiValuation, type Category } from "../../api/post";
 import { aiKeyOf, currentAi, usePost } from "../../post/state";
-import { postBorder, postColor, postRadius, postSize, postType, textStyle } from "../../theme/post-tokens";
+import { postColor, postSpace, postType, textStyle } from "../../theme/post-tokens";
 import { Tappable } from "../Tappable";
-import { OutlineButton } from "./ui";
+import { HelperRow, TextButton } from "./ui";
 
 /**
- * The AI half of step 4: asks /api/ai/valuation once per (title, category,
- * condition), and shows what came back — the reason, the online listings it
- * was based on, or why there is no AI number.
+ * The online-price half of step 4: asks /api/ai/valuation once per (title,
+ * category, condition), and shows what came back — the typical asking price,
+ * the Baylo price level it falls in, and the listings it came from — or why
+ * there is no online-price value.
  *
  * ── WHAT IS SENT ────────────────────────────────────────────────────────────
  *
@@ -98,6 +99,38 @@ export function useAiValuation() {
   }, [ready, key, state.title, state.category, state.condition, dispatch]);
 }
 
+const php = (n: number) => `₱${n.toLocaleString("en-PH")}`;
+
+/** "₱2K", "₱25K", "₱1.5K", "₱800" — the cut-off labels under the track. */
+function shortPhp(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `₱${Number.isInteger(k) ? k : k.toFixed(1)}K`;
+  }
+  return `₱${n}`;
+}
+
+function SectionLabel({ children, top = 20 }: { children: string; top?: number }) {
+  return (
+    <Text style={[textStyle(postType.sectionLabel), { color: postColor.inkMuted, marginTop: top }]}>
+      {children}
+    </Text>
+  );
+}
+
+const Divider = ({ top = 20 }: { top?: number }) => (
+  <View style={{ height: 1, backgroundColor: postColor.divider, marginTop: top }} />
+);
+
+/**
+ * Under the slider, in the flow's own register: hairlines, mono section
+ * labels, no card.
+ *
+ *   ONLINE ASKING PRICE       what the AI found (median, count)
+ *   PRICE LEVEL · CATEGORY    Baylo's fixed levels, drawn like the value band,
+ *                             the item's level in green
+ *   LISTINGS CHECKED          each listing, its site and its price
+ */
 export function AiValuationDetails() {
   const { state, dispatch } = usePost();
   const [linkError, setLinkError] = useState(false);
@@ -106,107 +139,196 @@ export function AiValuationDetails() {
 
   if (state.revaluationSpent) return null;
 
-  const retry = () => {
-    // Clearing the state re-arms useAiValuation, which asks again.
-    dispatch({ type: "ai/reset", notice: "" });
-  };
-
-  return (
-    <View
-      style={{
-        marginTop: 18,
-        padding: 14,
-        borderWidth: postBorder.field,
-        borderColor: postColor.line,
-        borderRadius: postRadius.button,
-        backgroundColor: postColor.inset,
-      }}
+  const notice = state.aiNotice ? (
+    <Text
+      accessibilityRole="alert"
+      style={[textStyle(postType.fieldError), { color: postColor.warmInk, marginTop: 16 }]}
     >
-      {state.aiNotice ? (
-        <Text
-          accessibilityRole="alert"
-          style={[textStyle(postType.helper), { color: postColor.warmInk, marginBottom: 8 }]}
-        >
-          {state.aiNotice}
-        </Text>
-      ) : null}
+      {state.aiNotice}
+    </Text>
+  ) : null;
 
-      {ai === null || ai.status === "loading" ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+  if (ai === null || ai.status === "loading") {
+    return (
+      <View>
+        <Divider top={24} />
+        {notice}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 20 }}>
           <ActivityIndicator size="small" color={postColor.forest} />
           <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary, flex: 1 }]}>
-            Checking current online listings for this item. This can take up to 20 seconds. Only
-            the title, category and condition are sent, not your photo.
+            Checking online asking prices for this item. This can take up to 20 seconds. Only the
+            title, category and condition are sent, not your photo.
           </Text>
         </View>
-      ) : result ? (
+      </View>
+    );
+  }
+
+  if (!result) {
+    return (
+      <View>
+        <Divider top={24} />
+        {notice}
+        <SectionLabel>ONLINE PRICE CHECK</SectionLabel>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary, marginTop: 6 }]}>
+          {ai.status === "fallback" ? `${ai.message} ` : ""}The value above is Baylo&apos;s standard
+          estimate from the category, condition and completed trades. It is not based on online
+          prices.
+        </Text>
+        <View style={{ alignItems: "flex-start", marginTop: 4 }}>
+          <TextButton
+            label="Check online prices again"
+            onPress={() => dispatch({ type: "ai/reset", notice: "" })}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const { market, level, sources } = result;
+  const current = level.levels[level.index];
+  const checkedAt = formatCheckedAt(result.checkedAt);
+
+  return (
+    <View>
+      <Divider top={24} />
+      {notice}
+
+      <SectionLabel>ONLINE ASKING PRICE</SectionLabel>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 6 }}>
+        <Text style={[textStyle(postType.detectResult), { color: postColor.ink }]}>
+          {php(market.typicalPhp)}
+        </Text>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
+          typical · {market.listingCount} listing{market.listingCount === 1 ? "" : "s"}
+        </Text>
+      </View>
+
+      <SectionLabel>{`PRICE LEVEL · ${level.categoryLabel.toUpperCase()}`}</SectionLabel>
+      <View
+        accessible
+        accessibilityLabel={`Price level ${level.name}. ${level.levels
+          .map((l) => `${l.name} ${l.leaves} Leaves`)
+          .join(", ")}.`}
+      >
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 10 }}>
+          {level.levels.map((l, i) => (
+            <View
+              key={l.name}
+              style={{
+                flex: 1,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: i === level.index ? postColor.green : postColor.line,
+              }}
+            />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 8 }}>
+          {level.levels.map((l, i) => {
+            const here = i === level.index;
+            return (
+              <View key={l.name} style={{ flex: 1, alignItems: "center" }}>
+                <Text
+                  style={[
+                    textStyle(postType.bandLabel),
+                    { color: here ? postColor.forest : postColor.inkMuted },
+                  ]}
+                >
+                  {l.name.toUpperCase()}
+                </Text>
+                <Text
+                  style={[
+                    textStyle(postType.bandValue),
+                    { color: here ? postColor.forest : postColor.inkSecondary, marginTop: 2 },
+                  ]}
+                >
+                  {l.leaves.toLocaleString("en-US")}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+        {/* The cut-offs sit on the joins between levels: the middle three of
+            four quarters, so the row is inset by an eighth each side. */}
+        <View style={{ flexDirection: "row", marginTop: 6, paddingHorizontal: "12.5%" }}>
+          {level.cutoffsPhp.map((c) => (
+            <Text
+              key={c}
+              style={[
+                textStyle(postType.counter),
+                { flex: 1, textAlign: "center", color: postColor.inkMuted },
+              ]}
+            >
+              {shortPhp(c)}
+            </Text>
+          ))}
+        </View>
+      </View>
+
+      <View style={{ marginTop: 14 }}>
+        <HelperRow gap={postSpace.value.helperIconGap}>
+          {`${php(market.typicalPhp)} is ${level.name} for ${level.categoryLabel.toLowerCase()}. ${level.name} is always ${current.leaves.toLocaleString("en-US")} Leaves for an item in this condition, so the same price gives the same value.`}
+        </HelperRow>
+      </View>
+
+      {sources.length ? (
         <>
-          <Text style={[textStyle(postType.smallTextLabel), { color: postColor.ink }]}>
-            Why this estimate
-          </Text>
-          <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary, marginTop: 4 }]}>
-            {result.explanation}
-          </Text>
-          {result.sources.length ? (
-            <View style={{ marginTop: 8 }}>
-              {result.sources.map((source) => {
-                const url = safeHttpsUrl(source.url);
-                if (!url) return null;
-                return (
-                  <Tappable
-                    key={url}
-                    accessibilityRole="link"
-                    accessibilityLabel={`Open source: ${source.title}`}
-                    onPress={() => {
-                      setLinkError(false);
-                      void Linking.openURL(url).catch(() => setLinkError(true));
-                    }}
-                    style={{ minHeight: 40, justifyContent: "center" }}
-                  >
+          <Divider />
+          <SectionLabel>LISTINGS CHECKED</SectionLabel>
+          <View style={{ marginTop: 4 }}>
+            {sources.map((source, i) => {
+              const url = safeHttpsUrl(source.url);
+              if (!url) return null;
+              return (
+                <Tappable
+                  key={url}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open listing: ${source.title}, ${php(source.pricePhp)}`}
+                  onPress={() => {
+                    setLinkError(false);
+                    void Linking.openURL(url).catch(() => setLinkError(true));
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    minHeight: 56,
+                    gap: 12,
+                    borderTopWidth: i ? 1 : 0,
+                    borderTopColor: postColor.divider,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
                     <Text
-                      numberOfLines={2}
-                      style={[
-                        textStyle(postType.smallTextLabel),
-                        { color: postColor.forest, textDecorationLine: "underline" },
-                      ]}
+                      numberOfLines={1}
+                      style={[textStyle(postType.draftRowTitle), { color: postColor.forest }]}
                     >
-                      {source.title}
+                      {`${source.title} ↗`}
                     </Text>
-                    <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
+                    <Text
+                      style={[textStyle(postType.draftRowMeta), { color: postColor.inkMuted, marginTop: 2 }]}
+                    >
                       {hostOf(url)}
                     </Text>
-                  </Tappable>
-                );
-              })}
-            </View>
-          ) : null}
+                  </View>
+                  <Text style={[textStyle(postType.bandValue), { color: postColor.ink }]}>
+                    {php(source.pricePhp)}
+                  </Text>
+                </Tappable>
+              );
+            })}
+          </View>
           {linkError ? (
             <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
-              Could not open that source link.
+              Could not open that listing.
             </Text>
           ) : null}
-          <Text style={[textStyle(postType.helper), { color: postColor.inkMuted, marginTop: 8 }]}>
-            An AI estimate{formatCheckedAt(result.checkedAt) ? `, checked ${formatCheckedAt(result.checkedAt)}` : ""}.
-            These are online asking prices, not confirmed sales, and Leaves are not pesos: the
-            listings only place your item within Baylo&apos;s range for its category and condition.
-          </Text>
         </>
-      ) : (
-        <>
-          <Text style={[textStyle(postType.smallTextLabel), { color: postColor.ink }]}>
-            Baylo standard estimate
-          </Text>
-          <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary, marginTop: 4 }]}>
-            {ai.status === "fallback" ? `${ai.message} ` : ""}This value is Baylo&apos;s standard
-            estimate from the category, condition and completed trades. It is not an AI estimate.
-          </Text>
-          <OutlineButton
-            label="Try the AI estimate again"
-            onPress={retry}
-            style={{ marginTop: 12, height: postSize.button.confirm }}
-          />
-        </>
-      )}
+      ) : null}
+
+      <Text style={[textStyle(postType.helper), { color: postColor.inkMuted, marginTop: 8 }]}>
+        {`Asking prices found by AI${checkedAt ? ` on ${checkedAt}` : ""}, not confirmed sales. Leaves are not pesos: the price only sets the level.`}
+      </Text>
     </View>
   );
 }

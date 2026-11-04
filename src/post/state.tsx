@@ -815,7 +815,7 @@ export function activeValuation(s: PostState): ValuationPayload | null {
     suggestedLeaves: ai.valuation.suggestedLeaves,
     allowed: ai.valuation.allowed,
     valuationSource: "ai_market",
-    basis: ai.explanation,
+    basis: `${ai.level.name} for ${ai.level.categoryLabel.toLowerCase()} · from online prices`,
   };
 }
 

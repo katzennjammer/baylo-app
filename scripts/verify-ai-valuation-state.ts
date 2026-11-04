@@ -51,10 +51,23 @@ const aiResult: AiValuationResult = {
     allowed: { min: 2250, max: 3750 },
     valuationSource: "ai_market",
   },
-  explanation: "Listings ask about ₱20,000, high for electronics.",
+  market: { typicalPhp: 23000, lowPhp: 21000, highPhp: 24999, listingCount: 3 },
+  level: {
+    index: 2,
+    name: "High",
+    categoryLabel: "Electronics",
+    cutoffsPhp: [2000, 8000, 25000],
+    levels: [
+      { name: "Low", leaves: 822 },
+      { name: "Typical", leaves: 1992 },
+      { name: "High", leaves: 3000 },
+      { name: "Premium", leaves: 4332 },
+    ],
+  },
+  note: "Like-new iPhone 13 listings.",
   sources: [
-    { title: "A", url: "https://a.example/1" },
-    { title: "B", url: "https://b.example/2" },
+    { title: "A", url: "https://a.example/1", pricePhp: 21000 },
+    { title: "B", url: "https://b.example/2", pricePhp: 23000 },
   ],
   checkedAt: "2026-11-04T00:00:00.000Z",
   ticket: "signed.ticket",
@@ -87,6 +100,7 @@ console.log("AI answer")
   s = reduce(s, { type: "ai/done", key, result: aiResult })
   check("the AI number is the value", effectiveValue(s) === 3000, effectiveValue(s))
   check("source reads ai_market", activeValuation(s)?.valuationSource === "ai_market")
+  check("provenance names the level", activeValuation(s)?.basis === "High for electronics · from online prices", activeValuation(s)?.basis)
   check("slider band is the AI band", activeValuation(s)?.allowed.min === 2250)
   check("ticket is sent", valuationTicket(s) === "signed.ticket")
   check("Next allowed", canAdvance(s))

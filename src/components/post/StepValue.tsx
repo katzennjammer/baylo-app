@@ -99,7 +99,7 @@ export function StepValue({ board }: { board: Board }) {
 
   const provenance =
     valuationSource === "ai_market"
-      ? "AI estimate from online listings"
+      ? valuation.basis
       : valuationSource === "comparables"
         ? sampleSize === 1
           ? "Standard estimate from 1 similar trade"

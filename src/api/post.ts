@@ -489,10 +489,11 @@ export interface ValuationPayload {
 /**
  * POST /api/ai/valuation.
  *
- * Claude reads current online listings for the title, category and condition
- * (never the photo) and places the item inside the range /api/v1/valuation
- * gives. The AI does not set the bracket or the review rules; the server does,
- * on the number.
+ * Claude finds online listings and their peso asking prices for the title,
+ * category and condition (never the photo). The SERVER takes the median price,
+ * finds its price level for the category (Low / Typical / High / Premium), and
+ * gives that level's fixed point in the range /api/v1/valuation gives. Same
+ * price, same Leaves. The bracket and review rules run on the server as before.
  *
  *   "ai"        use `valuation.suggestedLeaves` and `allowed`, show the
  *               explanation and sources, and send `ticket` with createItem so
@@ -513,15 +514,26 @@ export type AiValuationResult =
         allowed: { min: number; max: number };
         valuationSource: "ai_market";
       };
-      explanation: string;
-      sources: { title: string; url: string }[];
+      /** The online asking prices. `typicalPhp` (the median) picks the level. */
+      market: { typicalPhp: number; lowPhp: number; highPhp: number; listingCount: number };
+      level: {
+        index: 0 | 1 | 2 | 3;
+        name: "Low" | "Typical" | "High" | "Premium";
+        categoryLabel: string;
+        /** [Low→Typical, Typical→High, High→Premium], pesos. */
+        cutoffsPhp: [number, number, number];
+        /** All four levels and their Leaves for this category and condition. */
+        levels: { name: string; leaves: number }[];
+      };
+      note: string;
+      sources: { title: string; url: string; pricePhp: number }[];
       checkedAt: string;
       ticket: string;
       expiresAt: string;
     }
   | {
       status: "fallback";
-      reason: "INSUFFICIENT_SOURCES" | "OUT_OF_RANGE" | "INVALID_AI_RESPONSE" | "AI_UNAVAILABLE";
+      reason: "INSUFFICIENT_SOURCES" | "INVALID_AI_RESPONSE" | "AI_UNAVAILABLE";
       message: string;
     };
 

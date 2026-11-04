@@ -348,7 +348,7 @@ function reviewLine(state: PostState): string {
   const v = activeValuation(state);
   const source =
     v?.valuationSource === "ai_market"
-      ? "AI estimate"
+      ? "From online prices"
       : v?.valuationSource === "comparables"
         ? `Standard estimate from ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
         : "Standard estimate";
