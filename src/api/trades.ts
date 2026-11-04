@@ -120,6 +120,29 @@ export function useActiveTrades(enabled = true) {
 }
 
 /**
+ * One listing's incoming offers, for its offer inbox.
+ *
+ * `offersFor` makes the server return only PENDING offers this viewer received
+ * on that item, so a busy listing is not cut short by the 50-row cap the main
+ * feed shares across every listing. The key sits under TRADES_ACTIVE_KEY, so
+ * every mutation that invalidates the feed (accept, decline, withdraw)
+ * refreshes this too.
+ */
+export function useListingOffers(itemId: string | undefined) {
+  return useQuery({
+    queryKey: [...TRADES_ACTIVE_KEY, "for", itemId],
+    placeholderData: (previous) => previous,
+    queryFn: () =>
+      apiV1<TradesPayload>(
+        `/api/v1/trades?tab=active&limit=50&offersFor=${encodeURIComponent(itemId!)}`,
+      ),
+    select: (r) => r.data.offers.filter((o) => o.direction === "received"),
+    staleTime: LIST_STALE_MS,
+    enabled: !!itemId,
+  });
+}
+
+/**
  * The history tab, read for a COUNT and a page.
  *
  * §6 collapses History to a single row carrying `14 trades`, and the count has

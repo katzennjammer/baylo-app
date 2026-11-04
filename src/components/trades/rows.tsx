@@ -51,18 +51,25 @@ export function Thumb({
   image,
   size,
   icon,
+  fill = false,
 }: {
   image: string | null;
+  /** The square's side; with `fill`, the height only. */
   size: number;
   /** A promise has no photo and is not a missing one. See `PromiseWell`. */
   icon?: React.ReactNode;
+  /**
+   * Take the full width of the parent at `size` tall, cropped to fit. The
+   * trade card's big give/get photos; everything else stays a small square.
+   */
+  fill?: boolean;
 }) {
   // Too small for a Reload button: one automatic retry, then the placeholder.
   const photo = usePhotoRetry(image ?? undefined);
   return (
     <View
       style={{
-        width: size,
+        width: fill ? "100%" : size,
         height: size,
         borderRadius: offerRadius.thumbnail,
         backgroundColor: icon ? offerColor.quiet : offerColor.photoPlaceholder,
@@ -74,7 +81,7 @@ export function Thumb({
       {image && !photo.failed ? (
         <Image
           key={photo.key}
-          source={{ uri: sizedImage(image, "thumb") }}
+          source={{ uri: sizedImage(image, fill ? "card" : "thumb") }}
           contentFit="cover"
           style={{ width: "100%", height: "100%" }}
           transition={120}

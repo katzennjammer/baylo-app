@@ -11,7 +11,7 @@ import { ClockIcon } from "../post/post-icons";
 import { SwapSeam } from "../SwapSeam";
 import { Tappable } from "../Tappable";
 import { color, font, radius, size, space, textStyle, type } from "../../theme/tokens";
-import { offerBorder, offerColor, offerSize } from "../../theme/offer-tokens";
+import { offerBorder, offerColor } from "../../theme/offer-tokens";
 
 /**
  * One trade on the Trades tab (1 Oct 2026 redesign). The card body opens the
@@ -211,12 +211,14 @@ function Half({
       {/* Never truncated: at large text sizes "You give" wraps rather than reading "You gi…". */}
       <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>{label}</Text>
       <View style={s.halfBody}>
+        {/* Big and equal on both sides (Nov 2026): at 44 dp the photos were
+            too small to recognise the item, and the crop looked off. */}
         {side.leaves ? (
           <View style={s.leafTile}>
-            <LeafIcon size={20} stroke={1.7} color={color.forest} />
+            <LeafIcon size={28} stroke={1.7} color={color.forest} />
           </View>
         ) : (
-          <Thumb image={side.image} size={THUMB} />
+          <Thumb image={side.image} size={PHOTO} fill />
         )}
         <Text
           style={[textStyle(type.hubName), s.itemName]}
@@ -396,7 +398,8 @@ function CardButton({
 
 /* ─────────────────────────────── styles ─────────────────────────────── */
 
-const THUMB = offerSize.tradeRow.thumb;
+/** The give/get photo's height. Full width of its half. */
+const PHOTO = 120;
 /** Each half's distance from the seam. The same on both sides. */
 const SEAM_GAP = space.browse.searchGap;
 /** The current-step leaf marker, and the plain dot. */
@@ -429,8 +432,8 @@ const s = StyleSheet.create({
   halfBody: { alignItems: "flex-start", gap: 6 },
   itemName: { alignSelf: "stretch", color: color.ink },
   leafTile: {
-    width: THUMB,
-    height: THUMB,
+    width: "100%",
+    height: PHOTO,
     borderRadius: radius.matchesThumb,
     backgroundColor: color.greenWash,
     alignItems: "center",

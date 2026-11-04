@@ -616,7 +616,18 @@ export interface LiveOffer {
   offeredItems: { id: string; title: string; image: string | null; valueLeaves: number | null }[];
   offeredLeaves: number | null;
   message: string | null;
-  counterparty: { id: string; name: string; avatar: string | null };
+  /**
+   * `rating` and `trustTier` arrived in Nov 2026 for the offer inbox; an older
+   * server omits them, so both are optional and the card simply leaves the
+   * badge off.
+   */
+  counterparty: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    rating?: number;
+    trustTier?: TrustTier | null;
+  };
   /**
    * THE BRIDGE, as this screen needs it. Both brackets as they stood when the
    * offer was made; `bridgeFeeLeaves` is the QUOTE either way and
