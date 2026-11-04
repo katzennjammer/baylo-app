@@ -21,6 +21,7 @@ import {
 import { LeafIcon, PencilIcon, SwapIcon } from "../icons";
 import { ClockIcon, InfoIcon } from "./post-icons";
 import { Field, HelperRow, NoticePanel, Skeleton, TextButton } from "./ui";
+import { OnlinePriceReference } from "./OnlinePriceReference";
 
 /**
  * Step 4 — what it is worth in Leaves.
@@ -164,6 +165,14 @@ export function StepValue({ board }: { board: Board }) {
           onChange={(leaves) => dispatch({ type: "value/set", leaves })}
         />
       )}
+
+      {state.category ? (
+        <OnlinePriceReference
+          title={state.title}
+          category={state.category}
+          condition={state.condition}
+        />
+      ) : null}
 
       {own ? null : locked ? (
         <>

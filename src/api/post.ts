@@ -6,19 +6,20 @@ import { prepareImage, type PreparedImage } from "../media/prepare-image";
 import type { SafeZoneHub } from "./types";
 
 /**
- * The five endpoints the listing wizard talks to.
+ * The endpoints the listing wizard talks to.
  *
  * They do not share a response shape, and this module does not pretend they do.
- * Three of them predate /api/v1 and answer bare JSON; two are v1 and come
- * wrapped in the `{ data, error, meta }` envelope that `apiV1` unwraps. What
- * IS unified here is the failure type — everything below throws `ApiError`, so
- * a screen branches on `.status` and `.retryAfter` rather than on which
- * generation of the API it happened to be talking to.
+ * Legacy routes answer bare JSON; v1 routes use the `{ data, error, meta }`
+ * envelope that `apiV1` unwraps. What IS unified here is the failure type —
+ * everything below throws `ApiError`, so a screen branches on `.status` and
+ * `.retryAfter` rather than on which generation of the API it happened to be
+ * talking to.
  *
  *   POST /api/upload           multipart, images only, 10 MB, 30/hour
  *   POST /api/ai/identify      category + condition + tags from the photo, 20/hour
  *   POST /api/ai/phash         duplicate detection, FAILS CLOSED, 20/hour
- *   GET  /api/v1/valuation     the suggestion and the ±25% band
+ *   GET  /api/v1/valuation     the official Leaves suggestion and slider band
+ *   POST /api/ai/price-reference optional cited online peso-price reference
  *   GET  /api/v1/hubs          the 22 seeded Safe-Zone Hubs
  *   POST /api/items            creates the listing
  *
@@ -479,6 +480,28 @@ export interface ValuationPayload {
   conditionLabel: string;
   comparables: { label: string; sublabel: string; leaves: string }[];
   basis: string;
+}
+
+export interface PriceReferencePayload {
+  estimate: { lowPhp: number; highPhp: number } | null;
+  note: string;
+  sources: { title: string; url: string }[];
+  checkedAt: string;
+}
+
+export async function fetchPriceReference(input: {
+  title: string;
+  category: Category;
+  condition: Condition;
+}): Promise<PriceReferencePayload> {
+  const path = "/api/ai/price-reference";
+  const res = await request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) await legacyFailure(res, "Online price references are unavailable right now");
+  return readJson<PriceReferencePayload>(res, path);
 }
 
 /**
