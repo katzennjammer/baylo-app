@@ -1,11 +1,15 @@
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 
 import { CloseIcon, FilterIcon, GridIcon, MapIcon, SearchIcon, StoreIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
   border,
   color,
+  dColor,
+  font,
   icon,
+  marketplaceUi,
   radius,
   size,
   space,
@@ -31,17 +35,32 @@ export function SearchField({
   onSubmit,
   placeholder = "Search",
   accessibilityLabel = "Search items by title or description",
+  variant = "default",
+  trailing,
 }: {
   value: string;
   onChange: (next: string) => void;
   onSubmit: () => void;
+  /** Drawn inside the field at its end -- Home's filter button. */
+  trailing?: React.ReactNode;
   /** Map mode searches hubs, not listings, and says so. */
   placeholder?: string;
   accessibilityLabel?: string;
+  variant?: "default" | "home" | "marketplace";
 }) {
   return (
-    <View style={s.field}>
-      <SearchIcon size={icon.search.size} stroke={icon.search.stroke} color={color.inkMuted} />
+    <View
+      style={[
+        s.field,
+        variant === "home" && s.homeField,
+        variant === "marketplace" && s.marketplaceField,
+      ]}
+    >
+      <SearchIcon
+        size={icon.search.size}
+        stroke={icon.search.stroke}
+        color={variant === "home" ? color.inkSecondary : variant === "marketplace" ? dColor.mutedText : color.inkMuted}
+      />
 
       <TextInput
         value={value}
@@ -53,12 +72,17 @@ export function SearchField({
         autoCapitalize="none"
         autoCorrect={false}
         placeholder={placeholder}
-        placeholderTextColor={color.inkMuted}
+        placeholderTextColor={variant === "marketplace" ? dColor.mutedText : color.inkMuted}
         // The field shares its row with the Grid/Map toggle and the filter
         // button, so it is narrower than it was; uncapped, 2x text clips the
         // placeholder hard at 320 dp.
         maxFontSizeMultiplier={size.home.headingMaxFontScale}
-        style={[textStyle(type.searchInput), s.input]}
+        style={[
+          textStyle(type.searchInput),
+          s.input,
+          variant === "home" && s.homeInput,
+          variant === "marketplace" && s.marketplaceInput,
+        ]}
         accessibilityLabel={accessibilityLabel}
       />
 
@@ -69,42 +93,90 @@ export function SearchField({
           accessibilityLabel="Clear search"
           // 44 wide, pulled into the field's own padding so the glyph sits
           // where the eye expects while the target stays full size.
-          style={s.clear}
+          style={[s.clear, variant === "marketplace" && s.marketplaceClear]}
           hitSlop={8}
         >
-          <CloseIcon size={icon.clear.size} stroke={icon.clear.stroke} color={color.inkMuted} />
+          <CloseIcon
+            size={icon.clear.size}
+            stroke={icon.clear.stroke}
+            color={variant === "marketplace" ? dColor.mutedText : color.inkMuted}
+          />
         </Tappable>
       ) : null}
+      {trailing}
     </View>
   );
 }
 
-/** The filter button's side padding. */
-const FILTER_X = 13;
+export type SearchMode = "items" | "people";
+
+export function SearchModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: SearchMode;
+  onChange: (mode: SearchMode) => void;
+}) {
+  return (
+    <View
+      style={s.searchModeToggle}
+      accessibilityRole="tablist"
+      accessibilityLabel="Search items or people"
+    >
+      {(["items", "people"] as const).map((option) => {
+        const selected = mode === option;
+        const label = option === "items" ? "Items" : "People";
+        return (
+          <Tappable
+            key={option}
+            onPress={() => onChange(option)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${label} search`}
+            style={[s.searchModeSegment, selected && s.searchModeSegmentOn]}
+            pressedStyle={s.searchModeSegmentPressed}
+          >
+            <Text style={[textStyle(type.chip), s.searchModeLabel, selected && s.searchModeLabelOn]}>
+              {label}
+            </Text>
+          </Tappable>
+        );
+      })}
+    </View>
+  );
+}
 
 /** Opens the filter sheet. Carries a count when anything is set. */
 export function FilterButton({
   count,
   onPress,
+  variant = "default",
 }: {
   count: number;
   onPress: () => void;
+  /** "inline" sits inside a search field: no box of its own. */
+  variant?: "default" | "home" | "inline";
 }) {
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={count > 0 ? `Filters, ${count} active` : "Filters"}
-      style={[s.filterButton, count > 0 && s.filterButtonActive]}
-      pressedStyle={s.filterButtonPressed}
+      style={[
+        s.filterButton,
+        variant === "home" && s.homeFilter,
+        variant === "inline" && s.inlineFilter,
+        count > 0 && variant !== "home" && s.filterButtonActive,
+      ]}
+      pressedStyle={variant === "home" ? s.homeFilterPressed : s.filterButtonPressed}
     >
       <FilterIcon
         size={icon.filter.size}
         stroke={icon.filter.stroke}
-        color={count > 0 ? color.forest : color.inkSecondary}
+        color={count > 0 ? dColor.primary : variant === "home" ? color.homeOnGreen : variant === "inline" ? color.ink : dColor.mutedText}
       />
       {count > 0 ? (
-        <Text style={[textStyle(type.gridLeaves), { color: color.forest }]}>{count}</Text>
+        <View style={s.activeFilterDot} />
       ) : null}
     </Tappable>
   );
@@ -160,18 +232,36 @@ export function CategoryRail({
   orgsOnly: boolean;
   onToggleOrgs: () => void;
 }) {
-  // The shops chip survives an empty facet list, which the categories do not.
-  // Facets are "categories with something visible in them", so an empty rail
-  // means an empty marketplace -- but "show me shops" is still a question worth
-  // being able to ask, and hiding the only control that answers it is how a
-  // filter becomes undiscoverable.
-  if (facets.length === 0 && !orgsOnly) return null;
-
   const atCap = selected.length >= max;
   const allOn = selected.length === 0;
+  const railRef = useRef<ScrollView>(null);
+  const chipOffsets = useRef(new Map<string, number>());
+  const { width } = useWindowDimensions();
+  const selectedKey = selected.length > 0 ? selected[selected.length - 1] : orgsOnly ? "shops" : "all";
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const offset = chipOffsets.current.get(selectedKey);
+      if (offset !== undefined) {
+        railRef.current?.scrollTo({ x: Math.max(0, offset - space.screenX), animated: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedKey, selected.join("|"), width]);
+
+  const rememberChip = (key: string, x: number) => {
+    chipOffsets.current.set(key, x);
+    if (key === selectedKey) {
+      railRef.current?.scrollTo({ x: Math.max(0, x - space.screenX), animated: true });
+    }
+  };
+
+  // The shops chip survives an empty facet list, which the categories do not.
+  if (facets.length === 0 && !orgsOnly) return null;
 
   return (
     <ScrollView
+      ref={railRef}
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={s.rail}
@@ -183,16 +273,17 @@ export function CategoryRail({
         accessibilityRole="button"
         accessibilityState={{ selected: orgsOnly }}
         accessibilityLabel="Shops only"
-        style={[s.chip, s.chipWithIcon, orgsOnly && s.chipOn]}
+        onLayout={(event) => rememberChip("shops", event.nativeEvent.layout.x)}
+        style={[s.categoryChip, s.chipWithIcon, orgsOnly && s.categoryChipOn]}
         pressedStyle={s.chipPressed}
       >
         <StoreIcon
           size={icon.tileBadge.size}
           stroke={icon.tileBadge.stroke}
-          color={orgsOnly ? color.onGreen : color.inkSecondary}
+          color={orgsOnly ? dColor.primaryText : dColor.primary}
         />
         <Text
-          style={[textStyle(type.trendingChip), { color: orgsOnly ? color.onGreen : color.inkSecondary }]}
+          style={[s.chipLabel, { color: orgsOnly ? dColor.primaryText : dColor.primary }]}
         >
           Shops only
         </Text>
@@ -205,11 +296,12 @@ export function CategoryRail({
         accessibilityRole="button"
         accessibilityState={{ selected: allOn }}
         accessibilityLabel="All categories"
-        style={[s.chip, allOn && s.chipOn]}
+        onLayout={(event) => rememberChip("all", event.nativeEvent.layout.x)}
+        style={[s.categoryChip, allOn && s.categoryChipOn]}
         pressedStyle={s.chipPressed}
       >
         <Text
-          style={[textStyle(type.trendingChip), { color: allOn ? color.onGreen : color.inkSecondary }]}
+          style={[s.chipLabel, { color: allOn ? dColor.primaryText : dColor.primary }]}
         >
           All
         </Text>
@@ -230,13 +322,14 @@ export function CategoryRail({
             accessibilityRole="button"
             accessibilityState={{ selected: on, disabled: blocked }}
             accessibilityLabel={`${f.label}, ${f.count} items`}
-            style={[s.chip, on && s.chipOn, blocked && s.chipBlocked]}
+            onLayout={(event) => rememberChip(f.category, event.nativeEvent.layout.x)}
+            style={[s.categoryChip, on && s.categoryChipOn, blocked && s.chipBlocked]}
             pressedStyle={s.chipPressed}
           >
             <Text
               style={[
-                textStyle(type.trendingChip),
-                { color: on ? color.onGreen : blocked ? color.inkStale : color.inkSecondary },
+                s.chipLabel,
+                { color: on ? dColor.primaryText : blocked ? dColor.mutedText : dColor.primary },
               ]}
             >
               {f.label}
@@ -340,7 +433,7 @@ export function ViewToggle({
   // labels stay for screen readers, which is where they were doing the work.
   return (
     <View
-      style={s.toggle}
+      style={s.viewToggle}
       accessibilityRole="tablist"
       accessibilityLabel="Show listings as a grid or on a map"
     >
@@ -352,7 +445,7 @@ export function ViewToggle({
           <GridIcon
             size={icon.filter.size - 2}
             stroke={icon.filter.stroke}
-            color={view === "grid" ? color.onGreen : color.inkSecondary}
+            color={view === "grid" ? dColor.primaryText : dColor.mutedText}
           />
         }
       />
@@ -364,7 +457,7 @@ export function ViewToggle({
           <MapIcon
             size={icon.filter.size - 2}
             stroke={icon.filter.stroke}
-            color={view === "map" ? color.onGreen : color.inkSecondary}
+            color={view === "map" ? dColor.primaryText : dColor.mutedText}
           />
         }
       />
@@ -391,7 +484,7 @@ function ToggleSegment({
       accessibilityLabel={label}
       // The segment is 30 tall; the slop brings the target to the 44 floor.
       hitSlop={7}
-      style={[s.segment, selected && s.segmentOn]}
+      style={[s.viewSegment, selected && s.viewSegmentOn]}
       pressedStyle={s.segmentPressed}
     >
       {glyph}
@@ -455,6 +548,32 @@ export function SortToggle({
 }
 
 const s = StyleSheet.create({
+  // A small pill switch (4 Nov 2026), sharing its row with Grid / Map.
+  searchModeToggle: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    padding: 3,
+    borderRadius: 20,
+    backgroundColor: color.control,
+  },
+  searchModeSegment: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchModeSegmentOn: {
+    backgroundColor: color.searchSurface,
+    shadowColor: "#14140F",
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  searchModeSegmentPressed: { opacity: 0.8 },
+  searchModeLabel: { color: color.inkSecondary },
+  searchModeLabelOn: { color: color.ink, fontWeight: "700" },
   field: {
     flex: 1,
     flexDirection: "row",
@@ -465,38 +584,105 @@ const s = StyleSheet.create({
     paddingRight: 4,
     borderRadius: radius.searchField,
     borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    borderColor: color.divider,
+    backgroundColor: color.searchSurface,
   },
   // `padding: 0` because Android's TextInput carries its own and would push the
   // text off the vertical centre of a fixed-height field.
   input: { flex: 1, padding: 0, color: color.ink },
+  // Home's bar: plain white on the green, filters inside it (4 Nov 2026).
+  homeField: {
+    height: size.home.searchControl,
+    borderRadius: size.home.searchControl / 2,
+    borderColor: "transparent",
+    backgroundColor: color.searchSurface,
+    paddingRight: 4,
+  },
+  homeInput: { color: color.ink },
+  // Full width, soft fill, filters inside (4 Nov 2026): the placeholder is
+  // never cut by buttons beside it.
+  marketplaceField: {
+    height: 46,
+    borderRadius: 23,
+    borderColor: "transparent",
+    backgroundColor: color.control,
+    borderWidth: 0,
+  },
+  marketplaceInput: { fontSize: 15 },
   clear: {
     width: size.browse.searchField,
     height: size.browse.searchField,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  filterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    height: size.browse.filterButton,
-    paddingHorizontal: FILTER_X,
-    borderRadius: radius.filterButton,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+  marketplaceClear: {
+    width: marketplaceUi.size.controlHeight - 4,
+    height: marketplaceUi.size.controlHeight - 4,
   },
-  filterButtonActive: { borderColor: color.greenLine, backgroundColor: color.greenWash },
+
+  inlineFilter: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
+  filterButton: {
+    width: marketplaceUi.size.controlHeight,
+    height: marketplaceUi.size.controlHeight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: marketplaceUi.radius.control,
+    borderWidth: 1,
+    borderColor: dColor.border,
+    backgroundColor: dColor.surface,
+  },
+  filterButtonActive: { borderColor: dColor.primary },
   filterButtonPressed: { opacity: 0.75 },
+  activeFilterDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: marketplaceUi.size.activeFilterDot,
+    height: marketplaceUi.size.activeFilterDot,
+    borderRadius: marketplaceUi.size.activeFilterDot / 2,
+    backgroundColor: dColor.primary,
+  },
+  homeFilter: {
+    width: size.home.searchControl,
+    height: size.home.searchControl,
+    paddingHorizontal: 0,
+    justifyContent: "center",
+    borderRadius: size.home.searchControl / 2,
+    borderColor: color.homeFieldLine,
+    backgroundColor: color.homeIconSurface,
+  },
+  homeFilterPressed: { opacity: 0.75 },
 
   railOuter: { flexGrow: 0 },
   rail: {
     paddingHorizontal: space.screenX,
-    gap: space.browse.chipGap,
+    gap: marketplaceUi.space.chipGap,
     alignItems: "center",
+  },
+  categoryChip: {
+    height: marketplaceUi.size.chipHeight,
+    paddingHorizontal: marketplaceUi.space.chipX,
+    borderRadius: marketplaceUi.radius.chip,
+    borderWidth: 1,
+    borderColor: dColor.border,
+    backgroundColor: dColor.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryChipOn: {
+    backgroundColor: dColor.primary,
+    borderColor: dColor.primary,
+  },
+  chipLabel: {
+    fontFamily: font.figtreeMedium,
+    fontSize: marketplaceUi.type.chip,
+    lineHeight: 18,
   },
   chip: {
     height: size.browse.chip,
@@ -514,7 +700,7 @@ const s = StyleSheet.create({
   // Between the categories and "Shops only": a different kind of filter.
   railDivider: {
     width: border.hairline,
-    height: size.browse.chip - 14,
+    height: marketplaceUi.space.dividerHeight,
     backgroundColor: color.controlLineStrong,
   },
   subChip: { height: size.browse.chip - 6 },
@@ -530,6 +716,17 @@ const s = StyleSheet.create({
     borderWidth: border.chip,
     borderColor: color.controlLine,
   },
+  viewToggle: {
+    flexDirection: "row",
+    gap: 2,
+    padding: 3,
+    height: marketplaceUi.size.controlHeight,
+    alignItems: "center",
+    borderRadius: marketplaceUi.radius.control,
+    backgroundColor: dColor.surface,
+    borderWidth: 1,
+    borderColor: dColor.border,
+  },
   // Icon-only: square, so the two segments read as one compact control.
   segment: {
     alignItems: "center",
@@ -538,6 +735,14 @@ const s = StyleSheet.create({
     height: size.browse.chip - 8,
     borderRadius: radius.filterButton - 3,
   },
+  viewSegment: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: marketplaceUi.size.controlHeight - 8,
+    height: marketplaceUi.size.controlHeight - 8,
+    borderRadius: marketplaceUi.radius.control - 3,
+  },
+  viewSegmentOn: { backgroundColor: dColor.primary },
   sortSegment: {
     alignItems: "center",
     justifyContent: "center",

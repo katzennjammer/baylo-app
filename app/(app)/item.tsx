@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
@@ -32,6 +32,7 @@ import {
   CommentIcon,
   FlagIcon,
   HeartIcon,
+  PersonIcon,
   KebabIcon,
   LeafIcon,
   ShareIcon,
@@ -71,7 +72,15 @@ import {
 } from "../../src/theme/tokens";
 import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
+import { listingUrl, shareListing } from "../../src/lib/share";
+import * as Clipboard from "expo-clipboard";
+import { Ionicons } from "@expo/vector-icons";
+import { SendToChatSheet } from "../../src/components/messages/SendToChatSheet";
 import { sizedImage } from "../../src/media/image-url";
+
+function normalizeListingText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
 
 /**
  * The listing screen. Every listing opens here, whatever its kind: a person's
@@ -185,6 +194,8 @@ export default function ItemDetailScreen() {
    * which on Android silently drops every button past the third.
    */
   const [menu, setMenu] = useState<null | "menu" | "report">(null);
+  const [copied, setCopied] = useState(false);
+  const [sendingToChat, setSendingToChat] = useState(false);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(comments === "1");
   const [barHeight, setBarHeight] = useState<number>(size.detail.actionButton + space.detail.actionBarY * 2);
@@ -324,6 +335,13 @@ export default function ItemDetailScreen() {
     beyond === null ? null : beyond === 0 ? "within your reach" : `${bracketsWord(beyond)} above you`;
 
   const amount = item.perishable ? perishableAmount(item.perishable) : null;
+  // One bracket either side of the listing can trade for it (a bridge above
+  // or below), the same rule the offer screen enforces.
+  const offerableRange = (b: number) => {
+    const lo = Math.max(1, b - 1);
+    const hi = Math.min(10, b + 1);
+    return lo === hi ? `Bracket ${lo}` : `Brackets ${lo}–${hi}`;
+  };
   const wanted = item.wanted?.trim() ?? "";
   const lookingFor = item.lookingForLabels.join(" · ");
 
@@ -394,7 +412,12 @@ export default function ItemDetailScreen() {
     );
   };
 
-  const onShare = () => void Share.share({ message: item.title, title: item.title });
+  // The listing's public web link, not just its title: see src/lib/share.ts.
+  const onShare = () => {
+    void shareListing(item).then(({ ok }) => {
+      if (!ok) showDialog("Could not share", "This build has no Baylo web address set, so there is no link to send yet.");
+    });
+  };
 
   return (
     <View style={s.screen}>
@@ -476,9 +499,17 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
+          {/* What it is first (4 Nov 2026): category and condition above the title. */}
+          <View style={[s.tags, { marginTop: 0, marginBottom: 8 }]}>
+            <Tag label={item.categoryLabel} />
+            <Tag label={item.conditionLabel} />
+            {amount ? <Tag label={amount} /> : null}
+          </View>
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
-          {item.description.trim() ? (
+          {item.description.trim() &&
+          normalizeListingText(item.description) !== normalizeListingText(item.title) ? (
             <Text style={[textStyle(type.detailBody), s.description]}>{item.description}</Text>
           ) : null}
 
@@ -499,23 +530,28 @@ export default function ItemDetailScreen() {
                     : `, ${bracketsWord(beyond)} above your reach`)
               }
             >
-              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-              <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {bracketLabel(listingBracket)}
-              </Text>
-              {reachLine ? (
-                <Text style={[textStyle(type.detailBody), s.reachLine]}>· {reachLine}</Text>
+              <View style={s.bracketPill}>
+                <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
+                <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
+                  {bracketLabel(listingBracket)}
+                </Text>
+              </View>
+              {reachLine && beyond !== 0 ? (
+                <Text style={[textStyle(type.detailBody), s.reachLine]}>{reachLine}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {/* Both labels arrive resolved from the server — never the raw enum.
-              The quantity replaced the old "Perishable: 1 KG" section. */}
-          <View style={s.tags}>
-            <Tag label={item.conditionLabel} />
-            <Tag label={item.categoryLabel} />
-            {amount ? <Tag label={amount} /> : null}
-          </View>
+          {/* "Within your reach", said as something you can act on. */}
+          {!own && beyond === 0 && listingBracket !== null ? (
+            <View style={s.reachCard}>
+              <CheckIcon size={18} stroke={2.6} color={color.forest} />
+              <Text style={[textStyle(type.detailBody), { flex: 1, color: color.forest }]}>
+                <Text style={{ fontWeight: "700" }}>Within your reach. </Text>
+                You can offer any of your items in {offerableRange(listingBracket)}.
+              </Text>
+            </View>
+          ) : null}
 
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
@@ -586,45 +622,63 @@ export default function ItemDetailScreen() {
       </Animated.ScrollView>
 
       {/* Behind the status bar once the photo has scrolled away. */}
+      {/* Scrolled (4 Nov 2026): the photo is gone, so a solid bar carries
+          back, the title and share. Taps go through it while it is faded. */}
       <Animated.View
-        pointerEvents="none"
-        style={[s.statusBackdrop, { height: insets.top, opacity: backdropOpacity }]}
-      />
-
-      <View
-        style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
-        onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+        pointerEvents={overPhoto ? "none" : "box-none"}
+        style={[s.statusBackdrop, { height: insets.top + 52, paddingTop: insets.top, opacity: backdropOpacity }]}
       >
-        <BottomBar
-          own={own}
-          action={viewer.action}
-          canOffer={viewer.canOffer}
-          checkingAvailability={isFetching}
-          existingOfferId={viewer.existingOfferId}
-          ended={ended}
-          lock={
-            locked && item.valueLeaves !== null
-              ? {
-                  kind: viewer.offerLock ?? "premium",
-                  bracket: bracketOf(item.valueLeaves),
-                  owner: firstName(item.owner.name),
-                  onPress: () =>
-                    openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
-                }
-              : null
-          }
-          liked={item.stats.liked}
-          onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
-          onEdit={() => setEditing(true)}
-          onOffer={() => {
-            if (cannotOffer) {
-              setReachDialogOpen(true);
-              return;
+        <View style={s.scrolledBar}>
+          <Tappable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" style={s.scrolledButton}>
+            <ChevronLeftIcon size={22} stroke={1.8} color={color.ink} />
+          </Tappable>
+          <Text style={s.scrolledTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Tappable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share" style={s.scrolledButton}>
+            <ShareIcon size={20} stroke={1.9} color={color.ink} />
+          </Tappable>
+        </View>
+      </Animated.View>
+
+      {!editing ? (
+        <View
+          style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
+          onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+        >
+          <BottomBar
+            own={own}
+            available={item.status === "AVAILABLE" && !item.hiddenByModerator}
+            status={item.status}
+            action={viewer.action}
+            canOffer={viewer.canOffer}
+            checkingAvailability={isFetching}
+            existingOfferId={viewer.existingOfferId}
+            ended={ended}
+            lock={
+              locked && item.valueLeaves !== null
+                ? {
+                    kind: viewer.offerLock ?? "premium",
+                    bracket: bracketOf(item.valueLeaves),
+                    owner: firstName(item.owner.name),
+                    onPress: () =>
+                      openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
+                  }
+                : null
             }
-            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
-          }}
-        />
-      </View>
+            liked={item.stats.liked}
+            onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
+            onEdit={() => setEditing(true)}
+            onOffer={() => {
+              if (cannotOffer) {
+                setReachDialogOpen(true);
+                return;
+              }
+              router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
+            }}
+          />
+        </View>
+      ) : null}
 
       {/*
         THE ONE-BRACKET RULE, STATED THE RIGHT WAY ROUND.
@@ -668,7 +722,53 @@ export default function ItemDetailScreen() {
           {menu === "report" ? (
             <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
           ) : (
+            <>
+            {/* One-tap actions first: share and save. Safety rows below. */}
+            <View style={s.menuActions}>
+              <MenuAction
+                label="Share"
+                onPress={() => {
+                  setMenu(null);
+                  onShare();
+                }}
+              >
+                <ShareIcon size={22} stroke={1.9} color={color.ink} />
+              </MenuAction>
+              <MenuAction
+                label={copied ? "Copied" : "Copy link"}
+                onPress={() => {
+                  const url = listingUrl(item.id);
+                  if (!url) {
+                    showDialog("No link yet", "This build has no Baylo web address set, so there is no link to copy.");
+                    return;
+                  }
+                  void Clipboard.setStringAsync(url).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+              >
+                <Ionicons name={copied ? "checkmark" : "link"} size={22} color={color.ink} />
+              </MenuAction>
+              <MenuAction label="Send in chat" onPress={() => { setMenu(null); setSendingToChat(true); }}>
+                <Ionicons name="chatbubble-outline" size={21} color={color.ink} />
+              </MenuAction>
+              <MenuAction
+                label={item.stats.liked ? "Saved" : "Save"}
+                onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
+              >
+                <HeartIcon liked={item.stats.liked} size={22} stroke={1.9} color={item.stats.liked ? color.like : color.ink} />
+              </MenuAction>
+            </View>
             <SheetRows>
+              <SheetRow
+                glyph={<PersonIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
+                label={`View ${firstName(item.owner.name)}'s profile`}
+                onPress={() => {
+                  setMenu(null);
+                  router.push({ pathname: "/user", params: { id: item.owner.id } });
+                }}
+              />
               <SheetRow
                 glyph={<FlagIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
                 label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
@@ -683,10 +783,19 @@ export default function ItemDetailScreen() {
                 onPress={onBlock}
               />
             </SheetRows>
+            </>
           )}
         </SheetShell>
       ) : null}
-      <EditListingSheet item={editing ? item : null} onClose={() => setEditing(false)} />
+      {sendingToChat ? <SendToChatSheet item={item} onClose={() => setSendingToChat(false)} /> : null}
+      <EditListingSheet
+        item={editing ? item : null}
+        onClose={() => setEditing(false)}
+        onEditHubs={(listing) => {
+          setEditing(false);
+          router.push({ pathname: "/edit-hubs", params: { itemId: listing.id } });
+        }}
+      />
       <CommentsSheet item={commentsOpen ? item : null} onClose={() => setCommentsOpen(false)} />
     </View>
   );
@@ -713,6 +822,16 @@ function BackRow({ onPress }: { onPress: () => void }) {
 }
 
 /** A round button over the photo: the scrim and ink the photo badges use. */
+/** A round action in the listing menu: icon in a soft circle, label under it. */
+function MenuAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
+  return (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={s.menuAction}>
+      <View style={s.menuActionCircle}>{children}</View>
+      <Text style={[textStyle(type.gridMeta), s.menuActionLabel]}>{label}</Text>
+    </Tappable>
+  );
+}
+
 function PhotoButton({
   label,
   onPress,
@@ -939,7 +1058,14 @@ function HubBlock({ hub, children }: { hub: SafeZoneHub; children?: React.ReactN
  */
 async function directionsTo(hub: SafeZoneHub) {
   const outcome = await openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name });
-  if (outcome === "failed") showDialog("Could not open maps", "No maps app or browser is available on this phone.");
+  if (outcome === "failed") {
+    showDialog(
+      "Could not open maps",
+      "No maps app or browser is available on this phone.",
+      [{ text: "Got it" }],
+      { pose: "worry" },
+    );
+  }
 }
 
 /**
@@ -958,6 +1084,8 @@ async function directionsTo(hub: SafeZoneHub) {
  */
 function BottomBar({
   own,
+  available,
+  status,
   action,
   canOffer,
   checkingAvailability,
@@ -970,6 +1098,8 @@ function BottomBar({
   onOffer,
 }: {
   own: boolean;
+  available: boolean;
+  status: string;
   action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE";
   canOffer: boolean;
   checkingAvailability: boolean;
@@ -1020,11 +1150,17 @@ function BottomBar({
     </Tappable>
   );
 
-  if (action === "IN_TRADE" || action === "TRADED") {
+  if (!available) {
+    const message =
+      status === "IN_TRADE"
+        ? "This item is in a trade"
+        : status === "TRADED" || status === "SWAPPED"
+          ? "This item has been traded"
+          : "This item is no longer available";
     return (
       <View style={s.barRow}>
         {heart}
-        {inert(action === "IN_TRADE" ? "In trade" : "Traded")}
+        {inert(message)}
       </View>
     );
   }
@@ -1253,6 +1389,35 @@ const s = StyleSheet.create({
   },
   meetAt: { color: color.inkSecondary },
   hubBlock: { paddingBottom: space.detail.hubGap },
+  bracketPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: color.greenWash,
+  },
+  reachCard: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: color.greenWash,
+  },
+  menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 14 },
+  menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
+  menuActionCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: color.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuActionLabel: { color: color.ink, fontWeight: "600" },
   hubName: { marginTop: space.detail.hubNameToLandmark },
   hubNote: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
   struck: { textDecorationLine: "line-through" },
@@ -1290,6 +1455,9 @@ const s = StyleSheet.create({
   },
 
   photoScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  scrolledBar: { height: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: 6, gap: 4 },
+  scrolledButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  scrolledTitle: { flex: 1, fontFamily: font.displaySemi, fontSize: 17, color: color.ink },
   statusBackdrop: {
     position: "absolute",
     top: 0,

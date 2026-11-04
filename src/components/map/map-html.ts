@@ -268,19 +268,22 @@ export function buildMapHtml({
 <style>
   /* Cluster bubbles: Baylo green, sized by count in iconCreateFunction. */
   .baylo-cluster-wrap { background: none; border: 0; }
+  /* A group of hubs: a dark label, "3 hubs" (4 Nov 2026). */
   .baylo-cluster {
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: ${CLUSTER.fill};
-    border: 2px solid ${CLUSTER.ring};
-    color: ${CLUSTER.text};
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 15px;
+    background: #14140F;
+    color: #FFFFFF;
     display: flex;
     align-items: center;
-    justify-content: center;
-    font: 700 14px sans-serif;
-    box-shadow: 0 2px 6px rgba(20, 20, 15, 0.28);
+    white-space: nowrap;
+    font: 800 12px sans-serif;
+    box-shadow: 0 2px 8px rgba(20, 20, 15, 0.3);
   }
   html, body { margin: 0; padding: 0; height: 100%; background: #EDEBE3; }
   /* The canvas colour under the tiles. Matches the app's divider grey so the
@@ -294,14 +297,64 @@ export function buildMapHtml({
      condition should not be able to fail quietly. */
   .leaflet-control-container { display: none; }
 
+  /* Pins are LABELS (4 Nov 2026): a small icon and the place's short name,
+     with a point under it, so a place reads without tapping it. Anchored by
+     transform at the pin's ground point, which Leaflet puts at (0, 0). */
   .baylo-pin { background: none; border: 0; }
-  .baylo-pin svg { display: block; }
+  .baylo-label {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, calc(-100% - 6px));
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 10px 0 4px;
+    border-radius: 15px;
+    background: #FFFFFF;
+    color: #14140F;
+    white-space: nowrap;
+    font: 700 12px sans-serif;
+    box-shadow: 0 2px 8px rgba(20, 20, 15, 0.24);
+    transition: transform 120ms ease-out;
+  }
+  .baylo-label::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    width: 9px;
+    height: 9px;
+    margin-left: -4.5px;
+    background: inherit;
+    transform: rotate(45deg);
+  }
+  .baylo-label .disc {
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background: #EAF6EC;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .baylo-label.is-inactive { color: #8C8A7E; text-decoration: line-through; }
+  .baylo-label.is-inactive .disc { background: #F1EFE8; }
+  .baylo-label.is-nearby { box-shadow: 0 0 0 2px #3DBE5A, 0 2px 8px rgba(20, 20, 15, 0.24); }
+  .baylo-label.is-selected {
+    height: 40px;
+    padding: 0 14px 0 5px;
+    border-radius: 20px;
+    background: #1B4D2B;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 800;
+    box-shadow: 0 0 0 6px rgba(61, 190, 90, 0.3), 0 4px 12px rgba(20, 20, 15, 0.3);
+  }
+  .baylo-label.is-selected .disc { width: 30px; height: 30px; border-radius: 15px; background: #3DBE5A; }
   /* The tapped pin lifts slightly and takes a green ring. Transform only, so it
      never reflows the tile layer underneath. */
-  .baylo-pin.is-selected svg { transform: scale(1.14); transform-origin: 50% 100%; }
-  .baylo-pin svg { transition: transform 120ms ease-out; }
-  /* Nearby is a glow + ring, not a second colour: type glyphs stay the legend. */
-  .baylo-pin.is-nearby svg { filter: drop-shadow(0 0 7px rgba(61, 190, 90, 0.95)); }
 
   /* The viewer: a blue dot with a white border and a soft halo. No text
      label -- the dot is the convention every map app uses, and a "You are
@@ -420,38 +473,50 @@ export function buildMapHtml({
 
   /* ── pins ────────────────────────────────────────────────────────────── */
 
-  function pinSvg(hub, selected) {
+  function esc(text) {
+    return String(text).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
+  /* The label's short name: generic leading words dropped, then the first
+     word -- "Barangay Canjulao" reads "Canjulao", "Gaisano Grand Mall Mactan"
+     reads "Gaisano". The tapped pin shows the whole name. */
+  var GENERIC = { barangay: 1, brgy: 1, "brgy.": 1, the: 1, police: 1, station: 1, city: 1, municipal: 1 };
+  function shortName(name) {
+    var words = String(name).split(/[ \t]+/).filter(Boolean);
+    while (words.length > 1 && GENERIC[words[0].toLowerCase()]) words.shift();
+    return words[0] || String(name);
+  }
+
+  function pinHtml(hub, selected) {
     var c = hub.isActive ? PIN.active : PIN.inactive;
     var glyph = GLYPHS[hub.type] || FALLBACK_GLYPH;
-    var ring = selected ? PIN.selectedRing : (hub.nearby ? PIN.nearbyRing : PIN.ring);
-    // Selected: a light ring around the head, so the pin visibly matches the
-    // outlined card in the strip. Drawn past the box (overflow visible), so
-    // the box and its tip anchor are unchanged.
-    var halo = selected
-      ? '<circle cx="16" cy="16" r="19" fill="none" stroke="' + PIN.selectedHalo + '" stroke-width="4"/>'
-      : '';
+    var size = selected ? 18 : 14;
+    var stroke = selected ? "#0B2A15" : c.glyph;
+    var full = String(hub.name);
+    var label = selected ? (full.length > 26 ? full.slice(0, 25) + "\u2026" : full) : shortName(full);
+    var cls = "baylo-label" + (selected ? " is-selected" : "") + (hub.nearby && !selected ? " is-nearby" : "") + (hub.isActive ? "" : " is-inactive");
     return (
-      '<svg width="32" height="42" viewBox="0 0 32 42" style="overflow:visible" xmlns="http://www.w3.org/2000/svg">' +
-        halo +
-        '<path d="M16 1.6c-7.9 0-14.4 6.4-14.4 14.4 0 10.1 14.4 24 14.4 24s14.4-13.9 14.4-24c0-8-6.5-14.4-14.4-14.4z"' +
-          ' fill="' + c.body + '" stroke="' + ring + '" stroke-width="2.2"/>' +
-        '<circle cx="16" cy="16" r="10.4" fill="' + c.disc + '"/>' +
-        '<g transform="translate(8,8)" fill="none" stroke="' + c.glyph + '"' +
-          ' stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-          '<path d="' + glyph + '"/>' +
-        '</g>' +
-      '</svg>'
+      '<div class="' + cls + '">' +
+        '<span class="disc"><svg width="' + size + '" height="' + size + '" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">' +
+          '<g fill="none" stroke="' + stroke + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="' + glyph + '"/>' +
+          '</g>' +
+        '</svg></span>' +
+        esc(label) +
+      '</div>'
     );
   }
 
   function iconFor(hub, selected) {
     return L.divIcon({
-      className: 'baylo-pin' + (selected ? ' is-selected' : '') + (hub.nearby ? ' is-nearby' : ''),
-      html: pinSvg(hub, selected),
-      iconSize: [32, 42],
-      // The point of the teardrop, not its middle — the pin marks the ground
-      // under its tip, which is where a person is being told to stand.
-      iconAnchor: [16, 42]
+      className: 'baylo-pin',
+      html: pinHtml(hub, selected),
+      // No box: the label positions itself above the ground point by CSS,
+      // so a long name never shifts where the pin is.
+      iconSize: null,
+      iconAnchor: [0, 0]
     });
   }
 
@@ -472,11 +537,11 @@ export function buildMapHtml({
         zoomToBoundsOnClick: true,
         iconCreateFunction: function (cluster) {
           var n = cluster.getChildCount();
-          var d = n < 10 ? 38 : n < 100 ? 44 : 50;
           return L.divIcon({
             className: 'baylo-cluster-wrap',
-            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe hubs">' + n + '</div>',
-            iconSize: [d, d]
+            html: '<div class="baylo-cluster" role="img" aria-label="' + n + ' safe hubs">' + n + ' hubs</div>',
+            iconSize: null,
+            iconAnchor: [0, 0]
           });
         }
       })

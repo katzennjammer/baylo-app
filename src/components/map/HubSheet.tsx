@@ -69,6 +69,9 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
     <View style={s.sheet}>
       <View style={s.head}>
         <View style={s.headText}>
+          <Text style={[s.name, !hub.isActive && s.nameOff]} numberOfLines={1}>
+            {hub.name}
+          </Text>
           <View style={s.eyebrow}>
             <HubTypeGlyph
               hubType={hub.type}
@@ -79,12 +82,6 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
               {`${hub.typeLabel} · ${hub.city}`}
             </Text>
           </View>
-          <Text
-            style={[textStyle(type.sheetTitle), s.name, !hub.isActive && s.nameOff]}
-            numberOfLines={2}
-          >
-            {hub.name}
-          </Text>
         </View>
 
         <Tappable
@@ -101,7 +98,7 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
       {/* THE LANDMARK IS THE POINT OF THE WHOLE CARD. A pin gets two people to
           the same building; this sentence gets them to the same spot inside it,
           and a mall has six entrances. It is never truncated. */}
-      <Text style={[textStyle(type.hubLandmark), s.landmark]}>
+      <Text style={[textStyle(type.gridMeta), s.landmark]} numberOfLines={2}>
         {hub.isActive ? hub.landmark : "No longer a safe hub — agree somewhere else"}
       </Text>
 
@@ -116,11 +113,11 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
           }}
           accessibilityRole="link"
           accessibilityLabel={`Directions to ${hub.name}`}
-          style={[s.pill, s.pillForest]}
+          style={[s.pill, s.pillOutline]}
           pressedStyle={s.pillPressed}
         >
-          <Text style={[textStyle(type.chip), s.pillLabel, { color: color.forest }]}>Directions</Text>
-          <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+          <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.ink} />
+          <Text style={[textStyle(type.chip), s.pillLabel, { color: color.ink }]}>Directions</Text>
         </Tappable>
 
         {onOpenItems ? (
@@ -135,17 +132,17 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
             accessibilityLabel={
               countLabel ? `${countLabel} at ${hub.name}` : `Listings at ${hub.name}`
             }
-            style={[s.pill, s.pillNeutral]}
+            style={[s.pill, s.pillGreen]}
             pressedStyle={s.pillPressed}
           >
             {countLabel === null ? (
-              <ActivityIndicator size="small" color={color.inkMuted} />
+              <ActivityIndicator size="small" color={color.onGreen} />
             ) : (
-              <Text style={[textStyle(type.chip), s.pillLabel, { color: color.ink }]} numberOfLines={1}>
+              <Text style={[textStyle(type.chip), s.pillLabel, { color: color.onGreen, fontWeight: "700" }]} numberOfLines={1}>
                 {countLabel}
               </Text>
             )}
-            <ChevronRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.inkSecondary} />
+            <ChevronRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.onGreen} />
           </Tappable>
         ) : null}
       </View>
@@ -156,14 +153,14 @@ export function HubSheet({ hub, onClose, onOpenItems }: HubSheetProps) {
 const s = StyleSheet.create({
   sheet: {
     position: "absolute",
-    left: space.screenXTight,
-    right: space.screenXTight,
-    bottom: space.screenXTight,
-    paddingHorizontal: space.browse.tileBody + 4,
-    paddingTop: space.card.top,
-    paddingBottom: space.browse.tileBody + 4,
-    borderRadius: radius.sheet,
-    backgroundColor: color.surface,
+    left: 12,
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderRadius: 18,
+    backgroundColor: color.searchSurface,
     borderWidth: border.hairline,
     borderColor: color.controlLine,
     // The one raised thing on this screen, and it has to be: it sits over a map
@@ -180,7 +177,7 @@ const s = StyleSheet.create({
   headText: { flex: 1 },
   eyebrow: { flexDirection: "row", alignItems: "center", gap: 5 },
   eyebrowText: { flexShrink: 1, color: color.inkSecondary },
-  name: { marginTop: space.detail.hubNameToLandmark, color: color.ink },
+  name: { fontSize: 15, fontWeight: "700", color: color.ink },
   nameOff: { color: color.inkStale, textDecorationLine: "line-through" },
 
   close: {
@@ -190,21 +187,20 @@ const s = StyleSheet.create({
     justifyContent: "center",
     // Pulled into the card's padding so the glyph sits on the optical edge
     // while the target keeps its full size.
-    marginTop: -space.card.top + 4,
-    marginRight: -(space.browse.tileBody + 4) + 4,
+    marginTop: -6,
+    marginRight: -6,
     borderRadius: size.control.headerIconTight / 2,
   },
   closePressed: { backgroundColor: color.control },
 
   landmark: {
-    marginTop: space.detail.headingToBody,
+    marginTop: 6,
     color: color.inkSecondary,
   },
 
   actions: {
-    marginTop: space.detail.sectionY - 4,
+    marginTop: 10,
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
     gap: space.browse.chipGap,
   },
@@ -212,14 +208,14 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    maxWidth: "100%",
-    minHeight: size.browse.chip,
-    paddingHorizontal: size.browse.chipX,
-    borderRadius: radius.trendingChip,
+    justifyContent: "center",
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 19,
     borderWidth: border.chip,
   },
-  pillForest: { borderColor: color.forest },
-  pillNeutral: { borderColor: color.controlLineStrong },
+  pillOutline: { borderColor: color.controlLineStrong },
+  pillGreen: { flex: 1, borderColor: color.green, backgroundColor: color.green },
   pillPressed: { opacity: 0.7 },
   pillLabel: { flexShrink: 1 },
 });

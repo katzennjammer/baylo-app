@@ -1,43 +1,11 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import {
-  AppleIcon,
-  BagIcon,
-  BallIcon,
-  BikeIcon,
-  BlocksIcon,
-  BookIcon,
-  GamepadIcon,
-  GemIcon,
-  GridIcon,
-  HammerIcon,
-  LipstickIcon,
-  MonitorIcon,
-  MoreIcon,
-  MusicIcon,
-  PaletteIcon,
-  PawIcon,
-  ShirtIcon,
-  SofaIcon,
-  SproutIcon,
-  WatchIcon,
-  type CategoryIconProps,
-} from "../icons";
+import { FALLBACK_CATEGORY_ICON, HOME_CATEGORY_ICONS } from "./category-icon-map";
 import { Tappable } from "../Tappable";
-import {
-  categoryTone,
-  icon,
-  radius,
-  size,
-  space,
-  textStyle,
-  type,
-  color,
-  type CategoryToneName,
-} from "../../theme/tokens";
+import { dColor, homeCategoryTile, space, textStyle, type } from "../../theme/tokens";
 
 /**
- * The Home category row: circular icon buttons over a label.
+ * The Home category row: compact, horizontally scrollable category tiles.
  *
  * SAME DATA SOURCE AS CategoryRail — `useBrowse().facets`, which the server
  * computes unfiltered — so a category with nothing in it never shows, and the
@@ -52,38 +20,8 @@ import {
  * each their own section now, always on screen, so there is nothing for the
  * row to switch and neither the lit state nor the Exclusive circle is drawn.
  *
- * ── TWO-TONE ─────────────────────────────────────────────────────────────
- *
- * Each circle is its tone's pale disc, with the glyph outlined in the tone's
- * ink and one shape filled with its tint. See categoryTone in tokens.js for
- * the families and why the tint is opt-in on the glyph.
- *
- * Categories with no glyph yet fall back to GridIcon in the neutral tone
- * rather than being hidden.
+ * Categories without a mapped icon use the shared generic Phosphor fallback.
  */
-type Glyph = (props: CategoryIconProps) => React.JSX.Element;
-
-const GLYPHS: Record<string, { glyph: Glyph; tone: CategoryToneName }> = {
-  ELECTRONICS: { glyph: MonitorIcon, tone: "sky" },
-  CLOTHING: { glyph: ShirtIcon, tone: "clay" },
-  BAGS: { glyph: BagIcon, tone: "sand" },
-  BEAUTY: { glyph: LipstickIcon, tone: "clay" },
-  ACCESSORIES: { glyph: WatchIcon, tone: "lilac" },
-  FURNITURE: { glyph: SofaIcon, tone: "sand" },
-  BOOKS: { glyph: BookIcon, tone: "sky" },
-  GAMING: { glyph: GamepadIcon, tone: "lilac" },
-  SPORTS: { glyph: BallIcon, tone: "teal" },
-  BIKES: { glyph: BikeIcon, tone: "teal" },
-  TOYS: { glyph: BlocksIcon, tone: "clay" },
-  TOOLS: { glyph: HammerIcon, tone: "sand" },
-  MUSIC: { glyph: MusicIcon, tone: "sky" },
-  ART: { glyph: PaletteIcon, tone: "lilac" },
-  COLLECTIBLES: { glyph: GemIcon, tone: "lilac" },
-  PETS: { glyph: PawIcon, tone: "teal" },
-  PLANTS: { glyph: SproutIcon, tone: "green" },
-  FOOD: { glyph: AppleIcon, tone: "green" },
-  OTHER: { glyph: MoreIcon, tone: "sand" },
-};
 
 export function CategoryCircles({
   facets,
@@ -93,70 +31,101 @@ export function CategoryCircles({
   /** Opens Marketplace filtered to `category`. */
   onSelect: (category: string) => void;
 }) {
+  const twoRows = facets.length > 8;
+  const columns = twoRows
+    ? Array.from({ length: Math.ceil(facets.length / 2) }, (_, index) => facets.slice(index * 2, index * 2 + 2))
+    : facets.map((facet) => [facet]);
+
+  const renderTile = (facet: (typeof facets)[number]) => {
+    const CategoryIcon = isKnownCategory(facet.category)
+      ? HOME_CATEGORY_ICONS[facet.category]
+      : FALLBACK_CATEGORY_ICON;
+    const label = facet.category === "OTHER" ? "Other" : facet.label;
+    return (
+      <Tappable
+        key={facet.category}
+        onPress={() => onSelect(facet.category)}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}, ${facet.count} items. Opens Marketplace.`}
+        style={s.item}
+        pressedStyle={s.itemPressed}
+      >
+        <View style={s.tile}>
+          <CategoryIcon
+            size={homeCategoryTile.size.icon}
+            weight="duotone"
+            color={dColor.primary}
+            duotoneColor={dColor.primary}
+          />
+        </View>
+        <Text
+          style={[textStyle(type.homeCategoryTileLabel), s.label]}
+          numberOfLines={2}
+        >
+          {label}
+        </Text>
+      </Tappable>
+    );
+  };
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={s.row}
+      contentContainerStyle={[s.row, twoRows && s.twoRows]}
       style={s.outer}
     >
-      {facets.map((f) => {
-        const entry = GLYPHS[f.category];
-        const G = entry?.glyph ?? GridIcon;
-        const tone = entry ? categoryTone[entry.tone] : null;
-        return (
-          <Tappable
-            key={f.category}
-            onPress={() => onSelect(f.category)}
-            accessibilityRole="button"
-            accessibilityLabel={`${f.label}, ${f.count} items. Opens Marketplace.`}
-            style={s.item}
-            pressedStyle={s.itemPressed}
-          >
-            {/* ONE object, not [s.circle, {backgroundColor}]: NativeWind's
-                interop folds style arrays itself, and a fill that only exists
-                as the second half of an array fails silently if that ever
-                breaks. The old lit circle had the same rule. */}
-            <View style={{ ...circleBox, backgroundColor: tone?.bg ?? color.control }}>
-              <G
-                size={icon.category.size}
-                stroke={icon.category.stroke}
-                color={tone?.ink ?? color.inkSecondary}
-                tint={tone?.tint}
-              />
-            </View>
-            <Text
-              style={[
-                textStyle(type.categoryLabel),
-                { color: color.inkSecondary, marginTop: space.home.circleToLabel },
-              ]}
-              numberOfLines={1}
-            >
-              {f.label}
-            </Text>
-          </Tappable>
-        );
-      })}
+      {columns.map((column) =>
+        twoRows ? (
+          <View key={column[0].category} style={s.column}>
+            {column.map(renderTile)}
+          </View>
+        ) : (
+          renderTile(column[0])
+        ),
+      )}
     </ScrollView>
   );
 }
 
-/**
- * The disc, minus its fill. No border: the tone's disc is the whole shape. The
- * old outlined circle was a neutral control on the canvas; a tinted disc needs
- * no edge to read.
- */
-const circleBox = {
-  width: size.home.categoryCircle,
-  height: size.home.categoryCircle,
-  borderRadius: radius.categoryCircle,
-  alignItems: "center",
-  justifyContent: "center",
-} as const;
+function isKnownCategory(category: string): category is keyof typeof HOME_CATEGORY_ICONS {
+  return Object.prototype.hasOwnProperty.call(HOME_CATEGORY_ICONS, category);
+}
 
 const s = StyleSheet.create({
   outer: { flexGrow: 0 },
-  row: { paddingHorizontal: space.screenX, gap: space.home.categoryGap },
-  item: { width: size.home.categoryItem, alignItems: "center" },
+  row: {
+    paddingHorizontal: space.screenX,
+    gap: homeCategoryTile.space.itemGap,
+    alignItems: "flex-start",
+  },
+  twoRows: { paddingVertical: homeCategoryTile.space.rowGap },
+  column: {
+    gap: homeCategoryTile.space.rowGap,
+    alignItems: "center",
+  },
+  item: {
+    width: homeCategoryTile.size.itemWidth,
+    minHeight:
+      homeCategoryTile.size.tile +
+      homeCategoryTile.space.labelGap +
+      32,
+    alignItems: "center",
+  },
+  tile: {
+    width: homeCategoryTile.size.tile,
+    height: homeCategoryTile.size.tile,
+    borderRadius: homeCategoryTile.radius.tile,
+    backgroundColor: dColor.tint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    width: "100%",
+    height: 32,
+    marginTop: homeCategoryTile.space.labelGap,
+    color: dColor.text,
+    textAlign: "center",
+  },
   itemPressed: { opacity: 0.75 },
 });

@@ -267,9 +267,12 @@ export default function StoryViewer() {
             deleteStory(story.id, {
               onSuccess: close,
               onError: () => {
-                showDialog("Couldn't delete the story", "Check your connection and try again.", [
-                  { text: "OK", onPress: resume },
-                ]);
+                showDialog(
+                  "Couldn't delete the story",
+                  "Check your connection and try again.",
+                  [{ text: "Got it", onPress: resume }],
+                  { pose: "worry" },
+                );
               },
             }),
         },
@@ -407,6 +410,15 @@ export default function StoryViewer() {
             </View>
           ) : null}
 
+          {/* Your own story: who has seen it. */}
+          {author.isOwn && typeof story.seenBy === "number" ? (
+            <View style={s.seenBy} pointerEvents="none">
+              <Text style={[textStyle(type.metadata), s.onDark]}>
+                {story.seenBy === 0 ? "No views yet" : `Seen by ${story.seenBy}`}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={s.card}>
             <View style={s.cardRow}>
               <View style={s.thumbBox}>
@@ -443,7 +455,7 @@ export default function StoryViewer() {
                   View listing
                 </Text>
               </Tappable>
-              {author.isOwn ? null : (
+              {author.isOwn || item.status !== "AVAILABLE" || item.hiddenByModerator ? null : (
                 <Tappable
                   onPress={openListing}
                   accessibilityRole="button"
@@ -499,6 +511,7 @@ function Avatar({ uri, name }: { uri: string | null; name: string }) {
 const AVATAR = 32;
 
 const s = StyleSheet.create({
+  seenBy: { alignSelf: "flex-start", marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: "rgba(20,20,15,0.55)" },
   root: { flex: 1, backgroundColor: color.ink },
   stage: { flex: 1 },
   noPhoto: { alignItems: "center", justifyContent: "center", backgroundColor: color.ink },

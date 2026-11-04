@@ -1,44 +1,54 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  AppState,
   Image,
   Keyboard,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
   useColorScheme,
+  useWindowDimensions,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { NOTIFICATIONS_KEY } from "../../src/api/notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { threadQueryKey, useChatSettings, useSendMessage, useThread, useUpdateChatSettings, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { ApiError, request } from "../../src/api/client";
+import { usePublicProfile } from "../../src/api/profile";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { ActiveTrade } from "../../src/api/types";
+import { PinnedTrade } from "../../src/components/messages/PinnedTrade";
+import { QuotedReply, SwipeToReply } from "../../src/components/messages/SwipeToReply";
 import { useBlockUser } from "../../src/api/item";
-import { request } from "../../src/api/client";
 import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
+import { clearActiveConversationPartnerId, setActiveConversationPartnerId } from "../../src/notifications/active-conversation";
+import { dismissNotificationsForPartner } from "../../src/notifications/conversation-notifications";
 import { Ionicons } from "@expo/vector-icons";
-import { BlockIcon, ChevronLeftIcon, ChevronRightIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ChevronRightIcon, PersonIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { ChatBubble, useBubbleContentMax, type GroupPosition } from "../../src/components/messages/ChatBubble";
-import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
+import { previewFromContent, renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
+import { cacheMeasuredChatImageSize } from "../../src/components/messages/chat-image-sizing";
 
 /** Consecutive messages from one sender closer than this are one run. */
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -46,6 +56,13 @@ const GROUP_GAP_MS = 5 * 60 * 1000;
 const SEPARATOR_GAP_MS = 15 * 60 * 1000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function isUnavailableConversationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 403 || error.status === 404 || /blocked/i.test(`${error.code} ${error.message}`))
+  );
+}
 
 /** "12:13 PM" today, "Mon 12:13 PM" this week, "Oct 3, 12:13 PM" before that. */
 function separatorLabel(dateIso: string): string {
@@ -72,12 +89,14 @@ function payloadTypeOf(content: string): string | undefined {
 export default function MessagesThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { partner, partnerName, partnerAvatar } = useLocalSearchParams<{
+  const { partner, partnerName, partnerAvatar, messageId } = useLocalSearchParams<{
     partner?: string;
     partnerName?: string;
     partnerAvatar?: string;
+    messageId?: string;
   }>();
   const { keyboardUp, imeHeight } = useKeyboardState();
+  const { width: screenWidth } = useWindowDimensions();
   const { session } = useSession();
   const dark = useColorScheme() === "dark";
   const queryClient = useQueryClient();
@@ -90,15 +109,56 @@ export default function MessagesThreadScreen() {
   // While typing, the camera/gallery buttons fold behind a chevron (Messenger).
   const [toolsOpen, setToolsOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const [initialScrollComplete, setInitialScrollComplete] = useState(false);
   const listRef = useRef<ScrollView | null>(null);
+  const contentHeightRef = useRef(0);
+  const viewportHeightRef = useRef(0);
+  const scrollYRef = useRef(0);
+  const nearBottomRef = useRef(true);
+  const pendingScrollRef = useRef<"initial" | "animated" | null>("initial");
+  const knownMessageIdsRef = useRef(new Set<string>());
+  const trackedPartnerRef = useRef(partner);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for typing indication
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const thread = useThread(partner ?? null);
+  const partnerProfile = usePublicProfile(partner);
+  const unavailableHandled = useRef(false);
+  const lastReadRefreshMessageId = useRef<string | null>(null);
   const activeTrades = useActiveTrades();
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
+  const chatSettings = useChatSettings(partner);
+  const updateChat = useUpdateChatSettings(partner);
+  // In-chat search (Chat info > Search): matches, and which one is shown.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
+  // Swipe to reply: the message being answered, shown above the field.
+  const [replyingTo, setReplyingTo] = useState<ThreadMessage | null>(null);
+  // Where each message sits in the list, so a quote can jump to its original.
+  const messageY = useRef(new Map<string, number>());
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const jumpTo = (id: string) => {
+    const y = messageY.current.get(id);
+    if (y === undefined) return;
+    listRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+    setFlashId(id);
+    setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1200);
+  };
   const block = useBlockUser();
+  const currentUserId = thread.data?.currentUserId ?? "";
+  useEffect(() => {
+    unavailableHandled.current = false;
+  }, [partner]);
+  useEffect(() => {
+    if (unavailableHandled.current || !thread.isError || !isUnavailableConversationError(thread.error)) return;
+    unavailableHandled.current = true;
+    showDialog("Conversation unavailable", "This conversation could not be opened.");
+    router.replace("/messages");
+  }, [router, thread.error, thread.isError]);
+
   const sortedMessages = useMemo(
     () => collapseSystemPairs(
       Array.from(
@@ -108,6 +168,91 @@ export default function MessagesThreadScreen() {
     ),
     [thread.data, partner],
   );
+
+  const updateNearBottom = () => {
+    const distance = contentHeightRef.current - viewportHeightRef.current - scrollYRef.current;
+    nearBottomRef.current = distance <= 120;
+    if (nearBottomRef.current) setNewMessageCount(0);
+  };
+
+  const performPendingScroll = () => {
+    const mode = pendingScrollRef.current;
+    if (!mode || !listRef.current || viewportHeightRef.current <= 0 || contentHeightRef.current <= 0) return;
+    listRef.current.scrollToEnd({ animated: mode === "animated" });
+    scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+    pendingScrollRef.current = null;
+    nearBottomRef.current = true;
+    setNewMessageCount(0);
+    if (mode === "initial") setInitialScrollComplete(true);
+  };
+
+  const requestBottomScroll = (mode: "initial" | "animated") => {
+    if (pendingScrollRef.current !== "initial") pendingScrollRef.current = mode;
+  };
+
+  useLayoutEffect(() => {
+    if (trackedPartnerRef.current !== partner) {
+      trackedPartnerRef.current = partner;
+      knownMessageIdsRef.current = new Set();
+      pendingScrollRef.current = "initial";
+      nearBottomRef.current = true;
+      contentHeightRef.current = 0;
+      viewportHeightRef.current = 0;
+      scrollYRef.current = 0;
+      setInitialScrollComplete(false);
+      setNewMessageCount(0);
+    }
+
+    if (!partner || thread.isPending || thread.isError || thread.data?.partnerId !== partner) return;
+
+    const ids = new Set(sortedMessages.map((message) => message.id));
+    if (pendingScrollRef.current === "initial" && knownMessageIdsRef.current.size === 0) {
+      knownMessageIdsRef.current = ids;
+      performPendingScroll();
+      return;
+    }
+
+    const additions = sortedMessages.filter((message) => !knownMessageIdsRef.current.has(message.id));
+    knownMessageIdsRef.current = ids;
+    if (additions.length === 0) return;
+
+    if (additions.some((message) => message.senderId === currentUserId)) {
+      setNewMessageCount(0);
+      requestBottomScroll("animated");
+    } else if (nearBottomRef.current) {
+      requestBottomScroll("animated");
+    } else {
+      setNewMessageCount((count) => count + additions.length);
+    }
+  }, [currentUserId, partner, sortedMessages, thread.data?.partnerId, thread.isError, thread.isPending]);
+
+  const onMessageListContentSizeChange = (_width: number, height: number) => {
+    const wasNearBottom = nearBottomRef.current;
+    contentHeightRef.current = height;
+    if (pendingScrollRef.current) {
+      performPendingScroll();
+    } else if (wasNearBottom) {
+      listRef.current?.scrollToEnd({ animated: false });
+      scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+      updateNearBottom();
+    } else {
+      updateNearBottom();
+    }
+  };
+
+  const onMessageListLayout = (height: number) => {
+    const wasNearBottom = nearBottomRef.current;
+    viewportHeightRef.current = height;
+    if (pendingScrollRef.current) {
+      performPendingScroll();
+    } else if (wasNearBottom) {
+      listRef.current?.scrollToEnd({ animated: false });
+      scrollYRef.current = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+      updateNearBottom();
+    } else {
+      updateNearBottom();
+    }
+  };
   // The newest offer_update per offer: its status, and the trade it became.
   const offerStatuses = useMemo(() => {
     const statuses = new Map<string, { status: string; tradeId: string | null }>();
@@ -137,7 +282,6 @@ export default function MessagesThreadScreen() {
     // server, so refetch: without this a message that arrived while the chat
     // was open stayed unread until the chat was opened again.
     void queryClient.invalidateQueries({ queryKey: threadQueryKey(partner) });
-    listRef.current?.scrollToEnd({ animated: true });
   }, [partner, queryClient]);
 
   const onOfferUpdated = useCallback((event: {
@@ -145,6 +289,10 @@ export default function MessagesThreadScreen() {
   }) => {
     if (event.systemMessage) onNewMessage(event.systemMessage);
   }, [onNewMessage]);
+
+  const refreshThread = useCallback(() => {
+    void thread.refetch({ cancelRefetch: false });
+  }, [thread.refetch]);
 
   const onTyping = useCallback((event: { senderId: string; senderName: string; isTyping: boolean }) => {
     if (event.senderId !== partner) return;
@@ -160,19 +308,92 @@ export default function MessagesThreadScreen() {
   const inboxId = thread.data?.currentUserId || session?.user.id;
   useEffect(() => {
     if (!inboxId) return;
-    return subscribeToUserChannel(inboxId, onNewMessage, onTyping, onOfferUpdated) ?? undefined;
-  }, [onNewMessage, onOfferUpdated, onTyping, inboxId]);
+    return subscribeToUserChannel(
+      inboxId,
+      onNewMessage,
+      onTyping,
+      onOfferUpdated,
+      undefined,
+      refreshThread,
+    ) ?? undefined;
+  }, [onNewMessage, onOfferUpdated, onTyping, inboxId, refreshThread]);
 
   // Every thread fetch marks it read on the server (messages, and since 20 Oct
   // the bell's message row), so everything counting unread is refreshed: the
   // list, and the header badges, which come from /home.
   useEffect(() => {
-    if (thread.data) {
-      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["home"] });
-      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-    }
+    const latestMessageId = thread.data?.messages.at(-1)?.id ?? null;
+    if (latestMessageId === lastReadRefreshMessageId.current) return;
+    lastReadRefreshMessageId.current = latestMessageId;
+    if (!thread.data) return;
+    void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+    void queryClient.invalidateQueries({ queryKey: ["home"] });
+    void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
   }, [queryClient, thread.data]);
+
+  // Pusher is the fast path. Keep the visible conversation current if the
+  // socket drops, the phone misses an event, or the channel is still authorizing.
+  // The thread GET also marks incoming messages read, which is correct while
+  // this conversation is actively open.
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner) return;
+      const updateActivePartner = (state: string) => {
+        if (state === "active") {
+          setActiveConversationPartnerId(partner);
+        } else {
+          clearActiveConversationPartnerId(partner);
+        }
+      };
+      updateActivePartner(AppState.currentState);
+      void dismissNotificationsForPartner(partner).catch((error: unknown) => {
+        console.warn("Could not dismiss notifications for the open conversation.", error);
+      });
+      const appState = AppState.addEventListener("change", updateActivePartner);
+      return () => {
+        appState.remove();
+        clearActiveConversationPartnerId(partner);
+      };
+    }, [partner]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner) return;
+      let inFlight = false;
+      const syncThread = (appIsActive = AppState.currentState === "active") => {
+        if (!appIsActive || inFlight) return;
+        inFlight = true;
+        void thread.refetch({ cancelRefetch: false }).finally(() => {
+          inFlight = false;
+        });
+      };
+
+      syncThread();
+      const interval = setInterval(syncThread, 5_000);
+      const appState = AppState.addEventListener("change", (state) => {
+        if (state === "active") syncThread(true);
+      });
+      return () => {
+        clearInterval(interval);
+        appState.remove();
+      };
+    }, [partner, thread.refetch]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!partner || !messageId) return;
+      const retries = [1_500, 4_000].map((delay) =>
+        setTimeout(() => {
+          const cached = queryClient.getQueryData<LegacyThreadResponse>(threadQueryKey(partner));
+          if (cached?.messages.some((message) => message.id === messageId)) return;
+          void thread.refetch({ cancelRefetch: false });
+        }, delay),
+      );
+      return () => retries.forEach(clearTimeout);
+    }, [messageId, partner, queryClient, thread.refetch]),
+  );
 
   useEffect(() => () => {
     if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -215,13 +436,30 @@ export default function MessagesThreadScreen() {
     setSendError(null);
     try {
       // uploadPhoto() resizes to a JPEG first, like every other photo.
-      const { url } = await uploadPhoto(asset.uri);
-      await sendMessage.mutateAsync({
-        partnerId: partner,
-        content: JSON.stringify({ type: "image", url, caption: null }),
-      });
-      await thread.refetch();
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+      const { url, width, height } = await uploadPhoto(asset.uri);
+      cacheMeasuredChatImageSize(url, width, height);
+      const content = JSON.stringify({ type: "image", url, caption: null, width, height });
+      const optimisticId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const optimisticMessage: ThreadMessage = {
+        id: optimisticId,
+        senderId: currentUserId,
+        receiverId: partner,
+        content,
+        read: true,
+        createdAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) =>
+        current ? { ...current, messages: [...current.messages, optimisticMessage] } : current,
+      );
+      requestBottomScroll("animated");
+      try {
+        await sendMessage.mutateAsync({ partnerId: partner, content });
+        await thread.refetch();
+      } finally {
+        queryClient.setQueryData<LegacyThreadResponse>(threadQueryKey(partner), (current) =>
+          current ? { ...current, messages: current.messages.filter((message) => message.id !== optimisticId) } : current,
+        );
+      }
     } catch (error) {
       setSendError(error instanceof Error ? error.message : "Photo could not be sent.");
     } finally {
@@ -237,15 +475,14 @@ export default function MessagesThreadScreen() {
     setSendError(null);
 
     try {
-      await sendMessage.mutateAsync({ partnerId: partner, content });
+      requestBottomScroll("animated");
+      await sendMessage.mutateAsync({ partnerId: partner, content, replyToId: replyingTo?.id ?? null });
+      setReplyingTo(null);
       if (!quick) {
         setDraft("");
         setToolsOpen(false);
         Keyboard.dismiss();
       }
-      setTimeout(() => {
-        listRef.current?.scrollToEnd({ animated: true });
-      }, 50);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Your message could not be sent.";
       setSendError(message);
@@ -254,9 +491,18 @@ export default function MessagesThreadScreen() {
     }
   };
 
-  const currentUserId = thread.data?.currentUserId ?? "";
-  const otherName = thread.data?.partnerName ?? partnerName ?? "Conversation";
-  const otherAvatar = thread.data?.partnerAvatar ?? partnerAvatar ?? "";
+  const otherName =
+    partnerName ||
+    (thread.data?.partnerName && thread.data.partnerName !== "Conversation" ? thread.data.partnerName : null) ||
+    partnerProfile.data?.user.org?.name ||
+    partnerProfile.data?.user.name ||
+    "Conversation";
+  const otherAvatar =
+    partnerAvatar ||
+    thread.data?.partnerAvatar ||
+    partnerProfile.data?.user.org?.logoUrl ||
+    partnerProfile.data?.user.avatar ||
+    "";
   const bubbleContentMax = useBubbleContentMax();
   const tradesById = new Map([
     ...(activeTrades.data?.trades ?? []),
@@ -331,6 +577,15 @@ export default function MessagesThreadScreen() {
       </View>
     );
 
+  // In-chat search matches, newest first, as message ids.
+  const searchQ = searchText.trim().toLowerCase();
+  const searchMatches = searchQ
+    ? sortedMessages
+        .filter((m) => previewFromContent(m.content, m.senderId === currentUserId).toLowerCase().includes(searchQ))
+        .map((m) => m.id)
+        .reverse()
+    : [];
+
   return (
     <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View style={[styles.header, { paddingTop: insets.top, height: insets.top + HEADER_HEIGHT, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
@@ -359,23 +614,108 @@ export default function MessagesThreadScreen() {
         )}
       </View>
 
+      {/* In-chat search: matches step from newest to oldest. */}
+      {searchOpen ? (
+        <View style={[styles.searchBar, { borderBottomColor: palette.divider, backgroundColor: palette.surface }]}>
+          <TextInput
+            value={searchText}
+            onChangeText={(t) => {
+              setSearchText(t);
+              setSearchIndex(0);
+            }}
+            autoFocus
+            placeholder="Search this chat"
+            placeholderTextColor={palette.inkMuted}
+            returnKeyType="search"
+            onSubmitEditing={() => searchMatches[0] && jumpTo(searchMatches[0])}
+            style={[styles.searchField, { backgroundColor: palette.control, color: palette.ink }]}
+            accessibilityLabel="Search this chat"
+          />
+          <Text style={[styles.searchCount, { color: palette.inkSecondary }]}>
+            {searchText.trim() ? (searchMatches.length ? `${searchIndex + 1}/${searchMatches.length}` : "0") : ""}
+          </Text>
+          <Tappable
+            onPress={() => {
+              if (searchMatches.length === 0) return;
+              const next = (searchIndex + 1) % searchMatches.length;
+              setSearchIndex(next);
+              jumpTo(searchMatches[next]);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Older match"
+            style={styles.iconButton}
+          >
+            <Ionicons name="chevron-up" size={20} color={palette.ink} />
+          </Tappable>
+          <Tappable
+            onPress={() => {
+              setSearchOpen(false);
+              setSearchText("");
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Close search"
+            style={styles.iconButton}
+          >
+            <Ionicons name="close" size={20} color={palette.ink} />
+          </Tappable>
+        </View>
+      ) : null}
+
+      {/* PINNED: the live trade stays here however long the chat gets. */}
+      {activeTrades.data && partner ? (
+        <PinnedTrade
+          partnerId={partner}
+          partnerName={otherName}
+          trades={activeTrades.data.trades}
+          offers={activeTrades.data.offers}
+        />
+      ) : null}
+
       {thread.isPending ? (
         <View style={styles.centered}>
             <ActivityIndicator size="small" color={palette.forest} />
         </View>
       ) : thread.isError ? (
         <View style={styles.centered}>
-            <Text style={[styles.emptyTitle, { color: palette.ink }]}>This conversation failed to load.</Text>
+            <Text style={[styles.emptyTitle, { color: palette.ink }]}>
+              {isUnavailableConversationError(thread.error)
+                ? "This conversation is unavailable."
+                : "This conversation failed to load."}
+            </Text>
+            {!isUnavailableConversationError(thread.error) ? (
+              <Tappable
+                onPress={() => void thread.refetch()}
+                style={styles.newMessageButton}
+                pressedStyle={styles.newMessageButtonPressed}
+                accessibilityRole="button"
+              >
+                <Text style={styles.newMessageButtonText}>Try again</Text>
+              </Tappable>
+            ) : null}
         </View>
       ) : (
         <>
-          <ScrollView
-            ref={listRef}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          >
+          <View style={styles.listContainer}>
+            <ScrollView
+              ref={listRef}
+              style={[styles.list, !initialScrollComplete && styles.listUnpositioned]}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={thread.isRefetching}
+                  onRefresh={() => thread.refetch({ cancelRefetch: false })}
+                  tintColor={palette.forest}
+                />
+              }
+              keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={16}
+              onScroll={(event) => {
+                scrollYRef.current = event.nativeEvent.contentOffset.y;
+                updateNearBottom();
+              }}
+              onContentSizeChange={onMessageListContentSizeChange}
+              onLayout={(event) => onMessageListLayout(event.nativeEvent.layout.height)}
+            >
             {/* Messenger's thread opener: who you are talking to. */}
             <View style={styles.intro}>
               {avatarNode(72)}
@@ -410,9 +750,24 @@ export default function MessagesThreadScreen() {
               const isOfferUpdate = payloadType === "offer_update";
               const isSystem = isOfferUpdate || payloadType === "trade_completed";
               const { separator, position, footer } = layout[index];
+              const quoted = message.replyTo ?? null;
               return (
-                <View key={message.id}>
+                <View
+                  key={message.id}
+                  onLayout={(e) => messageY.current.set(message.id, e.nativeEvent.layout.y)}
+                  style={flashId === message.id ? { backgroundColor: palette.control } : undefined}
+                >
                   {separator ? <Text style={[styles.separator, { color: palette.inkSecondary }]}>{separator}</Text> : null}
+                  {/* A reply shows what it answers; tap to jump to it. */}
+                  {quoted ? (
+                    <QuotedReply
+                      mine={mine}
+                      author={quoted.senderId === currentUserId ? "You" : otherName}
+                      text={previewFromContent(quoted.content, quoted.senderId === currentUserId)}
+                      onPress={() => jumpTo(quoted.id)}
+                    />
+                  ) : null}
+                  <SwipeToReply enabled={!isSystem && !message.id.startsWith("local-")} onReply={() => setReplyingTo(message)}>
                   <ChatBubble
                     mine={mine}
                     kind={isSystem ? "status" : isOffer ? "card" : payloadType === "image" ? "media" : "bubble"}
@@ -424,7 +779,11 @@ export default function MessagesThreadScreen() {
                       content: displayContent,
                       mine,
                       contentMax: bubbleContentMax,
+                      screenWidth,
                       onImagePress: setLightboxUrl,
+                      onImageSizeChange: () => {
+                        if (nearBottomRef.current) requestBottomScroll("animated");
+                      },
                       // An offer opens its trade screen; an offer_update's
                       // "Open trade" passes the trade id it carries.
                       onOfferPress: (id) => {
@@ -435,6 +794,7 @@ export default function MessagesThreadScreen() {
                       offerTrade,
                       partnerName: otherName,
                       onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
+                      onSharedPostPress: (itemId) => router.push({ pathname: "/item", params: { id: itemId } }),
                       offerDetails: (() => {
                         try {
                           const payload = JSON.parse(message.content) as { offerId?: unknown };
@@ -457,12 +817,49 @@ export default function MessagesThreadScreen() {
                       })(),
                     })}
                   </ChatBubble>
+                  </SwipeToReply>
                 </View>
               );
             })}
-          </ScrollView>
+            </ScrollView>
+            {newMessageCount > 0 ? (
+              <Tappable
+                onPress={() => {
+                  pendingScrollRef.current = "animated";
+                  setNewMessageCount(0);
+                  performPendingScroll();
+                }}
+                style={styles.newMessageButton}
+                pressedStyle={styles.newMessageButtonPressed}
+                accessibilityRole="button"
+                accessibilityLabel={newMessageCount === 1 ? "Scroll to new message" : `Scroll to ${newMessageCount} new messages`}
+              >
+                <Ionicons name="arrow-down" size={16} color={color.surface} />
+                <Text style={styles.newMessageButtonText}>
+                  {newMessageCount === 1 ? "New message" : `New messages · ${newMessageCount}`}
+                </Text>
+              </Tappable>
+            ) : null}
+          </View>
 
           {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
+
+          {/* Replying: what you answer sits right above the field. */}
+          {replyingTo ? (
+            <View style={[styles.replyBar, { borderTopColor: palette.divider, backgroundColor: palette.surface }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.replyBarTitle, { color: palette.forest }]} numberOfLines={1}>
+                  Replying to {replyingTo.senderId === currentUserId ? "yourself" : otherName}
+                </Text>
+                <Text style={[styles.replyBarText, { color: palette.inkSecondary }]} numberOfLines={1}>
+                  {previewFromContent(replyingTo.content, replyingTo.senderId === currentUserId)}
+                </Text>
+              </View>
+              <Tappable onPress={() => setReplyingTo(null)} accessibilityRole="button" accessibilityLabel="Cancel reply" style={styles.iconButton}>
+                <Ionicons name="close" size={20} color={palette.inkSecondary} />
+              </Tappable>
+            </View>
+          ) : null}
 
           {/* Messenger's composer: photo tools on the left, a pill field, and a
               thumbs-up that becomes Send once something is typed. While typing,
@@ -521,6 +918,59 @@ export default function MessagesThreadScreen() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         colors={palette}
+        name={otherName}
+        avatar={avatarNode(64)}
+        onProfile={() => {
+          setMenuOpen(false);
+          openProfile();
+        }}
+        trades={[
+          ...(activeTrades.data?.trades
+            .filter((t) => t.counterparty.id === partner)
+            .map((t) => ({ id: t.id, title: `${t.offeredItem?.title ?? "Your item"} for ${t.requestedItem.title}`, sub: t.status === "PENDING" ? "Waiting for an answer" : "In progress", href: `/trade?id=${encodeURIComponent(t.id)}` })) ?? []),
+          ...(activeTrades.data?.offers
+            .filter((o) => o.counterparty.id === partner && o.status === "PENDING")
+            .map((o) => ({ id: o.id, title: `${o.offeredItems[0]?.title ?? "An item"} for ${o.post.title}`, sub: o.direction === "sent" ? "Your offer · waiting" : "Offer to you · your call", href: `/trade?offer=${encodeURIComponent(o.id)}` })) ?? []),
+        ]}
+        onOpenTrade={(href) => {
+          setMenuOpen(false);
+          router.push(href as never);
+        }}
+        muted={chatSettings.data?.muted ?? false}
+        onSearch={() => {
+          setMenuOpen(false);
+          setSearchOpen(true);
+        }}
+        onToggleMute={() =>
+          updateChat.mutate(
+            { muted: !(chatSettings.data?.muted ?? false) },
+            { onError: (e) => showDialog("Could not change that", e instanceof Error ? e.message : "Try again.") },
+          )
+        }
+        onDeleteChat={() =>
+          Alert.alert(
+            "Delete this chat?",
+            `It is removed for you only. ${otherName} keeps their copy, and new messages will still arrive.`,
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () =>
+                  updateChat.mutate(
+                    { clear: true },
+                    {
+                      onSuccess: () => {
+                        setMenuOpen(false);
+                        router.back();
+                      },
+                      onError: (e) => showDialog("Could not delete the chat", e instanceof Error ? e.message : "Try again."),
+                    },
+                  ),
+              },
+            ],
+          )
+        }
         // Not while acting as a shop: POST /api/v1/blocks acts as the PERSON, so
         // it would block from their own account and leave the shop's thread
         // open. Shop-level blocking is not built.
@@ -535,22 +985,81 @@ export default function MessagesThreadScreen() {
   );
 }
 
+/**
+ * Chat info (the i button): who this is, a Profile shortcut, the trades with
+ * them -- what Baylo adds over a plain chat -- and Block. No group chats.
+ */
 function ConversationMenu({
   visible,
   onClose,
   onBlock,
   colors,
+  name,
+  avatar,
+  onProfile,
+  trades,
+  onOpenTrade,
+  muted,
+  onSearch,
+  onToggleMute,
+  onDeleteChat,
 }: {
   visible: boolean;
   onClose: () => void;
   onBlock?: () => void;
-  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
+  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string; control: string; forest: string };
+  name: string;
+  avatar: React.ReactNode;
+  onProfile: () => void;
+  trades: { id: string; title: string; sub: string; href: string }[];
+  onOpenTrade: (href: string) => void;
+  muted: boolean;
+  onSearch: () => void;
+  onToggleMute: () => void;
+  onDeleteChat: () => void;
 }) {
   if (!visible) return null;
+  const first = name.split(/\s+/)[0] || name;
   return (
-    <SheetShell title="Conversation" onClose={onClose} colors={colors}>
+    <SheetShell title="Chat info" onClose={onClose} colors={colors}>
+      <View style={styles.infoWho}>
+        {avatar}
+        <Text style={[styles.infoName, { color: colors.ink }]} numberOfLines={1}>{name}</Text>
+        {/* Three round shortcuts, Messenger-style. */}
+        <View style={styles.infoShortcuts}>
+          <Tappable onPress={onProfile} accessibilityRole="button" style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
+              <PersonIcon size={20} stroke={1.9} color={colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Profile</Text>
+          </Tappable>
+          <Tappable onPress={onSearch} accessibilityRole="button" style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
+              <Ionicons name="search" size={20} color={colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Search</Text>
+          </Tappable>
+          <Tappable onPress={onToggleMute} accessibilityRole="switch" accessibilityState={{ checked: muted }} style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: muted ? colors.forest : colors.control }]}>
+              <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={muted ? "#FFFFFF" : colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>{muted ? "Muted" : "Mute"}</Text>
+          </Tappable>
+        </View>
+      </View>
+      {trades.length > 0 ? (
+        <>
+          <Text style={[styles.infoSection, { color: colors.inkSecondary }]}>TRADES WITH {first.toUpperCase()}</Text>
+          <SheetRows>
+            {trades.map((t) => (
+              <SheetRow key={t.id} label={`${t.title} · ${t.sub}`} colors={colors} onPress={() => onOpenTrade(t.href)} />
+            ))}
+          </SheetRows>
+        </>
+      ) : null}
       <SheetRows>
-        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} /> : null}
+        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label={`Block ${first}`} destructive colors={colors} onPress={onBlock} /> : null}
+        <SheetRow glyph={<Ionicons name="trash-outline" size={20} color={colors.urgent} />} label="Delete chat" destructive colors={colors} onPress={onDeleteChat} />
       </SheetRows>
     </SheetShell>
   );
@@ -573,6 +1082,19 @@ const darkColors = {
 const HEADER_HEIGHT = 60;
 
 const styles = StyleSheet.create({
+  replyBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16, paddingRight: 4, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth },
+  replyBarTitle: { fontFamily: font.sansBold, fontSize: 13 },
+  replyBarText: { fontFamily: font.sans, fontSize: 13 },
+  infoWho: { alignItems: "center", gap: 8, paddingBottom: 12 },
+  infoName: { fontFamily: font.displayBold, fontSize: 20 },
+  infoShortcuts: { flexDirection: "row", gap: 28, marginTop: 4 },
+  infoShortcut: { alignItems: "center", gap: 6, minWidth: 56 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 12, paddingRight: 4, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchField: { flex: 1, height: 38, borderRadius: 19, paddingHorizontal: 14, fontFamily: font.sans, fontSize: 15 },
+  searchCount: { fontFamily: font.sansSemi, fontSize: 12, minWidth: 44, textAlign: "center" },
+  infoShortcutCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  infoShortcutText: { fontFamily: font.sansSemi, fontSize: 12 },
+  infoSection: { fontFamily: font.sansBold, fontSize: 12, letterSpacing: 0.6, paddingTop: 8, paddingBottom: 4 },
   screen: {
     flex: 1,
     backgroundColor: color.surface,
@@ -640,6 +1162,38 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+  },
+  listContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  listUnpositioned: {
+    opacity: 0,
+  },
+  newMessageButton: {
+    position: "absolute",
+    right: 16,
+    bottom: 12,
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: color.forest,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  newMessageButtonPressed: {
+    opacity: 0.9,
+  },
+  newMessageButtonText: {
+    fontFamily: font.sansSemi,
+    fontSize: 13,
+    color: color.surface,
   },
   listContent: {
     paddingHorizontal: 12,

@@ -75,7 +75,12 @@ export default function EditOrgScreen() {
       if (kind === "logo") setLogo(uploaded.url);
       else setBanner(uploaded.url);
     } catch {
-      showDialog("Could not upload photo", "Check your connection and try again.");
+      showDialog(
+        "Could not upload photo",
+        "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
+      );
     } finally {
       setUploading(null);
     }
@@ -87,7 +92,12 @@ export default function EditOrgScreen() {
       await update.mutateAsync({ logoUrl: logo, bannerUrl: banner, description: description.trim() || null });
       router.back();
     } catch (err) {
-      showDialog("Could not save shop", err instanceof ApiError ? err.message : "Check your connection and try again.");
+      showDialog(
+        "Could not save shop",
+        err instanceof ApiError ? err.message : "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
+      );
     }
   }
 

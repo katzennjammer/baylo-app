@@ -6,19 +6,20 @@ import { prepareImage, type PreparedImage } from "../media/prepare-image";
 import type { SafeZoneHub } from "./types";
 
 /**
- * The five endpoints the listing wizard talks to.
+ * The endpoints the listing wizard talks to.
  *
  * They do not share a response shape, and this module does not pretend they do.
- * Three of them predate /api/v1 and answer bare JSON; two are v1 and come
- * wrapped in the `{ data, error, meta }` envelope that `apiV1` unwraps. What
- * IS unified here is the failure type — everything below throws `ApiError`, so
- * a screen branches on `.status` and `.retryAfter` rather than on which
- * generation of the API it happened to be talking to.
+ * Legacy routes answer bare JSON; v1 routes use the `{ data, error, meta }`
+ * envelope that `apiV1` unwraps. What IS unified here is the failure type —
+ * everything below throws `ApiError`, so a screen branches on `.status` and
+ * `.retryAfter` rather than on which generation of the API it happened to be
+ * talking to.
  *
  *   POST /api/upload           multipart, images only, 10 MB, 30/hour
  *   POST /api/ai/identify      category + condition + tags from the photo, 20/hour
  *   POST /api/ai/phash         duplicate detection, FAILS CLOSED, 20/hour
- *   GET  /api/v1/valuation     the suggestion and the ±25% band
+ *   GET  /api/v1/valuation     Baylo's standard Leaves estimate and its range
+ *   POST /api/ai/valuation     the AI-assisted Leaves suggestion, cited, 10/hour
  *   GET  /api/v1/hubs          the 22 seeded Safe-Zone Hubs
  *   POST /api/items            creates the listing
  *
@@ -319,6 +320,8 @@ export interface IdentifyResult {
   category: Category;
   condition: Condition;
   tags: string[];
+  brand?: string | null;
+  brandEvidence?: string | null;
 }
 
 /**
@@ -468,7 +471,11 @@ export interface ValuationPayload {
   max: number;
   /** The bounds the final value must fall inside. THE SLIDER'S STOPS. */
   allowed: { min: number; max: number };
-  valuationSource: "comparables" | "category_band";
+  /**
+   * "ai_market" never comes from /api/v1/valuation; it is set on the copy the
+   * wizard builds from an AI result (see `activeValuation` in post/state).
+   */
+  valuationSource: "comparables" | "category_band" | "ai_market";
   /** How many settled trades fed the comparables path. 0 on the band path. */
   sampleSize: number;
   category: string;
@@ -478,6 +485,80 @@ export interface ValuationPayload {
   comparables: { label: string; sublabel: string; leaves: string }[];
   basis: string;
 }
+
+/**
+ * POST /api/ai/valuation.
+ *
+ * Claude finds online listings and their peso asking prices for the title,
+ * category and condition (never the photo). The SERVER takes the median price,
+ * finds its price level for the category (Low / Typical / High / Premium), and
+ * gives that level's fixed point in the range /api/v1/valuation gives. Same
+ * price, same Leaves. The bracket and review rules run on the server as before.
+ *
+ *   "ai"        use `valuation.suggestedLeaves` and `allowed`, show the
+ *               explanation and sources, and send `ticket` with createItem so
+ *               the listing is created with exactly this number.
+ *   "fallback"  no AI number. The wizard keeps the standard estimate and must
+ *               label it as such, never as an AI result.
+ *
+ * A thrown ApiError (503 AI_UNAVAILABLE, 429, offline) is treated exactly like
+ * "fallback" by the caller.
+ */
+export type AiValuationResult =
+  | {
+      status: "ai";
+      valuation: {
+        suggestedLeaves: number;
+        min: number;
+        max: number;
+        allowed: { min: number; max: number };
+        valuationSource: "ai_market";
+      };
+      /** The online asking prices. `typicalPhp` (the median) picks the level. */
+      market: { typicalPhp: number; lowPhp: number; highPhp: number; listingCount: number };
+      level: {
+        index: 0 | 1 | 2 | 3;
+        name: "Low" | "Typical" | "High" | "Premium";
+        categoryLabel: string;
+        /** [Low→Typical, Typical→High, High→Premium], pesos. */
+        cutoffsPhp: [number, number, number];
+        /** All four levels and their Leaves for this category and condition. */
+        levels: { name: string; leaves: number }[];
+      };
+      note: string;
+      sources: { title: string; url: string; pricePhp: number }[];
+      checkedAt: string;
+      ticket: string;
+      expiresAt: string;
+    }
+  | {
+      status: "fallback";
+      reason: "INSUFFICIENT_SOURCES" | "INVALID_AI_RESPONSE" | "AI_UNAVAILABLE";
+      message: string;
+    };
+
+export async function fetchAiValuation(input: {
+  title: string;
+  category: Category;
+  condition: Condition;
+}): Promise<AiValuationResult> {
+  const path = "/api/ai/valuation";
+  const res = await request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) await legacyFailure(res, "AI valuation is unavailable right now");
+  return readJson<AiValuationResult>(res, path);
+}
+
+/**
+ * A 409 from createItem whose ticket did not verify: expired, or the title,
+ * category or condition changed after the estimate. Nothing was created; the
+ * wizard re-values and the person posts again.
+ */
+export const isValuationTicketInvalid = (e: unknown): boolean =>
+  e instanceof ApiError && e.status === 409 && e.code === "VALUATION_TICKET_INVALID";
 
 /**
  * The suggested value, and the band around it the server will accept.
@@ -538,6 +619,12 @@ export interface CreateItemInput {
   category: Category;
   condition: Condition;
   valueLeaves: number;
+  /**
+   * The ticket from fetchAiValuation, when the value step showed an AI
+   * suggestion for exactly this title, category and condition. Omitted, the
+   * server judges the value against its standard estimate.
+   */
+  valuationTicket?: string;
   images: string[];
   /** "What are you hoping to get?" — free text, optional. */
   wantedItems: string | null;

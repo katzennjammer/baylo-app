@@ -83,6 +83,18 @@ export interface OrgBadge {
   verified: boolean;
 }
 
+export interface UserSearchResult {
+  id: string;
+  name: string;
+  avatar: string | null;
+  location: string | null;
+  rating: number;
+  reviewCount: number;
+  totalTrades: number;
+  trustTier: TrustTier | null;
+  org: OrgBadge | null;
+}
+
 /** A curated public meetup point. Coordinates here are public and precise. */
 export interface SafeZoneHub {
   id: string;
@@ -240,7 +252,7 @@ export interface BrowsePayload {
   /** Absent from a server older than 25 Sep 2026. */
   organizations?: BrowseOrgMatch[];
   facets: {
-    categories: { category: string; label: string; count: number }[];
+    categories: { category: string; label: string; count: number; /** Newest listing photo; top six categories, first page only. */ coverImage?: string | null }[];
     /** Only filled while `orgsOnly` is on. Absent from an older server. */
     businessCategories?: BusinessCategoryFacet[];
   };
@@ -604,7 +616,18 @@ export interface LiveOffer {
   offeredItems: { id: string; title: string; image: string | null; valueLeaves: number | null }[];
   offeredLeaves: number | null;
   message: string | null;
-  counterparty: { id: string; name: string; avatar: string | null };
+  /**
+   * `rating` and `trustTier` arrived in Nov 2026 for the offer inbox; an older
+   * server omits them, so both are optional and the card simply leaves the
+   * badge off.
+   */
+  counterparty: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    rating?: number;
+    trustTier?: TrustTier | null;
+  };
   /**
    * THE BRIDGE, as this screen needs it. Both brackets as they stood when the
    * offer was made; `bridgeFeeLeaves` is the QUOTE either way and

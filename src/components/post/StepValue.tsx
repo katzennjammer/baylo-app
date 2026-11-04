@@ -4,7 +4,7 @@ import { PanResponder, Text, View } from "react-native";
 
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { classifyValue, valueCap } from "../../lib/trade-rules";
-import { effectiveValue, usePost } from "../../post/state";
+import { activeValuation, effectiveValue, usePost } from "../../post/state";
 import {
   postBorder,
   postColor,
@@ -21,6 +21,7 @@ import {
 import { LeafIcon, PencilIcon, SwapIcon } from "../icons";
 import { ClockIcon, InfoIcon } from "./post-icons";
 import { Field, HelperRow, NoticePanel, Skeleton, TextButton } from "./ui";
+import { AiValuationDetails, useAiValuation } from "./AiValuationDetails";
 
 /**
  * Step 4 — what it is worth in Leaves.
@@ -69,21 +70,41 @@ export function StepValue({ board }: { board: Board }) {
   // "already asked about this pair" memo is a ref: remounting this step would
   // clear it and refetch — free on a new listing, and on an EDIT it would spend
   // the listing's one and only re-valuation a second time.
-  const valuation = state.valuation;
+  //
+  // The AI ask, by contrast, IS safe here: its answer lives in wizard state.
+  useAiValuation();
+  const valuation = activeValuation(state);
   const value = effectiveValue(state);
   const locked = state.revaluationSpent;
   const own = state.ownValue;
+  const ai = state.aiValuation;
 
   if (!valuation || (value === null && !own)) return <ValueSkeleton board={board} />;
+
+  // While the AI is still looking, no number is shown at all. Showing the
+  // standard estimate first and swapping it a few seconds later would present
+  // the fallback as the answer and then contradict it.
+  if (!locked && (ai === null || ai.status === "loading")) {
+    return (
+      <View>
+        <ValueSkeleton board={board} />
+        <View style={{ paddingHorizontal: board.screenX }}>
+          <AiValuationDetails />
+        </View>
+      </View>
+    );
+  }
 
   const { allowed, valuationSource, sampleSize, suggestedLeaves } = valuation;
 
   const provenance =
-    valuationSource === "comparables"
-      ? sampleSize === 1
-        ? "Suggested from 1 similar trade"
-        : `Suggested from ${sampleSize} similar trades`
-      : "Category estimate — no similar trades yet";
+    valuationSource === "ai_market"
+      ? valuation.basis
+      : valuationSource === "comparables"
+        ? sampleSize === 1
+          ? "Standard estimate from 1 similar trade"
+          : `Standard estimate from ${sampleSize} similar trades`
+        : "Standard estimate — no similar trades yet";
 
   return (
     <View style={{ paddingHorizontal: board.screenX }}>
@@ -164,6 +185,8 @@ export function StepValue({ board }: { board: Board }) {
           onChange={(leaves) => dispatch({ type: "value/set", leaves })}
         />
       )}
+
+      <AiValuationDetails />
 
       {own ? null : locked ? (
         <>

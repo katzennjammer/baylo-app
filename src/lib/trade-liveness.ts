@@ -6,12 +6,12 @@ import { isRealtimeConnected } from "../api/pusher";
 import { useRefetchOnFocus } from "./refetch-on-focus";
 
 /**
- * Keeps a trade screen current when the push channel cannot.
+ * Keeps a focused, push-driven screen current when the push channel cannot.
  *
  * ── THE PUSH IS THE MECHANISM; THIS IS THE NET UNDER IT ─────────────────────
  *
- * `useTradeRealtime()` invalidates the trade caches the moment the partner
- * does something, and on a phone with a live socket that is the whole story.
+ * The screen invalidates its cache when the partner does something, and on a
+ * phone with a live socket that is the whole story.
  * The socket is not always live: a build without Pusher keys, a network that
  * blocks WebSockets, the seconds after a reconnect, a rejected authorisation.
  * On such a phone the only refetch triggers were a pull and an app
@@ -38,7 +38,7 @@ import { useRefetchOnFocus } from "./refetch-on-focus";
 
 const POLL_MS = 20_000;
 
-export function useTradeLiveness(refetch: (opts: { cancelRefetch: boolean }) => unknown) {
+export function useRealtimeLiveness(refetch: (opts: { cancelRefetch: boolean }) => unknown) {
   const ref = useRef(refetch);
   ref.current = refetch;
 
@@ -54,4 +54,8 @@ export function useTradeLiveness(refetch: (opts: { cancelRefetch: boolean }) => 
       return () => clearInterval(timer);
     }, []),
   );
+}
+
+export function useTradeLiveness(refetch: (opts: { cancelRefetch: boolean }) => unknown) {
+  useRealtimeLiveness(refetch);
 }

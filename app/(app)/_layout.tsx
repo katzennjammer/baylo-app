@@ -114,13 +114,9 @@ export default function AppLayout() {
           TabBar.tsx, NOT by the `href: null` below — and stays navigable, with
           the new Home linking to it (See all, Filter).
 
-          THE HEADER STAYS ON FOR HOME. The search row is a SECOND row under the
-          wordmark, not a replacement for it: the wordmark, the Leaves pill and
-          the bell/messages icons are the app's chrome and Home is not the one
-          screen that goes without them. Home therefore takes no safe-area
-          padding of its own — AppHeader paints behind the status bar and
-          insets its own contents. */}
-      <Tabs.Screen name="home" options={{ title: "Home", header: questsHeader }} />
+            HOME DRAWS ITS OWN PINNED HEADER. Its safe-area inset and status-bar
+            style belong to the Home screen; other tabs keep AppHeader unchanged. */}
+          <Tabs.Screen name="home" options={{ title: "Home", headerShown: false }} />
       <Tabs.Screen name="index" options={{ title: "Community", header: questsHeader }} />
       <Tabs.Screen name="post" options={{ title: "Post" }} />
       {/* THE ONLY TAB THAT DRAWS ITS OWN BAR.

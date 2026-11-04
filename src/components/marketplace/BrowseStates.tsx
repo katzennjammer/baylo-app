@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { GridIcon, SearchIcon, WarningIcon, RefreshIcon } from "../icons";
+import { WarningIcon, RefreshIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
   border,
@@ -12,6 +12,7 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
+import { MascotEmptyState } from "../MascotEmptyState";
 
 /**
  * The four things the grid can be when it is not a grid.
@@ -59,30 +60,12 @@ export function BrowseSkeleton({ tileWidth }: { tileWidth: number }) {
 
 export function BrowseEmpty({ onPost }: { onPost: () => void }) {
   return (
-    <View style={s.wrap}>
-      <View style={s.circle}>
-        <GridIcon size={icon.emptyGrid.size} stroke={icon.emptyGrid.stroke} color={color.forest} />
-      </View>
-
-      <Text style={[textStyle(type.emptyHeadline), s.headline]}>
-        Nothing listed yet
-      </Text>
-      <Text style={[textStyle(type.emptyBody), s.body]}>
-        The marketplace fills up as people post things they no longer use. Yours can be the first.
-      </Text>
-
-      <Tappable
-        onPress={onPost}
-        accessibilityRole="button"
-        accessibilityLabel="Post an item"
-        style={s.primary}
-        pressedStyle={s.primaryPressed}
-      >
-        <Text style={[textStyle(type.emptyPrimaryButton), { color: color.onGreen }]}>
-          Post an item
-        </Text>
-      </Tappable>
-    </View>
+    <MascotEmptyState
+      pose="box"
+      title="Nothing listed yet"
+      message="The marketplace fills up as people post things they no longer use. Yours can be the first."
+      action={{ label: "Post an item", onPress: onPost }}
+    />
   );
 }
 
@@ -118,42 +101,21 @@ export function BrowseNoMatches({
   const narrowed = filterCount > 0 || orgsOnly;
 
   return (
-    <View style={s.wrap}>
-      <View style={s.circleQuiet}>
-        <SearchIcon size={icon.emptyGrid.size} stroke={icon.emptyGrid.stroke} color={color.inkMuted} />
-      </View>
-
-      <Text style={[textStyle(type.emptyHeadline), s.headline]}>
-        {shopsMatched ? "No listings match" : "No matches"}
-      </Text>
-
-      {/*
-        The search term is quoted back. Somebody who mistyped a word is looking
-        for the typo, and a generic "try something else" hides the one piece of
-        information that would let them spot it.
-      */}
-      <Text style={[textStyle(type.emptyBody), s.body]}>
-        {q
-          ? `${shopsMatched ? "No listings" : "Nothing"} matched “${q}”`
-          : orgsOnly && filterCount === 0
-            ? "No shops have anything listed right now"
-            : "Nothing matched these filters"}
-        {narrowed && q ? ` with the filters you have on.` : "."}
-        {narrowed || q ? " Try widening the search." : ""}
-      </Text>
-
-      <Tappable
-        onPress={onClear}
-        accessibilityRole="button"
-        accessibilityLabel="Clear search and filters"
-        style={s.primary}
-        pressedStyle={s.primaryPressed}
-      >
-        <Text style={[textStyle(type.emptyPrimaryButton), { color: color.onGreen }]}>
-          Clear filters
-        </Text>
-      </Tappable>
-    </View>
+    <MascotEmptyState
+      pose="search"
+      size={100}
+      title={shopsMatched ? "No listings match" : "No matches"}
+      message={`${q
+        ? `${shopsMatched ? "No listings" : "Nothing"} matched “${q}”`
+        : orgsOnly && filterCount === 0
+          ? "No shops have anything listed right now"
+          : "Nothing matched these filters"}${narrowed && q ? ` with the filters you have on.` : "."}${narrowed || q ? " Try widening the search." : ""}`}
+      action={{
+        label: "Clear filters",
+        accessibilityLabel: "Clear search and filters",
+        onPress: () => onClear?.(),
+      }}
+    />
   );
 }
 
@@ -207,26 +169,6 @@ const s = StyleSheet.create({
     paddingHorizontal: space.empty.x,
     paddingVertical: space.empty.bodyToButton,
   },
-  circle: {
-    width: size.emptyIconCircle,
-    height: size.emptyIconCircle,
-    borderRadius: size.emptyIconCircle / 2,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  circleQuiet: {
-    width: size.emptyIconCircle,
-    height: size.emptyIconCircle,
-    borderRadius: size.emptyIconCircle / 2,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   circleError: {
     width: size.errorIconCircle,
     height: size.errorIconCircle,
@@ -239,16 +181,6 @@ const s = StyleSheet.create({
   },
   headline: { marginTop: space.empty.iconToHeadline, textAlign: "center", color: color.ink },
   body: { marginTop: space.empty.headlineToBody, textAlign: "center", color: color.inkSecondary },
-  primary: {
-    marginTop: space.empty.bodyToButton,
-    width: "100%",
-    height: size.control.emptyPrimaryButton,
-    borderRadius: radius.emptyPrimaryButton,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryPressed: { opacity: 0.85 },
   retry: {
     marginTop: space.error.bodyToButton,
     flexDirection: "row",

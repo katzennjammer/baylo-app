@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet } from "react-native";
 
+import type { MascotPose } from "../media/mascots";
 import { usePostedNotice } from "../post/posted-notice";
-import { border, color, radius, size, textStyle, type } from "../theme/tokens";
-import { Tappable } from "./Tappable";
+import { PopupActions, PopupButton, PopupSheet } from "./PopupSheet";
 
 /**
  * The app's dialog: a themed stand-in for React Native's `Alert.alert`.
@@ -31,18 +31,9 @@ import { Tappable } from "./Tappable";
  *
  * ── THE LOOK ────────────────────────────────────────────────────────────────
  *
- * NoticeDialog's card, measure for measure — surface fill, sheet radius, the
- * caption scrim, the display face for the title — so a confirmation and the
- * posted popup are visibly one family. Buttons are the app's primary button
- * (48 tall, primaryButton radius) in three tones:
- *
- *   default      green fill, on-green ink — the app's primary action
- *   destructive  urgent fill, surface ink — Block, Delete, Sign out
- *   cancel       outlined, ink — present, never the loudest thing
- *
- * One button fills the width. Two sit side by side, cancel first, so the
- * action is always under the right thumb. More than two stack -- and so do
- * two whose labels will not fit half a card (SIDE_BY_SIDE_MAX_CHARS below).
+ * The queued alert uses the same bottom-sheet surface and button family as
+ * NoticeDialog. Cancel remains secondary, default remains primary, and
+ * destructive keeps its urgent fill.
  *
  * ── DISMISSING ──────────────────────────────────────────────────────────────
  *
@@ -63,17 +54,14 @@ interface Dialog {
   title: string;
   message?: string;
   buttons: DialogButton[];
+  pose?: MascotPose;
 }
 
 /**
- * The longest label that fits one of two side-by-side buttons on a 360dp
- * phone: 24 scrim + 24 card padding each side leaves 264, less the 10 gap is
- * 127 a button, less 16 padding each side is ~95px of 15px bold -- about 11
- * characters. Past that the label is cut to one line with an ellipsis, which
- * turned the staff roster's "Withdraw invitation" into "Withdraw in…"
- * (24 Sep 2026). Stacking gives every button the full width instead.
+ * The cancel slot is 35% wide on a 360dp phone. Keep its label short enough
+ * to fit; longer labels stack so none of the actions are truncated.
  */
-const SIDE_BY_SIDE_MAX_CHARS = 11;
+const SIDE_BY_SIDE_MAX_CHARS = 8;
 
 let queue: Dialog[] = [];
 let nextId = 1;
@@ -83,9 +71,14 @@ function emit() {
   for (const l of listeners) l();
 }
 
-export function showDialog(title: string, message?: string, buttons?: DialogButton[]) {
+export function showDialog(
+  title: string,
+  message?: string,
+  buttons?: DialogButton[],
+  options?: { pose?: MascotPose },
+) {
   const list = buttons && buttons.length > 0 ? buttons : [{ text: "OK" }];
-  queue = [...queue, { id: nextId++, title, message, buttons: list }];
+  queue = [...queue, { id: nextId++, title, message, buttons: list, pose: options?.pose }];
   emit();
 }
 
@@ -126,117 +119,52 @@ export function DialogHost() {
   const stacked =
     cancelFirst.length > 2 || cancelFirst.some((b) => b.text.length > SIDE_BY_SIDE_MAX_CHARS);
 
+  const actionLayout = stacked ? "stacked" : cancelFirst.length > 1 ? "row" : "single";
+
   return (
-    <Modal
+    <PopupSheet
       visible={dialog !== null}
-      transparent
-      animationType="fade"
-      onRequestClose={dismiss}
-      statusBarTranslucent
+      title={dialog?.title ?? ""}
+      message={dialog?.message}
+      pose={dialog?.pose}
+      onDismiss={dismissal ? dismiss : undefined}
+      dismissLabel={dismissal?.text}
     >
-      <Pressable
-        style={s.scrim}
-        onPress={dismiss}
-        accessibilityRole={dismissal ? "button" : undefined}
-        accessibilityLabel={dismissal ? dismissal.text : undefined}
-      >
-        {dialog ? (
-          <Pressable onPress={() => {}} style={s.card} accessible={false} accessibilityViewIsModal>
-            <Text style={[textStyle(type.errorHeadline), s.title]} accessibilityRole="header">
-              {dialog.title}
-            </Text>
-            {dialog.message ? (
-              <Text style={[textStyle(type.emptyBody), s.body]}>{dialog.message}</Text>
-            ) : null}
-
-            <View style={stacked ? s.buttonsStacked : s.buttonsRow}>
-              {cancelFirst.map((b, i) => (
-                <DialogButtonView
-                  key={`${dialog.id}-${i}`}
-                  button={b}
-                  grow={!stacked}
-                  onPress={() => answer(dialog.id, b)}
-                />
-              ))}
-            </View>
-          </Pressable>
-        ) : null}
-      </Pressable>
-    </Modal>
+      {dialog ? (
+        <PopupActions layout={actionLayout}>
+          {cancelFirst.map((button, index) => {
+            const tone =
+              button.style === "cancel"
+                ? "secondary"
+                : button.style === "destructive"
+                  ? "destructive"
+                  : "primary";
+            const containerStyle =
+              actionLayout !== "row"
+                ? undefined
+                : cancelFirst[0]?.style === "cancel"
+                  ? index === 0
+                    ? s.secondaryAction
+                    : s.primaryAction
+                  : s.equalAction;
+            return (
+              <PopupButton
+                key={`${dialog.id}-${index}`}
+                label={button.text}
+                tone={tone}
+                onPress={() => answer(dialog.id, button)}
+                containerStyle={containerStyle}
+              />
+            );
+          })}
+        </PopupActions>
+      ) : null}
+    </PopupSheet>
   );
 }
-
-function DialogButtonView({
-  button,
-  grow,
-  onPress,
-}: {
-  button: DialogButton;
-  grow: boolean;
-  onPress: () => void;
-}) {
-  const tone = button.style ?? "default";
-  return (
-    <Tappable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={button.text}
-      style={[
-        tone === "cancel" ? s.cancel : tone === "destructive" ? s.destructive : s.primary,
-        grow ? s.grow : null,
-      ]}
-      pressedStyle={s.pressed}
-    >
-      <Text
-        style={[
-          textStyle(type.primaryButton),
-          {
-            color:
-              tone === "cancel" ? color.ink : tone === "destructive" ? color.surface : color.onGreen,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {button.text}
-      </Text>
-    </Tappable>
-  );
-}
-
-/** The box every tone shares, so only the colours are ever written three times. */
-const buttonBox = {
-  height: size.control.primaryButton,
-  borderRadius: radius.primaryButton,
-  borderWidth: border.chip,
-  paddingHorizontal: 16,
-  alignItems: "center",
-  justifyContent: "center",
-} as const;
 
 const s = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: color.captionFill,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: color.surface,
-    borderRadius: radius.sheet,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
-  },
-  title: { color: color.ink, textAlign: "center" },
-  body: { color: color.inkSecondary, textAlign: "center", marginTop: 8 },
-  buttonsRow: { flexDirection: "row", gap: 10, marginTop: 24 },
-  buttonsStacked: { gap: 10, marginTop: 24 },
-  grow: { flex: 1 },
-  primary: { ...buttonBox, backgroundColor: color.green, borderColor: color.green },
-  destructive: { ...buttonBox, backgroundColor: color.urgent, borderColor: color.urgent },
-  cancel: { ...buttonBox, backgroundColor: color.surface, borderColor: color.controlLineStrong },
-  pressed: { opacity: 0.85 },
+  secondaryAction: { flex: 35 },
+  primaryAction: { flex: 65 },
+  equalAction: { flex: 1 },
 });

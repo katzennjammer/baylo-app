@@ -6,6 +6,7 @@ import { ApiError } from "../src/api/client";
 import {
   meetupState,
   useActiveTrades,
+  useListingOffers,
   useTradeDecision,
   useTradeHistory,
 } from "../src/api/trades";
@@ -43,6 +44,7 @@ import * as present from "../src/components/trades/present";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { TradeButton } from "../src/components/trades/trade-ui";
 import { useOfferDecisionFlow } from "../src/components/trades/useOfferDecisionFlow";
+import { CompareOffer } from "../src/components/trades/CompareOffer";
 import { useWithdraw } from "../src/components/trades/useWithdraw";
 import { meetupWhen } from "../src/lib/gap";
 import { openPremium, premiumGateReason } from "../src/lib/premium";
@@ -87,12 +89,23 @@ import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
  */
 export default function TradeScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; offer?: string; handoff?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    offer?: string;
+    handoff?: string;
+    /** Set when opened from a listing's offer inbox: that listing's id. */
+    listing?: string;
+    /** And the inbox's order, comma-separated offer ids, for "Next offer". */
+    order?: string;
+  }>();
   const tradeId = params.id;
   const offerId = params.offer;
 
   const active = useActiveTrades();
   const history = useTradeHistory(!!tradeId);
+  // A listing's own offers: an offer past the main feed's 50-row cap is still
+  // found when it was opened from that listing's inbox.
+  const listingOffers = useListingOffers(params.listing || undefined);
   const { keyboardUp, imeHeight } = useKeyboardState();
   const entry = useCodeEntry();
 
@@ -113,7 +126,11 @@ export default function TradeScreen() {
       ? (active.data?.trades.find((t) => t.id === tradeId) ??
         history.data?.trades.find((t) => t.id === tradeId))
       : null) ?? null;
-  const liveOffer = (offerId ? active.data?.offers.find((o) => o.id === offerId) : null) ?? null;
+  const liveOffer =
+    (offerId
+      ? (active.data?.offers.find((o) => o.id === offerId) ??
+        listingOffers.data?.find((o) => o.id === offerId))
+      : null) ?? null;
   const [heldTrade, setHeldTrade] = useState<ActiveTrade | null>(null);
   const [heldOffer, setHeldOffer] = useState<LiveOffer | null>(null);
   useEffect(() => {
@@ -155,6 +172,41 @@ export default function TradeScreen() {
           </Gutter>
         )}
       </OfferScreenHost>
+    );
+  }
+
+  /* ── An offer someone made you: the compare view (Nov 2026). ── */
+  if (offer && !trade && offer.direction === "received") {
+    const order = (params.order ?? "").split(",").filter(Boolean);
+    const index = order.indexOf(offer.id);
+    const siblings =
+      listingOffers.data ??
+      (active.data?.offers ?? []).filter((o) => o.direction === "received" && o.post.id === offer.post.id);
+    const others = siblings.filter((o) => o.id !== offer.id).length;
+    const nextId = index >= 0 && order.length > 1 ? order[(index + 1) % order.length] : null;
+    return (
+      <>
+        <CompareOffer
+          offer={offer}
+          flow={offerFlow}
+          position={index >= 0 ? { index, total: order.length } : null}
+          others={others}
+          onBack={goBack}
+          onNext={
+            nextId
+              ? () =>
+                  router.replace(
+                    `/trade?offer=${encodeURIComponent(nextId)}&listing=${encodeURIComponent(params.listing ?? "")}&order=${encodeURIComponent(params.order ?? "")}`,
+                  )
+              : null
+          }
+          onChat={() =>
+            router.push(`/(app)/messages?partner=${encodeURIComponent(offer.counterparty.id)}`)
+          }
+          onOpenTrade={(id) => router.replace(present.tradeHref(id) as never)}
+        />
+        {offerFlow.sheet}
+      </>
     );
   }
 

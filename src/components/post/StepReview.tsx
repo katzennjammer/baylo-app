@@ -5,7 +5,7 @@ import { useHubs } from "../../api/hubs";
 import { categoryLabel, conditionLabel } from "../../api/post";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { classifyValue } from "../../lib/trade-rules";
-import { effectiveValue, isPostable, parseQuantity, unitLabel, usePost, type PostState } from "../../post/state";
+import { activeValuation, effectiveValue, isPostable, parseQuantity, unitLabel, usePost, type PostState } from "../../post/state";
 import {
   postColor,
   postLines,
@@ -345,11 +345,13 @@ function PhotoRail({
  */
 function reviewLine(state: PostState): string {
   const value = effectiveValue(state);
-  const v = state.valuation;
+  const v = activeValuation(state);
   const source =
-    v?.valuationSource === "comparables"
-      ? `From ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
-      : "Category estimate";
+    v?.valuationSource === "ai_market"
+      ? "From online prices"
+      : v?.valuationSource === "comparables"
+        ? `Standard estimate from ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
+        : "Standard estimate";
   if (value === null) return source;
   const bracket = bracketLabel(bracketOf(value));
   if (!state.ownValue || !v) return `${source} · ${bracket}`;

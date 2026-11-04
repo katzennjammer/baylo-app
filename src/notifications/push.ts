@@ -1,14 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { AppState, Platform } from "react-native";
 
 import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
-import { pushNotificationId, pushTarget } from "./push-target";
+import { getActiveConversationPartnerId } from "./active-conversation";
+import { Notifications, notificationsAvailable } from "./notifications-safe";
+import { pushMessageId, pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
 
 /**
  * Phone notifications for everything the bell shows (20 Oct 2026).
@@ -30,14 +31,28 @@ import { pushNotificationId, pushTarget } from "./push-target";
  * request just means no pushes. Nothing here can block sign-in or sign-out.
  */
 
-// Shown while the app is open too: the header badge alone is easy to miss.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    let suppressed = true;
+    try {
+      const data = notification.request.content.data;
+      if (pushTarget(data)) {
+        suppressed = shouldSuppressMessageNotification(
+          data,
+          getActiveConversationPartnerId(),
+          AppState.currentState === "active",
+        );
+      }
+    } catch (error) {
+      console.warn("[push] Ignoring malformed foreground notification", error);
+    }
+    return {
+      shouldShowBanner: !suppressed,
+      shouldShowList: !suppressed,
+      shouldPlaySound: !suppressed,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /**
@@ -54,6 +69,7 @@ Notifications.setNotificationHandler({
  */
 const CHANNEL = "alerts";
 const OLD_CHANNELS = ["default"];
+const handledResponseIds = new Set<string>();
 
 function projectId(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
@@ -63,7 +79,7 @@ function projectId(): string | undefined {
 /** Null when this build cannot receive pushes at all, or the user said no. */
 async function currentToken(askPermission: boolean): Promise<string | null> {
   // Expo Go cannot receive remote pushes on Android, and emulators have no token.
-  if (!Device.isDevice || Constants.executionEnvironment === "storeClient") return null;
+  if (!notificationsAvailable || !Device.isDevice || Constants.executionEnvironment === "storeClient") return null;
   const id = projectId();
   if (!id) return null;
 
@@ -109,9 +125,13 @@ export async function unregisterPush(): Promise<void> {
 /** Mounted in the signed-in layout. `userId` undefined = signed out, do nothing. */
 export function usePushNotifications(userId: string | undefined) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ partner?: string; messageId?: string }>();
+  const navigationState = useRootNavigationState();
   const qc = useQueryClient();
   const markRead = useMarkNotificationRead();
-  const handled = useRef<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<{ partnerId: string; messageId: string | null } | null>(null);
+  const replacingWithMessages = useRef(false);
   const last = Notifications.useLastNotificationResponse();
 
   useEffect(() => {
@@ -128,21 +148,83 @@ export function usePushNotifications(userId: string | undefined) {
 
   // A push that arrives while the app is open: refresh what counts unread.
   useEffect(() => {
-    const sub = Notifications.addNotificationReceivedListener(() => {
-      void qc.invalidateQueries({ queryKey: ["home"] });
-      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      try {
+        const target = pushTarget(notification.request.content.data);
+        if (!target) return;
+        void Promise.all([
+          qc.invalidateQueries({ queryKey: ["home"] }),
+          qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+        ]).catch((error: unknown) => {
+          console.warn("[push] Could not refresh notification counts", error);
+        });
+      } catch (error) {
+        console.warn("[push] Ignoring malformed received notification", error);
+      }
     });
     return () => sub.remove();
   }, [qc]);
 
   useEffect(() => {
-    if (!userId || !last) return;
-    const key = last.notification.request.identifier;
-    if (handled.current === key) return;
-    handled.current = key;
-    const data = last.notification.request.content.data;
-    const id = pushNotificationId(data);
-    if (id) markRead.mutate(id);
-    router.push(pushTarget(data) as never);
-  }, [last, userId, router, markRead]);
+    try {
+      if (!userId || !last || !navigationState.key) return;
+      const data = last.notification.request.content.data;
+      const target = pushTarget(data);
+      if (!target) return;
+
+      const key = last.notification.request.identifier;
+      if (handledResponseIds.has(key)) return;
+      handledResponseIds.add(key);
+      if (handledResponseIds.size > 100) {
+        const oldest = handledResponseIds.values().next().value;
+        if (oldest) handledResponseIds.delete(oldest);
+      }
+
+      const id = pushNotificationId(data);
+      if (id) markRead.mutate(id);
+      const partnerId = pushMessagePartnerId(data);
+      if (partnerId) {
+        const messageId = pushMessageId(data);
+        if (pathname === "/messages/thread" && params.partner === partnerId) {
+          if (messageId) router.setParams({ messageId });
+          return;
+        }
+        replacingWithMessages.current = false;
+        setPendingMessage({ partnerId, messageId });
+        return;
+      }
+      router.push(target as never);
+    } catch (error) {
+      console.warn("[push] Ignoring malformed notification response", error);
+    }
+  }, [last, userId, navigationState.key, pathname, params.partner, router, markRead]);
+
+  useEffect(() => {
+    try {
+      if (!pendingMessage || !userId || !navigationState.key) return;
+      if (pathname === "/messages/thread" && params.partner === pendingMessage.partnerId) {
+        setPendingMessage(null);
+        replacingWithMessages.current = false;
+        return;
+      }
+      if (pathname === "/messages") {
+        router.push({
+          pathname: "/messages/thread",
+          params: {
+            partner: pendingMessage.partnerId,
+            ...(pendingMessage.messageId ? { messageId: pendingMessage.messageId } : {}),
+          },
+        });
+        setPendingMessage(null);
+        replacingWithMessages.current = false;
+        return;
+      }
+      if (!replacingWithMessages.current) {
+        replacingWithMessages.current = true;
+        router.replace("/messages");
+      }
+    } catch (error) {
+      console.warn("[push] Could not route tapped message notification", error);
+    }
+  }, [navigationState.key, params.partner, pathname, pendingMessage, router, userId]);
 }

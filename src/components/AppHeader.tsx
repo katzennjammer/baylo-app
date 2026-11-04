@@ -97,6 +97,17 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   useEffect(() => {
     if (showQuests && dataUpdatedAt) void refetchQuests({ cancelRefetch: false });
   }, [showQuests, dataUpdatedAt, refetchQuests]);
+  const questsResetAt = quests.data?.resetsAt;
+  useEffect(() => {
+    if (!showQuests || !questsResetAt) return;
+
+    const resetDelay = Date.parse(questsResetAt) - Date.now();
+    const timeout = setTimeout(
+      () => void refetchQuests({ cancelRefetch: false }),
+      Math.max(0, resetDelay) + 1_000,
+    );
+    return () => clearTimeout(timeout);
+  }, [showQuests, questsResetAt, refetchQuests]);
 
   // The badges below count the acting shop's inbox while acting as it (see
   // `unread` on /api/v1/home), so the channel that refreshes them is the
@@ -186,8 +197,9 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               { color: color.ink, flexShrink: 1 },
             ]}
             numberOfLines={1}
+            accessibilityLabel="Baylo"
           >
-            Baylo
+            baylo<Text style={s.wordmarkDot}>.</Text>
           </Text>
 
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>
@@ -522,10 +534,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
+    backgroundColor: color.homeYellow,
+    borderWidth: 0,
+    borderColor: color.homeYellow,
   },
+  wordmarkDot: { color: color.homeYellow },
   badge: {
     position: "absolute",
     alignItems: "center",

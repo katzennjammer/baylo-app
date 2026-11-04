@@ -56,6 +56,20 @@ export interface ThreadMessage {
   content: string;
   read: boolean;
   createdAt: string;
+  /** The message this one answers (swipe to reply), quoted. */
+  replyToId?: string | null;
+  replyTo?: { id: string; content: string; senderId: string } | null;
+}
+
+export interface ImageMessagePayload {
+  type: "image";
+  url?: string;
+  imageUrl?: string;
+  caption?: string | null;
+  width?: number;
+  height?: number;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 export interface LegacyThreadResponse {
@@ -139,9 +153,15 @@ async function fetchLegacyThread(partnerId: string): Promise<LegacyThreadRespons
     messages: messages.map((msg) => {
       let content = msg.content;
       try {
-        const payload = JSON.parse(content) as { type?: unknown; url?: unknown; imageUrl?: unknown };
-        if (payload?.type === "image" && typeof payload.url !== "string" && typeof payload.imageUrl === "string") {
-          content = JSON.stringify({ ...payload, url: payload.imageUrl });
+        const payload = JSON.parse(content) as ImageMessagePayload;
+        if (payload?.type === "image") {
+          const normalized = {
+            ...payload,
+            ...(typeof payload.url !== "string" && typeof payload.imageUrl === "string" ? { url: payload.imageUrl } : {}),
+            ...(typeof payload.width !== "number" && typeof payload.imageWidth === "number" ? { width: payload.imageWidth } : {}),
+            ...(typeof payload.height !== "number" && typeof payload.imageHeight === "number" ? { height: payload.imageHeight } : {}),
+          };
+          if (JSON.stringify(normalized) !== content) content = JSON.stringify(normalized);
         }
       } catch {
         // Plain text messages stay untouched.
@@ -232,14 +252,17 @@ export function useSendMessage() {
     mutationFn: async ({
       partnerId,
       content,
+      replyToId,
     }: {
       partnerId: string;
       content: string;
+      /** Swipe to reply: the message this one answers. */
+      replyToId?: string | null;
     }) => {
       const res = await request("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiverId: partnerId, content }),
+        body: JSON.stringify({ receiverId: partnerId, content, ...(replyToId ? { replyToId } : {}) }),
       });
 
       if (!res.ok) {
@@ -274,3 +297,46 @@ export function useSendMessage() {
   });
 }
 
+/* ── Chat info: Mute and Delete chat ──────────────────────────────────── */
+
+export interface ChatSettings {
+  partnerId: string;
+  /** No push for this person's chat messages. Offers and trades still alert. */
+  muted: boolean;
+  /** "Delete chat" time for this account, or null. */
+  clearedAt: string | null;
+}
+
+export const chatSettingsKey = (partnerId: string) => ["messages", "settings", partnerId] as const;
+
+export function useChatSettings(partnerId: string | undefined) {
+  return useQuery({
+    queryKey: chatSettingsKey(partnerId ?? ""),
+    enabled: !!partnerId,
+    queryFn: async () =>
+      (await apiV1<ChatSettings>(`/api/v1/messages/conversations/${encodeURIComponent(partnerId!)}`)).data,
+    staleTime: 60_000,
+  });
+}
+
+/** PATCH one setting. `clear: true` is Delete chat: hidden for you only. */
+export function useUpdateChatSettings(partnerId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (change: { muted?: boolean; clear?: true }) =>
+      (
+        await apiV1<ChatSettings>(`/api/v1/messages/conversations/${encodeURIComponent(partnerId!)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(change),
+        })
+      ).data,
+    onSuccess: (data, change) => {
+      qc.setQueryData(chatSettingsKey(data.partnerId), data);
+      if (change.clear) {
+        void qc.invalidateQueries({ queryKey: ["messages", "thread"] });
+        void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
+      }
+    },
+  });
+}

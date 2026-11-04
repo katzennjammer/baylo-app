@@ -59,11 +59,13 @@ export function StoriesRow({
   return (
     <View style={{ backgroundColor: color.surface }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail}>
-        {!actingAsShop && viewer ? (
+        {/* "Create story" always first; "Your story" once you have one (4 Nov 2026). */}
+        {!actingAsShop && viewer ? <CreateStory onPress={openShare} /> : null}
+        {!actingAsShop && viewer && own && own.stories.length > 0 ? (
           <YourStory
             viewer={viewer}
             own={own}
-            onOpen={own ? () => openViewer(own.user.id) : openShare}
+            onOpen={() => openViewer(own.user.id)}
             onAdd={openShare}
           />
         ) : null}
@@ -73,6 +75,21 @@ export function StoriesRow({
       </ScrollView>
       <Divider />
     </View>
+  );
+}
+
+function CreateStory({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Create a story: share a listing">
+      <View style={[s.ring, s.create]}>
+        <View style={s.createPlus}>
+          <PlusIcon size={18} stroke={2.4} color={color.onGreen} />
+        </View>
+      </View>
+      <Text style={[textStyle(type.storyPostLabel), s.label]} numberOfLines={lines.storyHandle}>
+        Create story
+      </Text>
+    </Pressable>
   );
 }
 
@@ -190,6 +207,8 @@ const s = StyleSheet.create({
   },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
 
+  create: { borderColor: color.controlLineStrong, borderStyle: "dashed", backgroundColor: color.control },
+  createPlus: { width: 30, height: 30, borderRadius: 15, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
   addBadge: {
     position: "absolute",
     right: -2,

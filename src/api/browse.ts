@@ -128,11 +128,12 @@ export function activeFilterCount(f: BrowseFilters): number {
   return n;
 }
 
-function toQueryString(filters: BrowseFilters, cursor: string | null): string {
+function toQueryString(filters: BrowseFilters, cursor: string | null, limit?: number): string {
   const p = new URLSearchParams();
 
   const q = filters.q?.trim();
   if (q) p.set("q", q);
+  if (limit != null) p.set("limit", String(limit));
 
   // One value or a comma-separated list. Never a repeated parameter.
   if (filters.categories && filters.categories.length > 0) {
@@ -247,6 +248,22 @@ export function useBrowse(filters: BrowseFilters) {
      */
     orgMatches: pages[0]?.payload.organizations ?? [],
   };
+}
+
+/** A small, debounced-friendly first page for Marketplace's inline suggestions. */
+export function useBrowseSuggestions(filters: BrowseFilters, enabled = true) {
+  const query = filters.q?.trim() ?? "";
+  return useQuery({
+    queryKey: ["browse-suggestions", browseKey(filters)[1]],
+    queryFn: async () => {
+      const { data } = await apiV1<BrowsePayload>(
+        `/api/v1/browse${toQueryString(filters, null, 4)}`,
+      );
+      return data.items;
+    },
+    enabled: enabled && query.length >= 2,
+    staleTime: 30_000,
+  });
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import * as copy from "./copy";
 import { Gutter } from "./chrome";
@@ -6,8 +6,8 @@ import { SectionHeader } from "../home-redesign/SectionHeader";
 import { Hairline, PrimaryButton } from "../offer/chrome";
 import { color, radius, space, type } from "../../theme/tokens";
 import { WarningTriangleIcon } from "../offer/icons";
-import { NumberedStep } from "../offer/rows";
 import { RowAction } from "./rows";
+import { MascotEmptyState } from "../MascotEmptyState";
 import {
   offerBorder,
   offerColor,
@@ -22,20 +22,17 @@ import {
 /**
  * §6's four table rows that are not a list: empty, all-settled, loading, error.
  *
- * NO ILLUSTRATION IN ANY OF THEM. §5.2 says it for the offer flow's empty state
- * and §6's table says it again here, and the reason is the same both times: a
- * drawing is a mood, and every one of these four is a statement of fact that the
- * reader is about to act on.
+ * The no-trades onboarding state uses the search mascot; all-settled, loading
+ * and error remain text/data-led states.
  */
 
 /* ────────────────────────────── §6 empty ────────────────────────────── */
 
 /**
- * "No trades yet". A new user's first sight of this tab.
+ * "No trades yet". A new user's first sight of this tab, with the approved
+ * search mascot above the copy.
  *
- * §10.6 gives the heading, the body and the button; frame 9k adds three numbered
- * lines in the `01 / 02 / 03` shape §5.2's "No items" state already uses — so
- * `NumberedStep` is imported from the offer flow rather than rebuilt.
+ * The screen keeps the mascot, heading, body and marketplace action.
  *
  * NO SECTION LABELS. Frame 9k's own note: no labels for sections that do not
  * exist. A `Needs you today` heading over nothing would read as a list that
@@ -44,30 +41,22 @@ import {
 export function TradesEmpty({ onBrowse }: { onBrowse: () => void }) {
   return (
     <View style={{ flex: 1 }}>
-      <View
-        style={{
-          flex: 1,
-          paddingTop: 44,
-          paddingHorizontal: offerSpace.screenX,
-          gap: offerSpace.paragraphToControl,
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          paddingTop: 12,
+          paddingBottom: offerSpace.paragraphToControl,
         }}
+        showsVerticalScrollIndicator={false}
       >
-        <Text
-          accessibilityRole="header"
-          style={[textStyle(offerType.screenHeading), { color: offerColor.ink }]}
-        >
-          {copy.empty.heading}
-        </Text>
-        <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-          {copy.empty.body}
-        </Text>
-
-        <View style={{ paddingTop: 16, gap: 12 }}>
-          <NumberedStep n={1}>{copy.empty.step1}</NumberedStep>
-          <NumberedStep n={2}>{copy.empty.step2}</NumberedStep>
-          <NumberedStep n={3}>{copy.empty.step3}</NumberedStep>
-        </View>
-      </View>
+        <MascotEmptyState
+          pose="search"
+          title={copy.empty.heading}
+          message={copy.empty.body}
+        />
+      </ScrollView>
 
       {/* §3.2's bar geometry, minus the footnote. The button is the only thing
           that turns this screen into a populated one, so it is the bottom of

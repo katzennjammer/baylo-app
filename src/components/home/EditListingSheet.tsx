@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { Tappable } from "../Tappable";
+import { ChevronRightIcon, PinIcon, TrashIcon } from "../icons";
 import { ApiError } from "../../api/client";
 import { EDIT_LIMITS, useDeleteItem, useUpdateItem } from "../../api/item";
 import { useActiveTrades } from "../../api/trades";
@@ -20,6 +21,7 @@ import { listingRemovalCheck } from "../../lib/listing-removal";
 import {
   border,
   color,
+  icon,
   radius,
   size,
   space,
@@ -31,13 +33,17 @@ import { relookingFor } from "../../post/wanted-keywords";
 import { rules } from "../../theme/post-tokens";
 import { showDialog } from "../dialog";
 
+function normalizeListingText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /**
- * Editing a listing you own — the three fields that are safe to change here.
+ * Editing a listing you own — safe text edits, with a route to manage hubs.
  *
  * ── WHY THREE FIELDS AND NOT SEVEN ──────────────────────────────────────────
  *
  * Title, description, and what you want in return. NOT photos, category,
- * condition, value or meetup points, and the reason is the server's, not a
+ * condition or value, and the reason is the server's, not a
  * matter of screen space: PATCH /api/items/[id] re-runs the valuation model the
  * moment `category`, `condition` or `valueLeaves` appears in the body — and can
  * then REFUSE the request, because the price you already had may no longer sit
@@ -50,9 +56,9 @@ import { showDialog } from "../dialog";
  * client that only knows the lead hash loses four entries from the duplicate
  * pool. See the note in `src/api/item.ts`.
  *
- * So this sheet sends exactly what it shows, and the wizard keeps the rest. A
- * full edit mode is its own task; this is the one that stops "Edit listing"
- * being another control that does nothing.
+ * Meeting hubs are managed in the dedicated `/edit-hubs` screen, which can
+ * also be opened from a trade when the two listings have no hub in common.
+ * This sheet links to that screen rather than duplicating its picker.
  *
  * ── IT EDITS A DRAFT ────────────────────────────────────────────────────────
  *
@@ -64,10 +70,12 @@ import { showDialog } from "../dialog";
 export function EditListingSheet({
   item,
   onClose,
+  onEditHubs,
 }: {
   /** The listing being edited. Null closes the sheet. */
   item: Item | null;
   onClose: () => void;
+  onEditHubs: (item: Item) => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -89,8 +97,7 @@ export function EditListingSheet({
     setTitle(item.title);
     // The server falls back to the title when a listing is created without a
     // description, so the two are often the same string. Shown as stored: an
-    // empty box here would read as "no description" and Save would then write
-    // one, which is a change the owner did not ask for.
+    // empty box here would read as "no description" and Save would clear it.
     setDescription(item.description);
     setWanted(item.wanted ?? "");
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,13 +127,37 @@ export function EditListingSheet({
     ]);
   };
 
+  const editHubs = () => {
+    if (busy) return;
+    if (!dirty) {
+      onEditHubs(item);
+      return;
+    }
+    showDialog(
+      "Discard your changes?",
+      "Your text edits won't be saved before you change the meeting locations.",
+      [
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => onEditHubs(item),
+        },
+      ],
+    );
+  };
+
   const save = () => {
     if (blocked) return;
     const wantedChanged = wanted.trim() !== (item.wanted ?? "");
+    const descriptionIsUnchangedTitle =
+      description.trim() === item.description &&
+      normalizeListingText(item.description) === normalizeListingText(item.title);
     update.mutate(
       {
         title: trimmedTitle,
-        description: description.trim(),
+        description:
+          trimmedTitle !== item.title && descriptionIsUnchangedTitle ? "" : description.trim(),
         wantedItems: wanted.trim(),
         // The matcher reads the categories, not this text, so a rewritten want
         // has to move them too or the listing keeps matching its ORIGINAL
@@ -147,6 +178,8 @@ export function EditListingSheet({
           showDialog(
             "Could not save that",
             e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+            [{ text: "Got it" }],
+            { pose: "worry" },
           ),
       },
     );
@@ -224,6 +257,37 @@ export function EditListingSheet({
               multiline
             />
 
+            <View style={s.locationGroup}>
+              <Text style={[textStyle(type.sheetLabel), s.label]}>Meeting locations</Text>
+              <Text style={[textStyle(type.gridMeta), s.locationHint]}>
+                Choose up to five public hubs where traders can meet you.
+              </Text>
+              <Tappable
+                onPress={editHubs}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Manage meeting locations"
+                style={s.locationButton}
+                pressedStyle={s.locationPressed}
+              >
+                <View style={s.locationIcon}>
+                  <PinIcon
+                    size={icon.menuRow.size}
+                    stroke={icon.menuRow.stroke}
+                    color={color.forest}
+                  />
+                </View>
+                <Text style={[textStyle(type.secondaryButton), s.locationButtonText]}>
+                  Manage meeting locations
+                </Text>
+                <ChevronRightIcon
+                  size={icon.back.size - 4}
+                  stroke={icon.back.stroke}
+                  color={color.inkMuted}
+                />
+              </Tappable>
+            </View>
+
             {/*
               Said rather than left to be discovered. Somebody who opens this
               looking for the value slider needs to know where it is, not to
@@ -249,7 +313,16 @@ export function EditListingSheet({
               {remove.isPending ? (
                 <ActivityIndicator color={color.urgent} />
               ) : (
-                <Text style={[textStyle(type.secondaryButton), { color: color.urgent }]}>Remove listing</Text>
+                <>
+                  <TrashIcon
+                    size={icon.menuRow.size}
+                    stroke={icon.menuRow.stroke}
+                    color={color.urgent}
+                  />
+                  <Text style={[textStyle(type.secondaryButton), { color: color.urgent }]}>
+                    Remove listing
+                  </Text>
+                </>
               )}
             </Tappable>
           </ScrollView>
@@ -386,17 +459,46 @@ const s = StyleSheet.create({
   // vertically centred; iOS already tops it out and ignores the property.
   inputMulti: { minHeight: 96, textAlignVertical: "top" },
 
+  locationGroup: { marginBottom: space.sheet.groupGap },
+  locationHint: { color: color.inkMuted, marginTop: 4 },
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 56,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.filterButton,
+    borderWidth: border.chip,
+    borderColor: color.greenLine,
+    backgroundColor: color.greenWash,
+  },
+  locationPressed: { opacity: 0.8 },
+  locationIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.surface,
+  },
+  locationButtonText: { color: color.forest, flex: 1 },
+
   note: { color: color.inkMuted },
   remove: {
-    alignSelf: "center",
     marginTop: space.sheet.groupGap,
     minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: radius.primaryButton,
+    paddingHorizontal: 14,
+    borderRadius: radius.filterButton,
+    borderWidth: border.chip,
+    borderColor: color.urgentLine,
+    backgroundColor: color.urgentWash,
+    flexDirection: "row",
+    gap: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  removePressed: { backgroundColor: color.urgentWash },
+  removePressed: { opacity: 0.8 },
 
   actions: {
     flexDirection: "row",

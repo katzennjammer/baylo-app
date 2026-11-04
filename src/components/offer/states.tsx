@@ -1,4 +1,11 @@
-import { Text, View } from "react-native";
+import { Image } from "expo-image";
+import { StyleSheet, Text, View } from "react-native";
+
+import { MASCOT } from "../../media/mascots";
+import { sizedImage } from "../../media/image-url";
+import { color, font } from "../../theme/tokens";
+import { PinIcon } from "../icons";
+import { Tappable } from "../Tappable";
 
 import { LockIcon, WarningTriangleIcon } from "./icons";
 import { ItemRow, NumberedStep, RecordRow } from "./rows";
@@ -107,100 +114,183 @@ export function PendingOfferState({
   owner,
   sentIso,
   offeredItems,
+  target,
   termsLine,
   message,
   hubName,
-  withdrawLabel,
+  onMessage,
+  onChange,
   onWithdraw,
   withdrawing,
-  onLeaveIt,
 }: {
   owner: string;
   sentIso: string;
   offeredItems: { id: string; title: string; image: string | null }[];
-  /** `Bracket 2 for Bracket 3 · 20 Leaves held`. The offer's terms, in one mono line. */
+  /** The listing the offer is on. */
+  target: { title: string; image: string | null };
+  /** `Bracket 2 for Bracket 3 · 20 Leaves held`. The offer's terms, in one line. */
   termsLine: string;
   message: string | null;
-  /** The listing's first Safe Zone, when it has one. §5.2's "meetup row". */
+  /** The listing's first Safe Zone, when it has one. */
   hubName: string | null;
-  /** §9's board-dependent string. See the note above. */
-  withdrawLabel: string;
+  /** Opens the chat with the owner. */
+  onMessage: () => void;
+  /** Withdraw, then compose again on this screen. */
+  onChange: () => void;
+  /** Withdraw and leave. */
   onWithdraw: () => void;
   withdrawing: boolean;
-  onLeaveIt: () => void;
 }) {
+  const given = offeredItems[0] ?? null;
   return (
-    <View>
-      <Section pad={offerSpace.section.gap}>
-        <Text style={[textStyle(offerType.screenHeading), { color: offerColor.ink }]}>
-          {copy.pending.heading}
-        </Text>
-        <Text
-          style={[
-            textStyle(offerType.body),
-            { color: offerColor.inkSecondary, marginTop: offerSpace.labelToContent },
-          ]}
-        >
-          {copy.pending.body(copy.sentAgo(sentIso), owner, copy.replyBy(sentIso))}
-        </Text>
-      </Section>
+    <View style={pending.body}>
+      {/* Where it stands, as three steps: sent, they reply, you meet. */}
+      <View style={pending.card}>
+        <View style={pending.statusRow}>
+          <Image source={MASCOT.search} contentFit="contain" style={pending.duck} accessible={false} />
+          <View style={{ flex: 1 }}>
+            <Text style={pending.statusTitle}>Waiting for {owner}</Text>
+            <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary }]}>
+              Sent {copy.sentAgo(sentIso)}. {owner} has until {copy.replyBy(sentIso)} to reply, then it expires on its own.
+            </Text>
+          </View>
+        </View>
+        <View style={pending.steps} accessibilityLabel={`Offer progress: sent, waiting for ${owner} to reply`}>
+          <View style={pending.stepLine} />
+          <Step label="Sent" state="done" />
+          <Step label={`${owner} replies`} state="now" />
+          <Step label="You meet" state="later" />
+        </View>
+      </View>
 
-      <Hairline />
-
-      <Section pad={offerSpace.section.settle}>
-        <SectionLabel>{copy.label.whatYouSent}</SectionLabel>
-        <View style={{ marginTop: offerSpace.labelToContent, gap: offerSpace.rowGap }}>
-          {offeredItems.map((item) => (
-            <ItemRow
-              key={item.id}
-              image={item.image}
-              title={item.title}
-              meta="Offered"
-            />
-          ))}
-
-          <RecordRow first label="Terms" value={termsLine} />
-
+      {/* What you offered, compact. */}
+      <View style={[pending.card, pending.summary]}>
+        <View style={pending.stack}>
+          <View style={[pending.thumb, { left: 0 }]}>
+            {given?.image ? <Image source={{ uri: sizedImage(given.image, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+          </View>
+          <View style={[pending.thumb, pending.thumbFront]}>
+            {target.image ? <Image source={{ uri: sizedImage(target.image, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+          </View>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={pending.summaryTitle} numberOfLines={2}>
+            {given ? `${given.title} for ${target.title}` : target.title}
+          </Text>
+          <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]} numberOfLines={2}>
+            {termsLine}
+          </Text>
           {message ? (
-            <Text
-              style={[
-                textStyle(offerType.bodyDense),
-                { color: offerColor.inkSecondary, marginTop: 4 },
-              ]}
-            >
-              {message}
+            <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary, marginTop: 4 }]} numberOfLines={3}>
+              “{message}”
             </Text>
           ) : null}
         </View>
-      </Section>
+      </View>
 
       {hubName ? (
-        <>
-          <Hairline />
-          <Section pad={offerSpace.section.settle}>
-            <SectionLabel>{copy.label.meet}</SectionLabel>
-            <View style={{ marginTop: offerSpace.labelToContent }}>
-              <ItemRow image={null} title={hubName} meta="Safe hub" photoSize={44} />
-            </View>
-          </Section>
-        </>
+        <View style={[pending.card, pending.summary]}>
+          <PinIcon size={20} stroke={1.9} color={color.forest} />
+          <View style={{ flex: 1 }}>
+            <Text style={pending.hubName}>{hubName}</Text>
+            <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]}>
+              Where you&apos;ll meet if {owner} accepts
+            </Text>
+          </View>
+        </View>
       ) : null}
 
-      <Section pad={offerSpace.section.offering}>
-        {/*
-          The secondary sits above the tertiary, which is §5.2's own ordering:
-          withdrawing is the action somebody came to this screen to take, and
-          leaving it alone is what happens if they do nothing anyway.
-        */}
-        <SecondaryButton
-          label={withdrawing ? "Withdrawing" : withdrawLabel}
-          onPress={withdrawing ? () => undefined : onWithdraw}
-        />
-        <TertiaryButton label={copy.pending.leaveIt} onPress={onLeaveIt} />
-      </Section>
+      {/* Clear next steps: talk to them, change it, or take it back. */}
+      <View style={{ gap: 8, marginTop: 4 }}>
+        <Tappable onPress={onMessage} accessibilityRole="button" style={pending.primary}>
+          <Text style={pending.primaryText}>Message {owner}</Text>
+        </Tappable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Tappable
+            onPress={withdrawing ? () => undefined : onChange}
+            accessibilityRole="button"
+            accessibilityLabel="Change offer: withdraws this one so you can send a new one"
+            style={pending.secondary}
+          >
+            <Text style={pending.secondaryText}>Change offer</Text>
+          </Tappable>
+          <Tappable
+            onPress={withdrawing ? () => undefined : onWithdraw}
+            accessibilityRole="button"
+            style={[pending.secondary, { borderColor: color.urgentLine }]}
+          >
+            <Text style={[pending.secondaryText, { color: color.urgent }]}>{withdrawing ? "Withdrawing" : "Withdraw"}</Text>
+          </Tappable>
+        </View>
+      </View>
     </View>
   );
 }
+
+function Step({ label, state }: { label: string; state: "done" | "now" | "later" }) {
+  return (
+    <View style={pending.step}>
+      <View
+        style={[
+          pending.dot,
+          state === "done"
+            ? { backgroundColor: color.forest }
+            : state === "now"
+              ? { backgroundColor: color.searchSurface, borderWidth: 2, borderColor: color.forest }
+              : { backgroundColor: color.searchSurface, borderWidth: 1.5, borderColor: color.dashed },
+        ]}
+      />
+      <Text
+        style={[
+          pending.stepLabel,
+          state === "now" ? { color: color.forest, fontWeight: "700" } : state === "later" ? { color: color.inkSecondary, fontWeight: "400" } : null,
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+const pending = StyleSheet.create({
+  body: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28, gap: 12 },
+  card: {
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: color.searchSurface,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    gap: 12,
+  },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  duck: { width: 44, height: 60 },
+  statusTitle: { fontFamily: font.displayBold, fontSize: 19, color: color.ink },
+  steps: { flexDirection: "row" },
+  stepLine: { position: "absolute", left: "16.6%", right: "16.6%", top: 6, height: 2, backgroundColor: color.controlLine },
+  step: { flex: 1, alignItems: "center", gap: 6 },
+  dot: { width: 14, height: 14, borderRadius: 7 },
+  stepLabel: { fontSize: 12, fontWeight: "600", color: color.ink },
+  summary: { flexDirection: "row", alignItems: "center", padding: 12 },
+  stack: { width: 70, height: 46 },
+  thumb: { position: "absolute", width: 46, height: 46, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
+  thumbFront: { left: 24, borderWidth: 2, borderColor: color.searchSurface },
+  summaryTitle: { fontSize: 14, fontWeight: "700", color: color.ink },
+  hubName: { fontSize: 14, fontWeight: "600", color: color.ink },
+  primary: { height: 52, borderRadius: 16, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
+  primaryText: { fontSize: 16, fontWeight: "700", color: color.onGreen },
+  secondary: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
+    backgroundColor: color.searchSurface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryText: { fontSize: 14, fontWeight: "600", color: color.ink },
+});
 
 /* ────────────────────────── §1.10 / §5.2 failures ───────────────────── */
 

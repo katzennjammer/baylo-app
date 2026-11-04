@@ -1,17 +1,15 @@
 /**
- * Baylo's palette, ported from the web app's design tokens.
+ * Baylo's legacy palette, ported from the web app's design tokens.
  *
  * The source of truth on the web is `baylo/src/app/globals.css`, where every
  * token is authored in oklch(). React Native's style engine does not parse
  * oklch, so each value below is the sRGB conversion of the corresponding
- * `--token` — same colour, a notation the platform can read.
+ * `--token` — same colour, a notation the platform can read. Direction 1's
+ * mobile design-system colours are kept in a separate palette below.
  *
- * The app carries exactly two surface sets, and they are not a light/dark pair
- * a viewer can switch between: `colors` is what everything behind the sign-in
- * gate renders on, `auth` is what the sign-in screens render on. Neither is
- * derived from the other. The web's three re-skinnable `[data-direction]`
- * palettes are not ported — the app has no such switch, and porting palettes
- * nothing renders would be tables to keep in sync rather than tables in use.
+ * The legacy `colors` and `auth` sets remain separate and unchanged. The
+ * Direction 1 palette is also separate and is mapped into `d-*` tokens by
+ * tokens.js; none of these palettes is derived from another.
  *
  * Keep this file plain CommonJS. It is required by `tailwind.config.js`, which
  * Tailwind loads through Node before any TypeScript transform runs — a .ts file
@@ -133,4 +131,25 @@ const auth = {
   "ok-wash": "#eef7ee",
 };
 
-module.exports = { colors, auth };
+/**
+ * Direction 1 design-system colours. Kept separate so adding the new visual
+ * foundation does not alter the legacy app or auth palettes above.
+ */
+const direction1 = {
+  primary: "#1F4D3A",
+  primaryText: "#FBFAF7",
+  accent: "#C9A54A",
+  accentText: "#8A6A1F",
+  accentSoft: "#F5EEDB",
+  background: "#F7F5F0",
+  surface: "#FFFFFF",
+  tint: "#E8F0EC",
+  text: "#1C2420",
+  mutedText: "#6B726D",
+  border: "#E5E2DA",
+  success: "#2F7D55",
+  warning: "#B7791F",
+  danger: "#B4412F",
+};
+
+module.exports = { colors, auth, direction1 };

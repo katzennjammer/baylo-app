@@ -10,7 +10,10 @@ import { Component, type ReactNode } from "react";
  * platform will not parse — none of those are reasons a person should be unable
  * to log in.
  *
- * ── THE FALLBACK IS `null`, AND THAT IS THE WHOLE POINT ─────────────────────
+ * ── THE DEFAULT FALLBACK IS `null` ─────────────────────────────────────────
+ *
+ * Existing consumers default to rendering nothing; a presentation that has
+ * matching still art can pass it as `fallback`.
  *
  * `MapErrorBoundary` degrades to a list because the hubs are the point of that
  * screen and the map is one presentation of them — losing the map must not lose
@@ -32,7 +35,7 @@ import { Component, type ReactNode } from "react";
  * downloaded yet, and those want different fixes.
  */
 export class VideoFallback extends Component<
-  { what: string; children: ReactNode },
+  { what: string; children: ReactNode; fallback?: ReactNode },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -46,6 +49,6 @@ export class VideoFallback extends Component<
   }
 
   render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? this.props.fallback ?? null : this.props.children;
   }
 }

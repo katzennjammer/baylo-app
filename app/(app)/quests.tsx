@@ -1,12 +1,14 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useQuests, type Quest, type QuestTier } from "../../src/api/quests";
-import { CheckIcon, LeafIcon } from "../../src/components/icons";
+import { CheckIcon, ChevronRightIcon, LeafIcon } from "../../src/components/icons";
+import { MASCOT } from "../../src/media/mascots";
 import { Tappable } from "../../src/components/Tappable";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
-import { border, color, icon, radius, space, textStyle, type } from "../../src/theme/tokens";
+import { border, color, font, space, textStyle, type } from "../../src/theme/tokens";
 
 /**
  * The Quests screen: today's five quests from GET /api/v1/quests.
@@ -48,7 +50,7 @@ const QUEST_ACTION: Record<string, { route: string; label: string }> = {
   SEND_OFFER: { route: "/marketplace", label: "Browse listings" },
   SEND_BRIDGE_OFFER: { route: "/marketplace", label: "Browse listings" },
   FOLLOW_TRADER: { route: "/marketplace", label: "Find traders" },
-  LEAVE_REVIEW: { route: "/trades", label: "Review a trade" },
+  LEAVE_REVIEW: { route: "/trades-history", label: "Review a trade" },
   LIST_ITEM: { route: "/post-item", label: "List an item" },
   RECEIVE_OFFER: { route: "/profile", label: "View your shelf" },
   COMPLETE_TRADE: { route: "/trades", label: "View your trades" },
@@ -104,18 +106,46 @@ export default function QuestsScreen() {
         </View>
       ) : data ? (
         <>
-          <Text style={[textStyle(type.sectionSubcopy), s.summary]}>
-            {done} of {data.quests.length} done · {earned} of {total} Leaves earned. New quests
-            every day.
-          </Text>
+          {/* Progress in one compact strip; it celebrates when all are done. */}
+          {data.quests.length > 0 && done === data.quests.length ? (
+            <View style={[s.strip, s.stripDone]}>
+              <Image source={MASCOT.celebrateTrimmed} contentFit="contain" style={s.stripDuck} accessible={false} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={s.stripTitle}>All {done} done!</Text>
+                <Text style={s.stripBody}>
+                  You earned all {total} Leaves today.{resetsIn && resetsIn !== "now" ? ` New quests in ${resetsIn}.` : ""}
+                </Text>
+              </View>
+            </View>
+          ) : data.quests.length > 0 ? (
+            <View style={s.strip}>
+              <View style={s.stripHead}>
+                <Text style={s.stripCount}>
+                  {done} of {data.quests.length} done
+                </Text>
+                <View style={s.stripEarned}>
+                  <LeafIcon size={13} stroke={2.4} color="#DDF1E2" />
+                  <Text style={s.stripEarnedText}>
+                    {earned} of {total} Leaves earned
+                  </Text>
+                </View>
+              </View>
+              <View style={s.segments} accessibilityLabel={`${done} of ${data.quests.length} quests done`}>
+                {data.quests.map((q) => (
+                  <View key={q.quest} style={[s.segment, q.completed && s.segmentDone]} />
+                ))}
+              </View>
+            </View>
+          ) : null}
           {data.quests.length === 0 ? (
             <Text style={[textStyle(type.emptyBody), s.empty]}>No quests today.</Text>
           ) : (
             <View style={s.list}>
-              {data.quests.map((q) => (
+              {data.quests.map((q, i) => (
                 <QuestRow
                   key={q.quest}
                   quest={q}
+                  first={i === 0}
                   onNavigate={(route) => router.push(route as never)}
                 />
               ))}
@@ -127,8 +157,11 @@ export default function QuestsScreen() {
   );
 }
 
-function QuestRow({ quest, onNavigate }: { quest: Quest; onNavigate: (route: string) => void }) {
-  const tone = TIER_TONE[quest.tier];
+/**
+ * One quest as a row. The circle is the status: empty to do, filled when
+ * done. The whole row opens where the quest gets done.
+ */
+function QuestRow({ quest, first, onNavigate }: { quest: Quest; first: boolean; onNavigate: (route: string) => void }) {
   const action = quest.completed ? undefined : QUEST_ACTION[quest.quest];
   return (
     <Tappable
@@ -136,62 +169,41 @@ function QuestRow({ quest, onNavigate }: { quest: Quest; onNavigate: (route: str
       disabled={!action}
       accessibilityRole={action ? "button" : undefined}
       accessibilityHint={action ? action.label : undefined}
-      style={[s.card, quest.completed && s.cardDone]}
-      pressedStyle={action ? s.cardPressed : undefined}
+      style={[s.row, !first && s.rowLine]}
+      pressedStyle={action ? s.rowPressed : undefined}
       accessible
       accessibilityLabel={`${TIER_LABEL[quest.tier]} quest: ${quest.label}. ${quest.description} ${
         quest.completed ? "Done" : "Not done"
       }, ${quest.rewardLeaves} Leaves.`}
     >
-      <View style={s.cardTop}>
-        <View style={[s.tier, { backgroundColor: tone.fill, borderColor: tone.line }]}>
-          <Text style={[textStyle(type.tierBadge), { color: tone.ink }]}>
-            {TIER_LABEL[quest.tier]}
-          </Text>
+      {quest.completed ? (
+        <View style={s.doneMark}>
+          <CheckIcon size={14} stroke={3} color={color.surface} />
         </View>
-        <View style={s.reward}>
-          <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
-          <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>
-            +{quest.rewardLeaves}
-          </Text>
-        </View>
+      ) : (
+        <View style={s.todoMark} />
+      )}
+      <View style={s.rowText}>
+        <Text style={[s.rowTitle, quest.completed && { color: color.inkSecondary }]}>{quest.label}</Text>
+        <Text style={quest.completed ? s.rowDone : s.rowSub}>
+          {quest.completed
+            ? `Done · +${quest.rewardLeaves} Leaves earned`
+            : `${quest.description} · ${TIER_LABEL[quest.tier]}`}
+        </Text>
       </View>
-
-      <View style={s.cardBody}>
-        <View style={s.cardText}>
-          <Text
-            style={[
-              textStyle(type.itemTitle),
-              { color: quest.completed ? color.inkSecondary : color.ink },
-            ]}
-          >
-            {quest.label}
-          </Text>
-          <Text style={[textStyle(type.metadata), { color: color.inkMuted, marginTop: 2 }]}>
-            {quest.description}
-          </Text>
-        </View>
-        {quest.completed ? (
-          <View style={s.doneMark}>
-            <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.onGreen} />
+      {!quest.completed ? (
+        <>
+          <View style={s.reward}>
+            <LeafIcon size={12} stroke={2.6} color={color.forest} />
+            <Text style={s.rewardText}>+{quest.rewardLeaves}</Text>
           </View>
-        ) : (
-          <View style={s.todoMark} />
-        )}
-      </View>
-
-      {action ? (
-        <Text style={[textStyle(type.homeSeeAll), s.action]}>{action.label} ›</Text>
+          {action ? <ChevronRightIcon size={16} stroke={2} color={color.inkMuted} /> : null}
+        </>
       ) : null}
     </Tappable>
   );
 }
 
-/**
- * "5h 12m" until `iso`, ticking each minute. "now" once it has passed, which
- * the screen reads as "go and get the new day". Undefined while there is
- * nothing to count down to.
- */
 function useCountdown(iso: string | undefined): string | undefined {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -228,41 +240,58 @@ const s = StyleSheet.create({
   stateBox: { alignItems: "center", marginTop: space.home.sectionTop * 2, gap: 12 },
   retry: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12 },
   empty: { color: color.inkMuted, paddingHorizontal: space.screenX },
-  list: { paddingHorizontal: space.screenX, gap: space.browse.gridGap },
-  card: {
-    borderRadius: radius.card,
-    borderWidth: border.hairline,
-    borderColor: color.controlLine,
-    backgroundColor: color.surface,
-    padding: 14,
+  strip: {
+    marginHorizontal: space.screenX,
+    marginTop: 10,
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: color.forest,
     gap: 10,
   },
-  cardDone: { backgroundColor: color.inset },
-  cardPressed: { backgroundColor: color.greenWash },
-  action: { color: color.forest },
-  cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  tier: {
-    paddingHorizontal: space.tierBadge.x,
-    paddingVertical: space.tierBadge.y,
-    borderRadius: radius.tierBadge,
-    borderWidth: border.chip,
+  stripDone: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  stripDuck: { width: 58, height: 64 },
+  stripTitle: { fontFamily: font.displayBold, fontSize: 20, color: "#FFFFFF" },
+  stripBody: { fontSize: 13, color: "#DDF1E2" },
+  stripHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  stripCount: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
+  stripEarned: { flexDirection: "row", alignItems: "center", gap: 4 },
+  stripEarnedText: { fontSize: 13, fontWeight: "600", color: "#DDF1E2" },
+  segments: { flexDirection: "row", gap: 4 },
+  segment: { flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.22)" },
+  segmentDone: { backgroundColor: color.green },
+  // One card of rows (4 Nov 2026), not a stack of cards.
+  list: {
+    marginHorizontal: space.screenX,
+    borderRadius: 18,
+    borderWidth: border.hairline,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    overflow: "hidden",
   },
-  reward: { flexDirection: "row", alignItems: "center", gap: 4 },
-  cardBody: { flexDirection: "row", alignItems: "center", gap: 12 },
-  cardText: { flex: 1 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
+  rowLine: { borderTopWidth: border.hairline, borderTopColor: color.divider },
+  rowPressed: { backgroundColor: color.greenWash },
+  rowText: { flex: 1, minWidth: 0, gap: 1 },
+  rowTitle: { fontSize: 15, fontWeight: "600", color: color.ink },
+  rowSub: { fontSize: 13, color: color.inkSecondary },
+  rowDone: { fontSize: 12, fontWeight: "600", color: color.forest },
+  reward: { flexDirection: "row", alignItems: "center", gap: 3 },
+  rewardText: { fontSize: 13, fontWeight: "700", color: color.forest },
   doneMark: {
-    width: MARK,
-    height: MARK,
-    borderRadius: MARK / 2,
-    backgroundColor: color.green,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: color.forest,
     alignItems: "center",
     justifyContent: "center",
   },
   todoMark: {
-    width: MARK,
-    height: MARK,
-    borderRadius: MARK / 2,
-    borderWidth: border.chip,
-    borderColor: color.controlLineStrong,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: color.dashed,
   },
 });

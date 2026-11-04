@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import {
@@ -41,6 +41,10 @@ import {
   SettlementSkeleton,
 } from "../src/components/offer/states";
 import { bracketLabel } from "../src/lib/brackets";
+import { CONDITIONS } from "../src/api/browse";
+import { TradeTickets } from "../src/components/offer/TradeTickets";
+import { Tappable } from "../src/components/Tappable";
+import { color } from "../src/theme/tokens";
 import { displayedBridgeFee, hasPremiumAccess, openPremium, premiumGateReason } from "../src/lib/premium";
 import { grouped, shelfMisses } from "../src/lib/gap";
 import { offerAllowed, type OfferTerms } from "../src/lib/trade-rules";
@@ -288,10 +292,8 @@ export default function OfferScreen() {
         : copy.pending.termsFree;
     return (
       <OfferScreenHost imeInset={0}>
-        <OfferNav title={copy.chrome.navTitle} onBack={() => router.back()} />
+        <OfferNav title="Your offer" onBack={() => router.back()} />
         <ScrollView>
-          <ListingHeader context={context} />
-          <Hairline />
           {failed ? (
             <Section pad={offerSpace.section.offering}>
               <Text style={[textStyle(offerType.errorText), { color: offerColor.warm }]}>
@@ -312,15 +314,35 @@ export default function OfferScreen() {
               }
               message={existing.message}
               hubName={context.hubs[0]?.name ?? null}
-              withdrawLabel={board.withdraw}
+              target={{ title: context.item.title, image: context.item.images[0] ?? null }}
               withdrawing={withdraw.isPending}
-              onWithdraw={() =>
+              onMessage={() =>
+                router.push({
+                  pathname: "/messages/thread",
+                  params: {
+                    partner: context.item.owner.id,
+                    partnerName: context.item.owner.name,
+                    partnerAvatar: context.item.owner.avatar ?? "",
+                  },
+                })
+              }
+              // Withdrawing frees the listing, and this same screen then
+              // shows the composer: that is "change offer".
+              onChange={() =>
                 withdraw.mutate(
                   { offerId: pendingId, postId: context.item.id },
                   { onError: (e) => setFailed(e instanceof ApiError ? e.message : null) },
                 )
               }
-              onLeaveIt={() => router.back()}
+              onWithdraw={() =>
+                withdraw.mutate(
+                  { offerId: pendingId, postId: context.item.id },
+                  {
+                    onSuccess: () => router.back(),
+                    onError: (e) => setFailed(e instanceof ApiError ? e.message : null),
+                  },
+                )
+              }
             />
           ) : (
             <Section pad={offerSpace.section.gap}>
@@ -493,55 +515,34 @@ export default function OfferScreen() {
       />
 
       <ScrollView scrollEnabled={!sending} keyboardShouldPersistTaps="handled">
-        <ListingHeader context={context} />
-        <Hairline />
-
-        {/* `You're offering` — the viewer's own item, value and bracket both. */}
+        {/* The trade as two equal tickets, the same picture the sent offer keeps. */}
         <Section pad={offerSpace.section.offering}>
-          <SectionLabel>{copy.label.offering}</SectionLabel>
-          <View style={{ marginTop: offerSpace.labelToContent }}>
-            <ItemRow
-              image={chosen.image}
-              title={chosen.title}
-              meta={copy.picker.rowMeta(yourBracket)}
-              trailing={sending ? undefined : <ChangeLink onPress={() => setPicker(true)} />}
-            />
-          </View>
-        </Section>
-        <Hairline />
+          <TradeTickets
+            give={{ title: chosen.title, image: chosen.image, meta: copy.picker.rowMeta(yourBracket) }}
+            get={{
+              title: context.item.title,
+              image: context.item.images[0] ?? null,
+              meta: [conditionText(context.item.condition), theirBracket !== null ? bracketLabel(theirBracket) : null]
+                .filter(Boolean)
+                .join(" · "),
+            }}
+            onChange={sending ? undefined : () => setPicker(true)}
+          />
 
-        {/* `The brackets` — the relationship, and what it costs whom. */}
-        <Section pad={offerSpace.section.gap}>
-          <SectionLabel>{copy.label.brackets}</SectionLabel>
-
-          <View style={{ marginTop: offerSpace.gapBlock.labelToFigure }}>
-            <Text style={[textStyle(offerType.gapWord), { color: terms.fee > 0 ? offerColor.deep : offerColor.ink }]}>
-              {copy.bracket.figure(terms.legality)}
-            </Text>
-            <Text
-              style={[
-                textStyle(offerType.rowSubtitle),
-                { color: offerColor.inkSecondary, marginTop: 6 },
-              ]}
-            >
-              {copy.bracket.suffix(yourBracket, theirBracket)}
+          {/* The rule in one line: green when it costs nothing, warm when a
+              bridging fee is involved. */}
+          <View style={[styles.rule, terms.fee > 0 ? styles.ruleFee : styles.ruleFree]}>
+            <Text style={[textStyle(offerType.body), { color: terms.fee > 0 ? offerColor.deep : color.forest }]}>
+              <Text style={{ fontWeight: "700" }}>{copy.bracket.figure(terms.legality)}. </Text>
+              {terms.legality === "same"
+                ? copy.bracket.same(owner)
+                : terms.legality === "bridgeUp"
+                  ? context.balance >= proposerFee
+                    ? copy.bracket.bridgeUp(proposerFee, context.balance, owner)
+                    : copy.bracket.short(proposerFee, context.balance)
+                  : copy.bracket.bridgeDown(owner)}
             </Text>
           </View>
-
-          <Text
-            style={[
-              textStyle(offerType.body),
-              { color: offerColor.inkSecondary, marginTop: offerSpace.gapBlock.legendToCopy },
-            ]}
-          >
-            {terms.legality === "same"
-              ? copy.bracket.same(owner)
-              : terms.legality === "bridgeUp"
-                ? context.balance >= proposerFee
-                  ? copy.bracket.bridgeUp(proposerFee, context.balance, owner)
-                  : copy.bracket.short(proposerFee, context.balance)
-                : copy.bracket.bridgeDown(owner)}
-          </Text>
         </Section>
 
         {/* The meet-up section. Always drawn when the listing names a hub. */}
@@ -575,6 +576,22 @@ export default function OfferScreen() {
             onFocus={() => setMessageFocused(true)}
             onBlur={() => setMessageFocused(false)}
           />
+          {/* One-tap starters. They add to what is typed, never replace it. */}
+          {!sending ? (
+            <View style={styles.starters}>
+              {MESSAGE_STARTERS.map((line) => (
+                <Tappable
+                  key={line}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add "${line}" to your message`}
+                  onPress={() => setMessage((m) => (m.trim() ? `${m.trim()} ${line}` : line).slice(0, MAX_OFFER_MESSAGE))}
+                  style={styles.starter}
+                >
+                  <Text style={[textStyle(offerType.helper), { color: offerColor.ink }]}>{line}</Text>
+                </Tappable>
+              ))}
+            </View>
+          ) : null}
         </Section>
       </ScrollView>
 
@@ -701,6 +718,28 @@ function Picker({
     </OfferSheet>
   );
 }
+
+const MESSAGE_STARTERS = ["Free this weekend", "Is it still available?"] as const;
+
+function conditionText(value: string | null | undefined): string | null {
+  return CONDITIONS.find((c) => c.value === value)?.label ?? null;
+}
+
+const styles = StyleSheet.create({
+  rule: { marginTop: 14, padding: 12, borderRadius: 14 },
+  ruleFree: { backgroundColor: color.greenWash },
+  ruleFee: { backgroundColor: color.urgentWash },
+  starters: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  starter: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
+    backgroundColor: color.searchSurface,
+    justifyContent: "center",
+  },
+});
 
 /* ─────────────────────── the listing header ─────────────────────────── */
 

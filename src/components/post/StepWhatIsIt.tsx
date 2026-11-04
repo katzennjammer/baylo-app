@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { TagIcon } from "phosphor-react-native";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
@@ -87,20 +88,47 @@ export function StepWhatIsIt({
 }) {
   const { state, dispatch } = usePost();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [brandAdded, setBrandAdded] = useState(false);
 
   const lead = leadPhoto(state.photos);
   const phase = state.detection.phase;
+  const brand = state.detection.original?.brand;
+  const brandEvidence = state.detection.original?.brandEvidence;
+  const showBrand = Boolean(brand && brandEvidence);
+  const titleAlreadyHasBrand = Boolean(
+    brand && state.title.toLowerCase().includes(brand.toLowerCase()),
+  );
+  const titleWithBrand = brand
+    ? state.title
+      ? `${brand} ${state.title}`
+      : brand
+    : state.title;
+  const brandTitleTooLong = Boolean(
+    brand && !titleAlreadyHasBrand && titleWithBrand.length > rules.titleMax,
+  );
   const error = titleError(state);
+
+  useEffect(() => {
+    setBrandAdded(false);
+  }, [brand, brandEvidence]);
 
   const limit = state.rateLimit?.action === "detect" ? state.rateLimit : null;
   const secondsLeft = useCountdown(limit?.until ?? null, () =>
     dispatch({ type: "rate-limit/clear" }),
   );
 
+  const addBrandToTitle = () => {
+    if (brand && !titleAlreadyHasBrand && !brandTitleTooLong) {
+      dispatch({ type: "field/title", value: titleWithBrand });
+    }
+    setBrandAdded(true);
+  };
+
   const chooseCategory = (category: Category) => {
     setPickerOpen(false);
     if (phase === "failed") dispatch({ type: "field/category", value: category });
     else dispatch({ type: "detect/correct", category, title: state.title });
+    requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   // Only the TOP of the step changes with the keyboard. See the note on the
@@ -119,30 +147,16 @@ export function StepWhatIsIt({
             condition={state.condition}
             onChange={() => setPickerOpen(true)}
           />
+          {showBrand && brand && brandEvidence ? (
+            <BrandEvidenceRow
+              brand={brand}
+              evidence={brandEvidence}
+              added={brandAdded}
+              tooLong={brandTitleTooLong}
+              onAdd={addBrandToTitle}
+            />
+          ) : null}
           <View style={{ height: 20 }} />
-          <Text
-            style={[
-              textStyle(postType.smallTextLabel),
-              { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
-            ]}
-          >
-            Give it a title
-          </Text>
-          <Field
-            label="Give it a title"
-            value={state.title}
-            placeholder="What is it? Brand and size help"
-            onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-            onBlur={onFieldBlur}
-            error={error}
-            maxLength={rules.titleMax}
-            inputRef={titleRef}
-          />
-          <View style={{ height: postSpace.what.fieldToHelper }} />
-          <HelperCounterRow
-            helper="Say the brand and size if you know them."
-            counter={`${state.title.length}/${rules.titleMax}`}
-          />
         </Fragment>
       ) : (
         /* ── the full step ── */
@@ -176,10 +190,7 @@ export function StepWhatIsIt({
 
           {phase === "failed" ? (
             <FailedForm
-              keyboardUp={keyboardUp}
               onOpenPicker={() => setPickerOpen(true)}
-              titleRef={titleRef}
-              onFieldBlur={onFieldBlur}
             />
           ) : (
             <>
@@ -209,6 +220,16 @@ export function StepWhatIsIt({
                   )}
                 </View>
               </View>
+
+              {showBrand && brand && brandEvidence ? (
+                <BrandEvidenceRow
+                  brand={brand}
+                  evidence={brandEvidence}
+                  added={brandAdded}
+                  tooLong={brandTitleTooLong}
+                  onAdd={addBrandToTitle}
+                />
+              ) : null}
 
               {phase === "detecting" ? (
                 <View
@@ -263,38 +284,50 @@ export function StepWhatIsIt({
               )}
 
               <Divider style={{ marginTop: postSpace.what.confirmToDivider }} />
-
-              <Text
-                style={[
-                  textStyle(postType.smallTextLabel),
-                  {
-                    color: postColor.inkSecondary,
-                    marginTop: postSpace.what.dividerToLabel,
-                    marginBottom: postSpace.what.labelToField,
-                  },
-                ]}
-              >
-                Give it a title
-              </Text>
-              <Field
-                label="Give it a title"
-                value={state.title}
-                placeholder="What is it? Brand and size help"
-                onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-                onBlur={onFieldBlur}
-                error={error}
-                maxLength={rules.titleMax}
-                inputRef={titleRef}
-              />
-              <View style={{ height: postSpace.what.fieldToHelper }} />
-              <HelperCounterRow
-                helper="Say the brand and size if you know them. That is what people search for."
-                counter={`${state.title.length}/${rules.titleMax}`}
-              />
             </>
           )}
         </Fragment>
       )}
+      <Text
+        style={[
+          textStyle(postType.smallTextLabel),
+          {
+            color: postColor.inkSecondary,
+            marginTop: compact || phase === "failed" ? 0 : postSpace.what.dividerToLabel,
+            marginBottom: postSpace.what.labelToField,
+          },
+        ]}
+      >
+        Give it a title
+      </Text>
+      <Field
+        label="Give it a title"
+        value={state.title}
+        placeholder="What is it? Brand and size help"
+        onChangeText={(v) => dispatch({ type: "field/title", value: v })}
+        onBlur={onFieldBlur}
+        error={error}
+        maxLength={rules.titleMax}
+        inputRef={titleRef}
+      />
+      <View style={{ height: postSpace.what.fieldToHelper }} />
+      <HelperCounterRow
+        helper={
+          phase === "failed" && keyboardUp
+            ? "Say the brand and size if you know them."
+            : "Say the brand and size if you know them. That is what people search for."
+        }
+        counter={`${state.title.length}/${rules.titleMax}`}
+      />
+      {phase === "failed" && !keyboardUp ? (
+        <>
+          <View style={{ height: 22 }} />
+          <Text style={[textStyle(postType.helperLong), { color: postColor.inkMuted }]}>
+            A photo taken in brighter light usually helps us guess, but you do not have to
+            retake it.
+          </Text>
+        </>
+      ) : null}
 
       {/*
         THE PERISHABLE BLOCK HAS A SLOT OF ITS OWN, outside the switch above,
@@ -375,7 +408,7 @@ type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
  * "Trade within" reads as a promise the poster is making, which it is not: it
  * is when the listing stops being shown. Nobody is penalised for a perishable
  * that expires unsold. The helper says that, because the alternative is people
- * choosing 24 out of caution on a thing that is genuinely good for six hours.
+ * choosing 24 out of caution on a thing that is still suitable for six hours.
  */
 function ItemTypeBlock({
   keyboardUp,
@@ -691,18 +724,11 @@ function CorrectionBlock({ onChangeAgain }: { onChangeAgain: () => void }) {
 /* ───────────────────── the detection-failed form ────────────────────── */
 
 function FailedForm({
-  keyboardUp,
   onOpenPicker,
-  titleRef,
-  onFieldBlur,
 }: {
-  keyboardUp: boolean;
   onOpenPicker: () => void;
-  titleRef: React.RefObject<TextInput | null>;
-  onFieldBlur: () => void;
 }) {
-  const { state, dispatch } = usePost();
-  const error = titleError(state);
+  const { state } = usePost();
 
   return (
     <View>
@@ -732,41 +758,76 @@ function FailedForm({
       />
 
       <View style={{ height: postSpace.what.fieldToLabel }} />
-      <Text
-        style={[
-          textStyle(postType.smallTextLabel),
-          { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
-        ]}
-      >
-        Give it a title
-      </Text>
-      <Field
-        label="Give it a title"
-        value={state.title}
-        placeholder="What is it? Brand and size help"
-        onChangeText={(v) => dispatch({ type: "field/title", value: v })}
-        onBlur={onFieldBlur}
-        error={error}
-        maxLength={rules.titleMax}
-        inputRef={titleRef}
-      />
-      <View style={{ height: postSpace.what.fieldToHelper }} />
-      <HelperCounterRow
-        helper={
-          keyboardUp
-            ? "Say the brand and size if you know them."
-            : "Say the brand and size if you know them. That is what people search for."
-        }
-        counter={`${state.title.length}/${rules.titleMax}`}
-      />
+    </View>
+  );
+}
 
-      {keyboardUp ? null : (
+function BrandEvidenceRow({
+  brand,
+  evidence,
+  added,
+  tooLong,
+  onAdd,
+}: {
+  brand: string;
+  evidence: string;
+  added: boolean;
+  tooLong: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <View
+      style={{
+        marginTop: postSpace.what.resultToEyebrow,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: postSpace.what.eyebrowGap,
+      }}
+    >
+      <TagIcon size={16} color={postColor.inkMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={[textStyle(postType.tag), { color: postColor.inkSecondary }]}>
+          Brand seen: {brand}
+        </Text>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkMuted }]}>
+          {evidence}
+        </Text>
+      </View>
+      {added ? (
+        <Text
+          style={[textStyle(postType.smallTextLabel), { color: postColor.inkMuted }]}
+          accessibilityLabel={`Brand ${brand} added to title`}
+        >
+          Added
+        </Text>
+      ) : (
         <>
-          <View style={{ height: 22 }} />
-          <Text style={[textStyle(postType.helperLong), { color: postColor.inkMuted }]}>
-            A photo taken in brighter light usually helps us guess, but you do not have to
-            retake it.
-          </Text>
+          <Tappable
+            onPress={tooLong ? undefined : onAdd}
+            disabled={tooLong}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: tooLong }}
+            accessibilityLabel={`Add ${brand} to title`}
+            style={{ minHeight: postSize.button.smallText, justifyContent: "center" }}
+          >
+            <Text
+              style={[
+                textStyle(postType.smallTextLabel),
+                { color: tooLong ? postColor.inkDisabled : postColor.forest },
+              ]}
+            >
+              Add to title
+            </Text>
+          </Tappable>
+          {tooLong ? (
+            <Text
+              style={[textStyle(postType.helper), { color: postColor.inkMuted, flexBasis: "100%" }]}
+              accessibilityLabel="Title is too long to add the brand."
+            >
+              Title is too long to add the brand.
+            </Text>
+          ) : null}
         </>
       )}
     </View>

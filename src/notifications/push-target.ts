@@ -13,13 +13,43 @@ export interface PushData {
   entityType?: unknown;
   entityId?: unknown;
   actorId?: unknown;
+  partnerId?: unknown;
+  messageId?: unknown;
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
 
-export function pushTarget(data: PushData | null | undefined): string {
-  const type = str(data?.type);
-  if (!type) return "/notifications";
+export function pushMessagePartnerId(data: PushData | null | undefined): string | null {
+  const type = str(data?.type)?.trim();
+  const entityType = str(data?.entityType)?.trim();
+  if (type !== "NEW_MESSAGE" && entityType !== "conversation") return null;
+  return str(data?.partnerId) ?? str(data?.entityId) ?? (type === "NEW_MESSAGE" ? str(data?.actorId) : null);
+}
+
+export function pushMessageId(data: PushData | null | undefined): string | null {
+  return str(data?.messageId);
+}
+
+export function shouldSuppressMessageNotification(
+  data: PushData | null | undefined,
+  activePartnerId: string | null,
+  appIsActive: boolean,
+): boolean {
+  if (!appIsActive || !activePartnerId || str(data?.type) !== "NEW_MESSAGE") return false;
+  return pushMessagePartnerId(data) === activePartnerId;
+}
+
+export function pushTarget(data: PushData | null | undefined): string | null {
+  const type = str(data?.type)?.trim();
+  if (!type) return null;
+
+  const partnerId = pushMessagePartnerId(data);
+  if (partnerId) {
+    const messageId = pushMessageId(data);
+    return `/messages/thread?partner=${encodeURIComponent(partnerId)}` +
+      (messageId ? `&messageId=${encodeURIComponent(messageId)}` : "");
+  }
+
   const actorId = str(data?.actorId);
   const row = {
     type,
@@ -27,7 +57,7 @@ export function pushTarget(data: PushData | null | undefined): string {
     entityId: str(data?.entityId),
     actor: actorId ? { id: actorId } : null,
   } as unknown as NotificationItem;
-  return notificationTarget(row) ?? "/notifications";
+  return notificationTarget(row);
 }
 
 export function pushNotificationId(data: PushData | null | undefined): string | null {

@@ -13,6 +13,8 @@ import { useKeyboardState } from "./auth-sheet";
 import { CheckIcon, PlusIcon, ShareIcon, VerifiedOrgIcon } from "./icons";
 import { Tappable } from "./Tappable";
 import { sizedImage } from "../media/image-url";
+import { MascotEmptyState } from "./MascotEmptyState";
+import type { MascotPose } from "../media/mascots";
 
 /**
  * The MSME storefront header — the top of an organisation's profile.
@@ -299,7 +301,19 @@ function SetupCard({ palette, org, hasListings, onEdit, onPost }: {
  * The storefront's empty list, under its tabs. A title and a line of guidance,
  * as the design draws it, in place of the person profile's one muted sentence.
  */
-export function StorefrontEmpty({ dark, title, body }: { dark: boolean; title: string; body: string }) {
+export function StorefrontEmpty({
+  dark,
+  title,
+  body,
+  pose,
+}: {
+  dark: boolean;
+  title: string;
+  body: string;
+  pose?: MascotPose;
+}) {
+  if (pose) return <MascotEmptyState pose={pose} title={title} message={body} />;
+
   const palette = dark ? darkPalette : lightPalette;
   return (
     <View style={s.empty}>

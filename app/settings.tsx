@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { createContext, useContext, useState } from "react";
+import { Linking, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
@@ -10,20 +11,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError, resendVerificationSignedIn } from "../src/api/client";
 import { getApiBase } from "../src/api/config";
 import { fetchIdVerification, type IdVerificationStatus } from "../src/api/id-verification";
-import { useOrganizations } from "../src/api/organizations";
+import { useOrganizations, type ActingOrg } from "../src/api/organizations";
+import { getActingOrgId } from "../src/api/org-context";
 import { useProfileMe } from "../src/api/profile";
 import type { ViewerReputation } from "../src/api/types";
 import { useSession } from "../src/auth/session";
 import { BackHeader } from "../src/components/BackHeader";
 import { showDialog } from "../src/components/dialog";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
-import { ChevronRightIcon } from "../src/components/icons";
+import { ChevronRightIcon, SearchIcon } from "../src/components/icons";
+import { sizedImage } from "../src/media/image-url";
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
 import { Tappable } from "../src/components/Tappable";
 import { openPremium } from "../src/lib/premium";
 import { resetReachExplainerSeen } from "../src/lib/reach-flag";
 import { TRADING_POLICY_PATH } from "../src/lib/trade-rules";
-import { border, color, icon, size, space, textStyle, type } from "../src/theme/tokens";
+import { border, color, font, icon, size, space, textStyle, type } from "../src/theme/tokens";
 
 /**
  * Settings.
@@ -63,6 +66,7 @@ import { border, color, icon, size, space, textStyle, type } from "../src/theme/
  * note in Tappable.tsx.
  */
 export default function SettingsScreen() {
+  const [query, setQuery] = useState("");
   const router = useRouter();
   // The app is edge-to-edge and this screen has no AppHeader to inset it, so
   // the top padding is the status bar's, same as `AppHeader` does.
@@ -81,7 +85,12 @@ export default function SettingsScreen() {
   });
 
   const { data: profile, refetch: refetchProfile } = useProfileMe();
-  const organizations = useOrganizations().data?.data.organizations;
+  const organizationsQuery = useOrganizations();
+  const organizations = organizationsQuery.data?.data.organizations ?? [];
+  const myShop =
+    organizations.find((organization) => organization.id === getActingOrgId()) ??
+    organizations[0] ??
+    null;
 
   const email = profile?.user.email ?? session?.user.email ?? "";
   const version = Constants.expoConfig?.version ?? "unknown";
@@ -102,6 +111,8 @@ export default function SettingsScreen() {
       showDialog(
         "Could not send the email",
         e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
       );
     } finally {
       setResending(false);
@@ -135,8 +146,40 @@ export default function SettingsScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <BackHeader title="Settings" onBack={() => goBack(router)} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space.home.sectionTop }}>
-        <SectionHeader accent="Account" top={space.home.headingToContent} />
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space.home.sectionTop }} keyboardShouldPersistTaps="handled">
+        <View style={styles.searchBox}>
+          <SearchIcon size={18} stroke={2} color={color.inkSecondary} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search settings"
+            placeholderTextColor={color.inkMuted}
+            style={styles.searchInput}
+            accessibilityLabel="Search settings"
+          />
+        </View>
+        {/* You, at the top: the way in to Edit profile. */}
+        {!query ? (
+          <Tappable onPress={() => router.push("/edit-profile")} accessibilityRole="button" style={styles.me} pressedStyle={styles.pressed}>
+            {profile?.user.avatar ? (
+              <Image source={{ uri: sizedImage(profile.user.avatar, "thumb") }} contentFit="cover" style={styles.meAvatar} />
+            ) : (
+              <View style={[styles.meAvatar, styles.meFallback]}>
+                <Text style={styles.meInitials}>{(profile?.user.name ?? "?").slice(0, 1).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.meName} numberOfLines={1}>{profile?.user.name ?? "Your account"}</Text>
+              <Text style={styles.meSub} numberOfLines={1}>{email} · Edit profile</Text>
+            </View>
+            <ChevronRightIcon size={icon.chevron.size} stroke={icon.chevron.stroke} color={color.inkMuted} />
+          </Tappable>
+        ) : null}
+        <SettingsQuery.Provider value={query.trim().toLowerCase()}>
+        {query ? null : (
+          <SectionHeader accent="Account" top={space.home.headingToContent} />
+        )}
+        <View style={styles.card}>
         <InfoRow label="Email" value={email} sub={signInLine(profile?.user.hasPassword)} />
         {profile ? (
           profile.user.isVerified ? (
@@ -149,10 +192,21 @@ export default function SettingsScreen() {
             />
           )
         ) : null}
-        {/* Only once the list has loaded and is empty: somebody who owns a shop
-            has the switcher below instead, and a row that flashes in while the
-            list loads would be a row that then disappears under a thumb. */}
-        {organizations && organizations.length === 0 ? (
+        {myShop ? (
+          <SettingsRow
+            label="My shop"
+            sub={`${myShop.name} · ${organizationStatusLine(myShop)}`}
+            onPress={() =>
+              router.push({
+                pathname: "/edit-org",
+                params: {
+                  id: myShop.id,
+                  userId: myShop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "",
+                },
+              })
+            }
+          />
+        ) : organizationsQuery.isSuccess && organizations.length === 0 ? (
           <SettingsRow
             label="Register your shop"
             sub="For MSMEs: trade as a shop, co-op or non-profit"
@@ -162,11 +216,15 @@ export default function SettingsScreen() {
         {/*
           No "Posting as" card (removed 20 Oct 2026). A shop owner switches
           between themselves and the shop on the Profile tab (the shop card,
-          "Switch to Myself") and in the post flow ("Post as myself"); a shop's
-          verification state is on its storefront ("Get verified") and in the
-          post flow ("under review").
+          "Switch to Myself") and in the post flow ("Post as myself"). The row
+          above shows the shop's review status and opens its existing manage screen.
         */}
-        <SectionHeader accent="Profile and security" />
+        </View>
+
+        {query ? null : (
+          <SectionHeader accent="Profile and security" />
+        )}
+        <View style={styles.card}>
         <SettingsRow
           label="Edit profile"
           sub="Name, photo, bio and location"
@@ -187,8 +245,12 @@ export default function SettingsScreen() {
           sub="Choose which badges show on your profile"
           onPress={() => router.push("/achievements")}
         />
+        </View>
 
-        <SectionHeader accent="Trading" />
+        {query ? null : (
+          <SectionHeader accent="Trading" />
+        )}
+        <View style={styles.card}>
         <SettingsRow
           label="How trading works"
           sub="Brackets, bridging fees and your tier's ceiling"
@@ -201,8 +263,12 @@ export default function SettingsScreen() {
           onPress={() => openPage(TRADING_POLICY_PATH)}
         />
         <SettingsRow label="Premium" sub={premiumLine(profile?.reputation)} onPress={() => openPremium(router)} />
+        </View>
 
-        <SectionHeader accent="Privacy and safety" />
+        {query ? null : (
+          <SectionHeader accent="Privacy and safety" />
+        )}
+        <View style={styles.card}>
         <SettingsRow
           label="Active sessions"
           sub="See where you're signed in and log out other devices"
@@ -213,8 +279,12 @@ export default function SettingsScreen() {
           sub="See who you have blocked and unblock them"
           onPress={() => router.push("/blocked-users")}
         />
+        </View>
 
-        <SectionHeader accent="About" />
+        {query ? null : (
+          <SectionHeader accent="About" />
+        )}
+        <View style={styles.card}>
         {/* Three pages beside the trading policy, opened the same way. Help is
             where "Contact support" leads: several refusals say it, and until
             that page nothing said how. */}
@@ -222,10 +292,11 @@ export default function SettingsScreen() {
         <SettingsRow label="Terms of service" sub="Opens in your browser" onPress={() => openPage(TERMS_PATH)} />
         <SettingsRow label="Privacy policy" sub="Opens in your browser" onPress={() => openPage(PRIVACY_PATH)} />
         <InfoRow label="Version" value={version} />
+        </View>
 
         {/* No title: the two rows that end the session say what they are. The
             section gap alone sets them apart from About. */}
-        <View style={styles.leaving}>
+        <View style={[styles.card, styles.leaving]}>
           <SettingsRow label="Sign out" sub="On this device" onPress={confirmSignOut} />
           <SettingsRow
             danger
@@ -234,6 +305,8 @@ export default function SettingsScreen() {
             onPress={() => router.push("/delete-account")}
           />
         </View>
+
+        </SettingsQuery.Provider>
 
         {/* Dev builds only. `__DEV__` is a compile-time constant, so the release
             minifier drops this block and the reset never ships. */}
@@ -278,6 +351,11 @@ function openPage(path: string) {
  * A row that opens something. `danger` draws the label and the chevron in the
  * urgent colour, for the one irreversible action on this screen.
  */
+/** What is typed in "Search settings"; rows that do not match it hide. */
+const SettingsQuery = createContext("");
+const matches = (q: string, ...text: (string | null | undefined)[]) =>
+  !q || text.some((t) => t?.toLowerCase().includes(q));
+
 function SettingsRow({
   label,
   sub,
@@ -289,6 +367,8 @@ function SettingsRow({
   onPress: () => void;
   danger?: boolean;
 }) {
+  const q = useContext(SettingsQuery);
+  if (!matches(q, label, sub)) return null;
   return (
     <Tappable
       onPress={onPress}
@@ -318,6 +398,8 @@ function SettingsRow({
  * not (Version).
  */
 function InfoRow({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
+  const q = useContext(SettingsQuery);
+  if (!matches(q, label, value, sub)) return null;
   return (
     <View
       style={styles.row}
@@ -362,6 +444,17 @@ function idStatusLine(status: IdVerificationStatus | undefined, verified: boolea
  * known this, and a guess here would be a wrong statement about somebody's own
  * account.
  */
+function organizationStatusLine(organization: ActingOrg): string {
+  switch (organization.verificationStatus ?? (organization.verified ? "VERIFIED" : "PENDING")) {
+    case "PENDING":
+      return "Under review";
+    case "VERIFIED":
+      return "Verified";
+    case "REJECTED":
+      return "Rejected";
+  }
+}
+
 function signInLine(hasPassword: boolean | undefined): string | null {
   if (hasPassword === undefined) return null;
   return hasPassword ? "Signs in with a password" : "Signs in with Google";
@@ -394,7 +487,24 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: color.control },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
 
-  leaving: { marginTop: space.home.sectionTop, borderTopWidth: border.hairline, borderTopColor: color.divider },
+  leaving: { marginTop: space.home.sectionTop },
+  // Each section is one rounded card (4 Nov 2026), Instagram-settings style.
+  card: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: border.hairline,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    overflow: "hidden",
+  },
+  searchBox: { marginHorizontal: 16, marginTop: 12, height: 42, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: color.control },
+  searchInput: { flex: 1, fontFamily: font.sans, fontSize: 15, color: color.ink, paddingVertical: 0 },
+  me: { marginHorizontal: 16, marginTop: 14, flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 16, borderWidth: border.hairline, borderColor: color.controlLine, backgroundColor: color.searchSurface },
+  meAvatar: { width: 52, height: 52, borderRadius: 26 },
+  meFallback: { backgroundColor: color.greenWash, alignItems: "center", justifyContent: "center" },
+  meInitials: { fontFamily: font.displayBold, fontSize: 18, color: color.forest },
+  meName: { fontFamily: font.sansBold, fontSize: 16, color: color.ink },
+  meSub: { fontFamily: font.sans, fontSize: 13, color: color.inkSecondary },
 
   ink: { color: color.ink },
   secondary: { color: color.inkSecondary },

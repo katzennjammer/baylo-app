@@ -11,6 +11,7 @@ import type { DimensionValue, TextStyle } from "react-native";
 
 export type ColorName =
   | "surface"
+  | "searchSurface"
   | "inset"
   | "control"
   | "storyPost"
@@ -20,6 +21,7 @@ export type ColorName =
   | "inkStale"
   | "forest"
   | "green"
+  | "mascotGreen"
   | "onGreen"
   | "greenWash"
   | "greenLine"
@@ -37,9 +39,42 @@ export type ColorName =
   | "skeletonSoft"
   | "failedIcon"
   | "captionFill"
-  | "onScrim";
+  | "onScrim"
+  | "homeTop"
+  | "homeMiddle"
+  | "homeBottom"
+  | "homeYellow"
+  | "homeCream"
+  | "homeOnGreen"
+  | "homeOnGreenMuted"
+  | "homePattern"
+  | "homeIconSurface"
+  | "homeFieldSurface"
+  | "homeFieldLine"
+  | "homeBadge"
+  | "homeOutline";
 
 export declare const color: Readonly<Record<ColorName, string>>;
+
+export type DColorName =
+  | "primary"
+  | "primaryText"
+  | "accent"
+  | "accentText"
+  | "accentSoft"
+  | "background"
+  | "surface"
+  | "tint"
+  | "text"
+  | "mutedText"
+  | "border"
+  | "success"
+  | "warning"
+  | "danger"
+  | ColorName;
+
+/** Direction 1 colors, isolated from the legacy `color` roles. */
+export declare const dColor: Readonly<Record<DColorName, string>>;
 
 export type DarkColorName =
   | "surface"
@@ -66,7 +101,11 @@ export type FontName =
   | "sansSemi"
   | "sansBold"
   | "mono"
-  | "monoMedium";
+  | "monoMedium"
+  | "figtreeRegular"
+  | "figtreeMedium"
+  | "figtreeSemi"
+  | "figtreeBold";
 
 export declare const font: Readonly<Record<FontName, string>>;
 
@@ -77,6 +116,15 @@ export type TypeRole = Pick<
 >;
 
 export type TypeRoleName =
+  | "dDisplay"
+  | "dSheetTitle"
+  | "dSectionTitle"
+  | "dCardTitle"
+  | "dButton"
+  | "dBody"
+  | "dCaption"
+  | "dSmall"
+  | "dCount"
   | "wordmark"
   | "wordmarkTight"
   | "itemTitle"
@@ -132,6 +180,7 @@ export type TypeRoleName =
   | "heroSubhead"
   | "heroCta"
   | "categoryLabel"
+  | "homeCategoryTileLabel"
   | "exclusiveTitle"
   | "exclusiveMeta"
   | "countdownPill"
@@ -164,6 +213,12 @@ export declare const lines: Readonly<{
 }>;
 
 export declare const space: Readonly<{
+  design: Readonly<{
+    scale: Readonly<{ xxs: number; xs: number; sm: number; md: number; lg: number; xl: number; xxl: number }>;
+    page: number;
+    section: number;
+    cardGap: number;
+  }>;
   screenX: number;
   screenXTight: number;
   header: Readonly<{ row: number; bottom: number; gap: number; gapTight: number }>;
@@ -264,6 +319,13 @@ export declare const space: Readonly<{
   }>;
   home: Readonly<{
     top: number;
+    gradientHeight: number;
+    headerFadeDistance: number;
+    mascotVisibleHeight: number;
+    archHeight: number;
+    archRise: number;
+    archButtonOffset: number;
+    actionTop: number;
     searchGap: number;
     headerToHero: number;
     heroX: number;
@@ -303,6 +365,12 @@ export declare const space: Readonly<{
 }>;
 
 export type RadiusName =
+  | "dButton"
+  | "dCard"
+  | "dPhoto"
+  | "dBadge"
+  | "dSheet"
+  | "dCategoryCircle"
   | "card"
   | "primaryButton"
   | "emptyPrimaryButton"
@@ -351,8 +419,19 @@ export type RadiusName =
 export declare const radius: Readonly<Record<RadiusName, number>>;
 
 export declare const size: Readonly<{
+  design: Readonly<{
+    button: number;
+    secondaryButton: number;
+    input: number;
+    categoryCircle: number;
+    categoryItem: number;
+    categoryIcon: number;
+    inputIcon: number;
+    notification: number;
+  }>;
   avatar: Readonly<{
     owner: number;
+    peopleSearch: number;
     story: number;
     storyRing: number;
     storyGap: number;
@@ -455,6 +534,7 @@ export declare const size: Readonly<{
     squiggleStroke: number;
     headingMaxFontScale: number;
     overlayMaxFontScale: number;
+    searchControl: number;
     spotlightPerScreen: number;
     spotlightAspect: number;
     spotlightHeroFraction: number;
@@ -545,6 +625,7 @@ export type IconName =
 export declare const icon: Readonly<Record<IconName, IconSpec>>;
 
 export declare const border: Readonly<{
+  d: number;
   hairline: number;
   chip: number;
   dashed: number;
@@ -553,7 +634,100 @@ export declare const border: Readonly<{
   fabRing: number;
 }>;
 
+export declare const popup: Readonly<{
+  sheetMaxWidth: number;
+  sheetRadius: number;
+  outlineWidth: number;
+  shadowOffset: number;
+  mascotDiameter: number;
+  mascotOvalHeight: number;
+  mascotImageSize: number;
+  mascotTop: number;
+  contentTop: number;
+  buttonHeight: number;
+  buttonRadius: number;
+  buttonGap: number;
+  previewRadius: number;
+  previewPadding: number;
+  previewThumbnail: number;
+  stickerX: number;
+  stickerY: number;
+}>;
+
+export declare const marketplaceUi: Readonly<{
+  size: Readonly<{
+    controlHeight: number;
+    chipHeight: number;
+    sheetHandleWidth: number;
+    sheetHandleHeight: number;
+    sheetFooterButton: number;
+    conditionHeight: number;
+    bracketSize: number;
+    activeFilterDot: number;
+    initialCategories: number;
+    helperExpanded: number;
+    helperCollapsed: number;
+  }>;
+  radius: Readonly<{
+    control: number;
+    chip: number;
+    sheet: number;
+    bracket: number;
+    helperCollapsed: number;
+  }>;
+  space: Readonly<{
+    controlGap: number;
+    chipGap: number;
+    chipX: number;
+    dividerHeight: number;
+    sheetX: number;
+    sheetTop: number;
+    titleToBody: number;
+    groupGap: number;
+    labelToOptions: number;
+    optionGap: number;
+    bracketGap: number;
+    footerTop: number;
+    footerBottom: number;
+  }>;
+  type: Readonly<{
+    chip: number;
+    sheetTitle: number;
+    conditionLabel: number;
+  }>;
+}>;
+
+export declare const homeCategoryTile: Readonly<{
+  size: Readonly<{
+    tile: number;
+    icon: number;
+    itemWidth: number;
+  }>;
+  radius: Readonly<{
+    tile: number;
+  }>;
+  space: Readonly<{
+    labelGap: number;
+    itemGap: number;
+    rowGap: number;
+  }>;
+}>;
+
 export declare const shadow: Readonly<{
+  card: Readonly<{
+    shadowColor: string;
+    shadowOpacity: number;
+    shadowRadius: number;
+    shadowOffset: Readonly<{ width: number; height: number }>;
+    elevation: number;
+  }>;
+  raised: Readonly<{
+    shadowColor: string;
+    shadowOpacity: number;
+    shadowRadius: number;
+    shadowOffset: Readonly<{ width: number; height: number }>;
+    elevation: number;
+  }>;
   fab: Readonly<{
     shadowColor: string;
     shadowOpacity: number;
