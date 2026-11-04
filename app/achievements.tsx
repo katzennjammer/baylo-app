@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image as ExpoImage } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { goBack } from "../src/lib/go-back";
@@ -12,8 +13,9 @@ import { BackHeader } from "../src/components/BackHeader";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { CheckIcon, StarIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
-import { border, color, icon as iconToken, radius, size, space, textStyle, type } from "../src/theme/tokens";
+import { border, color, font, icon as iconToken, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { sizedImage } from "../src/media/image-url";
+import { MASCOT } from "../src/media/mascots";
 
 /**
  * Achievements: every badge, which of the earned ones show on the profile, and
@@ -72,7 +74,6 @@ export default function AchievementsScreen() {
     mutationFn: updateDisplayedAchievements,
     onMutate: () => setSaveMessage(null),
     onSuccess: async () => {
-      setSaveMessage({ ok: true, text: "Your Home and Profile badges are updated." });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["achievements"] }),
         queryClient.invalidateQueries({ queryKey: ["profile"] }),
@@ -119,18 +120,32 @@ export default function AchievementsScreen() {
 
   useEffect(() => {
     if (!saveMessage?.ok) return;
-    const timeout = setTimeout(() => setSaveMessage(null), 2_000);
+    const timeout = setTimeout(() => setSaveMessage(null), 4_000);
     return () => clearTimeout(timeout);
   }, [saveMessage]);
 
-  function toggleSelected(id: string) {
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : current.length < maxSlots
-          ? [...current, id]
-          : current,
+  // CHANGES SAVE AS YOU TAP (4 Nov 2026): no Save button. Each tap sends the
+  // new choice; the toast says what changed and offers Undo.
+  const [undo, setUndo] = useState<{ ids: string[]; featured: string | null } | null>(null);
+  const commit = (ids: string[], nextFeatured: string | null, text: string) => {
+    setUndo({ ids: selected, featured });
+    setSelected(ids);
+    setFeatured(nextFeatured);
+    save.mutate(
+      { achievementIds: ids, featuredAchievementId: nextFeatured },
+      { onSuccess: () => setSaveMessage({ ok: true, text }) },
     );
+  };
+  const nameOf = (id: string) => query.data?.achievements.find((a) => a.id === id)?.name ?? "That badge";
+
+  function toggleSelected(id: string) {
+    if (selected.includes(id)) {
+      commit(selected.filter((value) => value !== id), featured === id ? null : featured, `${nameOf(id)} is off your profile.`);
+    } else if (selected.length < maxSlots) {
+      commit([...selected, id], featured, `${nameOf(id)} now shows on your profile.`);
+    } else {
+      setSaveMessage({ ok: false, text: `Your profile shows up to ${maxSlots}. Take one off first.` });
+    }
   }
 
   const achievements = query.data?.achievements ?? [];
@@ -140,7 +155,7 @@ export default function AchievementsScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <BackHeader
         title="Achievements"
-        subtitle="Milestones earned through real activity"
+        subtitle={query.data ? `${earned.length} of ${achievements.length} earned · changes save as you tap` : "Milestones earned through real activity"}
         onBack={() => goBack(router)}
       />
       {query.isPending ? (
@@ -181,7 +196,13 @@ export default function AchievementsScreen() {
                   return (
                     <Tappable
                       key={achievement.id}
-                      onPress={() => setFeatured((current) => (current === achievement.id ? null : achievement.id))}
+                      onPress={() =>
+                        commit(
+                          selected,
+                          featured === achievement.id ? null : achievement.id,
+                          featured === achievement.id ? "Home shows no badge now." : `${achievement.name} now shows on Home.`,
+                        )
+                      }
                       accessibilityRole="radio"
                       accessibilityState={{ selected: isFeatured }}
                       accessibilityLabel={achievement.name}
@@ -272,35 +293,34 @@ export default function AchievementsScreen() {
             ) : null}
           </ScrollView>
 
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.home.tileBody) }]}>
-            {saveMessage ? (
-              <View accessibilityLiveRegion="polite">
-                {saveMessage.ok ? (
-                  <Text style={[textStyle(type.username), styles.earned]}>Saved</Text>
-                ) : null}
-                <Text style={[textStyle(type.metadata), saveMessage.ok ? styles.earned : styles.urgent]}>
-                  {saveMessage.text}
-                </Text>
+          {/* Saved: a small toast with the duck, and Undo. */}
+          {saveMessage ? (
+            <View style={[styles.toast, { bottom: Math.max(insets.bottom, 12) + 8 }]} accessibilityLiveRegion="polite">
+              {saveMessage.ok ? <ExpoImage source={MASCOT.celebrateTrimmed} contentFit="contain" style={styles.toastDuck} accessible={false} /> : null}
+              <View style={{ flex: 1 }}>
+                {saveMessage.ok ? <Text style={styles.toastTitle}>Saved</Text> : null}
+                <Text style={styles.toastBody}>{saveMessage.text}</Text>
               </View>
-            ) : null}
-            <Tappable
-              disabled={!hasChanges || save.isPending}
-              onPress={() => save.mutate({ achievementIds: selected, featuredAchievementId: featured })}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !hasChanges || save.isPending }}
-              style={[styles.save, (!hasChanges || save.isPending) && styles.buttonHeld]}
-              pressedStyle={styles.buttonHeld}
-            >
-              {save.isPending ? (
-                <View style={styles.saving}>
-                  <ActivityIndicator size="small" color={color.onGreen} />
-                  <Text style={[textStyle(type.primaryButton), styles.onGreen]}>Saving...</Text>
-                </View>
-              ) : (
-                <Text style={[textStyle(type.primaryButton), styles.onGreen]}>Save</Text>
-              )}
-            </Tappable>
-          </View>
+              {saveMessage.ok && undo ? (
+                <Tappable
+                  onPress={() => {
+                    const back = undo;
+                    setUndo(null);
+                    setSelected(back.ids);
+                    setFeatured(back.featured);
+                    save.mutate(
+                      { achievementIds: back.ids, featuredAchievementId: back.featured },
+                      { onSuccess: () => setSaveMessage({ ok: true, text: "Change undone." }) },
+                    );
+                  }}
+                  accessibilityRole="button"
+                  style={styles.undo}
+                >
+                  <Text style={styles.undoText}>Undo</Text>
+                </Tappable>
+              ) : null}
+            </View>
+          ) : null}
         </>
       )}
     </View>
@@ -309,7 +329,28 @@ export default function AchievementsScreen() {
 
 const BADGE = 48;
 
+const toastStyles = {
+  toast: {
+    position: "absolute" as const,
+    left: 16,
+    right: 16,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: "#14140F",
+  },
+  toastDuck: { width: 40, height: 44 },
+  toastTitle: { fontFamily: font.sansBold, fontSize: 14, color: "#FFFFFF" },
+  toastBody: { fontFamily: font.sans, fontSize: 13, color: "#E8E6DE" },
+  undo: { paddingHorizontal: 10, paddingVertical: 8 },
+  undoText: { fontFamily: font.sansBold, fontSize: 14, color: "#7FD992" },
+};
+
 const styles = StyleSheet.create({
+  ...toastStyles,
   screen: { flex: 1, backgroundColor: color.surface },
   gutter: { paddingHorizontal: space.screenX },
 
