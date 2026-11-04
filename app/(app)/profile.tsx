@@ -20,7 +20,10 @@ import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
-import { fetchAchievements } from "../../src/api/achievements";
+import { DEFAULT_MAX_PROFILE_BADGES, fetchAchievements } from "../../src/api/achievements";
+import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
+import { Tappable } from "../../src/components/Tappable";
+import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
@@ -223,7 +226,47 @@ export default function ProfileScreen() {
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
-        <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
+        <PersonHeader
+          avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
+          user={{
+            bio: profile?.user.bio ?? null,
+            location: profile?.user.location ?? null,
+            createdAt: profile?.user.createdAt ?? "",
+            rating: profile?.user.rating ?? 0,
+            trustTier: profile?.reputation.tier ?? null,
+          }}
+          counts={{
+            listed: profile?.counts.listed ?? items.length,
+            completedTrades: profile?.counts.completedTrades ?? 0,
+            reviews: profile?.counts.reviews ?? 0,
+            followers: profile?.counts.followers ?? 0,
+            following: profile?.counts.following ?? 0,
+          }}
+          palette={dark ? { ink: darkColors.ink, secondary: darkColors.muted, control: darkColors.surface } : { ink: color.ink, secondary: color.inkSecondary, control: color.control }}
+          locationSlot={
+            <Tappable onPress={() => router.push("/edit-profile")} accessibilityRole="button">
+              <Text style={{ fontSize: 13, fontWeight: "600", color: color.forest }}>+ Add your location</Text>
+            </Tappable>
+          }
+          onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })}
+          onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })}
+        >
+          <HeaderButtons
+            palette={dark ? { ink: darkColors.ink, control: darkColors.surface, border: darkColors.border } : { ink: color.ink, control: color.control, border: color.controlLine }}
+            primary={{ label: "Edit profile", onPress: () => router.push("/edit-profile"), filled: false }}
+            secondary={{ label: "Share profile", onPress: () => void shareProfile() }}
+          />
+          <View style={s.badgeHead}>
+            <Text style={[s.badgeHeadText, { color: dark ? darkColors.muted : color.inkSecondary }]}>
+              Badges · {profile?.displayedAchievements.length ?? 0} of {DEFAULT_MAX_PROFILE_BADGES} shown
+            </Text>
+            <Tappable onPress={() => router.push("/achievements")} accessibilityRole="button" accessibilityLabel="Edit badges">
+              <Text style={s.badgeEdit}>Edit</Text>
+            </Tappable>
+          </View>
+          <Badges dark={dark} achievements={profile?.displayedAchievements ?? []} onMore={() => router.push("/achievements")} />
+          {profile ? <FinishProfile profile={profile} dark={dark} /> : null}
+        </PersonHeader>
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
       </>}
@@ -236,7 +279,17 @@ export default function ProfileScreen() {
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "posts" ? profileRefetching : reviewsRefetching} onRefresh={onRefresh} tintColor={dark ? darkColors.green : color.green} />}
       ListFooterComponent={tab === "reviews" && isFetchingNextPage ? <ActivityIndicator color={dark ? darkColors.green : color.green} style={s.footer} /> : null}
-      ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
+      ListEmptyComponent={tab === "reviews" ? (
+        <Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>No reviews yet.</Text>
+      ) : (
+        <MascotEmptyState
+          pose="box"
+          size={96}
+          title="Your listings show here"
+          message="Post something you don't use any more."
+          action={{ label: "Post", onPress: () => router.push("/post-item") }}
+        />
+      )}
     />
   );
 }
@@ -715,6 +768,56 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
   );
 }
 
+/**
+ * New accounts: a short checklist instead of empty space. Each row opens the
+ * place to do it; the whole card goes away when all four are done.
+ */
+function FinishProfile({ profile, dark }: { profile: ProfileMePayload; dark: boolean }) {
+  const router = useRouter();
+  const steps = [
+    { key: "photo", label: "Add a photo", done: !!profile.user.avatar, go: "/edit-profile" },
+    { key: "bio", label: "Write a short bio", done: !!profile.user.bio?.trim(), go: "/edit-profile" },
+    { key: "city", label: "Add your city", done: !!profile.user.location?.trim(), go: "/edit-profile" },
+    {
+      key: "id",
+      label: "Verify your ID",
+      sub: "Needed before you can post",
+      done: profile.idVerification.verified,
+      go: "/verify-id",
+    },
+  ];
+  const done = steps.filter((x) => x.done).length;
+  if (done === steps.length) return null;
+  const ink = dark ? darkColors.ink : color.ink;
+  return (
+    <View style={[s.finish, { backgroundColor: dark ? darkColors.surface : color.searchSurface, borderColor: dark ? darkColors.border : color.controlLine }]}>
+      <View style={s.finishHead}>
+        <Text style={[s.finishTitle, { color: ink }]}>Finish your profile</Text>
+        <Text style={s.finishCount}>{done} of {steps.length}</Text>
+      </View>
+      {steps.map((x) => (
+        <Tappable
+          key={x.key}
+          onPress={x.done ? undefined : () => router.push(x.go as never)}
+          disabled={x.done}
+          accessibilityRole="button"
+          accessibilityState={{ checked: x.done }}
+          style={s.finishRow}
+        >
+          <View style={[s.finishMark, x.done && s.finishMarkDone]}>
+            {x.done ? <CheckIcon size={12} stroke={3} color={color.surface} /> : null}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.finishLabel, { color: x.done ? color.inkMuted : ink }, x.done && { textDecorationLine: "line-through" }]}>{x.label}</Text>
+            {x.sub && !x.done ? <Text style={s.finishSub}>{x.sub}</Text> : null}
+          </View>
+          {!x.done ? <ChevronRightIcon size={16} stroke={2} color={color.inkMuted} /> : null}
+        </Tappable>
+      ))}
+    </View>
+  );
+}
+
 function shortBadgeLabel(label: string): string {
   return label.replace(/^Trusted Trader$/, "Trusted").replace(/^First Offer$/, "First offer");
 }
@@ -773,6 +876,18 @@ const s = StyleSheet.create({
   shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 76, height: 76, borderRadius: 38 },
+  badgeHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: -4 },
+  badgeHeadText: { fontSize: 13, fontWeight: "600" },
+  badgeEdit: { fontSize: 14, fontWeight: "600", color: color.forest },
+  finish: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 6 },
+  finishHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingBottom: 4 },
+  finishTitle: { fontSize: 15, fontWeight: "700" },
+  finishCount: { fontSize: 13, fontWeight: "600", color: color.forest },
+  finishRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
+  finishMark: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.dashed, alignItems: "center", justifyContent: "center" },
+  finishMarkDone: { backgroundColor: color.forest, borderColor: color.forest },
+  finishLabel: { fontSize: 14, fontWeight: "500" },
+  finishSub: { fontSize: 12, color: color.inkSecondary },
   avatarFallback: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: color.green },
   avatarText: { color: color.onGreen, fontFamily: font.sansBold, fontSize: 26 },
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 },

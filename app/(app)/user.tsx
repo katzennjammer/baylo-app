@@ -20,7 +20,7 @@ import { ReportSheet } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { showDialog } from "../../src/components/dialog";
 import { bracketLabel } from "../../src/lib/brackets";
-import { TIER_LABEL } from "../../src/lib/trust";
+import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
 import type { Item } from "../../src/api/types";
 import { color, dark as darkTokens, font, icon, space } from "../../src/theme/tokens";
 
@@ -173,7 +173,17 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
     tab === "reviews"
       ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." />
       : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} pose="box" />
-  ) : <Text style={[s.empty, { color: palette.muted }]}>{tab === "reviews" ? "No reviews yet." : "No posts yet."}</Text>;
+  ) : tab === "reviews" ? (
+    <Text style={[s.empty, { color: palette.muted }]}>No reviews yet.</Text>
+  ) : (
+    // Nothing listed: still a whole profile. Only this area says so.
+    <MascotEmptyState
+      pose="box"
+      size={96}
+      title="Nothing listed yet"
+      message={`Follow ${data.user.name.split(/\s+/)[0]} to see new listings in your feed when they post.`}
+    />
+  );
 
   return <>
   <FlatList<ProfileRow>
@@ -183,25 +193,29 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
     data={rows}
     keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
     ListHeaderComponent={<>
-      <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} />
+      <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={org ? undefined : () => setActionsOpen(true)} />
       {header ?? (
-      <View style={s.header}>
-        {/* A PERSON. Organisations never reach this block -- see `header` above. */}
-        <View style={s.identityRow}>
-          <Avatar uri={data.user.avatar} name={data.user.name} />
-          <View style={s.stats}>
-            <Stat dark={dark} label="Posts" value={data.counts.listed} />
-            <Stat dark={dark} label="Followers" value={data.counts.followers} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })} />
-            <Stat dark={dark} label="Following" value={data.counts.following} onPress={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })} />
-          </View>
-        </View>
-        {data.user.trustTier ? (
-          <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[data.user.trustTier as keyof typeof TIER_LABEL] ?? data.user.trustTier}</Text></View>
-        ) : null}
-        {data.user.bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{data.user.bio}</Text> : null}
-        <View style={s.actions}><Pressable onPress={toggleFollow} disabled={busy || status === "PENDING"} style={[s.actionButton, status === "NONE" ? s.followButton : { backgroundColor: palette.control, borderColor: palette.border }, (busy || status === "PENDING") && s.disabled]} accessibilityRole="button"><Text style={[s.actionText, status === "NONE" ? s.followText : { color: palette.ink }]}>{busy ? "Updating..." : followButtonLabel(status, data.follow.followsYou)}</Text></Pressable><Pressable onPress={openMessage} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Message</Text></Pressable><Pressable onPress={() => setActionsOpen(true)} style={[s.menuButton, { backgroundColor: palette.control, borderColor: palette.border }]} accessibilityRole="button" accessibilityLabel="More options"><KebabIcon size={icon.kebab.size} color={palette.ink} /></Pressable></View>
+      <PersonHeader
+        avatar={<Avatar uri={data.user.avatar} name={data.user.name} />}
+        user={{ ...data.user, trustTier: data.user.trustTier }}
+        counts={data.counts}
+        palette={palette}
+        onFollowers={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "followers" } })}
+        onFollowing={() => router.push({ pathname: "/connections", params: { userId: data.user.id, kind: "following" } })}
+      >
+        <HeaderButtons
+          palette={palette}
+          primary={{
+            label: busy ? "Updating..." : followButtonLabel(status, data.follow.followsYou),
+            onPress: toggleFollow,
+            filled: status === "NONE",
+            disabled: busy || status === "PENDING",
+          }}
+          secondary={{ label: "Message", onPress: openMessage }}
+        />
+        {/* Badges they chose to show. Tap one to see what it is for. */}
         {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} own={false} onMore={() => undefined} /> : null}
-      </View>
+      </PersonHeader>
       )}
       <ProfileTabs dark={dark} active={tab} onChange={setTab} />
       {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} /> : null}
@@ -255,7 +269,25 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
 }
 
 function chunkItems(items: Item[]): Item[][] { const rows: Item[][] = []; for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3)); return rows; }
-function BackRow({ title, insetsTop, dark, onPress }: { title: string; insetsTop: number; dark: boolean; onPress: () => void }) { const palette = dark ? darkColors : lightColors; return <View style={[s.top, { borderBottomColor: palette.divider, paddingTop: insetsTop, height: insetsTop + 64 }]}><Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel="Go back" style={s.back} pressedStyle={s.backPressed}><ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={palette.ink} /></Tappable><Text style={[s.headerTitle, { color: palette.ink }]} numberOfLines={1}>{title}</Text><View style={s.headerSpacer} /></View>; }
+function BackRow({ title, insetsTop, dark, onPress, onMenu }: { title: string; insetsTop: number; dark: boolean; onPress: () => void; onMenu?: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={[s.top, { borderBottomColor: palette.divider, paddingTop: insetsTop, height: insetsTop + 64 }]}>
+      <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel="Go back" style={s.back} pressedStyle={s.backPressed}>
+        <ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={palette.ink} />
+      </Tappable>
+      <Text style={[s.headerTitle, { color: palette.ink }]} numberOfLines={1}>{title}</Text>
+      {/* One labelled menu (Report, Block) in the header, not beside the buttons. */}
+      {onMenu ? (
+        <Tappable onPress={onMenu} accessibilityRole="button" accessibilityLabel="More options" style={s.back} pressedStyle={s.backPressed}>
+          <KebabIcon size={icon.kebab.size} color={palette.ink} />
+        </Tappable>
+      ) : (
+        <View style={s.headerSpacer} />
+      )}
+    </View>
+  );
+}
 function Stat({ dark, label, value, onPress }: { dark: boolean; label: string; value: number; onPress?: () => void }) { const palette = dark ? darkColors : lightColors; const content = <><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></>; return onPress ? <Pressable onPress={onPress} style={s.stat} accessibilityRole="button">{content}</Pressable> : <View style={s.stat}>{content}</View>; }
 
 const s = StyleSheet.create({
