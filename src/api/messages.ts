@@ -296,3 +296,47 @@ export function useSendMessage() {
     },
   });
 }
+
+/* ── Chat info: Mute and Delete chat ──────────────────────────────────── */
+
+export interface ChatSettings {
+  partnerId: string;
+  /** No push for this person's chat messages. Offers and trades still alert. */
+  muted: boolean;
+  /** "Delete chat" time for this account, or null. */
+  clearedAt: string | null;
+}
+
+export const chatSettingsKey = (partnerId: string) => ["messages", "settings", partnerId] as const;
+
+export function useChatSettings(partnerId: string | undefined) {
+  return useQuery({
+    queryKey: chatSettingsKey(partnerId ?? ""),
+    enabled: !!partnerId,
+    queryFn: async () =>
+      (await apiV1<ChatSettings>(`/api/v1/messages/conversations/${encodeURIComponent(partnerId!)}`)).data,
+    staleTime: 60_000,
+  });
+}
+
+/** PATCH one setting. `clear: true` is Delete chat: hidden for you only. */
+export function useUpdateChatSettings(partnerId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (change: { muted?: boolean; clear?: true }) =>
+      (
+        await apiV1<ChatSettings>(`/api/v1/messages/conversations/${encodeURIComponent(partnerId!)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(change),
+        })
+      ).data,
+    onSuccess: (data, change) => {
+      qc.setQueryData(chatSettingsKey(data.partnerId), data);
+      if (change.clear) {
+        void qc.invalidateQueries({ queryKey: ["messages", "thread"] });
+        void qc.invalidateQueries({ queryKey: ["messages", "conversations"] });
+      }
+    },
+  });
+}

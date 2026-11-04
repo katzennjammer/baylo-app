@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Image,
   Keyboard,
@@ -21,7 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { NOTIFICATIONS_KEY } from "../../src/api/notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { threadQueryKey, useSendMessage, useThread, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
+import { threadQueryKey, useChatSettings, useSendMessage, useThread, useUpdateChatSettings, type LegacyThreadResponse, type ThreadMessage } from "../../src/api/messages";
 import { ApiError, request } from "../../src/api/client";
 import { usePublicProfile } from "../../src/api/profile";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
@@ -128,6 +129,12 @@ export default function MessagesThreadScreen() {
   const activeTrades = useActiveTrades();
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
+  const chatSettings = useChatSettings(partner);
+  const updateChat = useUpdateChatSettings(partner);
+  // In-chat search (Chat info > Search): matches, and which one is shown.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
   // Swipe to reply: the message being answered, shown above the field.
   const [replyingTo, setReplyingTo] = useState<ThreadMessage | null>(null);
   // Where each message sits in the list, so a quote can jump to its original.
@@ -570,6 +577,15 @@ export default function MessagesThreadScreen() {
       </View>
     );
 
+  // In-chat search matches, newest first, as message ids.
+  const searchQ = searchText.trim().toLowerCase();
+  const searchMatches = searchQ
+    ? sortedMessages
+        .filter((m) => previewFromContent(m.content, m.senderId === currentUserId).toLowerCase().includes(searchQ))
+        .map((m) => m.id)
+        .reverse()
+    : [];
+
   return (
     <View style={[styles.screen, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View style={[styles.header, { paddingTop: insets.top, height: insets.top + HEADER_HEIGHT, backgroundColor: palette.surface, borderBottomColor: palette.divider }]}>
@@ -597,6 +613,53 @@ export default function MessagesThreadScreen() {
           </Tappable>
         )}
       </View>
+
+      {/* In-chat search: matches step from newest to oldest. */}
+      {searchOpen ? (
+        <View style={[styles.searchBar, { borderBottomColor: palette.divider, backgroundColor: palette.surface }]}>
+          <TextInput
+            value={searchText}
+            onChangeText={(t) => {
+              setSearchText(t);
+              setSearchIndex(0);
+            }}
+            autoFocus
+            placeholder="Search this chat"
+            placeholderTextColor={palette.inkMuted}
+            returnKeyType="search"
+            onSubmitEditing={() => searchMatches[0] && jumpTo(searchMatches[0])}
+            style={[styles.searchField, { backgroundColor: palette.control, color: palette.ink }]}
+            accessibilityLabel="Search this chat"
+          />
+          <Text style={[styles.searchCount, { color: palette.inkSecondary }]}>
+            {searchText.trim() ? (searchMatches.length ? `${searchIndex + 1}/${searchMatches.length}` : "0") : ""}
+          </Text>
+          <Tappable
+            onPress={() => {
+              if (searchMatches.length === 0) return;
+              const next = (searchIndex + 1) % searchMatches.length;
+              setSearchIndex(next);
+              jumpTo(searchMatches[next]);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Older match"
+            style={styles.iconButton}
+          >
+            <Ionicons name="chevron-up" size={20} color={palette.ink} />
+          </Tappable>
+          <Tappable
+            onPress={() => {
+              setSearchOpen(false);
+              setSearchText("");
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Close search"
+            style={styles.iconButton}
+          >
+            <Ionicons name="close" size={20} color={palette.ink} />
+          </Tappable>
+        </View>
+      ) : null}
 
       {/* PINNED: the live trade stays here however long the chat gets. */}
       {activeTrades.data && partner ? (
@@ -872,6 +935,41 @@ export default function MessagesThreadScreen() {
           setMenuOpen(false);
           router.push(href as never);
         }}
+        muted={chatSettings.data?.muted ?? false}
+        onSearch={() => {
+          setMenuOpen(false);
+          setSearchOpen(true);
+        }}
+        onToggleMute={() =>
+          updateChat.mutate(
+            { muted: !(chatSettings.data?.muted ?? false) },
+            { onError: (e) => showDialog("Could not change that", e instanceof Error ? e.message : "Try again.") },
+          )
+        }
+        onDeleteChat={() =>
+          Alert.alert(
+            "Delete this chat?",
+            `It is removed for you only. ${otherName} keeps their copy, and new messages will still arrive.`,
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () =>
+                  updateChat.mutate(
+                    { clear: true },
+                    {
+                      onSuccess: () => {
+                        setMenuOpen(false);
+                        router.back();
+                      },
+                      onError: (e) => showDialog("Could not delete the chat", e instanceof Error ? e.message : "Try again."),
+                    },
+                  ),
+              },
+            ],
+          )
+        }
         // Not while acting as a shop: POST /api/v1/blocks acts as the PERSON, so
         // it would block from their own account and leave the shop's thread
         // open. Shop-level blocking is not built.
@@ -900,6 +998,10 @@ function ConversationMenu({
   onProfile,
   trades,
   onOpenTrade,
+  muted,
+  onSearch,
+  onToggleMute,
+  onDeleteChat,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -910,6 +1012,10 @@ function ConversationMenu({
   onProfile: () => void;
   trades: { id: string; title: string; sub: string; href: string }[];
   onOpenTrade: (href: string) => void;
+  muted: boolean;
+  onSearch: () => void;
+  onToggleMute: () => void;
+  onDeleteChat: () => void;
 }) {
   if (!visible) return null;
   const first = name.split(/\s+/)[0] || name;
@@ -918,12 +1024,27 @@ function ConversationMenu({
       <View style={styles.infoWho}>
         {avatar}
         <Text style={[styles.infoName, { color: colors.ink }]} numberOfLines={1}>{name}</Text>
-        <Tappable onPress={onProfile} accessibilityRole="button" style={styles.infoShortcut}>
-          <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
-            <PersonIcon size={20} stroke={1.9} color={colors.ink} />
-          </View>
-          <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Profile</Text>
-        </Tappable>
+        {/* Three round shortcuts, Messenger-style. */}
+        <View style={styles.infoShortcuts}>
+          <Tappable onPress={onProfile} accessibilityRole="button" style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
+              <PersonIcon size={20} stroke={1.9} color={colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Profile</Text>
+          </Tappable>
+          <Tappable onPress={onSearch} accessibilityRole="button" style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
+              <Ionicons name="search" size={20} color={colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Search</Text>
+          </Tappable>
+          <Tappable onPress={onToggleMute} accessibilityRole="switch" accessibilityState={{ checked: muted }} style={styles.infoShortcut}>
+            <View style={[styles.infoShortcutCircle, { backgroundColor: muted ? colors.forest : colors.control }]}>
+              <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={muted ? "#FFFFFF" : colors.ink} />
+            </View>
+            <Text style={[styles.infoShortcutText, { color: colors.ink }]}>{muted ? "Muted" : "Mute"}</Text>
+          </Tappable>
+        </View>
       </View>
       {trades.length > 0 ? (
         <>
@@ -937,6 +1058,7 @@ function ConversationMenu({
       ) : null}
       <SheetRows>
         {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label={`Block ${first}`} destructive colors={colors} onPress={onBlock} /> : null}
+        <SheetRow glyph={<Ionicons name="trash-outline" size={20} color={colors.urgent} />} label="Delete chat" destructive colors={colors} onPress={onDeleteChat} />
       </SheetRows>
     </SheetShell>
   );
@@ -964,7 +1086,11 @@ const styles = StyleSheet.create({
   replyBarText: { fontFamily: font.sans, fontSize: 13 },
   infoWho: { alignItems: "center", gap: 8, paddingBottom: 12 },
   infoName: { fontFamily: font.displayBold, fontSize: 20 },
-  infoShortcut: { alignItems: "center", gap: 6, marginTop: 4 },
+  infoShortcuts: { flexDirection: "row", gap: 28, marginTop: 4 },
+  infoShortcut: { alignItems: "center", gap: 6, minWidth: 56 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 12, paddingRight: 4, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchField: { flex: 1, height: 38, borderRadius: 19, paddingHorizontal: 14, fontFamily: font.sans, fontSize: 15 },
+  searchCount: { fontFamily: font.sansSemi, fontSize: 12, minWidth: 44, textAlign: "center" },
   infoShortcutCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   infoShortcutText: { fontFamily: font.sansSemi, fontSize: 12 },
   infoSection: { fontFamily: font.sansBold, fontSize: 12, letterSpacing: 0.6, paddingTop: 8, paddingBottom: 4 },

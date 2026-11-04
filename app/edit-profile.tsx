@@ -74,7 +74,8 @@ export default function EditProfileScreen() {
         // `avatar` only when there is one. The server takes a string or no key
         // at all, and `null` -- what an account without a photo holds -- was a
         // 400 that made every save fail for those accounts.
-        body: JSON.stringify({ name, bio, location, ...(avatar ? { avatar } : {}) }),
+        // An empty string REMOVES the photo: the server stores it as null.
+        body: JSON.stringify({ name, bio, location, ...(avatar ? { avatar } : data?.user.avatar ? { avatar: "" } : {}) }),
       });
       if (!response.ok) await legacyFailure(response, "Could not save profile");
       await Promise.all([
@@ -118,6 +119,11 @@ export default function EditProfileScreen() {
       <Pressable onPress={() => void chooseAvatar()} style={s.photoButton} accessibilityRole="button" accessibilityLabel="Change profile picture" disabled={uploadingAvatar}>
         <Text style={s.photoButtonText}>{uploadingAvatar ? "Uploading..." : "Change photo"}</Text>
       </Pressable>
+      {avatar && !uploadingAvatar ? (
+        <Pressable onPress={() => setAvatar(null)} style={s.photoButton} accessibilityRole="button" accessibilityLabel="Remove profile picture">
+          <Text style={[s.photoButtonText, { color: color.urgent }]}>Remove</Text>
+        </Pressable>
+      ) : null}
     </View>
     <Field label="Name" value={name} onChangeText={setName} help="Shown on your listings, offers and chats." />
     <Field label="Bio" value={bio} onChangeText={setBio} multiline maxLength={MAX_BIO} counter={`${bio.length} / ${MAX_BIO}`} />
