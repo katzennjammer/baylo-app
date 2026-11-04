@@ -5,6 +5,15 @@ import type { UserSearchResult } from "./types";
 
 const USER_SEARCH_PAGE_SIZE = 20;
 
+/**
+ * The server refuses a query longer than this with a 400 (z.max(50) on
+ * /api/v1/users/search). The search box has no limit of its own, so the query
+ * is cut here rather than shown as "something went wrong" past 50 characters.
+ * A name search on the first 50 characters finds the same people anyway.
+ */
+const USER_SEARCH_MAX = 50;
+const toQuery = (raw: string) => raw.trim().slice(0, USER_SEARCH_MAX).trim();
+
 export interface UserSearchErrorPresentation {
   message: string;
   canRetry: boolean;
@@ -14,6 +23,9 @@ export function userSearchErrorPresentation(error: unknown): UserSearchErrorPres
   if (error instanceof ApiError) {
     if (error.status === 404 || error.status === 405) {
       return { message: "People search isn't available yet.", canRetry: false };
+    }
+    if (error.status === 400) {
+      return { message: "Try a shorter name, 2 to 50 characters.", canRetry: false };
     }
     if (error.status === 429) {
       return { message: "Too many searches. Wait a moment.", canRetry: true };
@@ -58,7 +70,7 @@ async function fetchUserSearchPage(query: string, cursor: string | null): Promis
 }
 
 export function useUserSearch(query: string, enabled = true) {
-  const normalizedQuery = query.trim();
+  const normalizedQuery = toQuery(query);
   return useInfiniteQuery({
     queryKey: ["user-search", normalizedQuery],
     queryFn: ({ pageParam }) => fetchUserSearchPage(normalizedQuery, pageParam),
@@ -71,7 +83,7 @@ export function useUserSearch(query: string, enabled = true) {
 
 /** A short, debounced-friendly first page for Home's trader suggestions. */
 export function useUserSearchSuggestions(query: string, enabled = true) {
-  const normalizedQuery = query.trim();
+  const normalizedQuery = toQuery(query);
   return useQuery({
     queryKey: ["user-search-suggestions", normalizedQuery],
     queryFn: async () => {
