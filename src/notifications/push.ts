@@ -33,11 +33,19 @@ import { pushMessageId, pushMessagePartnerId, pushNotificationId, pushTarget, sh
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
-    const suppressed = shouldSuppressMessageNotification(
-      notification.request.content.data,
-      getActiveConversationPartnerId(),
-      AppState.currentState === "active",
-    );
+    let suppressed = true;
+    try {
+      const data = notification.request.content.data;
+      if (pushTarget(data)) {
+        suppressed = shouldSuppressMessageNotification(
+          data,
+          getActiveConversationPartnerId(),
+          AppState.currentState === "active",
+        );
+      }
+    } catch (error) {
+      console.warn("[push] Ignoring malformed foreground notification", error);
+    }
     return {
       shouldShowBanner: !suppressed,
       shouldShowList: !suppressed,
@@ -140,62 +148,83 @@ export function usePushNotifications(userId: string | undefined) {
 
   // A push that arrives while the app is open: refresh what counts unread.
   useEffect(() => {
-    const sub = Notifications.addNotificationReceivedListener(() => {
-      void qc.invalidateQueries({ queryKey: ["home"] });
-      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      try {
+        const target = pushTarget(notification.request.content.data);
+        if (!target) return;
+        void Promise.all([
+          qc.invalidateQueries({ queryKey: ["home"] }),
+          qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+        ]).catch((error: unknown) => {
+          console.warn("[push] Could not refresh notification counts", error);
+        });
+      } catch (error) {
+        console.warn("[push] Ignoring malformed received notification", error);
+      }
     });
     return () => sub.remove();
   }, [qc]);
 
   useEffect(() => {
-    if (!userId || !last || !navigationState.key) return;
-    const key = last.notification.request.identifier;
-    if (handledResponseIds.has(key)) return;
-    handledResponseIds.add(key);
-    if (handledResponseIds.size > 100) {
-      const oldest = handledResponseIds.values().next().value;
-      if (oldest) handledResponseIds.delete(oldest);
-    }
+    try {
+      if (!userId || !last || !navigationState.key) return;
+      const data = last.notification.request.content.data;
+      const target = pushTarget(data);
+      if (!target) return;
 
-    const data = last.notification.request.content.data;
-    const id = pushNotificationId(data);
-    if (id) markRead.mutate(id);
-    const partnerId = pushMessagePartnerId(data);
-    if (partnerId) {
-      const messageId = pushMessageId(data);
-      if (pathname === "/messages/thread" && params.partner === partnerId) {
-        if (messageId) router.setParams({ messageId });
+      const key = last.notification.request.identifier;
+      if (handledResponseIds.has(key)) return;
+      handledResponseIds.add(key);
+      if (handledResponseIds.size > 100) {
+        const oldest = handledResponseIds.values().next().value;
+        if (oldest) handledResponseIds.delete(oldest);
+      }
+
+      const id = pushNotificationId(data);
+      if (id) markRead.mutate(id);
+      const partnerId = pushMessagePartnerId(data);
+      if (partnerId) {
+        const messageId = pushMessageId(data);
+        if (pathname === "/messages/thread" && params.partner === partnerId) {
+          if (messageId) router.setParams({ messageId });
+          return;
+        }
+        replacingWithMessages.current = false;
+        setPendingMessage({ partnerId, messageId });
         return;
       }
-      replacingWithMessages.current = false;
-      setPendingMessage({ partnerId, messageId });
-      return;
+      router.push(target as never);
+    } catch (error) {
+      console.warn("[push] Ignoring malformed notification response", error);
     }
-    router.push(pushTarget(data) as never);
   }, [last, userId, navigationState.key, pathname, params.partner, router, markRead]);
 
   useEffect(() => {
-    if (!pendingMessage || !userId || !navigationState.key) return;
-    if (pathname === "/messages/thread" && params.partner === pendingMessage.partnerId) {
-      setPendingMessage(null);
-      replacingWithMessages.current = false;
-      return;
-    }
-    if (pathname === "/messages") {
-      router.push({
-        pathname: "/messages/thread",
-        params: {
-          partner: pendingMessage.partnerId,
-          ...(pendingMessage.messageId ? { messageId: pendingMessage.messageId } : {}),
-        },
-      });
-      setPendingMessage(null);
-      replacingWithMessages.current = false;
-      return;
-    }
-    if (!replacingWithMessages.current) {
-      replacingWithMessages.current = true;
-      router.replace("/messages");
+    try {
+      if (!pendingMessage || !userId || !navigationState.key) return;
+      if (pathname === "/messages/thread" && params.partner === pendingMessage.partnerId) {
+        setPendingMessage(null);
+        replacingWithMessages.current = false;
+        return;
+      }
+      if (pathname === "/messages") {
+        router.push({
+          pathname: "/messages/thread",
+          params: {
+            partner: pendingMessage.partnerId,
+            ...(pendingMessage.messageId ? { messageId: pendingMessage.messageId } : {}),
+          },
+        });
+        setPendingMessage(null);
+        replacingWithMessages.current = false;
+        return;
+      }
+      if (!replacingWithMessages.current) {
+        replacingWithMessages.current = true;
+        router.replace("/messages");
+      }
+    } catch (error) {
+      console.warn("[push] Could not route tapped message notification", error);
     }
   }, [navigationState.key, params.partner, pathname, pendingMessage, router, userId]);
 }

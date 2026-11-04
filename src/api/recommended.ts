@@ -44,6 +44,7 @@ const REQUEST_LIMIT = 14;
 export function useRecommended() {
   return useQuery({
     queryKey: RECOMMENDED_KEY,
+    placeholderData: (previous) => previous,
     queryFn: async (): Promise<RecommendedShelf> => {
       const { data, meta } = await apiV1<{ items: RecommendedItem[] }>(
         `/api/v1/recommended?limit=${REQUEST_LIMIT}`,

@@ -39,6 +39,7 @@ export function useHome() {
     queryFn: ({ pageParam }) => fetchHomePage(pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: (previous) => previous,
   });
 
   const pages = query.data?.pages ?? [];
@@ -94,6 +95,7 @@ export function useActingShopUserId(enabled: boolean): string | null {
     queryFn: ({ pageParam }) => fetchHomePage(pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: (previous) => previous,
     enabled,
   });
   return query.data?.pages[0]?.payload.acting?.orgUserId ?? null;

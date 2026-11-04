@@ -158,7 +158,8 @@ export default function HomeScreen() {
 
   // Unfiltered: the category circles (facets) come from it.
   const browse = useBrowse({ categories: [] });
-  const { items, facets, isPending, isError, isRefetching } = browse;
+  const { items, facets, isError, isRefetching } = browse;
+  const isInitialBrowseLoad = browse.isPending && browse.data === undefined;
   const pendingTradeCount = activeTrades.data
     ? activeTrades.data.offers.filter((offer) => offer.direction === "received").length +
       activeTrades.data.trades.filter((trade) => trade.status === "PENDING" && trade.direction === "received").length
@@ -169,6 +170,7 @@ export default function HomeScreen() {
   // without the perishables work omits `perishable` entirely -- `!= null`,
   // not `!== null`, so undefined never reaches `.expired`.
   const exclusiveQuery = useBrowse({ perishable: true, sort: "expiring" });
+  const isInitialExclusiveLoad = exclusiveQuery.isPending && exclusiveQuery.data === undefined;
   const exclusive = useMemo(
     () =>
       exclusiveQuery.items.filter(
@@ -380,7 +382,7 @@ export default function HomeScreen() {
         />
 
         <View style={s.contentSurface}>
-          {isPending && items.length === 0 ? (
+          {isInitialBrowseLoad && items.length === 0 ? (
             <ActivityIndicator color={color.green} style={s.loading} />
           ) : isError && items.length === 0 ? (
             <View style={s.stateBox}>
@@ -430,7 +432,7 @@ export default function HomeScreen() {
                   />
                 ))}
               </ScrollView>
-            ) : exclusiveQuery.isPending ? (
+            ) : isInitialExclusiveLoad ? (
               <ActivityIndicator color={color.green} style={s.sectionLoading} />
             ) : exclusiveQuery.isError ? (
               <Text style={[textStyle(type.emptyBody), s.empty]}>

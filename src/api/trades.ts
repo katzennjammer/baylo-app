@@ -111,6 +111,7 @@ const LIST_STALE_MS = 30_000;
 export function useActiveTrades(enabled = true) {
   return useQuery({
     queryKey: TRADES_ACTIVE_KEY,
+    placeholderData: (previous) => previous,
     queryFn: () => apiV1<TradesPayload>("/api/v1/trades?tab=active&limit=50"),
     select: (r) => r.data,
     staleTime: LIST_STALE_MS,

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -177,7 +177,6 @@ export function HomeTopSection({
 }: HomeTopSectionProps) {
   const { width } = useWindowDimensions();
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
-  const [waveFailed, setWaveFailed] = useState(false);
   const resolvedName = firstName?.trim().split(/\s+/)[0] || "there";
   const now = new Date();
   const weekday = now.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
@@ -189,7 +188,7 @@ export function HomeTopSection({
   const duckBoxSize =
     duckHeight /
     ((DUCK_WAVE_CONTENT_BOUNDS.bottom - DUCK_WAVE_CONTENT_BOUNDS.top) / DUCK_WAVE_CANVAS_SIZE);
-  const showWave = reduceMotion === false && !waveFailed;
+  const showWave = reduceMotion === false;
   const duckVisibleWidth = showWave
     ? duckBoxSize *
       ((DUCK_WAVE_CONTENT_BOUNDS.right - DUCK_WAVE_CONTENT_BOUNDS.left) / DUCK_WAVE_CANVAS_SIZE)
@@ -284,25 +283,11 @@ export function HomeTopSection({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            <Image
-              source={showWave ? MASCOT.waveWebp : MASCOT.celebrateTrimmed}
-              contentFit="contain"
-              autoplay={showWave}
-              onError={
-                showWave
-                  ? (event) => {
-                      console.warn(
-                        "[home] animated duck failed to load; falling back to static mascot:",
-                        event.error,
-                      );
-                      setWaveFailed(true);
-                    }
-                  : undefined
-              }
-              style={{
-                width: showWave ? duckBoxSize : duckWidth,
-                height: showWave ? duckBoxSize : duckHeight,
-              }}
+            <HomeMascot
+              showWave={showWave}
+              duckBoxSize={duckBoxSize}
+              duckWidth={duckWidth}
+              duckHeight={duckHeight}
             />
           </View>
         </View>
@@ -328,6 +313,43 @@ export function HomeTopSection({
     </View>
   );
 }
+
+const HomeMascot = memo(function HomeMascot({
+  showWave,
+  duckBoxSize,
+  duckWidth,
+  duckHeight,
+}: {
+  showWave: boolean;
+  duckBoxSize: number;
+  duckWidth: number;
+  duckHeight: number;
+}) {
+  const [waveFailed, setWaveFailed] = useState(false);
+  const animate = showWave && !waveFailed;
+  return (
+    <Image
+      source={animate ? MASCOT.waveWebp : MASCOT.celebrateTrimmed}
+      contentFit="contain"
+      autoplay={animate}
+      onError={
+        animate
+          ? (event) => {
+              console.warn(
+                "[home] animated duck failed to load; falling back to static mascot:",
+                event.error,
+              );
+              setWaveFailed(true);
+            }
+          : undefined
+      }
+      style={{
+        width: animate ? duckBoxSize : duckWidth,
+        height: animate ? duckBoxSize : duckHeight,
+      }}
+    />
+  );
+});
 
 function HomeActionButton({
   label,
