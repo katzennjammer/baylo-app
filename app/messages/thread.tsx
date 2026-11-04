@@ -28,6 +28,7 @@ import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { ActiveTrade } from "../../src/api/types";
 import { PinnedTrade } from "../../src/components/messages/PinnedTrade";
+import { QuotedReply, SwipeToReply } from "../../src/components/messages/SwipeToReply";
 import { useBlockUser } from "../../src/api/item";
 import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
@@ -41,7 +42,7 @@ import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { ChatBubble, useBubbleContentMax, type GroupPosition } from "../../src/components/messages/ChatBubble";
-import { renderMessageBody } from "../../src/components/messages/MessagePayloads";
+import { previewFromContent, renderMessageBody } from "../../src/components/messages/MessagePayloads";
 import { chatTradeFor, offerHref, tradeHref } from "../../src/components/trades/present";
 import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
@@ -127,6 +128,18 @@ export default function MessagesThreadScreen() {
   const activeTrades = useActiveTrades();
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
+  // Swipe to reply: the message being answered, shown above the field.
+  const [replyingTo, setReplyingTo] = useState<ThreadMessage | null>(null);
+  // Where each message sits in the list, so a quote can jump to its original.
+  const messageY = useRef(new Map<string, number>());
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const jumpTo = (id: string) => {
+    const y = messageY.current.get(id);
+    if (y === undefined) return;
+    listRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+    setFlashId(id);
+    setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1200);
+  };
   const block = useBlockUser();
   const currentUserId = thread.data?.currentUserId ?? "";
   useEffect(() => {
@@ -456,7 +469,8 @@ export default function MessagesThreadScreen() {
 
     try {
       requestBottomScroll("animated");
-      await sendMessage.mutateAsync({ partnerId: partner, content });
+      await sendMessage.mutateAsync({ partnerId: partner, content, replyToId: replyingTo?.id ?? null });
+      setReplyingTo(null);
       if (!quick) {
         setDraft("");
         setToolsOpen(false);
@@ -673,9 +687,24 @@ export default function MessagesThreadScreen() {
               const isOfferUpdate = payloadType === "offer_update";
               const isSystem = isOfferUpdate || payloadType === "trade_completed";
               const { separator, position, footer } = layout[index];
+              const quoted = message.replyTo ?? null;
               return (
-                <View key={message.id}>
+                <View
+                  key={message.id}
+                  onLayout={(e) => messageY.current.set(message.id, e.nativeEvent.layout.y)}
+                  style={flashId === message.id ? { backgroundColor: palette.control } : undefined}
+                >
                   {separator ? <Text style={[styles.separator, { color: palette.inkSecondary }]}>{separator}</Text> : null}
+                  {/* A reply shows what it answers; tap to jump to it. */}
+                  {quoted ? (
+                    <QuotedReply
+                      mine={mine}
+                      author={quoted.senderId === currentUserId ? "You" : otherName}
+                      text={previewFromContent(quoted.content, quoted.senderId === currentUserId)}
+                      onPress={() => jumpTo(quoted.id)}
+                    />
+                  ) : null}
+                  <SwipeToReply enabled={!isSystem && !message.id.startsWith("local-")} onReply={() => setReplyingTo(message)}>
                   <ChatBubble
                     mine={mine}
                     kind={isSystem ? "status" : isOffer ? "card" : payloadType === "image" ? "media" : "bubble"}
@@ -724,6 +753,7 @@ export default function MessagesThreadScreen() {
                       })(),
                     })}
                   </ChatBubble>
+                  </SwipeToReply>
                 </View>
               );
             })}
@@ -749,6 +779,23 @@ export default function MessagesThreadScreen() {
           </View>
 
           {sendError ? <Text style={[styles.sendError, { color: palette.inkSecondary }]}>{sendError}</Text> : null}
+
+          {/* Replying: what you answer sits right above the field. */}
+          {replyingTo ? (
+            <View style={[styles.replyBar, { borderTopColor: palette.divider, backgroundColor: palette.surface }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.replyBarTitle, { color: palette.forest }]} numberOfLines={1}>
+                  Replying to {replyingTo.senderId === currentUserId ? "yourself" : otherName}
+                </Text>
+                <Text style={[styles.replyBarText, { color: palette.inkSecondary }]} numberOfLines={1}>
+                  {previewFromContent(replyingTo.content, replyingTo.senderId === currentUserId)}
+                </Text>
+              </View>
+              <Tappable onPress={() => setReplyingTo(null)} accessibilityRole="button" accessibilityLabel="Cancel reply" style={styles.iconButton}>
+                <Ionicons name="close" size={20} color={palette.inkSecondary} />
+              </Tappable>
+            </View>
+          ) : null}
 
           {/* Messenger's composer: photo tools on the left, a pill field, and a
               thumbs-up that becomes Send once something is typed. While typing,
@@ -912,6 +959,9 @@ const darkColors = {
 const HEADER_HEIGHT = 60;
 
 const styles = StyleSheet.create({
+  replyBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16, paddingRight: 4, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth },
+  replyBarTitle: { fontFamily: font.sansBold, fontSize: 13 },
+  replyBarText: { fontFamily: font.sans, fontSize: 13 },
   infoWho: { alignItems: "center", gap: 8, paddingBottom: 12 },
   infoName: { fontFamily: font.displayBold, fontSize: 20 },
   infoShortcut: { alignItems: "center", gap: 6, marginTop: 4 },

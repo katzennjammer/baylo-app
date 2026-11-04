@@ -56,6 +56,9 @@ export interface ThreadMessage {
   content: string;
   read: boolean;
   createdAt: string;
+  /** The message this one answers (swipe to reply), quoted. */
+  replyToId?: string | null;
+  replyTo?: { id: string; content: string; senderId: string } | null;
 }
 
 export interface ImageMessagePayload {
@@ -249,14 +252,17 @@ export function useSendMessage() {
     mutationFn: async ({
       partnerId,
       content,
+      replyToId,
     }: {
       partnerId: string;
       content: string;
+      /** Swipe to reply: the message this one answers. */
+      replyToId?: string | null;
     }) => {
       const res = await request("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiverId: partnerId, content }),
+        body: JSON.stringify({ receiverId: partnerId, content, ...(replyToId ? { replyToId } : {}) }),
       });
 
       if (!res.ok) {
