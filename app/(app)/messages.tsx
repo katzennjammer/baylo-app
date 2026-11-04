@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
-import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../../src/api/client";
@@ -9,7 +9,8 @@ import { useHome } from "../../src/api/home";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { MessageIcon, StoreIcon } from "../../src/components/icons";
+import { MessageIcon, SearchIcon, StoreIcon } from "../../src/components/icons";
+import { useActiveTrades } from "../../src/api/trades";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
@@ -72,6 +73,9 @@ export default function MessagesScreen() {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const { data, error, isPending, isError, isRefetching, refetch } = useConversations(params.partner ?? null);
+  const activeTrades = useActiveTrades();
+  const [query, setQuery] = useState("");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "trading">("all");
   useFocusEffect(
     useCallback(() => {
       void refetch();
@@ -161,11 +165,57 @@ export default function MessagesScreen() {
     );
   }
 
+  const q = query.trim().toLowerCase();
+  const tradingIds = new Set([
+    ...(activeTrades.data?.trades.map((t) => t.counterparty.id) ?? []),
+    ...(activeTrades.data?.offers.filter((o) => o.status === "PENDING").map((o) => o.counterparty.id) ?? []),
+  ]);
+  const shown = conversations.filter(
+    (c) =>
+      (!q || c.partnerName?.toLowerCase().includes(q) || previewFromContent(c.content, c.fromMe).toLowerCase().includes(q)) &&
+      (inboxFilter === "all" || (inboxFilter === "unread" ? c.unreadCount > 0 : tradingIds.has(c.partnerId))),
+  );
+  const unreadTotal = conversations.filter((c) => c.unreadCount > 0).length;
+
   return (
     <View style={styles.screen}>
       {shopStrip}
+      {/* Search and filters (4 Nov 2026). The screen title is the header's
+          own message icon, so there is no "Messages" heading. */}
+      <View style={styles.tools}>
+        <View style={styles.search}>
+          <SearchIcon size={18} stroke={2} color={color.inkSecondary} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search people and messages"
+            placeholderTextColor={color.inkMuted}
+            style={styles.searchInput}
+            accessibilityLabel="Search messages"
+            returnKeyType="search"
+          />
+        </View>
+        <View style={styles.filters}>
+          {(["all", "unread", "trading"] as const).map((f) => (
+            <Tappable
+              key={f}
+              onPress={() => setInboxFilter(f)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: inboxFilter === f }}
+              style={[styles.filter, inboxFilter === f && styles.filterOn]}
+            >
+              <Text style={[styles.filterText, inboxFilter === f && styles.filterTextOn]}>
+                {f === "all" ? "All" : f === "unread" ? "Unread" : "Trading"}
+              </Text>
+              {f === "unread" && unreadTotal > 0 ? (
+                <View style={styles.filterCount}><Text style={styles.filterCountText}>{unreadTotal}</Text></View>
+              ) : null}
+            </Tappable>
+          ))}
+        </View>
+      </View>
       <FlatList
-        data={conversations}
+        data={shown}
         keyExtractor={(item) => item.partnerId}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -208,6 +258,12 @@ export default function MessagesScreen() {
                     </View>
                   ) : null}
                 </View>
+                {/* A trade is live in this chat: say so on the row. */}
+                {tradingIds.has(item.partnerId) ? (
+                  <View style={styles.tradeTag}>
+                    <Text style={styles.tradeTagText}>Trade in progress</Text>
+                  </View>
+                ) : null}
               </Tappable>
             </View>
           );
@@ -218,6 +274,18 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
+  tools: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6, gap: 10 },
+  search: { height: 42, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, borderRadius: 21, backgroundColor: color.control },
+  searchInput: { flex: 1, fontFamily: font.sans, fontSize: 15, color: color.ink, paddingVertical: 0 },
+  filters: { flexDirection: "row", gap: 8 },
+  filter: { height: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface },
+  filterOn: { backgroundColor: color.ink, borderColor: color.ink },
+  filterText: { fontFamily: font.sansMedium, fontSize: 13, color: color.ink },
+  filterTextOn: { color: "#FFFFFF", fontFamily: font.sansSemi },
+  filterCount: { minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
+  filterCountText: { fontFamily: font.sansBold, fontSize: 11, color: color.onGreen },
+  tradeTag: { alignSelf: "flex-start", marginTop: 4, height: 22, paddingHorizontal: 8, borderRadius: 11, backgroundColor: color.control, justifyContent: "center" },
+  tradeTagText: { fontFamily: font.sansSemi, fontSize: 12, color: color.inkSecondary },
   screen: {
     flex: 1,
     backgroundColor: color.surface,

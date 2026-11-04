@@ -27,6 +27,7 @@ import { usePublicProfile } from "../../src/api/profile";
 import { collapseSystemPairs } from "../../src/lib/system-pairs";
 import { useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { ActiveTrade } from "../../src/api/types";
+import { PinnedTrade } from "../../src/components/messages/PinnedTrade";
 import { useBlockUser } from "../../src/api/item";
 import { uploadPhoto } from "../../src/api/post";
 import { getActingOrgId } from "../../src/api/org-context";
@@ -35,7 +36,7 @@ import { useSession } from "../../src/auth/session";
 import { clearActiveConversationPartnerId, setActiveConversationPartnerId } from "../../src/notifications/active-conversation";
 import { dismissNotificationsForPartner } from "../../src/notifications/conversation-notifications";
 import { Ionicons } from "@expo/vector-icons";
-import { BlockIcon, ChevronLeftIcon, ChevronRightIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ChevronRightIcon, PersonIcon } from "../../src/components/icons";
 import { useKeyboardState } from "../../src/components/auth-sheet";
 import { Tappable } from "../../src/components/Tappable";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -583,6 +584,16 @@ export default function MessagesThreadScreen() {
         )}
       </View>
 
+      {/* PINNED: the live trade stays here however long the chat gets. */}
+      {activeTrades.data && partner ? (
+        <PinnedTrade
+          partnerId={partner}
+          partnerName={otherName}
+          trades={activeTrades.data.trades}
+          offers={activeTrades.data.offers}
+        />
+      ) : null}
+
       {thread.isPending ? (
         <View style={styles.centered}>
             <ActivityIndicator size="small" color={palette.forest} />
@@ -796,6 +807,24 @@ export default function MessagesThreadScreen() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         colors={palette}
+        name={otherName}
+        avatar={avatarNode(64)}
+        onProfile={() => {
+          setMenuOpen(false);
+          openProfile();
+        }}
+        trades={[
+          ...(activeTrades.data?.trades
+            .filter((t) => t.counterparty.id === partner)
+            .map((t) => ({ id: t.id, title: `${t.offeredItem?.title ?? "Your item"} for ${t.requestedItem.title}`, sub: t.status === "PENDING" ? "Waiting for an answer" : "In progress", href: `/trade?id=${encodeURIComponent(t.id)}` })) ?? []),
+          ...(activeTrades.data?.offers
+            .filter((o) => o.counterparty.id === partner && o.status === "PENDING")
+            .map((o) => ({ id: o.id, title: `${o.offeredItems[0]?.title ?? "An item"} for ${o.post.title}`, sub: o.direction === "sent" ? "Your offer · waiting" : "Offer to you · your call", href: `/trade?offer=${encodeURIComponent(o.id)}` })) ?? []),
+        ]}
+        onOpenTrade={(href) => {
+          setMenuOpen(false);
+          router.push(href as never);
+        }}
         // Not while acting as a shop: POST /api/v1/blocks acts as the PERSON, so
         // it would block from their own account and leave the shop's thread
         // open. Shop-level blocking is not built.
@@ -810,22 +839,57 @@ export default function MessagesThreadScreen() {
   );
 }
 
+/**
+ * Chat info (the i button): who this is, a Profile shortcut, the trades with
+ * them -- what Baylo adds over a plain chat -- and Block. No group chats.
+ */
 function ConversationMenu({
   visible,
   onClose,
   onBlock,
   colors,
+  name,
+  avatar,
+  onProfile,
+  trades,
+  onOpenTrade,
 }: {
   visible: boolean;
   onClose: () => void;
   onBlock?: () => void;
-  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string };
+  colors: { surface: string; ink: string; inkSecondary: string; divider: string; controlLine: string; urgent: string; control: string; forest: string };
+  name: string;
+  avatar: React.ReactNode;
+  onProfile: () => void;
+  trades: { id: string; title: string; sub: string; href: string }[];
+  onOpenTrade: (href: string) => void;
 }) {
   if (!visible) return null;
+  const first = name.split(/\s+/)[0] || name;
   return (
-    <SheetShell title="Conversation" onClose={onClose} colors={colors}>
+    <SheetShell title="Chat info" onClose={onClose} colors={colors}>
+      <View style={styles.infoWho}>
+        {avatar}
+        <Text style={[styles.infoName, { color: colors.ink }]} numberOfLines={1}>{name}</Text>
+        <Tappable onPress={onProfile} accessibilityRole="button" style={styles.infoShortcut}>
+          <View style={[styles.infoShortcutCircle, { backgroundColor: colors.control }]}>
+            <PersonIcon size={20} stroke={1.9} color={colors.ink} />
+          </View>
+          <Text style={[styles.infoShortcutText, { color: colors.ink }]}>Profile</Text>
+        </Tappable>
+      </View>
+      {trades.length > 0 ? (
+        <>
+          <Text style={[styles.infoSection, { color: colors.inkSecondary }]}>TRADES WITH {first.toUpperCase()}</Text>
+          <SheetRows>
+            {trades.map((t) => (
+              <SheetRow key={t.id} label={`${t.title} · ${t.sub}`} colors={colors} onPress={() => onOpenTrade(t.href)} />
+            ))}
+          </SheetRows>
+        </>
+      ) : null}
       <SheetRows>
-        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label="Block account" destructive colors={colors} onPress={onBlock} /> : null}
+        {onBlock ? <SheetRow glyph={<BlockIcon size={20} stroke={1.6} color={colors.urgent} />} label={`Block ${first}`} destructive colors={colors} onPress={onBlock} /> : null}
       </SheetRows>
     </SheetShell>
   );
@@ -848,6 +912,12 @@ const darkColors = {
 const HEADER_HEIGHT = 60;
 
 const styles = StyleSheet.create({
+  infoWho: { alignItems: "center", gap: 8, paddingBottom: 12 },
+  infoName: { fontFamily: font.displayBold, fontSize: 20 },
+  infoShortcut: { alignItems: "center", gap: 6, marginTop: 4 },
+  infoShortcutCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  infoShortcutText: { fontFamily: font.sansSemi, fontSize: 12 },
+  infoSection: { fontFamily: font.sansBold, fontSize: 12, letterSpacing: 0.6, paddingTop: 8, paddingBottom: 4 },
   screen: {
     flex: 1,
     backgroundColor: color.surface,
