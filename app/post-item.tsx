@@ -21,7 +21,7 @@ import {
   isIdGateError,
   type IdVerificationPayload,
 } from "../src/api/id-verification";
-import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
+import { isValuationTicketInvalid, useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
 import { getActingOrgId } from "../src/api/org-context";
 import { isOrgContextRequired, isOrgPostingRefusal, switchToOrganization, useOrganizations, type ActingOrg } from "../src/api/organizations";
 import { useKeyboardState } from "../src/components/auth-sheet";
@@ -63,6 +63,7 @@ import {
   photosReady,
   PostStateProvider,
   usePost,
+  valuationTicket,
 } from "../src/post/state";
 import {
   chrome,
@@ -585,6 +586,11 @@ function Wizard() {
         category: state.category as Category,
         condition: state.condition as Condition,
         valueLeaves: value,
+        // Present only when step 4 showed an AI suggestion for exactly this
+        // title, category and condition; the server then creates the listing
+        // against that number. Absent, it uses its standard estimate — which
+        // is what step 4 showed in that case.
+        valuationTicket: valuationTicket(state),
         images: photos.map((p) => p.url!).slice(0, rules.maxPhotos),
         wantedItems: state.wanted.trim() || null,
         // EVERY postable photo's hash, positionally aligned with `images`
@@ -645,6 +651,16 @@ function Wizard() {
       // The shop's review, refusing at the last step: the context was switched
       // or the shop's status changed after the check above. Same treatment as
       // the ID gate below: keep the draft, show the server's own sentence.
+      // The AI estimate expired (two hours) or no longer matches the listing.
+      // Nothing was created. Back to step 4, which asks again, with the
+      // server's reason on screen there.
+      if (isValuationTicketInvalid(e)) {
+        await saveDraft(state);
+        dispatch({ type: "ai/reset", notice: e instanceof ApiError ? e.message : "Please re-check the value." });
+        dispatch({ type: "goto", step: 3 });
+        dispatch({ type: "post/fail", message: "The value needs a fresh check before posting. Your draft is safe." });
+        return;
+      }
       if (isOrgPostingRefusal(e)) {
         await saveDraft(state);
         dispatch({ type: "post/fail", message: `${e.message} Your draft is safe.` });

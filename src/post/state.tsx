@@ -7,6 +7,7 @@ import {
   type IdentifyResult,
   type MatchedListing,
   type PhashStatus,
+  type AiValuationResult,
   type ValuationPayload,
 } from "../api/post";
 import { rules } from "../theme/post-tokens";
@@ -216,6 +217,22 @@ export interface PostState {
   ownValue: boolean;
   /** True once the one re-valuation is gone. Locks the slider flat. */
   revaluationSpent: boolean;
+  /**
+   * The AI-assisted suggestion for one exact (title, category, condition).
+   *
+   * Kept beside `valuation` rather than written over it: `valuation` is
+   * Baylo's standard estimate, which is both the range the AI answer had to
+   * fall inside and the fallback when there is no AI answer. Read the two
+   * together through `activeValuation()`, never directly.
+   *
+   * `key` is what the AI was asked about (see `aiKeyOf`). The server's ticket
+   * is only valid for those inputs, so a title, category or condition change
+   * clears this (see `reduce`) rather than leaving a suggestion — and a
+   * ticket — for a different item on screen.
+   */
+  aiValuation: AiValuationState | null;
+  /** Why the last AI ticket was refused at post time; shown on the value step. */
+  aiNotice: string | null;
 
   wanted: string;
   /**
@@ -290,6 +307,8 @@ export function initialState(): PostState {
     valueLeaves: null,
     ownValue: false,
     revaluationSpent: false,
+    aiValuation: null,
+    aiNotice: null,
     wanted: "",
     returnCategories: [],
     isPerishable: false,
@@ -343,6 +362,12 @@ export type PostAction =
   | { type: "valuation/done"; payload: ValuationPayload }
   | { type: "valuation/spent" }
   | { type: "valuation/failed" }
+  | { type: "ai/pending"; key: string }
+  | { type: "ai/done"; key: string; result: AiValuationResult }
+  /** Thrown request (offline, 429, 503): the standard estimate stands, labelled. */
+  | { type: "ai/failed"; key: string; message: string }
+  /** The server refused the ticket at post time. Ask again on the value step. */
+  | { type: "ai/reset"; notice: string }
   | { type: "value/set"; leaves: number }
   /** "Set my own value": the typed field takes over from the slider. */
   | { type: "value/own" }
@@ -363,7 +388,24 @@ export type PostAction =
 
 export const LAST_STEP = 6;
 
+/**
+ * Every transition, plus one rule applied after it: an AI suggestion whose
+ * inputs no longer match the listing is dropped. Done here once rather than in
+ * each action that can move the title, category or condition (typing,
+ * detection, a restored draft), so none of them can forget it.
+ */
 export function reduce(s: PostState, a: PostAction): PostState {
+  const next = step(s, a);
+  const ai = next.aiValuation ?? null;
+  if (ai && ai.key !== aiKeyOf(next)) {
+    // An untouched value followed the AI number; let it follow the standard
+    // one again. A value the owner typed is theirs and stays.
+    return { ...next, aiValuation: null, valueLeaves: next.ownValue ? next.valueLeaves : null };
+  }
+  return next;
+}
+
+function step(s: PostState, a: PostAction): PostState {
   switch (a.type) {
     case "goto":
       return { ...s, step: Math.max(0, Math.min(LAST_STEP, a.step)) };
@@ -541,8 +583,40 @@ export function reduce(s: PostState, a: PostAction): PostState {
     case "valuation/failed":
       return { ...s, valuationPending: false };
 
+    /* ── AI-assisted valuation ── */
+
+    case "ai/pending":
+      return { ...s, aiValuation: { key: a.key, status: "loading" }, aiNotice: null };
+
+    case "ai/done": {
+      // A late answer for inputs that have since changed is ignored.
+      if (a.key !== aiKeyOf(s)) return s;
+      if (a.result.status === "fallback") {
+        return { ...s, aiValuation: { key: a.key, status: "fallback", message: a.result.message } };
+      }
+      const ai: AiValuationState = { key: a.key, status: "ai", result: a.result };
+      // The slider is not shown while the AI is looking, so a slider value
+      // here is valuation/done's copy of the STANDARD suggestion, not a choice
+      // the owner made. It re-seats on the AI suggestion. A typed value is the
+      // owner's own and stays.
+      if (s.ownValue) return { ...s, aiValuation: ai };
+      return { ...s, aiValuation: ai, valueLeaves: null };
+    }
+
+    case "ai/failed":
+      if (a.key !== aiKeyOf(s)) return s;
+      return { ...s, aiValuation: { key: a.key, status: "fallback", message: a.message } };
+
+    case "ai/reset":
+      return {
+        ...s,
+        aiValuation: null,
+        aiNotice: a.notice,
+        valueLeaves: s.ownValue ? s.valueLeaves : null,
+      };
+
     case "value/set": {
-      const v = s.valuation;
+      const v = activeValuation(s);
       if (!v || s.revaluationSpent) return s;
       // Clamped HERE as well as at the gesture, so no path — a restored draft,
       // a re-valuation, a keyboard entry added later — can seat the value
@@ -622,7 +696,9 @@ export function reduce(s: PostState, a: PostAction): PostState {
       return { ...s, rateLimit: null };
 
     case "restore":
-      return a.state;
+      // A draft saved before AI valuation existed has neither field; absent
+      // must read as "not asked yet", not as something else.
+      return { ...a.state, aiValuation: a.state.aiValuation ?? null, aiNotice: a.state.aiNotice ?? null };
 
     default:
       return s;
@@ -670,7 +746,10 @@ export function canAdvance(s: PostState): boolean {
       // number in it — an empty own-value field is not "use the suggestion",
       // it is nothing, and posting nothing would post the suggestion under a
       // heading that said the owner set it.
-      return !s.ownValue || (s.valueLeaves !== null && s.valueLeaves >= 1);
+      if (s.ownValue) return s.valueLeaves !== null && s.valueLeaves >= 1;
+      // Not while the AI is still looking: the number on screen would change
+      // under the person after they had moved on. A typed value does not wait.
+      return s.revaluationSpent || (s.aiValuation != null && s.aiValuation.status !== "loading");
     case LAST_STEP:
       // Post waits for every photo. See `photosReady`.
       return photosReady(s.photos);
@@ -691,7 +770,58 @@ export function titleError(s: PostState): string | null {
 
 /** The value that will actually be posted. The suggestion until it is moved. */
 export function effectiveValue(s: PostState): number | null {
-  return s.valueLeaves ?? s.valuation?.suggestedLeaves ?? null;
+  return s.valueLeaves ?? activeValuation(s)?.suggestedLeaves ?? null;
+}
+
+/* ─────────────────────── AI-assisted valuation ─────────────────────── */
+
+export type AiValuationState =
+  | { key: string; status: "loading" }
+  | { key: string; status: "ai"; result: Extract<AiValuationResult, { status: "ai" }> }
+  | { key: string; status: "fallback"; message: string };
+
+/**
+ * What an AI valuation is FOR. Case and spacing are ignored, as the server's
+ * ticket check ignores them, so retyping "iPhone 13" as "iphone 13" does not
+ * throw away a good estimate.
+ */
+export function aiKeyOf(s: Pick<PostState, "title" | "category" | "condition">): string {
+  return JSON.stringify([
+    s.title.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase(),
+    s.category,
+    s.condition,
+  ]);
+}
+
+/** The AI suggestion, if there is one for exactly the current inputs. */
+export function currentAi(s: PostState) {
+  const ai = s.aiValuation ?? null;
+  return ai && ai.status === "ai" && ai.key === aiKeyOf(s) ? ai.result : null;
+}
+
+/**
+ * The valuation the step shows and the slider is bounded by: the AI one when
+ * there is a current one, Baylo's standard estimate otherwise. The standard
+ * estimate's comparables and basis are kept for reference; the number, its
+ * band and its source are the AI's.
+ */
+export function activeValuation(s: PostState): ValuationPayload | null {
+  const v = s.valuation;
+  if (!v) return null;
+  const ai = currentAi(s);
+  if (!ai) return v;
+  return {
+    ...v,
+    suggestedLeaves: ai.valuation.suggestedLeaves,
+    allowed: ai.valuation.allowed,
+    valuationSource: "ai_market",
+    basis: ai.explanation,
+  };
+}
+
+/** The ticket to post with, or undefined: only ever for the current inputs. */
+export function valuationTicket(s: PostState): string | undefined {
+  return currentAi(s)?.ticket;
 }
 
 /**
