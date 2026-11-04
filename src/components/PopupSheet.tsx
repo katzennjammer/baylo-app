@@ -26,6 +26,12 @@ type PopupSheetProps = {
   message?: string;
   icon?: ReactNode;
   pose?: MascotPose;
+  /**
+   * Art for the big circle in place of the duck -- a badge's own image, say.
+   * With `pose` too, the pose still drives the entrance bounce; `hero` wins
+   * what is drawn.
+   */
+  hero?: ReactNode;
   liveSticker?: boolean;
   onDismiss?: () => void;
   dismissLabel?: string;
@@ -38,6 +44,7 @@ export function PopupSheet({
   message,
   icon,
   pose,
+  hero,
   liveSticker = false,
   onDismiss,
   dismissLabel,
@@ -120,7 +127,7 @@ export function PopupSheet({
     return () => animation.stop();
   }, [mascotScale, pose, reduceMotion, visible]);
 
-  const posed = pose !== undefined;
+  const posed = pose !== undefined || hero !== undefined;
   const errorPose = pose === "worry";
 
   return (
@@ -146,7 +153,7 @@ export function PopupSheet({
             accessible={false}
             accessibilityViewIsModal
           >
-            {pose ? (
+            {pose || hero ? (
               <Animated.View
                 pointerEvents="none"
                 accessible={false}
@@ -158,10 +165,12 @@ export function PopupSheet({
                   <View
                     style={[
                       s.mascotWash,
-                      { backgroundColor: errorPose ? color.urgentWash : color.homeYellow },
+                      hero
+                        ? s.heroWash
+                        : { backgroundColor: errorPose ? color.urgentWash : color.homeYellow },
                     ]}
                   />
-                  <Image source={MASCOT[pose]} contentFit="contain" style={s.mascotImage} />
+                  {hero ? <View style={s.heroFrame}>{hero}</View> : pose ? <Image source={MASCOT[pose]} contentFit="contain" style={s.mascotImage} /> : null}
                   {liveSticker ? (
                     <View style={s.liveSticker} accessibilityElementsHidden importantForAccessibility="no">
                       <Text style={[textStyle(type.primaryButton), s.liveStickerText]}>LIVE!</Text>
@@ -183,7 +192,7 @@ export function PopupSheet({
                 },
               ]}
             >
-              {icon && !pose ? <View style={s.iconBadge}>{icon}</View> : null}
+              {icon && !pose && !hero ? <View style={s.iconBadge}>{icon}</View> : null}
               <Text style={[textStyle(type.errorHeadline), s.title]} accessibilityRole="header">
                 {title}
               </Text>
@@ -312,6 +321,19 @@ const s = StyleSheet.create({
   mascotImage: {
     width: popup.mascotImageSize,
     height: popup.mascotImageSize,
+  },
+  /** A badge (or any hero art): a surface disc with the brand's green ring. */
+  heroWash: {
+    height: popup.mascotDiameter,
+    backgroundColor: color.surface,
+    borderWidth: 5,
+    borderColor: color.green,
+  },
+  heroFrame: {
+    width: popup.mascotDiameter - 22,
+    height: popup.mascotDiameter - 22,
+    borderRadius: (popup.mascotDiameter - 22) / 2,
+    overflow: "hidden",
   },
   liveSticker: {
     position: "absolute",

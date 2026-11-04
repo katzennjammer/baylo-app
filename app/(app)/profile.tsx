@@ -700,6 +700,13 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
               <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
           }
+          // The badge itself is the hero, never the duck (owner's call, 4 Nov
+          // 2026). The celebrate pose stays only for its entrance bounce.
+          hero={
+            dialogBadge.imageUrl ? (
+              <Image source={{ uri: sizedImage(dialogBadge.imageUrl, "card") }} contentFit="cover" style={StyleSheet.absoluteFill} />
+            ) : undefined
+          }
           pose={own && !!selected?.unlockedAt ? "celebrate" : undefined}
           onDismiss={() => setSelectedId(null)}
         />

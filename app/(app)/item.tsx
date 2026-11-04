@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
@@ -31,6 +31,7 @@ import {
   CommentIcon,
   FlagIcon,
   HeartIcon,
+  PersonIcon,
   KebabIcon,
   LeafIcon,
   ShareIcon,
@@ -70,6 +71,7 @@ import {
 } from "../../src/theme/tokens";
 import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
+import { shareListing } from "../../src/lib/share";
 import { sizedImage } from "../../src/media/image-url";
 
 function normalizeListingText(value: string): string {
@@ -396,7 +398,12 @@ export default function ItemDetailScreen() {
     );
   };
 
-  const onShare = () => void Share.share({ message: item.title, title: item.title });
+  // The listing's public web link, not just its title: see src/lib/share.ts.
+  const onShare = () => {
+    void shareListing(item).then(({ ok }) => {
+      if (!ok) showDialog("Could not share", "This build has no Baylo web address set, so there is no link to send yet.");
+    });
+  };
 
   return (
     <View style={s.screen}>
@@ -673,7 +680,34 @@ export default function ItemDetailScreen() {
           {menu === "report" ? (
             <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
           ) : (
+            <>
+            {/* One-tap actions first: share and save. Safety rows below. */}
+            <View style={s.menuActions}>
+              <MenuAction
+                label="Share"
+                onPress={() => {
+                  setMenu(null);
+                  onShare();
+                }}
+              >
+                <ShareIcon size={22} stroke={1.9} color={color.ink} />
+              </MenuAction>
+              <MenuAction
+                label={item.stats.liked ? "Saved" : "Save"}
+                onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
+              >
+                <HeartIcon liked={item.stats.liked} size={22} stroke={1.9} color={item.stats.liked ? color.like : color.ink} />
+              </MenuAction>
+            </View>
             <SheetRows>
+              <SheetRow
+                glyph={<PersonIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
+                label={`View ${firstName(item.owner.name)}'s profile`}
+                onPress={() => {
+                  setMenu(null);
+                  router.push({ pathname: "/user", params: { id: item.owner.id } });
+                }}
+              />
               <SheetRow
                 glyph={<FlagIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
                 label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
@@ -688,6 +722,7 @@ export default function ItemDetailScreen() {
                 onPress={onBlock}
               />
             </SheetRows>
+            </>
           )}
         </SheetShell>
       ) : null}
@@ -725,6 +760,16 @@ function BackRow({ onPress }: { onPress: () => void }) {
 }
 
 /** A round button over the photo: the scrim and ink the photo badges use. */
+/** A round action in the listing menu: icon in a soft circle, label under it. */
+function MenuAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
+  return (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={s.menuAction}>
+      <View style={s.menuActionCircle}>{children}</View>
+      <Text style={[textStyle(type.gridMeta), s.menuActionLabel]}>{label}</Text>
+    </Tappable>
+  );
+}
+
 function PhotoButton({
   label,
   onPress,
@@ -1260,6 +1305,17 @@ const s = StyleSheet.create({
   },
   meetAt: { color: color.inkSecondary },
   hubBlock: { paddingBottom: space.detail.hubGap },
+  menuActions: { flexDirection: "row", gap: 24, paddingHorizontal: 4, paddingBottom: 14 },
+  menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
+  menuActionCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: color.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuActionLabel: { color: color.ink, fontWeight: "600" },
   hubName: { marginTop: space.detail.hubNameToLandmark },
   hubNote: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
   struck: { textDecorationLine: "line-through" },

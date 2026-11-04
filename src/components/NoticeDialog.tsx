@@ -12,6 +12,7 @@ export function NoticeDialog({
   icon,
   onDismiss,
   pose,
+  hero,
   buttonLabel = "OK",
   listingPreview,
   onViewListing,
@@ -22,6 +23,7 @@ export function NoticeDialog({
   icon: React.ReactNode;
   onDismiss: () => void;
   pose?: MascotPose;
+  hero?: React.ReactNode;
   buttonLabel?: string;
   listingPreview?: { title: string | null; photoUrl: string | null };
   onViewListing?: () => void;
@@ -33,6 +35,7 @@ export function NoticeDialog({
       message={body}
       icon={icon}
       pose={pose}
+      hero={hero}
       liveSticker={listingPreview !== undefined}
       onDismiss={onDismiss}
       dismissLabel="Close"

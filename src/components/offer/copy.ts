@@ -40,7 +40,7 @@ export function firstName(full: string): string {
 /* ───────────────────── §10.1 offer flow — the chrome ────────────────── */
 
 export const chrome = {
-  navTitle: "Offer trade",
+  navTitle: "Send an offer",
   sheetHeading: "Which item are you offering",
   sheetFootnote:
     "You can offer an item in the same bracket, one below, or one above. " +
