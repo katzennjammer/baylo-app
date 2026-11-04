@@ -328,6 +328,13 @@ export default function ItemDetailScreen() {
     beyond === null ? null : beyond === 0 ? "within your reach" : `${bracketsWord(beyond)} above you`;
 
   const amount = item.perishable ? perishableAmount(item.perishable) : null;
+  // One bracket either side of the listing can trade for it (a bridge above
+  // or below), the same rule the offer screen enforces.
+  const offerableRange = (b: number) => {
+    const lo = Math.max(1, b - 1);
+    const hi = Math.min(10, b + 1);
+    return lo === hi ? `Bracket ${lo}` : `Brackets ${lo}–${hi}`;
+  };
   const wanted = item.wanted?.trim() ?? "";
   const lookingFor = item.lookingForLabels.join(" · ");
 
@@ -485,6 +492,13 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
+          {/* What it is first (4 Nov 2026): category and condition above the title. */}
+          <View style={[s.tags, { marginTop: 0, marginBottom: 8 }]}>
+            <Tag label={item.categoryLabel} />
+            <Tag label={item.conditionLabel} />
+            {amount ? <Tag label={amount} /> : null}
+          </View>
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
           {item.description.trim() &&
@@ -509,23 +523,28 @@ export default function ItemDetailScreen() {
                     : `, ${bracketsWord(beyond)} above your reach`)
               }
             >
-              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-              <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {bracketLabel(listingBracket)}
-              </Text>
-              {reachLine ? (
-                <Text style={[textStyle(type.detailBody), s.reachLine]}>· {reachLine}</Text>
+              <View style={s.bracketPill}>
+                <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
+                <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
+                  {bracketLabel(listingBracket)}
+                </Text>
+              </View>
+              {reachLine && beyond !== 0 ? (
+                <Text style={[textStyle(type.detailBody), s.reachLine]}>{reachLine}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {/* Both labels arrive resolved from the server — never the raw enum.
-              The quantity replaced the old "Perishable: 1 KG" section. */}
-          <View style={s.tags}>
-            <Tag label={item.conditionLabel} />
-            <Tag label={item.categoryLabel} />
-            {amount ? <Tag label={amount} /> : null}
-          </View>
+          {/* "Within your reach", said as something you can act on. */}
+          {!own && beyond === 0 && listingBracket !== null ? (
+            <View style={s.reachCard}>
+              <CheckIcon size={18} stroke={2.6} color={color.forest} />
+              <Text style={[textStyle(type.detailBody), { flex: 1, color: color.forest }]}>
+                <Text style={{ fontWeight: "700" }}>Within your reach. </Text>
+                You can offer any of your items in {offerableRange(listingBracket)}.
+              </Text>
+            </View>
+          ) : null}
 
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
@@ -596,10 +615,24 @@ export default function ItemDetailScreen() {
       </Animated.ScrollView>
 
       {/* Behind the status bar once the photo has scrolled away. */}
+      {/* Scrolled (4 Nov 2026): the photo is gone, so a solid bar carries
+          back, the title and share. Taps go through it while it is faded. */}
       <Animated.View
-        pointerEvents="none"
-        style={[s.statusBackdrop, { height: insets.top, opacity: backdropOpacity }]}
-      />
+        pointerEvents={overPhoto ? "none" : "box-none"}
+        style={[s.statusBackdrop, { height: insets.top + 52, paddingTop: insets.top, opacity: backdropOpacity }]}
+      >
+        <View style={s.scrolledBar}>
+          <Tappable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" style={s.scrolledButton}>
+            <ChevronLeftIcon size={22} stroke={1.8} color={color.ink} />
+          </Tappable>
+          <Text style={s.scrolledTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Tappable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share" style={s.scrolledButton}>
+            <ShareIcon size={20} stroke={1.9} color={color.ink} />
+          </Tappable>
+        </View>
+      </Animated.View>
 
       {!editing ? (
         <View
@@ -1305,6 +1338,24 @@ const s = StyleSheet.create({
   },
   meetAt: { color: color.inkSecondary },
   hubBlock: { paddingBottom: space.detail.hubGap },
+  bracketPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: color.greenWash,
+  },
+  reachCard: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: color.greenWash,
+  },
   menuActions: { flexDirection: "row", gap: 24, paddingHorizontal: 4, paddingBottom: 14 },
   menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
   menuActionCircle: {
@@ -1353,6 +1404,9 @@ const s = StyleSheet.create({
   },
 
   photoScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  scrolledBar: { height: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: 6, gap: 4 },
+  scrolledButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  scrolledTitle: { flex: 1, fontFamily: font.displaySemi, fontSize: 17, color: color.ink },
   statusBackdrop: {
     position: "absolute",
     top: 0,

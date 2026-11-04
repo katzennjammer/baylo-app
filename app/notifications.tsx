@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError, apiV1 } from "../src/api/client";
 import { itemKey } from "../src/api/item";
@@ -21,6 +21,8 @@ import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { RowChevron, Thumb } from "../src/components/trades/rows";
 import { TradesErrorPanel } from "../src/components/trades/states";
 import { Tappable } from "../src/components/Tappable";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
+import { color } from "../src/theme/tokens";
 import { relativeShort } from "../src/lib/format";
 import {
   offerColor,
@@ -73,6 +75,7 @@ import {
  */
 export default function NotificationsScreen() {
   const router = useRouter();
+  const [filter, setFilter] = useState<Filter>("all");
   const list = useNotifications();
   const markVisible = useMarkNotificationsRead();
 
@@ -117,7 +120,9 @@ export default function NotificationsScreen() {
     return <Splash waitingOn="Signing you back in" />;
   }
 
-  const rows = list.data?.notifications ?? [];
+  const all = list.data?.notifications ?? [];
+  const rows = filter === "all" ? all : all.filter((n) => filterOf(n.type) === filter);
+  const groups = groupByAge(rows);
 
   return (
     <OfferScreenHost imeInset={0}>
@@ -127,23 +132,53 @@ export default function NotificationsScreen() {
         <TradesErrorPanel onRetry={() => void list.refetch()} />
       ) : list.isPending ? (
         <NotificationSkeleton />
-      ) : rows.length === 0 ? (
-        <Gutter style={{ paddingTop: 18 }}>
-          <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-            Nothing yet. Updates about your activity will appear here.
-          </Text>
-        </Gutter>
+      ) : all.length === 0 ? (
+        // The duck, what is missing, what will appear, and the next step.
+        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 60 }}>
+          <MascotEmptyState
+            pose="search"
+            title="No notifications yet"
+            message="Offers on your items, accepted trades, meetup reminders and reviews will show up here."
+            action={{ label: "Browse the marketplace", onPress: () => router.push("/marketplace") }}
+          />
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-          <Hairline />
-          {rows.map((n) => (
-            <View key={n.id}>
-              <NotificationRow
-                item={n}
-                wasUnread={unreadOnEntry.current?.has(n.id) ?? false}
-                onOpen={(path) => router.push(path as never)}
-              />
+          {/* Filter chips: what kind of update. */}
+          <View style={chipStyles.row}>
+            {FILTERS.map((f) => (
+              <Tappable
+                key={f.key}
+                onPress={() => setFilter(f.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filter === f.key }}
+                style={[chipStyles.chip, filter === f.key && chipStyles.chipOn]}
+              >
+                <Text style={[chipStyles.text, filter === f.key && chipStyles.textOn]}>{f.label}</Text>
+              </Tappable>
+            ))}
+          </View>
+          {rows.length === 0 ? (
+            <Gutter style={{ paddingTop: 18 }}>
+              <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
+                Nothing here yet.
+              </Text>
+            </Gutter>
+          ) : null}
+          {groups.map((g) => (
+            <View key={g.label}>
+              <Text style={chipStyles.section}>{g.label}</Text>
               <Hairline />
+              {g.items.map((n) => (
+                <View key={n.id}>
+                  <NotificationRow
+                    item={n}
+                    wasUnread={unreadOnEntry.current?.has(n.id) ?? false}
+                    onOpen={(path) => router.push(path as never)}
+                  />
+                  <Hairline />
+                </View>
+              ))}
             </View>
           ))}
         </ScrollView>
@@ -151,6 +186,65 @@ export default function NotificationsScreen() {
     </OfferScreenHost>
   );
 }
+
+type Filter = "all" | "offers" | "trades" | "people";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "offers", label: "Offers" },
+  { key: "trades", label: "Trades" },
+  { key: "people", label: "People" },
+];
+
+/** Which chip a notification type belongs to. Unknown types show under All only. */
+function filterOf(type: string): Filter | null {
+  if (type === "TRADE_REQUEST" || type.startsWith("OFFER_")) return "offers";
+  if (type.startsWith("TRADE_") || type.startsWith("MEETUP_")) return "trades";
+  if (type.startsWith("FOLLOW_") || type === "NEW_REVIEW") return "people";
+  return null;
+}
+
+/** Today / This week / Earlier, newest first within each, in the server's order. */
+function groupByAge<T extends { createdAt: string }>(rows: T[]): { label: string; items: T[] }[] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const today = startOfToday.getTime();
+  const week = today - 6 * 86_400_000;
+  const buckets: { label: string; items: T[] }[] = [
+    { label: "TODAY", items: [] },
+    { label: "THIS WEEK", items: [] },
+    { label: "EARLIER", items: [] },
+  ];
+  for (const r of rows) {
+    const t = Date.parse(r.createdAt);
+    buckets[t >= today ? 0 : t >= week ? 1 : 2].items.push(r);
+  }
+  return buckets.filter((b) => b.items.length > 0);
+}
+
+const chipStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 6, paddingHorizontal: offerSpace.screenX, paddingTop: 8, paddingBottom: 4 },
+  chip: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    justifyContent: "center",
+  },
+  chipOn: { backgroundColor: color.ink, borderColor: color.ink },
+  text: { fontSize: 13, fontWeight: "500", color: color.ink },
+  textOn: { color: "#FFFFFF", fontWeight: "600" },
+  section: {
+    paddingHorizontal: offerSpace.screenX,
+    paddingTop: 16,
+    paddingBottom: 6,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    color: color.inkSecondary,
+  },
+});
 
 function NotificationSkeleton() {
   return (
@@ -294,7 +388,12 @@ function NotificationRow({
 
   if (!target) {
     return (
-      <View accessible accessibilityRole="text" accessibilityLabel={line}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={line}
+        style={wasUnread ? { backgroundColor: color.greenWash } : undefined}
+      >
         {body}
       </View>
     );
@@ -305,6 +404,8 @@ function NotificationRow({
       onPress={() => onOpen(target)}
       accessibilityRole="button"
       accessibilityLabel={wasUnread ? `Unread. ${line}` : line}
+      // Unread rows get a soft tint as well as the dot (4 Nov 2026).
+      style={wasUnread ? { backgroundColor: color.greenWash } : undefined}
       pressedStyle={{ backgroundColor: offerColor.quiet }}
     >
       {body}
