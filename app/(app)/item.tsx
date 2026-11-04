@@ -71,7 +71,10 @@ import {
 } from "../../src/theme/tokens";
 import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
-import { shareListing } from "../../src/lib/share";
+import { listingUrl, shareListing } from "../../src/lib/share";
+import * as Clipboard from "expo-clipboard";
+import { Ionicons } from "@expo/vector-icons";
+import { SendToChatSheet } from "../../src/components/messages/SendToChatSheet";
 import { sizedImage } from "../../src/media/image-url";
 
 function normalizeListingText(value: string): string {
@@ -189,6 +192,8 @@ export default function ItemDetailScreen() {
    * which on Android silently drops every button past the third.
    */
   const [menu, setMenu] = useState<null | "menu" | "report">(null);
+  const [copied, setCopied] = useState(false);
+  const [sendingToChat, setSendingToChat] = useState(false);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(comments === "1");
   const [barHeight, setBarHeight] = useState<number>(size.detail.actionButton + space.detail.actionBarY * 2);
@@ -726,6 +731,25 @@ export default function ItemDetailScreen() {
                 <ShareIcon size={22} stroke={1.9} color={color.ink} />
               </MenuAction>
               <MenuAction
+                label={copied ? "Copied" : "Copy link"}
+                onPress={() => {
+                  const url = listingUrl(item.id);
+                  if (!url) {
+                    showDialog("No link yet", "This build has no Baylo web address set, so there is no link to copy.");
+                    return;
+                  }
+                  void Clipboard.setStringAsync(url).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+              >
+                <Ionicons name={copied ? "checkmark" : "link"} size={22} color={color.ink} />
+              </MenuAction>
+              <MenuAction label="Send in chat" onPress={() => { setMenu(null); setSendingToChat(true); }}>
+                <Ionicons name="chatbubble-outline" size={21} color={color.ink} />
+              </MenuAction>
+              <MenuAction
                 label={item.stats.liked ? "Saved" : "Save"}
                 onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
               >
@@ -759,6 +783,7 @@ export default function ItemDetailScreen() {
           )}
         </SheetShell>
       ) : null}
+      {sendingToChat ? <SendToChatSheet item={item} onClose={() => setSendingToChat(false)} /> : null}
       <EditListingSheet
         item={editing ? item : null}
         onClose={() => setEditing(false)}
@@ -1356,7 +1381,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: color.greenWash,
   },
-  menuActions: { flexDirection: "row", gap: 24, paddingHorizontal: 4, paddingBottom: 14 },
+  menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 14 },
   menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
   menuActionCircle: {
     width: 52,

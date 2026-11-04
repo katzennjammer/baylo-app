@@ -794,6 +794,7 @@ export default function MessagesThreadScreen() {
                       offerTrade,
                       partnerName: otherName,
                       onRatePress: (tradeId) => router.push(`/rate-trade?id=${encodeURIComponent(tradeId)}`),
+                      onSharedPostPress: (itemId) => router.push({ pathname: "/item", params: { id: itemId } }),
                       offerDetails: (() => {
                         try {
                           const payload = JSON.parse(message.content) as { offerId?: unknown };

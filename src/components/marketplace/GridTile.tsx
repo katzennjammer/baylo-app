@@ -2,7 +2,8 @@ import { Image } from "expo-image";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { ImageIcon, LeafIcon, LockIcon } from "../icons";
+import { HeartIcon, ImageIcon, LeafIcon, LockIcon } from "../icons";
+import { useLike } from "../../api/social";
 import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
 import { sizedImage } from "../../media/image-url";
@@ -125,6 +126,7 @@ export const GridTile = memo(function GridTile({
   const cover = item.images[0];
   const photo = usePhotoRetry(cover);
   const own = viewerId !== null && item.owner.id === viewerId;
+  const { mutate: like } = useLike();
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
 
   // Strictly greater — a listing IN the reach bracket is in reach. An unvalued
@@ -234,6 +236,22 @@ export const GridTile = memo(function GridTile({
           </View>
         ) : null}
 
+        {/* Save from the card (4 Nov 2026): the same like as the listing's heart.
+            Not on your own listings, and not on a perishable, whose countdown
+            owns the photo's bottom edge. */}
+        {!own && !perishable && viewerId !== null ? (
+          <Tappable
+            onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item.stats.liked }}
+            accessibilityLabel={item.stats.liked ? `Saved. Unsave ${item.title}` : `Save ${item.title}`}
+            hitSlop={6}
+            style={s.heart}
+          >
+            <HeartIcon liked={item.stats.liked} size={16} stroke={2} color={item.stats.liked ? color.like : color.ink} />
+          </Tappable>
+        ) : null}
+
         {perishable ? (
           <View
             style={s.countdown}
@@ -338,6 +356,17 @@ const s = StyleSheet.create({
     backgroundColor: color.captionFill,
   },
   reachBadge: { backgroundColor: color.greenWash },
+  heart: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   neutralBadge: { backgroundColor: color.searchSurface },
   countBadge: {
     position: "absolute",

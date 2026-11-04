@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Tappable } from "../Tappable";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import * as copy from "../trades/copy";
@@ -105,6 +105,7 @@ export function renderMessageBody({
   onImagePress,
   onOfferPress,
   onRatePress,
+  onSharedPostPress,
   offerDetails,
   tradeDetails,
   partnerName = "them",
@@ -120,6 +121,8 @@ export function renderMessageBody({
   onImagePress?: (url: string) => void;
   onOfferPress?: (offerId: string) => void;
   onRatePress?: (tradeId: string) => void;
+  /** A shared listing card opens the listing. */
+  onSharedPostPress?: (itemId: string) => void;
   offerDetails?: LiveOffer;
   tradeDetails?: ActiveTrade;
   /** The other person in the thread — the offer card's "from" when it is theirs. */
@@ -216,9 +219,16 @@ export function renderMessageBody({
       const postUser = typeof parsed.postUser === "string" ? parsed.postUser : "Baylo";
       // A definite width, so the photo is sized in px from it, never as a % of a content-sized card.
       const sharedWidth = Math.min(MEDIA.shared, contentMax);
+      const postId = typeof parsed.postId === "string" ? parsed.postId : null;
 
       return (
-        <View style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}>
+        <Pressable
+          onPress={postId && onSharedPostPress ? () => onSharedPostPress(postId) : undefined}
+          disabled={!postId || !onSharedPostPress}
+          accessibilityRole={postId ? "link" : undefined}
+          accessibilityLabel={postId ? `Open listing: ${postItem}` : undefined}
+          style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}
+        >
           {imageUrl ? (
             <Image
               source={{ uri: sizedImage(imageUrl, "card") }}
@@ -232,7 +242,7 @@ export function renderMessageBody({
               by {postUser}
             </Text>
           </View>
-        </View>
+        </Pressable>
       );
     }
     case "image": {
