@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -48,6 +49,7 @@ import { signedUpAsOrganization } from "../src/auth/signup-kind";
 import { useDetection } from "../src/post/detection";
 import { discardDraft, saveDraft, useAutosave, useStoredDraft } from "../src/post/draft";
 import { announcePosted } from "../src/post/posted-notice";
+import { MASCOT } from "../src/media/mascots";
 import { PhotoPipelineProvider, usePhotos } from "../src/post/photos";
 import { useValuation } from "../src/post/valuation";
 import { mergeLookingFor } from "../src/post/wanted-keywords";
@@ -412,6 +414,17 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
       </View>
 
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
+        {/* The duck holding an ID says what is being asked before a word is
+            read. Out of attempts is not a cheerful moment, so that state gets
+            the worried duck instead. Decorative: hidden from screen readers. */}
+        <Image
+          source={state.status === "exhausted" ? MASCOT.worry : MASCOT.idCard}
+          contentFit="contain"
+          style={{ width: 104, height: 168, marginBottom: 20 }}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
         <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>
           {copy.title}
         </Text>

@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from "expo-image";
 import { Image as NativeImage } from "react-native";
 
-export type MascotPose = "box" | "celebrate" | "worry" | "search" | "leaf";
+export type MascotPose = "box" | "celebrate" | "worry" | "search" | "leaf" | "idCard";
 export type MascotAssetKey = MascotPose | "celebrateTrimmed" | "wave" | "waveWebp";
 
 export const MASCOT: Readonly<Record<MascotAssetKey, number>> = {
@@ -11,12 +11,14 @@ export const MASCOT: Readonly<Record<MascotAssetKey, number>> = {
   worry: require("../../assets/mascots/Worried_duck_mascot_scratching_head_trimmed.png"),
   search: require("../../assets/mascots/Duck_holding_magnifying_glass_trimmed.png"),
   leaf: require("../../assets/mascots/Duck_holding_green_leaf_trimmed.png"),
+  /** Holding an ID card. The ID-verification gate. */
+  idCard: require("../../assets/mascots/Duck_holding_id_card_trimmed.png"),
   wave: require("../../assets/mascots/Duck_mascot_waves_hello.mp4"),
   waveWebp: require("../../assets/mascots/Duck_wave.webp"),
 };
 
 export function preloadMascotImages(): Promise<void> {
-  const poses: MascotPose[] = ["box", "celebrate", "worry", "search", "leaf"];
+  const poses: MascotPose[] = ["box", "celebrate", "worry", "search", "leaf", "idCard"];
   const uris = poses.flatMap((pose) => {
     const uri = NativeImage.resolveAssetSource(MASCOT[pose])?.uri;
     return uri ? [uri] : [];
