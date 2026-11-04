@@ -20,10 +20,11 @@ import { useQuests } from "../../api/quests";
 import { getActingOrgId } from "../../api/org-context";
 import { subscribeToUserChannel } from "../../api/pusher";
 import { useSession } from "../../auth/session";
-import { BellIcon, MessageIcon, QuestIcon } from "../icons";
+import { BellIcon, FilterIcon, MessageIcon, QuestIcon } from "../icons";
 import { LeavesPill } from "../AppHeader";
+import { Tappable } from "../Tappable";
 import { OfflineBar } from "../home/OfflineBar";
-import { FilterButton, SearchField } from "../marketplace/BrowseControls";
+import { SearchField } from "../marketplace/BrowseControls";
 import { formatBadge, formatLeaves } from "../../lib/format";
 import { MASCOT } from "../../media/mascots";
 import { breakpoint, color, font, icon, size, space, textStyle, type } from "../../theme/tokens";
@@ -242,8 +243,18 @@ export function HomeTopSection({
               placeholder="Search items or traders"
               accessibilityLabel="Search items or traders"
               variant="home"
+              trailing={
+                <Tappable
+                  onPress={onFilterPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Filters"
+                  style={s.inlineFilter}
+                  hitSlop={4}
+                >
+                  <FilterIcon size={20} stroke={2} color={color.ink} />
+                </Tappable>
+              }
             />
-            <FilterButton count={0} onPress={onFilterPress} variant="home" />
           </View>
           {searchSuggestions ? (
             <View pointerEvents="box-none" style={s.searchSuggestions}>
@@ -391,6 +402,7 @@ function HomeActionButton({
 }
 
 const s = StyleSheet.create({
+  inlineFilter: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   pinnedHeader: { backgroundColor: "transparent" },
   pinnedHeaderFill: { backgroundColor: color.homeTop },
   headerRow: {

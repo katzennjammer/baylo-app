@@ -27,7 +27,7 @@ import { Tappable } from "../../src/components/Tappable";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
 import { useTabReselect } from "../../src/lib/tab-reselect";
-import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
+import { CategoryPhotoTiles } from "../../src/components/home-redesign/CategoryPhotoTiles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
 import { HomePinnedHeader, HomeTopSection } from "../../src/components/home-redesign/HomeTopSection";
@@ -399,7 +399,7 @@ export default function HomeScreen() {
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}
             <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
-            <CategoryCircles facets={facets} onSelect={browseInMarketplace} />
+            <CategoryPhotoTiles facets={facets} onSelect={browseInMarketplace} />
 
             {/* 4. Limited time (perishables): one row of large cards, soonest
                 to expire first. No "Next:" chip -- each card carries its own

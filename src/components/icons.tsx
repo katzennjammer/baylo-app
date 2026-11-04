@@ -485,6 +485,16 @@ export function ExpandIcon(props: IconProps) {
   );
 }
 
+/** "Go" -- the search helper's submit, inside its field. */
+export function ArrowRightIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <Path d="M5 12h14" />
+      <Path d="m13 6 6 6-6 6" />
+    </Glyph>
+  );
+}
+
 /** "Opens elsewhere" — the Directions links hand off to the phone's maps app. */
 export function ArrowUpRightIcon(props: IconProps) {
   return (

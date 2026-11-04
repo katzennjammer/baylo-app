@@ -14,8 +14,9 @@ import { ApiError } from "../../src/api/client";
 import { useSession } from "../../src/auth/session";
 import { Splash } from "../../src/components/Splash";
 import { useHubItems } from "../../src/api/hubs";
+import { useReach } from "../../src/api/offer";
 import type { Item, SafeZoneHub } from "../../src/api/types";
-import { ArrowUpRightIcon, ChevronLeftIcon, ExpandIcon, WarningIcon } from "../../src/components/icons";
+import { ArrowUpRightIcon, CheckIcon, ChevronLeftIcon, ExpandIcon, WarningIcon } from "../../src/components/icons";
 import { openDirections } from "../../src/components/map/directions";
 import { HubMap } from "../../src/components/map/HubMap";
 import { MapErrorBoundary } from "../../src/components/map/MapErrorBoundary";
@@ -74,6 +75,7 @@ export default function HubScreen() {
   const insets = useSafeAreaInsets();
   /** Own tiles show the exact value, everyone else's a bracket — see GridTile. */
   const viewerId = useSession().session?.user.id ?? null;
+  const { gridReach } = useReach();
   const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -157,13 +159,18 @@ export default function HubScreen() {
       </View>
 
       <View style={s.head}>
-        <View style={s.eyebrow}>
-          <HubTypeGlyph
-            hubType={hub.type}
-            size={icon.hubPin.size}
-            tint={hub.isActive ? color.forest : color.inkStale}
-          />
-          <Text style={[textStyle(type.gridMeta), s.eyebrowText]}>{`${hub.typeLabel} · Safe hub`}</Text>
+        {/* Two tags: what kind of place, and that it is a Safe hub. */}
+        <View style={s.tags}>
+          <View style={s.tag}>
+            <HubTypeGlyph hubType={hub.type} size={13} tint={hub.isActive ? color.ink : color.inkStale} />
+            <Text style={s.tagText}>{hub.typeLabel}</Text>
+          </View>
+          {hub.isActive ? (
+            <View style={[s.tag, s.tagSafe]}>
+              <CheckIcon size={12} stroke={2.6} color={color.forest} />
+              <Text style={[s.tagText, { color: color.forest }]}>Safe hub</Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={[textStyle(type.detailTitle), s.name]}>{displayName(hub)}</Text>
@@ -185,29 +192,28 @@ export default function HubScreen() {
 
         {/* The landmark, in full and never truncated. It is the sentence that
             gets two people to the same spot inside a building with six doors. */}
-        <Text style={[textStyle(type.gridMeta), s.label]}>Meeting point</Text>
-        <Text style={[textStyle(type.detailBody), s.landmark]}>{hub.landmark}</Text>
-
-        {/* The one action: the phone's own maps app. The in-app map is the
-            strip above. */}
-        <View style={s.pills}>
+        {/* Where to meet, as its own card, with directions beside it. */}
+        <View style={s.meetCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.meetLabel}>WHERE TO MEET</Text>
+            <Text style={[textStyle(type.detailBody), s.landmark]}>{hub.landmark}</Text>
+          </View>
           <Tappable
             onPress={() => {
               void openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name });
             }}
             accessibilityRole="link"
             accessibilityLabel={`Directions to ${hub.name}`}
-            style={[s.pill, s.pillForest]}
+            style={s.directions}
             pressedStyle={s.pressed}
           >
-            <Text style={[textStyle(type.chip), s.pillLabel, { color: color.forest }]}>Directions</Text>
-            <ArrowUpRightIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+            <ArrowUpRightIcon size={20} stroke={2.2} color={color.surface} />
           </Tappable>
         </View>
 
         <View style={s.sectionHead}>
           <Text style={[textStyle(type.detailSection), s.sectionTitle]} accessibilityRole="header">
-            Meets here
+            Listings that meet here
           </Text>
           {items.length > 0 ? (
             <Text style={[textStyle(type.metadata), s.count]}>
@@ -236,6 +242,7 @@ export default function HubScreen() {
             width={tileWidth}
             onPress={(it) => router.push({ pathname: "/item", params: { id: it.id } })}
             viewerId={viewerId}
+            reach={gridReach}
             // Every listing here meets at this hub; the place would repeat.
             showPlace={false}
           />
@@ -371,13 +378,51 @@ const s = StyleSheet.create({
   backPlain: { marginLeft: space.screenXTight, marginTop: 8 },
 
   // The list's gridX plus this makes the detail screen's 16 gutter.
+  // A rounded sheet over the bottom of the map (4 Nov 2026).
   head: {
-    paddingHorizontal: space.detail.x - space.browse.gridX,
-    paddingTop: space.detail.photoToBody,
+    marginTop: -22,
+    marginHorizontal: -space.browse.gridX,
+    paddingHorizontal: space.detail.x,
+    paddingTop: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: color.surface,
+  },
+  tags: { flexDirection: "row", gap: 6 },
+  tag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 24,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    backgroundColor: color.control,
+  },
+  tagSafe: { backgroundColor: color.greenWash },
+  tagText: { fontSize: 12, fontWeight: "700", color: color.ink },
+  meetCard: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+  },
+  meetLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, color: color.forest },
+  directions: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: color.forest,
+    alignItems: "center",
+    justifyContent: "center",
   },
   eyebrow: { flexDirection: "row", alignItems: "center", gap: 6 },
   eyebrowText: { flexShrink: 1, color: color.inkSecondary },
-  name: { marginTop: space.detail.hubNameToLandmark + 2, color: color.ink },
+  name: { marginTop: 8, color: color.ink },
   area: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
 
   // No tinted box: the glyph and the words carry the warning.
@@ -390,7 +435,7 @@ const s = StyleSheet.create({
   noticeText: { flex: 1, color: color.urgent },
 
   label: { marginTop: space.detail.sectionY - 2, color: color.inkSecondary },
-  landmark: { marginTop: space.detail.hubNameToLandmark, color: color.ink },
+  landmark: { marginTop: 2, color: color.ink },
 
   pills: {
     marginTop: space.detail.sectionY - 4,

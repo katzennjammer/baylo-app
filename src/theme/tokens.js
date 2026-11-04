@@ -770,7 +770,8 @@ const size = {
     chip: 36,
     chipX: 14,
     /** A grid tile's photo is square; the body sits under it. */
-    tilePhotoAspect: 1,
+    // 4:3 (4 Nov 2026): shorter photos, so more listings show at once.
+    tilePhotoAspect: 4 / 3,
   },
 
   sheet: {

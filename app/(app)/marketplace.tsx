@@ -848,13 +848,12 @@ export default function MarketplaceScreen() {
               : "Search items by title or description, or start with @ to search people"
           }
           variant="marketplace"
+          trailing={
+            searchMode === "items" ? (
+              <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} variant="inline" />
+            ) : undefined
+          }
         />
-        {searchMode === "items" ? (
-          <>
-            <ViewToggle view={view} onChange={setView} />
-            <FilterButton count={filterCount} onPress={() => setSheetOpen(true)} />
-          </>
-        ) : null}
       </View>
 
       {showItemSuggestions ? (
@@ -878,7 +877,11 @@ export default function MarketplaceScreen() {
         />
       ) : null}
 
-      <SearchModeToggle mode={searchMode} onChange={changeSearchMode} />
+      {/* Items / People and Grid / Map share one quiet row. */}
+      <View style={s.modeRow}>
+        <SearchModeToggle mode={searchMode} onChange={changeSearchMode} />
+        {searchMode === "items" ? <ViewToggle view={view} onChange={setView} /> : null}
+      </View>
 
       {searchMode === "items" ? (
         <>
@@ -984,17 +987,6 @@ export default function MarketplaceScreen() {
             accessibilityLabel="Search safe hubs by name"
             variant="marketplace"
           />
-          <ViewToggle view={view} onChange={setView} />
-        </View>
-
-        <View style={s.legend}>
-          <MapLegend
-            selectedType={hubTypeFilter}
-            onSelectType={(next) => {
-              setHubTypeFilter(next);
-              selectHub(null);
-            }}
-          />
         </View>
 
         <View style={s.locationRow}>
@@ -1045,6 +1037,20 @@ export default function MarketplaceScreen() {
               </Text>
             </Tappable>
           ) : null}
+          {/* The same Grid / Map switch as the grid, in the same corner. */}
+          <View style={{ marginLeft: "auto" }}>
+            <ViewToggle view={view} onChange={setView} />
+          </View>
+        </View>
+
+        <View style={s.legend}>
+          <MapLegend
+            selectedType={hubTypeFilter}
+            onSelectType={(next) => {
+              setHubTypeFilter(next);
+              selectHub(null);
+            }}
+          />
         </View>
 
         <View style={s.mapWrap}>
@@ -1215,7 +1221,7 @@ export default function MarketplaceScreen() {
           rather than navigating to the screen that is already open. */}
       {searchMode === "items" ? (
         <SearchHelper
-          collapsed={listScrolling}
+          collapsed // Always the round button here (4 Nov 2026): it never sits on a card.
           onSeeAll={(next) => {
             setFilters(next);
             setDraftQuery(next.q ?? "");
@@ -1267,6 +1273,10 @@ function NearestHubsStrip({
   onOpenItems: (hubId: string) => void;
 }) {
   return (
+    <View style={{ gap: 6 }} pointerEvents="box-none">
+    <View style={s.nearbyTag} pointerEvents="none">
+      <Text style={s.nearbyTagText}>Nearest to you</Text>
+    </View>
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
@@ -1287,14 +1297,18 @@ function NearestHubsStrip({
             style={[s.nearbyCard, selected && s.nearbyCardSelected]}
             pressedStyle={s.nearbyCardPressed}
           >
-            <Text style={[textStyle(type.hubName), s.nearbyName]} numberOfLines={1}>
-              {hub.name}
-            </Text>
-            <View style={s.nearbyMetaRow}>
-              <HubTypeGlyph hubType={hub.type} size={12} />
-              <Text style={[textStyle(type.gridMeta), s.nearbyMeta]} numberOfLines={1}>
-                {`${hub.typeLabel} · ${distance}`}
-              </Text>
+            <View style={s.nearbyHead}>
+              <View style={s.nearbyIcon}>
+                <HubTypeGlyph hubType={hub.type} size={18} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.nearbyName} numberOfLines={1}>
+                  {hub.name}
+                </Text>
+                <Text style={[textStyle(type.gridMeta), s.nearbyMeta]} numberOfLines={1}>
+                  {`${hub.typeLabel} · ${distance}`}
+                </Text>
+              </View>
             </View>
             {selected ? (
               <View style={s.nearbyActions}>
@@ -1328,10 +1342,19 @@ function NearestHubsStrip({
         );
       })}
     </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  modeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: space.screenX,
+    marginTop: 10,
+    marginBottom: 2,
+  },
   screen: { flex: 1, backgroundColor: color.surface },
   searchRow: {
     flexDirection: "row",
@@ -1348,9 +1371,10 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: space.browse.searchGap,
     paddingHorizontal: space.screenX,
+    paddingTop: 10,
     minHeight: 18,
   },
-  locationStatus: { flex: 1, color: color.inkSecondary },
+  locationStatus: { flexShrink: 1, color: color.inkSecondary },
   locationRetry: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -1360,9 +1384,28 @@ const s = StyleSheet.create({
     backgroundColor: color.greenWash,
   },
   locationRetryPressed: { backgroundColor: color.greenLine },
+  nearbyTag: {
+    alignSelf: "flex-start",
+    marginLeft: 12,
+    height: 24,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    justifyContent: "center",
+  },
+  nearbyTagText: { fontSize: 12, fontWeight: "700", color: color.ink },
+  nearbyHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  nearbyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: color.greenWash,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   nearbyRow: {
-    paddingHorizontal: space.screenX,
-    paddingTop: 8,
+    paddingHorizontal: 12,
+    paddingTop: 0,
     paddingBottom: 6,
     gap: space.browse.chipGap,
     alignItems: "center",
@@ -1371,34 +1414,40 @@ const s = StyleSheet.create({
   // 1.5 px forest border, matching the ringed pin on the map.
   // 208, not narrower: the selected card's two actions sit side by side at
   // 1x (about 170 of the 186 inside), and wrap at larger text.
+  // Slim (4 Nov 2026): icon, name, type and distance -- the map stays the
+  // main thing on screen.
   nearbyCard: {
-    width: 208,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: radius.hubRow,
-    borderWidth: border.hairline,
-    borderColor: color.controlLine,
-    backgroundColor: color.surface,
+    width: 228,
+    paddingLeft: 8,
+    paddingRight: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: color.searchSurface,
+    shadowColor: "#14140F",
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   nearbyCardSelected: { borderWidth: 1.5, borderColor: color.forest },
   nearbyCardPressed: { opacity: 0.8 },
-  nearbyName: { color: color.ink },
-  nearbyMetaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  nearbyName: { fontSize: 14, fontWeight: "700", color: color.ink },
   nearbyMeta: { flexShrink: 1, color: color.inkSecondary },
   nearbyActions: { flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 4, marginTop: 6 },
   nearbyAction: { flexDirection: "row", alignItems: "center", gap: 3, minHeight: 28, maxWidth: "100%" },
   nearbyActionLabel: { flexShrink: 1, color: color.forest },
+  // Edge to edge (4 Nov 2026): the map is the screen here.
   mapWrap: {
     position: "relative",
     flex: 1,
-    paddingHorizontal: space.screenXTight,
-    paddingBottom: space.screenXTight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.divider,
   },
   nearbyOverlay: {
     position: "absolute",
-    left: space.screenXTight,
-    right: space.screenXTight,
-    bottom: space.screenXTight + 8,
+    left: 0,
+    right: 0,
+    bottom: 12,
     zIndex: 2,
   },
   map: { flex: 1 },

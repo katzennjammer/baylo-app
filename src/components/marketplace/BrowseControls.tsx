@@ -36,10 +36,13 @@ export function SearchField({
   placeholder = "Search",
   accessibilityLabel = "Search items by title or description",
   variant = "default",
+  trailing,
 }: {
   value: string;
   onChange: (next: string) => void;
   onSubmit: () => void;
+  /** Drawn inside the field at its end -- Home's filter button. */
+  trailing?: React.ReactNode;
   /** Map mode searches hubs, not listings, and says so. */
   placeholder?: string;
   accessibilityLabel?: string;
@@ -56,7 +59,7 @@ export function SearchField({
       <SearchIcon
         size={icon.search.size}
         stroke={icon.search.stroke}
-        color={variant === "home" ? color.homeOnGreenMuted : variant === "marketplace" ? dColor.mutedText : color.inkMuted}
+        color={variant === "home" ? color.inkSecondary : variant === "marketplace" ? dColor.mutedText : color.inkMuted}
       />
 
       <TextInput
@@ -69,7 +72,7 @@ export function SearchField({
         autoCapitalize="none"
         autoCorrect={false}
         placeholder={placeholder}
-        placeholderTextColor={variant === "home" ? color.homeOnGreenMuted : variant === "marketplace" ? dColor.mutedText : color.inkMuted}
+        placeholderTextColor={variant === "marketplace" ? dColor.mutedText : color.inkMuted}
         // The field shares its row with the Grid/Map toggle and the filter
         // button, so it is narrower than it was; uncapped, 2x text clips the
         // placeholder hard at 320 dp.
@@ -96,10 +99,11 @@ export function SearchField({
           <CloseIcon
             size={icon.clear.size}
             stroke={icon.clear.stroke}
-            color={variant === "home" ? color.homeOnGreen : variant === "marketplace" ? dColor.mutedText : color.inkMuted}
+            color={variant === "marketplace" ? dColor.mutedText : color.inkMuted}
           />
         </Tappable>
       ) : null}
+      {trailing}
     </View>
   );
 }
@@ -150,7 +154,8 @@ export function FilterButton({
 }: {
   count: number;
   onPress: () => void;
-  variant?: "default" | "home";
+  /** "inline" sits inside a search field: no box of its own. */
+  variant?: "default" | "home" | "inline";
 }) {
   return (
     <Tappable
@@ -160,6 +165,7 @@ export function FilterButton({
       style={[
         s.filterButton,
         variant === "home" && s.homeFilter,
+        variant === "inline" && s.inlineFilter,
         count > 0 && variant !== "home" && s.filterButtonActive,
       ]}
       pressedStyle={variant === "home" ? s.homeFilterPressed : s.filterButtonPressed}
@@ -167,7 +173,7 @@ export function FilterButton({
       <FilterIcon
         size={icon.filter.size}
         stroke={icon.filter.stroke}
-        color={count > 0 ? dColor.primary : variant === "home" ? color.homeOnGreen : dColor.mutedText}
+        color={count > 0 ? dColor.primary : variant === "home" ? color.homeOnGreen : variant === "inline" ? color.ink : dColor.mutedText}
       />
       {count > 0 ? (
         <View style={s.activeFilterDot} />
@@ -542,26 +548,32 @@ export function SortToggle({
 }
 
 const s = StyleSheet.create({
+  // A small pill switch (4 Nov 2026), sharing its row with Grid / Map.
   searchModeToggle: {
     flexDirection: "row",
-    marginHorizontal: space.screenX,
-    marginTop: space.design.scale.xxs,
-    marginBottom: space.browse.chipsY,
-    borderBottomWidth: border.hairline,
-    borderBottomColor: dColor.border,
+    alignSelf: "flex-start",
+    padding: 3,
+    borderRadius: 20,
+    backgroundColor: color.control,
   },
   searchModeSegment: {
-    flex: 1,
-    minHeight: size.design.button,
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    borderBottomWidth: border.storyRing,
-    borderBottomColor: "transparent",
   },
-  searchModeSegmentOn: { borderBottomColor: dColor.primary },
+  searchModeSegmentOn: {
+    backgroundColor: color.searchSurface,
+    shadowColor: "#14140F",
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
   searchModeSegmentPressed: { opacity: 0.8 },
-  searchModeLabel: { color: dColor.mutedText },
-  searchModeLabelOn: { color: dColor.primary, fontWeight: "700" },
+  searchModeLabel: { color: color.inkSecondary },
+  searchModeLabelOn: { color: color.ink, fontWeight: "700" },
   field: {
     flex: 1,
     flexDirection: "row",
@@ -578,19 +590,23 @@ const s = StyleSheet.create({
   // `padding: 0` because Android's TextInput carries its own and would push the
   // text off the vertical centre of a fixed-height field.
   input: { flex: 1, padding: 0, color: color.ink },
+  // Home's bar: plain white on the green, filters inside it (4 Nov 2026).
   homeField: {
     height: size.home.searchControl,
     borderRadius: size.home.searchControl / 2,
-    borderColor: color.homeFieldLine,
-    backgroundColor: color.homeFieldSurface,
+    borderColor: "transparent",
+    backgroundColor: color.searchSurface,
+    paddingRight: 4,
   },
-  homeInput: { color: color.homeOnGreen },
+  homeInput: { color: color.ink },
+  // Full width, soft fill, filters inside (4 Nov 2026): the placeholder is
+  // never cut by buttons beside it.
   marketplaceField: {
-    height: marketplaceUi.size.controlHeight,
-    borderRadius: marketplaceUi.radius.control,
-    borderColor: dColor.border,
-    backgroundColor: dColor.surface,
-    borderWidth: 1,
+    height: 46,
+    borderRadius: 23,
+    borderColor: "transparent",
+    backgroundColor: color.control,
+    borderWidth: 0,
   },
   marketplaceInput: { fontSize: 15 },
   clear: {
@@ -604,6 +620,13 @@ const s = StyleSheet.create({
     height: marketplaceUi.size.controlHeight - 4,
   },
 
+  inlineFilter: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
   filterButton: {
     width: marketplaceUi.size.controlHeight,
     height: marketplaceUi.size.controlHeight,

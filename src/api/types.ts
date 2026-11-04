@@ -252,7 +252,7 @@ export interface BrowsePayload {
   /** Absent from a server older than 25 Sep 2026. */
   organizations?: BrowseOrgMatch[];
   facets: {
-    categories: { category: string; label: string; count: number }[];
+    categories: { category: string; label: string; count: number; /** Newest listing photo; top six categories, first page only. */ coverImage?: string | null }[];
     /** Only filled while `orgsOnly` is on. Absent from an older server. */
     businessCategories?: BusinessCategoryFacet[];
   };

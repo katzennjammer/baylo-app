@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -41,7 +42,11 @@ import {
   textStyle,
   type,
 } from "../../theme/tokens";
-import { CloseIcon, SearchIcon } from "../icons";
+import { ArrowRightIcon, ArrowUpRightIcon, CloseIcon, SearchIcon } from "../icons";
+import { bracketLabel, bracketOf } from "../../lib/brackets";
+import { bracketsBeyondReach } from "../../lib/gap";
+import { MASCOT } from "../../media/mascots";
+import { sizedImage } from "../../media/image-url";
 import { GridTile } from "../marketplace/GridTile";
 import { RemovableChip } from "../RemovableChip";
 import { Tappable } from "../Tappable";
@@ -206,8 +211,13 @@ function HelperSheet({
       <View style={s.sheet}>
         <View style={s.handle} />
 
+        {/* The magnifier duck sets the tone; one short line instead of a paragraph. */}
         <View style={s.titleRow}>
-          <Text style={[textStyle(type.sheetTitle), { color: color.ink }]}>Search helper</Text>
+          <Image source={MASCOT.search} contentFit="contain" style={s.titleDuck} accessible={false} />
+          <View style={{ flex: 1 }}>
+            <Text style={[textStyle(type.sheetTitle), { color: color.ink }]}>Help me find</Text>
+            <Text style={[textStyle(type.gridMeta), s.muted]}>Say it the way you&apos;d say it to a friend.</Text>
+          </View>
           <Tappable
             onPress={onClose}
             accessibilityRole="button"
@@ -237,22 +247,21 @@ function HelperSheet({
               style={[textStyle(type.searchInput), s.input]}
               accessibilityLabel="What are you looking for?"
             />
+            {/* The search button sits inside the field, so the field gets the width. */}
+            <Tappable
+              onPress={() => (isPeopleSearch ? searchPeople() : run(draft))}
+              accessibilityRole="button"
+              accessibilityLabel={isPeopleSearch ? "Find people" : "Search"}
+              disabled={isPeopleSearch ? !canSearchPeople : !draft.trim()}
+              style={[
+                s.go,
+                (isPeopleSearch ? !canSearchPeople : !draft.trim()) && s.goDisabled,
+              ]}
+              pressedStyle={s.goPressed}
+            >
+              <ArrowRightIcon size={20} stroke={2.4} color={color.onGreen} />
+            </Tappable>
           </View>
-          <Tappable
-            onPress={() => (isPeopleSearch ? searchPeople() : run(draft))}
-            accessibilityRole="button"
-            accessibilityLabel={isPeopleSearch ? "Search people" : "Search"}
-            disabled={isPeopleSearch ? !canSearchPeople : !draft.trim()}
-            style={[
-              s.go,
-              (isPeopleSearch ? !canSearchPeople : !draft.trim()) && s.goDisabled,
-            ]}
-            pressedStyle={s.goPressed}
-          >
-            <Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>
-              {isPeopleSearch ? "Find people" : "Search"}
-            </Text>
-          </Tappable>
         </View>
 
         <ScrollView
@@ -335,36 +344,51 @@ function chipLabel(chip: HelperChip): string {
   }
 }
 
+/** Tappable example searches, as rows. */
 function Examples({ onExample }: { onExample: (text: string) => void }) {
   return (
-    <View style={s.chips}>
-      {EXAMPLES.map((e) => (
+    <View style={s.exampleList}>
+      {EXAMPLES.map((e, i) => (
         <Tappable
           key={e}
           onPress={() => onExample(e)}
           accessibilityRole="button"
           accessibilityLabel={`Try: ${e}`}
-          style={s.example}
+          style={[s.exampleRow, i > 0 && s.exampleRowLine]}
           pressedStyle={s.examplePressed}
         >
-          <Text style={[textStyle(type.chip), { color: color.inkSecondary }]}>{e}</Text>
+          <View style={s.exampleIcon}>
+            <SearchIcon size={16} stroke={2} color={color.ink} />
+          </View>
+          <Text style={[textStyle(type.emptyBody), { flex: 1, color: color.ink }]}>{e}</Text>
+          <ArrowUpRightIcon size={16} stroke={2} color={color.inkMuted} />
         </Tappable>
       ))}
     </View>
   );
 }
 
+/** What the matcher picks up on, shown as the chips it would make. */
+const PICKS_UP = ["Item type", "Bracket", "Condition", "Shops", "Fresh food", "@username"];
+
 function Intro({ onExample }: { onExample: (text: string) => void }) {
   return (
     <View>
-      <Text style={[textStyle(type.emptyBody), s.muted]}>
-        Type what you&apos;re looking for in simple words. I match item types, brackets, condition,
-        shops and fresh food, and show you exactly what I picked up.
-      </Text>
-      <Text style={[textStyle(type.sheetLabel), s.label, { marginTop: space.sheet.groupGap }]}>
-        Try
-      </Text>
+      <Text style={[textStyle(type.sheetLabel), s.label]}>Try one</Text>
       <Examples onExample={onExample} />
+      <Text style={[textStyle(type.sheetLabel), s.label, { marginTop: space.sheet.groupGap }]}>
+        I pick up on
+      </Text>
+      <View style={[s.chips, { marginTop: 8 }]}>
+        {PICKS_UP.map((tag) => (
+          <View key={tag} style={s.pickTag}>
+            <Text style={[textStyle(type.chip), { color: color.forest }]}>{tag}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={[textStyle(type.gridMeta), s.muted, { marginTop: 8 }]}>
+        You&apos;ll see exactly what I picked up, and can remove any of it.
+      </Text>
     </View>
   );
 }
@@ -389,6 +413,8 @@ function NotUnderstood({ onExample }: { onExample: (text: string) => void }) {
 
 /** How many results the preview shows before "See all". */
 const PREVIEW_COUNT = 4;
+/** Out-of-reach rows shown under the preview. */
+const BEYOND_COUNT = 3;
 
 /**
  * The first few results, from the same query Marketplace would run.
@@ -440,20 +466,72 @@ function Results({
   }
 
   const count = `${items.length}${hasNextPage ? "+" : ""}`;
+  // What you can offer on first; what is beyond your reach after, compact.
+  // An unknown reach counts as reachable: never grey on a guess.
+  const isBeyond = (item: Item) =>
+    gridReach != null && item.valueLeaves !== null && item.owner.id !== viewerId
+      ? bracketsBeyondReach(item.valueLeaves, gridReach) > 0
+      : false;
+  const reachable = items.filter((i) => !isBeyond(i));
+  const beyond = items.filter(isBeyond);
   return (
     <View style={s.results}>
-      <View style={s.grid}>
-        {items.slice(0, PREVIEW_COUNT).map((item) => (
-          <GridTile
-            key={item.id}
-            item={item}
-            width={tileWidth}
-            onPress={onOpen}
-            reach={gridReach}
-            viewerId={viewerId}
-          />
-        ))}
-      </View>
+      {reachable.length > 0 ? (
+        <>
+          <Text style={[textStyle(type.sheetLabel), s.label]}>
+            {gridReach != null ? "You can offer on these" : "Results"}
+          </Text>
+          <View style={s.grid}>
+            {reachable.slice(0, PREVIEW_COUNT).map((item) => (
+              <GridTile
+                key={item.id}
+                item={item}
+                width={tileWidth}
+                onPress={onOpen}
+                reach={gridReach}
+                viewerId={viewerId}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
+      {beyond.length > 0 ? (
+        <>
+          <Text style={[textStyle(type.sheetLabel), s.label, { marginTop: space.sheet.groupGap }]}>
+            Above your reach for now
+          </Text>
+          <Text style={[textStyle(type.gridMeta), s.muted]}>Post a higher-bracket item to offer on these.</Text>
+          <View style={s.beyondList}>
+            {beyond.slice(0, BEYOND_COUNT).map((item, i) => (
+              <Tappable
+                key={item.id}
+                onPress={() => onOpen(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title}, ${bracketLabel(bracketOf(item.valueLeaves as number))}, above your reach`}
+                style={[s.beyondRow, i > 0 && s.exampleRowLine]}
+                pressedStyle={s.examplePressed}
+              >
+                <View style={s.beyondThumb}>
+                  {item.images[0] ? (
+                    <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} />
+                  ) : null}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[textStyle(type.emptyBody), { color: color.ink, fontWeight: "600" }]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={[textStyle(type.gridMeta), s.muted]} numberOfLines={1}>
+                    {item.conditionLabel}
+                  </Text>
+                </View>
+                <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary, fontWeight: "700" }]}>
+                  {bracketLabel(bracketOf(item.valueLeaves as number))}
+                </Text>
+              </Tappable>
+            ))}
+          </View>
+        </>
+      ) : null}
       <Tappable
         onPress={onSeeAll}
         accessibilityRole="button"
@@ -532,9 +610,17 @@ const s = StyleSheet.create({
     paddingHorizontal: space.sheet.x,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
   },
-  close: { padding: 4 },
+  titleDuck: { width: 44, height: 60 },
+  close: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: color.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   inputRow: {
     marginTop: space.sheet.titleToBody,
@@ -547,19 +633,19 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.browse.searchGap,
-    height: size.sheet.action,
-    paddingLeft: space.browse.searchGap + 4,
-    paddingRight: 4,
-    borderRadius: radius.searchField,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    height: 54,
+    paddingLeft: 16,
+    paddingRight: 5,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: color.green,
+    backgroundColor: color.searchSurface,
   },
   input: { flex: 1, color: color.ink, paddingVertical: 0 },
   go: {
-    height: size.sheet.action,
-    paddingHorizontal: 16,
-    borderRadius: radius.primaryButton,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: color.green,
     alignItems: "center",
     justifyContent: "center",
@@ -589,6 +675,41 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
   examplePressed: { opacity: 0.75 },
+  exampleList: {
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: border.hairline,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    overflow: "hidden",
+  },
+  exampleRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 52, paddingHorizontal: 12 },
+  exampleRowLine: { borderTopWidth: border.hairline, borderTopColor: color.divider },
+  exampleIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: color.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickTag: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: color.greenWash,
+    justifyContent: "center",
+  },
+  beyondList: {
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: border.hairline,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    overflow: "hidden",
+  },
+  beyondRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  beyondThumb: { width: 52, height: 52, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
 
   loading: { marginTop: space.sheet.groupGap },
   resultsState: { marginTop: space.sheet.groupGap },

@@ -239,9 +239,12 @@ check("an unknown hub type falls back to a glyph rather than drawing nothing", (
 });
 
 check("the pin anchors on its tip, not its centre", () => {
-  // The pin marks the ground a person is told to stand on. Anchoring at the
-  // centre would put every hub ~20 px north of where it is.
-  assert.match(html, /iconAnchor: \[16, 42\]/);
+  // The pin marks the ground a person is told to stand on. Since the label
+  // pins (4 Nov 2026) the marker box is empty and anchored at the ground
+  // point, and the label is lifted wholly ABOVE it by CSS, its point at the
+  // bottom -- so a hub is never drawn north or south of where it is.
+  assert.match(html, /iconAnchor: \[0, 0\]/);
+  assert.match(html, /transform: translate\(-50%, calc\(-100% - 6px\)\)/);
 });
 
 /* ── §4 ─────────────────────────────────────────────────────────────────── */
