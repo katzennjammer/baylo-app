@@ -4,7 +4,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 
 import { useConversations, useSendMessage } from "../../api/messages";
 import { sizedImage } from "../../media/image-url";
-import { color } from "../../theme/tokens";
+import { color, space } from "../../theme/tokens";
 import { SheetShell } from "../sheet-ui";
 import { Tappable } from "../Tappable";
 
@@ -58,7 +58,7 @@ export function SendToChatSheet({
           {isError ? "Could not load your chats." : "No chats yet. Message someone first, then you can send listings to them."}
         </Text>
       ) : (
-        <ScrollView style={{ maxHeight: 380 }}>
+        <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ paddingHorizontal: space.sheet.x, paddingTop: 4 }}>
           {conversations.map((c) => {
             const done = sent.has(c.partnerId);
             return (
@@ -95,9 +95,9 @@ export function SendToChatSheet({
 }
 
 const s = StyleSheet.create({
-  empty: { fontSize: 14, color: color.inkSecondary, paddingVertical: 16 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
+  empty: { fontSize: 14, color: color.inkSecondary, paddingVertical: 16, paddingHorizontal: space.sheet.x },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   fallback: { backgroundColor: color.greenWash, alignItems: "center", justifyContent: "center" },
   initial: { fontSize: 16, fontWeight: "700", color: color.forest },
   name: { flex: 1, fontSize: 15, fontWeight: "600", color: color.ink },
@@ -105,5 +105,5 @@ const s = StyleSheet.create({
   sent: { backgroundColor: color.control },
   sendText: { fontSize: 14, fontWeight: "700", color: color.onGreen },
   sentText: { color: color.inkSecondary },
-  error: { fontSize: 13, color: color.urgent, paddingTop: 8 },
+  error: { fontSize: 13, color: color.urgent, paddingTop: 8, paddingHorizontal: space.sheet.x },
 });

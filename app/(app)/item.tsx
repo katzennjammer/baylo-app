@@ -449,9 +449,13 @@ export default function ItemDetailScreen() {
               <ChevronLeftIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
             </PhotoButton>
             <View style={s.photoButtonsRight} pointerEvents="box-none">
-              <PhotoButton label="Share" onPress={onShare}>
-                <ShareIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
-              </PhotoButton>
+              {/* Share lives in the ⋯ menu on someone else's listing. Your
+                  own listing has no menu, so it keeps the share button. */}
+              {own ? (
+                <PhotoButton label="Share" onPress={onShare}>
+                  <ShareIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
+                </PhotoButton>
+              ) : null}
               {/* Report and Block act on someone else. On your own listing the
                   server refuses both, so there is no menu to open. */}
               {!own ? (
@@ -652,9 +656,17 @@ export default function ItemDetailScreen() {
           <Text style={s.scrolledTitle} numberOfLines={1}>
             {item.title}
           </Text>
-          <Tappable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share" style={s.scrolledButton}>
-            <ShareIcon size={20} stroke={1.9} color={color.ink} />
-          </Tappable>
+          {own ? (
+            <Tappable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share" style={s.scrolledButton}>
+              <ShareIcon size={20} stroke={1.9} color={color.ink} />
+            </Tappable>
+          ) : (
+            <Tappable onPress={() => setMenu("menu")} accessibilityRole="button" accessibilityLabel="More options" style={s.scrolledButton}>
+              <View style={s.horizontal}>
+                <KebabIcon size={20} color={color.ink} />
+              </View>
+            </Tappable>
+          )}
         </View>
       </Animated.View>
 
@@ -1485,11 +1497,11 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: color.greenWash,
   },
-  menuHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 },
-  menuThumb: { width: 44, height: 44, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
+  menuHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.sheet.x, paddingTop: 12, paddingBottom: 18 },
+  menuThumb: { width: 48, height: 48, borderRadius: 12, overflow: "hidden", backgroundColor: color.control },
   menuTitle: { fontFamily: font.sansBold, fontSize: 15, color: color.ink },
   menuSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
-  menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 14 },
+  menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.sheet.x, paddingBottom: 18, marginBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
   menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
   menuActionCircle: {
     width: 52,
