@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MascotEmptyState } from "../MascotEmptyState";
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { getActingOrgId } from "../../api/org-context";
@@ -255,9 +256,7 @@ export function HubPickerSheet({
           ) : null}
 
           {groups.length === 0 ? (
-            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary, paddingTop: 4 }]}>
-              {copy.picker.noMatch(query.trim())}
-            </Text>
+            <MascotEmptyState pose="search" size={80} title="No matches" message={copy.picker.noMatch(query.trim())} />
           ) : null}
 
           {groups.map((g) => (

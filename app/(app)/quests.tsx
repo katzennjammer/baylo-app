@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -138,7 +139,7 @@ export default function QuestsScreen() {
             </View>
           ) : null}
           {data.quests.length === 0 ? (
-            <Text style={[textStyle(type.emptyBody), s.empty]}>No quests today.</Text>
+            <MascotEmptyState pose="celebrate" size={100} title="No quests today" message="Check back tomorrow for new ones." />
           ) : (
             <View style={s.list}>
               {data.quests.map((q, i) => (

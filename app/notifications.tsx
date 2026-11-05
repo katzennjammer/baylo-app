@@ -159,11 +159,14 @@ export default function NotificationsScreen() {
             ))}
           </View>
           {rows.length === 0 ? (
-            <Gutter style={{ paddingTop: 18 }}>
-              <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-                Nothing here yet.
-              </Text>
-            </Gutter>
+            <View style={{ paddingTop: 40 }}>
+              <MascotEmptyState
+                pose="search"
+                size={110}
+                title={filter === "all" ? "You're all caught up" : "Nothing here yet"}
+                message={filter === "all" ? "Offers, trades and new followers show up here." : "Notifications of this kind will show up here."}
+              />
+            </View>
           ) : null}
           {groups.map((g) => (
             <View key={g.label}>

@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { useRouter } from "expo-router";
 
 import { goBack } from "../src/lib/go-back";
@@ -65,7 +66,7 @@ export default function BlockedUsersScreen() {
             </Tappable>
           </View>
         ) : data && data.length === 0 ? (
-          <Text style={[textStyle(type.emptyBody), s.muted, s.center]}>You have not blocked anyone.</Text>
+          <MascotEmptyState pose="leaf" size={96} title="No one blocked" message="People you block show here, and you can unblock them any time." />
         ) : data ? (
           data.map((block) => {
             const busy = unblock.isPending && unblock.variables === block.user.id;
