@@ -10,10 +10,16 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import { Tappable } from "../Tappable";
-import { ChevronRightIcon, PinIcon, TrashIcon } from "../icons";
+import { PinIcon, TrashIcon } from "../icons";
+import { LockIcon } from "../offer/icons";
+import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { sizedImage } from "../../media/image-url";
+import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { ApiError } from "../../api/client";
 import { EDIT_LIMITS, useDeleteItem, useUpdateItem } from "../../api/item";
 import { useActiveTrades } from "../../api/trades";
@@ -21,6 +27,7 @@ import { listingRemovalCheck } from "../../lib/listing-removal";
 import {
   border,
   color,
+  font,
   icon,
   radius,
   size,
@@ -77,6 +84,8 @@ export function EditListingSheet({
   onClose: () => void;
   onEditHubs: (item: Item) => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [wanted, setWanted] = useState("");
@@ -103,6 +112,8 @@ export function EditListingSheet({
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!item) return null;
+  const hubs = item.safeZones ?? [];
+  const bracket = item.valueLeaves !== null ? bracketLabel(bracketOf(item.valueLeaves)) : null;
 
   const trimmedTitle = title.trim();
   const dirty =
@@ -225,12 +236,61 @@ export function EditListingSheet({
         there rather than "height".
       */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={s.sheet}>
+        {/*
+          maxHeight in pixels, not "88%": a percentage of the keyboard
+          wrapper, which grows to fill the modal, left a band at the bottom
+          where the listing behind showed through.
+        */}
+        <View style={[s.sheet, { paddingBottom: insets.bottom + 12, maxHeight: Math.round(windowHeight * 0.9) }]}>
           <View style={s.handle} />
 
-          <Text style={[textStyle(type.sheetTitle), s.title]}>Edit listing</Text>
+          {/*
+            Cancel and Save in the header, so the form ends where the content
+            ends. The old bottom bar sat above Android's navigation area and
+            let the listing behind show through under it.
+          */}
+          <View style={s.header}>
+            <Tappable onPress={close} accessibilityRole="button" style={s.headerSide} pressedStyle={s.pressedText}>
+              <Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Cancel</Text>
+            </Tappable>
+            <Text style={[textStyle(type.sheetTitle), s.title]}>Edit listing</Text>
+            <Tappable
+              onPress={save}
+              disabled={blocked}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: blocked }}
+              style={[s.headerSide, { alignItems: "flex-end" }]}
+              pressedStyle={s.pressedText}
+            >
+              {update.isPending ? (
+                <ActivityIndicator color={color.forest} />
+              ) : (
+                <Text style={[textStyle(type.primaryButton), { color: blocked ? color.inkMuted : color.forest }]}>Save</Text>
+              )}
+            </Tappable>
+          </View>
 
           <ScrollView style={s.body} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
+            {/*
+              What this screen does not change, shown as the listing itself
+              rather than a paragraph of small print. Changing any of it
+              re-prices the listing, which happens in the posting flow.
+            */}
+            <View style={s.locked} accessible accessibilityLabel={`${item.categoryLabel}, ${item.conditionLabel}${bracket ? `, ${bracket}` : ""}. Photos, category, condition and value are set when you post.`}>
+              {item.images[0] ? (
+                <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={s.lockedThumb} />
+              ) : (
+                <View style={s.lockedThumb} />
+              )}
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text style={s.lockedFacts} numberOfLines={1}>
+                  {[item.categoryLabel, item.conditionLabel, bracket].filter(Boolean).join(" · ")}
+                </Text>
+                <Text style={s.lockedNote}>Photos, category, condition and value are set when you post.</Text>
+              </View>
+              <LockIcon size={16} stroke={2} color={color.inkMuted} />
+            </View>
+
             <Field
               label="Title"
               value={title}
@@ -258,104 +318,45 @@ export function EditListingSheet({
             />
 
             <View style={s.locationGroup}>
-              <Text style={[textStyle(type.sheetLabel), s.label]}>Meeting locations</Text>
-              <Text style={[textStyle(type.gridMeta), s.locationHint]}>
-                Choose up to five public hubs where traders can meet you.
-              </Text>
-              <Tappable
-                onPress={editHubs}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel="Manage meeting locations"
-                style={s.locationButton}
-                pressedStyle={s.locationPressed}
-              >
-                <View style={s.locationIcon}>
-                  <PinIcon
-                    size={icon.menuRow.size}
-                    stroke={icon.menuRow.stroke}
-                    color={color.forest}
-                  />
-                </View>
-                <Text style={[textStyle(type.secondaryButton), s.locationButtonText]}>
-                  Manage meeting locations
+              <View style={s.labelRow}>
+                <Text style={[textStyle(type.sheetLabel), s.label]}>Meeting locations</Text>
+                <Tappable onPress={editHubs} disabled={busy} accessibilityRole="button" accessibilityLabel="Change meeting locations" pressedStyle={s.pressedText}>
+                  <Text style={[textStyle(type.secondaryButton), { color: color.forest }]}>Change</Text>
+                </Tappable>
+              </View>
+              {hubs.length > 0 ? (
+                hubs.map((h, i) => (
+                  <View key={h.id} style={[s.hubRow, i > 0 && s.hubDivider]}>
+                    <PinIcon size={16} stroke={2} color={color.forest} />
+                    <Text style={[textStyle(type.detailBody), { flex: 1, color: color.ink }]} numberOfLines={1}>{h.name}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={[textStyle(type.gridMeta), s.locationHint]}>
+                  None yet. Add up to five public hubs where traders can meet you.
                 </Text>
-                <ChevronRightIcon
-                  size={icon.back.size - 4}
-                  stroke={icon.back.stroke}
-                  color={color.inkMuted}
-                />
-              </Tappable>
+              )}
             </View>
 
-            {/*
-              Said rather than left to be discovered. Somebody who opens this
-              looking for the value slider needs to know where it is, not to
-              conclude the app cannot do it.
-            */}
-            <Text style={[textStyle(type.gridMeta), s.note]}>
-              Photos, category, condition and the Leaf value are not edited here — changing
-              any of them re-prices the listing, which happens in the posting flow.
-            </Text>
-
-            {/*
-              A text button at the end of the form, away from Save, so it cannot
-              be hit on the way to saving an edit. The dialog does the asking.
-            */}
+            {/* At the end of the form, away from Save. The dialog does the asking. */}
             <Tappable
               onPress={confirmRemove}
               disabled={busy}
               accessibilityRole="button"
               accessibilityLabel="Remove listing"
               style={s.remove}
-              pressedStyle={s.removePressed}
+              pressedStyle={s.pressedText}
             >
               {remove.isPending ? (
                 <ActivityIndicator color={color.urgent} />
               ) : (
                 <>
-                  <TrashIcon
-                    size={icon.menuRow.size}
-                    stroke={icon.menuRow.stroke}
-                    color={color.urgent}
-                  />
-                  <Text style={[textStyle(type.secondaryButton), { color: color.urgent }]}>
-                    Remove listing
-                  </Text>
+                  <TrashIcon size={18} stroke={2} color={color.urgent} />
+                  <Text style={[textStyle(type.secondaryButton), { color: color.urgent }]}>Remove listing</Text>
                 </>
               )}
             </Tappable>
           </ScrollView>
-
-          <View style={s.actions}>
-            <Tappable
-              onPress={close}
-              accessibilityRole="button"
-              style={s.secondary}
-              pressedStyle={s.secondaryPressed}
-            >
-              <Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>
-                Cancel
-              </Text>
-            </Tappable>
-
-            <Tappable
-              onPress={save}
-              disabled={blocked}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: blocked }}
-              style={[s.primary, blocked && s.primaryDisabled]}
-              pressedStyle={s.primaryPressed}
-            >
-              {update.isPending ? (
-                <ActivityIndicator color={color.onGreen} />
-              ) : (
-                <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-                  Save
-                </Text>
-              )}
-            </Tappable>
-          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -427,7 +428,6 @@ const s = StyleSheet.create({
     borderTopRightRadius: radius.sheet,
     paddingTop: space.sheet.top,
     paddingBottom: space.sheet.bottom,
-    maxHeight: "88%",
   },
   handle: {
     alignSelf: "center",
@@ -436,9 +436,17 @@ const s = StyleSheet.create({
     borderRadius: size.sheet.handleH / 2,
     backgroundColor: color.controlLineStrong,
   },
-  title: { marginTop: space.sheet.top, paddingHorizontal: space.sheet.x, color: color.ink },
-
-  body: { marginTop: space.sheet.titleToBody },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.sheet.x, marginTop: 10, paddingBottom: 12, borderBottomWidth: border.hairline, borderBottomColor: color.divider },
+  headerSide: { width: 72, minHeight: 44, justifyContent: "center" },
+  title: { flex: 1, textAlign: "center", color: color.ink },
+  pressedText: { opacity: 0.6 },
+  locked: { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, marginBottom: space.sheet.groupGap, borderRadius: 14, borderWidth: border.chip, borderColor: color.controlLine },
+  lockedThumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: color.control },
+  lockedFacts: { fontFamily: font.sansSemi, fontSize: 14, color: color.ink },
+  lockedNote: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.inkMuted },
+  hubRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
+  hubDivider: { borderTopWidth: border.hairline, borderTopColor: color.divider },
+  body: { marginTop: 16 },
   bodyContent: { paddingHorizontal: space.sheet.x, paddingBottom: space.sheet.actionsTop },
 
   group: { marginBottom: space.sheet.groupGap },
@@ -485,19 +493,7 @@ const s = StyleSheet.create({
   locationButtonText: { color: color.forest, flex: 1 },
 
   note: { color: color.inkMuted },
-  remove: {
-    marginTop: space.sheet.groupGap,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: radius.filterButton,
-    borderWidth: border.chip,
-    borderColor: color.urgentLine,
-    backgroundColor: color.urgentWash,
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  remove: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, marginTop: 4 },
   removePressed: { opacity: 0.8 },
 
   actions: {

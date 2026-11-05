@@ -687,6 +687,7 @@ export default function ItemDetailScreen() {
             onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
             onEdit={() => setEditing(true)}
             onRelist={() => void startRelist(item, () => router.push("/post-item"))}
+            onSeeOffers={() => router.push(`/listing-offers?id=${encodeURIComponent(item.id)}`)}
             onOffer={() => {
               if (cannotOffer) {
                 setReachDialogOpen(true);
@@ -1131,6 +1132,7 @@ function BottomBar({
   onLike,
   onEdit,
   onRelist,
+  onSeeOffers,
   onOffer,
 }: {
   own: boolean;
@@ -1147,6 +1149,8 @@ function BottomBar({
   onEdit: () => void;
   /** An ended perishable: start a NEW listing from it. */
   onRelist: () => void;
+  /** Your own listing: the offers inbox for it. */
+  onSeeOffers: () => void;
   onOffer: () => void;
 }) {
   const inert = (label: string) => (
@@ -1180,13 +1184,24 @@ function BottomBar({
     }
     return (
       <View style={s.barRow}>
+        {/* Your own listing: a plain Edit beside the thing you came back
+            for, the offers on it. */}
         <Tappable
           onPress={onEdit}
           accessibilityRole="button"
-          style={[s.action, s.actionOutline]}
+          accessibilityLabel="Edit listing"
+          style={[s.action, s.actionPlain]}
           pressedStyle={s.pressed}
         >
-          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Edit listing</Text>
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.ink }]}>Edit</Text>
+        </Tappable>
+        <Tappable
+          onPress={onSeeOffers}
+          accessibilityRole="button"
+          style={s.action}
+          pressedStyle={s.pressed}
+        >
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>See offers</Text>
         </Tappable>
       </View>
     );
@@ -1573,6 +1588,7 @@ const s = StyleSheet.create({
     borderWidth: border.chip,
     borderColor: color.forest,
   },
+  actionPlain: { backgroundColor: color.searchSurface, borderWidth: 1, borderColor: color.controlLineStrong },
   actionInert: { backgroundColor: color.control },
   actionLocked: { flexDirection: "row", gap: 8 },
   // Wraps to a second line at large text sizes rather than truncating beside

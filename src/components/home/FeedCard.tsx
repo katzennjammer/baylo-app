@@ -220,34 +220,37 @@ export const FeedCard = memo(function FeedCard({
           perishable={perishable}
           onOpen={onOpen && (() => onOpen(item))}
         />
-        {inReach && !perishable ? (
-          <View style={s.reachChip} pointerEvents="none">
-            <LeafIcon size={13} stroke={2.2} color={color.forest} />
-            <Text style={s.reachChipText}>Within your reach</Text>
-          </View>
-        ) : null}
       </View>
 
-      {/* ── title + value ── */}
+      {/* ── title ── */}
       <View style={s.titleRow}>
         <Text style={[textStyle(type.itemTitle), s.title]} numberOfLines={lines.itemTitle}>
           {item.title}
         </Text>
-
-        {/*
-          Null for listings made before the valuation model. The chip is omitted
-          rather than shown as "0" or "—": an unvalued item is not an item worth
-          nothing, and the artboard has no state for the difference.
-        */}
-        {item.valueLeaves !== null ? (
-          <LeavesChip value={item.valueLeaves} own={isOwnListing} />
-        ) : null}
       </View>
 
-      {/* ── condition · category ── */}
-      <Text style={[textStyle(type.metadata), s.facts]} numberOfLines={1}>
-        {`${item.conditionLabel} · ${item.categoryLabel}`}
-      </Text>
+      {/*
+        ── one line of facts: bracket, condition, category, and whether you
+        can offer. The bracket leads because it is the trading fact; it is
+        text with the leaf, not a pill, and nothing sits on the photo.
+        Unvalued listings (made before the valuation model) skip the bracket
+        rather than show "0".
+      */}
+      <View style={s.factsRow} accessible accessibilityRole="text">
+        {item.valueLeaves !== null ? (
+          <>
+            <LeafIcon size={14} stroke={2.2} color={color.forest} />
+            <Text style={[textStyle(type.metadata), s.factBracket]}>
+              {bracketLabel(bracketOf(item.valueLeaves))}
+            </Text>
+            <Text style={[textStyle(type.metadata), s.factSep]}>·</Text>
+          </>
+        ) : null}
+        <Text style={[textStyle(type.metadata), s.facts]} numberOfLines={1}>
+          {`${item.conditionLabel} · ${item.categoryLabel}`}
+          {inReach && !isOwnListing ? <Text style={s.factReach}>{"  ·  You can offer"}</Text> : null}
+        </Text>
+      </View>
 
       {/* ── what the owner will take; absent when they did not say ── */}
       {wanted ? (
@@ -427,29 +430,6 @@ function ownerStanding(owner: Item["owner"]): string | null {
   return badge.tier.charAt(0) + badge.tier.slice(1).toLowerCase();
 }
 
-/**
- * The item's worth. Never shrinks — the title is the flexible half of that row.
- *
- * THE EXACT NUMBER ONLY ON YOUR OWN LISTING. Everyone else's shows its bracket
- * — see `src/lib/brackets.ts` for the reasoning — and `own` is the same
- * `isOwnListing` that already decides whether the card gets an offer button,
- * so the two cannot disagree about whose listing this is. The accessibility
- * label follows the same rule: a reader announcing the exact figure would
- * defeat the bracket.
- */
-function LeavesChip({ value, own }: { value: number; own: boolean }) {
-  const shown = own ? String(value) : bracketLabel(bracketOf(value));
-  return (
-    <View
-      style={s.leavesChip}
-      accessibilityRole="text"
-      accessibilityLabel={own ? `Your listing, valued at ${value} Leaves` : shown}
-    >
-      <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
-      <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>{shown}</Text>
-    </View>
-  );
-}
 
 /**
  * How a card ends: the social actions, and the action the card exists for.
@@ -822,25 +802,18 @@ const s = StyleSheet.create({
   },
   title: { flex: 1, color: color.ink },
 
-  leavesChip: {
-    flexShrink: 0,
+
+  factsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: size.leaves.gap,
-    height: size.leaves.cardChip,
-    paddingLeft: size.leaves.cardChipLeft,
-    paddingRight: size.leaves.cardChipRight,
-    borderRadius: radius.leavesChipCard,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-
-  facts: {
+    gap: 5,
     paddingHorizontal: space.screenX,
     marginTop: space.card.titleToChips,
-    color: color.inkSecondary,
   },
+  factBracket: { color: color.ink, fontFamily: font.sansSemi },
+  factSep: { color: color.inkMuted },
+  facts: { flexShrink: 1, color: color.inkSecondary },
+  factReach: { color: color.forest, fontFamily: font.sansSemi },
   wantsRow: {
     flexDirection: "row",
     alignItems: "flex-start",
