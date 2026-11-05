@@ -132,7 +132,21 @@ export default function ListingReviewScreen() {
  */
 function ExpiredBody({ item }: { item: Item }) {
   const router = useRouter();
+  const remove = useDeleteItem();
   const image = item.images[0] ?? null;
+  const confirmDelete = () =>
+    showDialog("Delete this listing?", "It is removed from your profile for good.", [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          remove.mutate(item.id, {
+            onSuccess: () => router.back(),
+            onError: () => showDialog("Could not delete that", "Check your connection and try again."),
+          }),
+      },
+    ]);
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
       <Section pad={{ top: 14, bottom: 14 }}>
@@ -153,13 +167,21 @@ function ExpiredBody({ item }: { item: Item }) {
       <Section pad={{ top: 18, bottom: 14 }}>
         <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink }]}>Expired unsold</Text>
         <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary, marginTop: 8 }]}>
-          Its trade window closed before anyone traded for it, so it is off the feed and only you can see it. Relist to post it again as a new listing with the same photo and details and a fresh window.
+          Its trade window closed before anyone traded for it, so it is off the feed and only you can see it. Relist to post it again with the same photo and details and a fresh window, or delete it.
         </Text>
       </Section>
 
       <Gutter style={{ paddingTop: 8, gap: 12 }}>
         <PrimaryButton label="Relist" onPress={() => void startRelist(item, () => router.replace("/post-item"))} />
       </Gutter>
+
+      <Section pad={{ top: 4, bottom: 12 }}>
+        <Tappable onPress={remove.isPending ? undefined : confirmDelete} accessibilityRole="button" accessibilityState={{ disabled: remove.isPending }}>
+          <Text style={[textStyle(offerType.buttonSecondary), { color: offerColor.warm, textAlign: "center", paddingVertical: 12 }]}>
+            {remove.isPending ? "Deleting…" : "Delete this listing"}
+          </Text>
+        </Tappable>
+      </Section>
     </ScrollView>
   );
 }

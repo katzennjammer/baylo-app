@@ -166,22 +166,14 @@ export default function ProfileScreen() {
   // sit unlabelled among the listings and read as listings.
   const items = profile?.items ?? [];
   const isHistory = (i: Item) => i.status === "TRADED" || i.status === "OWNED";
-  const listingItems = items.filter((i) => !isHistory(i));
+  // An expired perishable is not a listing any more: it stays on the shelf,
+  // last and labelled, so it can be relisted or deleted, but it is not counted.
+  const isExpired = (i: Item) => i.status === "EXPIRED";
+  const listingItems = [...items.filter((i) => !isHistory(i) && !isExpired(i)), ...items.filter(isExpired)];
+  const listingCount = listingItems.filter((i) => !isExpired(i)).length;
   const tradedItems = items.filter(isHistory);
-  // The tab's number is the header's number: what is live on the marketplace
-  // now. Everything else that is still yours (in a trade, waiting for review,
-  // value not approved, expired) sits under its own heading below, labelled,
-  // so "5 listings" at the top and "Listings 5" on the tab never disagree.
-  const liveItems = listingItems.filter((i) => i.status === "AVAILABLE" && !i.hiddenByModerator);
-  const notLiveItems = listingItems.filter((i) => !liveItems.includes(i));
-  const postRows = (list: Item[]): ProfileListRow[] => chunkItems(list).map((postItems) => ({ kind: "posts", items: postItems }));
   const rows: ProfileListRow[] = tab === "posts"
-    ? [
-        ...postRows(liveItems),
-        ...(notLiveItems.length
-          ? [{ kind: "heading" as const, title: "Not on the marketplace", count: notLiveItems.length, first: liveItems.length === 0 }, ...postRows(notLiveItems)]
-          : []),
-      ]
+    ? chunkItems(listingItems).map((postItems) => ({ kind: "posts", items: postItems }))
     : tab === "traded"
       ? chunkItems(tradedItems).map((postItems) => ({ kind: "posts", items: postItems }))
       : reviews.map((review) => ({ kind: "review", review }));
@@ -267,7 +259,7 @@ export default function ProfileScreen() {
     <FlatList<ProfileListRow>
       style={s.screen}
       data={rows}
-      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.kind === "heading" ? `heading:${row.title}` : row.review.id}
+      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
         <PersonHeader
           userId={profile?.user.id}
@@ -311,15 +303,10 @@ export default function ProfileScreen() {
           <Badges dark={dark} achievements={profile?.displayedAchievements ?? []} onMore={() => router.push("/achievements")} />
           {profile ? <FinishProfile profile={profile} dark={dark} /> : null}
         </PersonHeader>
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: profile?.counts.listed ?? liveItems.length, traded: tradedItems.length, reviews: profile?.counts.reviews ?? 0 }} />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: listingCount, traded: tradedItems.length, reviews: profile?.counts.reviews ?? 0 }} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} loadError={reviewsLoadError} onRetry={() => void refetchReviews()} /> : null}
       </>}
-      renderItem={({ item: row }) => row.kind === "heading" ? (
-        <View style={[s.shelfHead, row.first ? { paddingTop: 16 } : null]}>
-          <Text style={[s.shelfHeadTitle, { color: dark ? darkColors.ink : color.ink }]}>{row.title}</Text>
-          <Text style={[s.shelfHeadCount, { color: dark ? darkColors.muted : color.inkMuted }]}>{row.count}</Text>
-        </View>
-      ) : row.kind === "posts" ? (
+      renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item}
           onPress={() => router.push({ pathname: shelfLabel(item) && item.status !== "OWNED" ? "/listing-review" : "/item", params: { id: item.id } })}
           footer={item.status === "OWNED" ? (
@@ -562,7 +549,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       style={[s.screen, { marginBottom: imeInset }]}
       keyboardShouldPersistTaps="handled"
       data={rows}
-      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.kind === "heading" ? row.title : row.review.id}
+      keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
         {topSlot}
         <OrgStorefrontHeader
@@ -579,7 +566,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
         <ProfileTabs dark={dark} active={tab} onChange={setTab} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
       </>}
-      renderItem={({ item: row }) => row.kind === "heading" ? null : row.kind === "posts" ? (
+      renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
       ) : (
         <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
@@ -601,7 +588,6 @@ type DisplayedAchievements = ProfileMePayload["displayedAchievements"];
 
 type ProfileListRow =
   | { kind: "posts"; items: Item[] }
-  | { kind: "heading"; title: string; count: number; first: boolean }
   | { kind: "review"; review: ProfileReview };
 
 function chunkItems(items: Item[]): Item[][] {
@@ -962,9 +948,6 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
 }
 
 const s = StyleSheet.create({
-  shelfHead: { flexDirection: "row", alignItems: "baseline", gap: 8, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 12 },
-  shelfHeadTitle: { fontFamily: font.sansSemi, fontSize: 15 },
-  shelfHeadCount: { fontFamily: font.sansMedium, fontSize: 14 },
   screen: { flex: 1, backgroundColor: color.surface },
   skeletonHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   skeletonAvatar: { width: 76, height: 76, borderRadius: 38 },
