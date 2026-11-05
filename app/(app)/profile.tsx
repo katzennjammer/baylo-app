@@ -228,6 +228,7 @@ export default function ProfileScreen() {
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
         <PersonHeader
+          userId={profile?.user.id}
           avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
           user={{
             bio: profile?.user.bio ?? null,
