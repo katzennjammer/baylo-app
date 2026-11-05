@@ -106,6 +106,11 @@ export default function ChatInfoScreen() {
     return out;
   }, [thread.data]);
   const [allPhotos, setAllPhotos] = useState(false);
+  // Measured, not "24%": a percentage width on expo-image inside a wrapping
+  // row can lay out at zero on Android, which left the section with a title
+  // and no photos.
+  const [gridWidth, setGridWidth] = useState(0);
+  const tile = gridWidth > 0 ? Math.floor((gridWidth - 3 * 4) / 4) : 0;
 
   const muted = settings.data?.muted ?? false;
   const backToChat = (extra?: Record<string, string>) =>
@@ -205,10 +210,17 @@ export default function ChatInfoScreen() {
                   </Tappable>
                 ) : null}
               </View>
-              <View style={s.photos}>
-                {(allPhotos ? photos : photos.slice(0, 4)).map((url, i) => (
-                  <Image key={`${url}-${i}`} source={{ uri: sizedImage(url, "thumb") }} contentFit="cover" style={s.photo} />
-                ))}
+              <View style={s.photos} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+                {tile > 0
+                  ? (allPhotos ? photos : photos.slice(0, 4)).map((url, i) => (
+                      <Image
+                        key={`${url}-${i}`}
+                        source={{ uri: sizedImage(url, "thumb") }}
+                        contentFit="cover"
+                        style={[s.photo, { width: tile, height: tile }]}
+                      />
+                    ))
+                  : null}
               </View>
             </View>
           ) : null}
@@ -325,7 +337,7 @@ const s = StyleSheet.create({
   tradeTitle: { fontFamily: font.sansSemi, fontSize: 14, color: color.ink },
   tradeSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
   photos: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  photo: { width: "24%", aspectRatio: 1, borderRadius: 10, backgroundColor: color.control },
+  photo: { borderRadius: 10, backgroundColor: color.control },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   actionText: { flex: 1, fontFamily: font.sansMedium, fontSize: 15, color: color.ink },
   danger: { color: color.urgent, fontFamily: font.sansSemi },
