@@ -327,7 +327,10 @@ function ChatImage({
   }, [dimensions?.height, dimensions?.width, url]);
 
   return (
-    <View style={[styles.imageWrap, { maxWidth: frame.width + 2 * MEDIA_BORDER }, mine ? styles.mineCard : styles.theirCard]}>
+    // No frame colour around a photo: the bubble's green (or grey) and its
+    // border used to show as a dark rim where the rounded image did not quite
+    // meet the rounded box. The photo is the bubble.
+    <View style={[styles.imageWrap, { maxWidth: frame.width }]}>
       <Tappable
         onPress={() => onPress?.(url)}
         disabled={!onPress}
@@ -339,7 +342,9 @@ function ChatImage({
           <Image
             source={{ uri: sizedImage(url, "card") }}
             style={[styles.messageImage, { width: frame.width, height: frame.height }]}
-            contentFit={frame.contentFit}
+            // The frame already has the photo's own shape, so cover fills it
+            // exactly; "contain" left hairline bands from rounding.
+            contentFit="cover"
             onLoad={(event) => {
               setLoaded(true);
               if (!dimensions && !measuredDimensions) {
@@ -436,7 +441,6 @@ const styles = StyleSheet.create({
   imageWrap: {
     borderRadius: radius.card,
     overflow: "hidden",
-    borderWidth: MEDIA_BORDER,
   },
   imageFrame: {
     position: "relative",
@@ -446,10 +450,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: color.control,
   },
-  messageImage: {
-    borderRadius: radius.card,
-  },
+  messageImage: {},
   caption: {
+    backgroundColor: color.control,
     fontFamily: font.sans,
     fontSize: 12,
     padding: 8,
