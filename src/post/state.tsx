@@ -405,6 +405,16 @@ export function reduce(s: PostState, a: PostAction): PostState {
   return next;
 }
 
+/**
+ * Whether the title is the person's own: typed, not written by detection.
+ * Drafts saved before the titleEdited flag existed have it undefined, and for
+ * those any title is treated as typed, as before.
+ */
+function keepsTitle(s: PostState): boolean {
+  if (s.titleEdited === undefined) return s.title.trim().length > 0;
+  return s.titleEdited;
+}
+
 function step(s: PostState, a: PostAction): PostState {
   switch (a.type) {
     case "goto":
@@ -436,6 +446,18 @@ function step(s: PostState, a: PostAction): PostState {
       // Clamp rather than reset: removing the third of four should leave the
       // hero on a neighbour, not jump back to the first.
       const selected = Math.max(0, Math.min(photos.length - 1, s.selectedPhoto));
+      if (photos.length === 0 && s.detection.original) {
+        // The last photo is gone, and with it what detection said about it.
+        // A title only detection wrote goes too, so the next photo does not
+        // inherit the old item's name.
+        return {
+          ...s,
+          photos,
+          selectedPhoto: 0,
+          detection: { phase: "idle", original: null, slow: false },
+          title: keepsTitle(s) ? s.title : "",
+        };
+      }
       return { ...s, photos, selectedPhoto: selected };
     }
 
@@ -468,7 +490,10 @@ function step(s: PostState, a: PostAction): PostState {
         // the user will edit, so it is normalised once here rather than at every
         // place that renders it.
         // Older persisted drafts may have a title but no titleEdited flag.
-        title: s.titleEdited || s.title.length > 0 ? s.title : sentenceCase(a.result.name),
+        // A title the last detection wrote (never typed over) follows the new
+        // photo: pick a Jollibee meal, remove it, pick a bag, and the name is
+        // the bag's. A typed title is the person's and stays.
+        title: keepsTitle(s) ? s.title : sentenceCase(a.result.name),
         condition,
         conditionPrefilled: true,
       };

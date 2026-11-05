@@ -21,12 +21,16 @@ export const NOTIFICATIONS_KEY = ["notifications"] as const;
 /** Matches the trades lists: a minute-old copy is fine while a fresh one loads. */
 const NOTIFICATIONS_STALE_MS = 30_000;
 
+/**
+ * A plain chat message ("sent you a message"). Those live in the Messages
+ * tab, so the list leaves them out -- and ONLY those, the same rule the
+ * server's bell count uses (excludeDirectMessageNotifications). Hiding every
+ * NEW_MESSAGE row also hid "commented on your listing" and "made you an
+ * offer", which the bell still counted: a badge of 1 and nothing new in the
+ * list.
+ */
 export function isMessageNotification(notification: NotificationItem): boolean {
-  return (
-    notification.type === "NEW_MESSAGE" ||
-    notification.entityType === "conversation" ||
-    notificationTarget(notification)?.startsWith("/messages") === true
-  );
+  return notification.type === "NEW_MESSAGE" && notification.message === "sent you a message";
 }
 
 /**

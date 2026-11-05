@@ -253,6 +253,10 @@ export default function HomeScreen() {
     [router],
   );
   const openMarketplace = useCallback(() => router.push("/(app)/marketplace"), [router]);
+  const openFilters = useCallback(
+    () => router.push({ pathname: "/(app)/marketplace", params: { openFilters: "1", applyAt: String(Date.now()) } }),
+    [router],
+  );
   const openTrades = useCallback(() => router.navigate("/(app)/trades"), [router]);
   // A shop's storefront is its backing account's profile.
   const openShop = useCallback(
@@ -373,7 +377,7 @@ export default function HomeScreen() {
           onSearchChange={setDraftQuery}
           onSearchSubmit={() => submitSearch()}
           searchSuggestions={searchSuggestions}
-          onFilterPress={openMarketplace}
+          onFilterPress={openFilters}
           pendingTradeCount={pendingTradeCount}
           leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
           firstName={homeData.viewer?.name ?? session?.user.name}

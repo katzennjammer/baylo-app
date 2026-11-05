@@ -14,7 +14,7 @@ import { bracketLabel, bracketOf as bracketOfValue } from "../../src/lib/bracket
 import { color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
-import { StoreIcon } from "../../src/components/icons";
+import { LeafIcon, StoreIcon } from "../../src/components/icons";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
@@ -589,11 +589,17 @@ export function ReviewSummary({ dark, summary, hideTier = false, loadError = fal
   const palette = dark ? darkColors : lightColors;
   if (loadError) return <ReviewLoadError dark={dark} onRetry={onRetry} />;
   if (!summary) return <View style={s.summaryLoading}><ActivityIndicator color={palette.green} /></View>;
+  const tier = summary.trustTier ?? "New Trader";
   return (
-    <View style={[s.summary, { backgroundColor: palette.surface }]}>
-      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "-"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>average rating</Text></View>
-      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.totalReviews}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>reviews</Text></View>
-      {hideTier ? null : <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>}
+    <View style={[s.summary, { backgroundColor: palette.control }]}>
+      <Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "–"}</Text>
+      <View style={s.summaryText}>
+        <RatingStars dark={dark} rating={Math.round(summary.averageRating)} size={16} />
+        <Text style={[s.summaryLabel, { color: palette.secondary }]}>
+          {summary.totalReviews} {summary.totalReviews === 1 ? "review" : "reviews"}
+          {hideTier ? "" : ` · ${tier.toLowerCase().replace(/^./, (c) => c.toUpperCase())}`}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -614,17 +620,28 @@ export function ReviewLoadError({ dark, onRetry }: { dark: boolean; onRetry?: ()
 
 export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean; review: import("../../src/api/reviews").ProfileReview; onReviewer: () => void; onItem: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  const date = new Date(review.createdAt);
+  const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" });
   return (
-    <View style={[s.reviewRow, { borderBottomColor: palette.divider }]}>
+    <View style={[s.reviewRow, { borderColor: palette.divider, backgroundColor: palette.surface }]}>
       <Pressable onPress={onReviewer} style={s.reviewIdentity} accessibilityRole="button" accessibilityLabel={`View ${review.reviewer.name}'s profile`}>
         <ReviewAvatar uri={review.reviewer.avatar} name={review.reviewer.name} dark={dark} />
-        <View style={s.reviewIdentityText}><Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text><RatingStars dark={dark} rating={review.rating} /></View>
-        <Text style={[s.reviewDate, { color: palette.muted }]}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+        <View style={s.reviewIdentityText}>
+          <Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text>
+          <View style={s.reviewMetaRow}>
+            <RatingStars dark={dark} rating={review.rating} />
+            {when ? <Text style={[s.reviewDate, { color: palette.muted }]}>{when}</Text> : null}
+          </View>
+        </View>
       </Pressable>
-      {review.comment ? <Text style={[s.reviewComment, { color: palette.secondary }]}>{review.comment}</Text> : null}
+      {review.comment ? <Text style={[s.reviewComment, { color: palette.ink }]}>{review.comment}</Text> : null}
       {review.item ? <Pressable onPress={onItem} style={[s.reviewItem, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Open ${review.item.title}`}>
-        {review.item.image ? <Image source={{ uri: sizedImage(review.item.image, "thumb") }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={18} color={palette.muted} /></View>}
-        <View style={s.reviewItemText}><Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text><Text style={[s.reviewItemMeta, { color: palette.muted }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text></View>
+        {review.item.image ? <Image source={{ uri: sizedImage(review.item.image, "thumb") }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={16} color={palette.muted} /></View>}
+        <View style={s.reviewItemText}>
+          <Text style={[s.reviewItemMeta, { color: palette.muted }]}>Traded</Text>
+          <Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text>
+        </View>
+        <Text style={[s.reviewItemMeta, { color: palette.secondary, marginRight: 10 }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text>
       </Pressable> : null}
     </View>
   );
@@ -637,9 +654,9 @@ function ReviewAvatar({ uri, name, dark }: { uri: string | null; name: string; d
     : <View style={[s.reviewAvatar, s.reviewAvatarFallback, { backgroundColor: palette.control }]}><Text style={[s.reviewAvatarText, { color: palette.green }]}>{name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
 }
 
-function RatingStars({ dark, rating }: { dark: boolean; rating: number }) {
+function RatingStars({ dark, rating, size = 13 }: { dark: boolean; rating: number; size?: number }) {
   const palette = dark ? darkColors : lightColors;
-  return <View style={s.stars}>{[1, 2, 3, 4, 5].map((star) => <Ionicons key={star} name={star <= rating ? "star" : "star-outline"} size={14} color={star <= rating ? "#C58A24" : palette.muted} />)}</View>;
+  return <View style={s.stars}>{[1, 2, 3, 4, 5].map((star) => <Ionicons key={star} name="star" size={size} color={star <= rating ? "#E0A526" : palette.divider} />)}</View>;
 }
 
 function Stat({ dark, label, value }: { dark: boolean; label: string; value: number }) { const palette = dark ? darkColors : lightColors; return <View style={s.stat}><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></View>; }
@@ -665,14 +682,22 @@ export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   const inTrade = item.status === "IN_TRADE";
-  const value = item.valueLeaves !== null ? `${item.valueLeaves} L · ${bracketLabel(bracketOfValue(item.valueLeaves))}` : "";
+  const bracket = item.valueLeaves !== null ? bracketLabel(bracketOfValue(item.valueLeaves)) : null;
   return <Pressable onPress={onPress} style={s.tile} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
     <View style={[s.tilePhoto, { backgroundColor: palette.control }, inTrade && s.dimmed]}>
       {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
       {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
     </View>
     <Text style={[s.tileTitle, { color: palette.ink }]} numberOfLines={1}>{item.title}</Text>
-    {value ? <Text style={[s.tileValue, { color: palette.secondary }]} numberOfLines={1}>{value}</Text> : null}
+    {item.valueLeaves !== null ? (
+      <View style={s.tileValueRow} accessibilityLabel={`${item.valueLeaves} Leaves, ${bracket}`}>
+        <LeafIcon size={13} stroke={2} color={palette.green} />
+        <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>
+          {item.valueLeaves}
+          <Text style={{ color: palette.secondary }}>{`  ·  ${bracket}`}</Text>
+        </Text>
+      </View>
+    ) : null}
   </Pressable>;
 }
 
@@ -945,33 +970,34 @@ const s = StyleSheet.create({
   tabText: { fontSize: 15 },
   tabCount: { fontFamily: font.sansSemi, fontSize: 15 },
   tabUnderline: { position: "absolute", bottom: -StyleSheet.hairlineWidth, width: 24, height: 2 },
-  summary: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 16, paddingHorizontal: 16 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 14, marginHorizontal: 16, marginTop: 14, marginBottom: 6, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16 },
   summaryLoading: { height: 64, alignItems: "center", justifyContent: "center" },
-  summaryValue: { fontFamily: font.displaySemi, fontSize: 20, textAlign: "center" },
-  summaryLabel: { fontFamily: font.sans, fontSize: 11, marginTop: 3, textAlign: "center" },
-  summaryTier: { maxWidth: 130, alignItems: "center" },
-  summaryTierText: { fontFamily: font.sansSemi, fontSize: 13, textAlign: "center" },
-  reviewRow: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  reviewIdentity: { minHeight: 44, flexDirection: "row", alignItems: "center" },
-  reviewAvatar: { width: 40, height: 40, borderRadius: 20 },
+  summaryValue: { fontFamily: font.displayBold, fontSize: 34, lineHeight: 38 },
+  summaryLabel: { fontFamily: font.sans, fontSize: 13 },
+  summaryText: { flex: 1, minWidth: 0, gap: 4 },
+  reviewRow: { marginHorizontal: 16, marginTop: 10, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  reviewIdentity: { flexDirection: "row", alignItems: "center" },
+  reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { alignItems: "center", justifyContent: "center" },
   reviewAvatarText: { fontFamily: font.sansBold, fontSize: 15 },
+  reviewMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
   reviewIdentityText: { flex: 1, minWidth: 0, marginLeft: 10 },
   reviewName: { fontFamily: font.sansSemi, fontSize: 14 },
   stars: { flexDirection: "row", gap: 2, marginTop: 3 },
-  reviewDate: { fontFamily: font.sans, fontSize: 11, marginLeft: 8 },
+  reviewDate: { fontFamily: font.sans, fontSize: 12 },
   reviewComment: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 10 },
-  reviewItem: { minHeight: 52, flexDirection: "row", alignItems: "center", marginTop: 12, borderRadius: 6, overflow: "hidden" },
-  reviewItemImage: { width: 52, height: 52 },
-  reviewItemText: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  reviewItem: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12, borderRadius: 12, overflow: "hidden" },
+  reviewItemImage: { width: 44, height: 44 },
+  reviewItemText: { flex: 1, minWidth: 0 },
   reviewItemTitle: { fontFamily: font.sansSemi, fontSize: 13 },
-  reviewItemMeta: { fontFamily: font.sans, fontSize: 11, marginTop: 3 },
+  reviewItemMeta: { fontFamily: font.sans, fontSize: 11 },
   footer: { paddingVertical: 18 },
   gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 },
   tile: { flexGrow: 0, flexBasis: "48%", width: "48%", minWidth: 0, gap: 6 },
   tilePhoto: { aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
   tileTitle: { fontFamily: font.sansSemi, fontSize: 14 },
-  tileValue: { fontFamily: font.sans, fontSize: 12, marginTop: -4 },
+  tileValueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
+  tileValue: { flexShrink: 1, fontFamily: font.sansSemi, fontSize: 12 },
   tileContent: { flex: 1 },
   tileImage: { width: "100%", height: "100%" },
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },

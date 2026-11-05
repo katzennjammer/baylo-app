@@ -287,8 +287,10 @@ export default function MarketplaceScreen() {
     category: arrivingCategory,
     q: arrivingQuery,
     [MARKETPLACE_FILTERS_PARAM]: arrivingFilters,
+    openFilters: arrivingOpenFilters,
     applyAt,
   } = useLocalSearchParams<{
+    openFilters?: string;
     category?: string;
     q?: string;
     filters?: string;
@@ -296,6 +298,14 @@ export default function MarketplaceScreen() {
   }>();
   useEffect(() => {
     if (!applyAt) return;
+    // Home's filter button: open the filter sheet over the grid, and keep
+    // the filters already set. This screen stays mounted, so without the
+    // explicit grid it reopened on whatever view was left -- the map.
+    if (arrivingOpenFilters === "1") {
+      setView("grid");
+      setSheetOpen(true);
+      return;
+    }
     const whole = parseMarketplaceFilters(arrivingFilters);
     if (whole) {
       setFilters(whole);

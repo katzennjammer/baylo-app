@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
-import { TIER_LABEL } from "../../lib/trust";
 import { color, font } from "../../theme/tokens";
 import { Tappable } from "../Tappable";
 
@@ -11,7 +11,8 @@ import { Tappable } from "../Tappable";
  * numbers. Used for your own profile and for someone else's, so the two
  * always look like the same kind of page.
  *
- *   [avatar]  NEW TRADER  ★ 4.5 · 2 reviews
+ *   [avatar]  ★ 4.5  2 reviews
+ *             (shield) New trader
  *             Lapu-Lapu City · Joined Oct 2026
  *   Gadgets and bags. Usually free on weekends.
  *   5 listings · 2 trades · 4 followers · 5 following
@@ -48,28 +49,37 @@ export function PersonHeader({
   children?: ReactNode;
 }) {
   const joined = joinedLabel(user.createdAt);
-  const rating = counts.reviews > 0
-    ? `★ ${user.rating.toFixed(1)} · ${counts.reviews} ${counts.reviews === 1 ? "review" : "reviews"}`
-    : "No reviews yet";
-  const tier = user.trustTier ? TIER_LABEL[user.trustTier as keyof typeof TIER_LABEL] ?? user.trustTier : null;
+  // The trust tier, written as words: "New trader", not a bare "NEW" chip
+  // that read as a label on the rating beside it.
+  const tierName = user.trustTier
+    ? user.trustTier.toLowerCase().replace(/^./, (c) => c.toUpperCase())
+    : null;
+  const place = [user.location, joined ? `Joined ${joined}` : null].filter(Boolean).join(" · ");
 
   return (
     <View style={s.wrap}>
       <View style={s.identity}>
         {avatar}
         <View style={s.signals}>
-          <View style={s.tierRow}>
-            {tier ? (
-              <View style={[s.tier, { backgroundColor: palette.control }]}>
-                <Text style={[s.tierText, { color: palette.ink }]}>{tier.toUpperCase()}</Text>
-              </View>
-            ) : null}
-            <Text style={[s.rating, { color: palette.ink }]}>{rating}</Text>
-          </View>
-          {user.location ? (
-            <Text style={[s.place, { color: palette.secondary }]} numberOfLines={1}>
-              {`${user.location}${joined ? ` · Joined ${joined}` : ""}`}
+          {counts.reviews > 0 ? (
+            <Text style={[s.rating, { color: palette.ink }]}>
+              <Text style={s.star}>★</Text> {user.rating.toFixed(1)}
+              <Text style={[s.ratingCount, { color: palette.secondary }]}>
+                {"  "}
+                {counts.reviews} {counts.reviews === 1 ? "review" : "reviews"}
+              </Text>
             </Text>
+          ) : (
+            <Text style={[s.ratingCount, { color: palette.secondary }]}>No reviews yet</Text>
+          )}
+          {tierName ? (
+            <View style={[s.tier, { backgroundColor: palette.control }]}>
+              <Ionicons name="shield-checkmark" size={12} color={color.green} />
+              <Text style={[s.tierText, { color: palette.ink }]}>{tierName}</Text>
+            </View>
+          ) : null}
+          {user.location ? (
+            <Text style={[s.place, { color: palette.secondary }]} numberOfLines={1}>{place}</Text>
           ) : (
             locationSlot ?? (joined ? <Text style={[s.place, { color: palette.secondary }]}>Joined {joined}</Text> : null)
           )}
@@ -141,11 +151,12 @@ function joinedLabel(iso: string): string | null {
 const s = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingTop: 14, gap: 12 },
   identity: { flexDirection: "row", alignItems: "center", gap: 14 },
-  signals: { flex: 1, minWidth: 0, gap: 4 },
-  tierRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
-  tier: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  tierText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  rating: { fontSize: 13, fontWeight: "600" },
+  signals: { flex: 1, minWidth: 0, gap: 5, alignItems: "flex-start" },
+  tier: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  tierText: { fontSize: 12, fontWeight: "600" },
+  rating: { fontSize: 17, fontFamily: font.sansBold },
+  star: { color: "#E0A526" },
+  ratingCount: { fontSize: 13, fontFamily: font.sans },
   place: { fontSize: 13 },
   bio: { fontSize: 14, lineHeight: 20 },
   counts: { fontSize: 14 },
