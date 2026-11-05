@@ -166,12 +166,14 @@ function ExpiredBody({ item }: { item: Item }) {
       </Section>
       <Hairline />
 
-      <Section pad={{ top: 18, bottom: 14 }}>
-        <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink }]}>Expired unsold</Text>
-        <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary, marginTop: 8 }]}>
-          Its trade window closed before anyone traded for it, so it is off the feed and only you can see it. Relist to post it again with the same photo and details and a fresh window, or delete it.
-        </Text>
-      </Section>
+      <View style={{ paddingTop: 20, paddingBottom: 8 }}>
+        <MascotEmptyState
+          pose="worry"
+          size={120}
+          title="Expired unsold"
+          message="Its trade window closed before anyone traded for it, so only you can see it now. Edit and relist it with a fresh window, or delete it."
+        />
+      </View>
 
       <Gutter style={{ paddingTop: 8, flexDirection: "row", gap: 10 }}>
         <Tappable
