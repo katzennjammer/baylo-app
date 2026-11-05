@@ -21,7 +21,6 @@ import { Splash } from "../../src/components/Splash";
 import {
   activeFilterCount,
   isFiltered,
-  MAX_CATEGORIES,
   useBrowse,
   useBrowseSuggestions,
   usePerishablesInScope,
@@ -660,16 +659,15 @@ export default function MarketplaceScreen() {
     Keyboard.dismiss();
   }, [draftQuery]);
 
+  // One category at a time on the chips (5 Nov 2026): tapping another one
+  // switches to it, tapping the selected one again shows everything. The
+  // filter panel and Help me find can still set several on purpose; the
+  // first chip tap after that narrows to just the one tapped.
   const toggleCategory = useCallback((category: string) => {
     setFilters((f) => {
       const current = f.categories ?? [];
-      if (current.includes(category)) {
-        return { ...f, categories: current.filter((c) => c !== category) };
-      }
-      // Silently ignoring the tap at the cap would read as a dead control; the
-      // rail dims the blocked chips so this branch is only ever a safety net.
-      if (current.length >= MAX_CATEGORIES) return f;
-      return { ...f, categories: [...current, category] };
+      if (current.length === 1 && current[0] === category) return { ...f, categories: undefined };
+      return { ...f, categories: [category] };
     });
   }, []);
 
@@ -901,7 +899,7 @@ export default function MarketplaceScreen() {
               selected={filters.categories ?? []}
               onToggle={toggleCategory}
               onClearCategories={clearCategories}
-              max={MAX_CATEGORIES}
+              max={Number.POSITIVE_INFINITY}
               orgsOnly={filters.orgsOnly ?? false}
               onToggleOrgs={toggleOrgsOnly}
             />
