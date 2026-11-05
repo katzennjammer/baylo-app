@@ -240,6 +240,19 @@ export default function MessagesScreen() {
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={color.green} />
         }
+        // A filter or search with nothing in it says so (5 Nov 2026); it was
+        // a blank screen.
+        ListEmptyComponent={
+          <View style={{ paddingTop: 48 }}>
+            {q ? (
+              <MascotEmptyState pose="search" size={110} title="No matches" message={`No chats match "${query.trim()}".`} />
+            ) : inboxFilter === "unread" ? (
+              <MascotEmptyState pose="celebrate" size={110} title="All caught up" message="You have read every message. New ones show up here." />
+            ) : (
+              <MascotEmptyState pose="leaf" size={110} title="No chats about a trade" message="Chats with someone you have an offer or trade with show up here." />
+            )}
+          </View>
+        }
         renderItem={({ item }) => {
           const preview = previewFromContent(item.content, item.fromMe);
           const label = item.fromMe ? `You: ${preview}` : preview;
