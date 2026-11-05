@@ -166,10 +166,28 @@ export default function MessagesScreen() {
   }
 
   const q = query.trim().toLowerCase();
-  const tradingIds = new Set([
-    ...(activeTrades.data?.trades.map((t) => t.counterparty.id) ?? []),
-    ...(activeTrades.data?.offers.filter((o) => o.status === "PENDING").map((o) => o.counterparty.id) ?? []),
-  ]);
+  // What is live with each person, said on their row: the item and where it stands.
+  const tradeTags = new Map<string, { label: string; image: string | null; good: boolean }>();
+  for (const o of activeTrades.data?.offers ?? []) {
+    if (o.status !== "PENDING" || tradeTags.has(o.counterparty.id)) continue;
+    tradeTags.set(o.counterparty.id, {
+      label: `${o.direction === "sent" ? "Offer waiting" : "Offer for you"} · ${o.post.title}`,
+      image: o.post.image ?? null,
+      good: false,
+    });
+  }
+  for (const t of activeTrades.data?.trades ?? []) {
+    const get = t.direction === "sent" ? t.requestedItem : t.offeredItem;
+    const at = t.meetup?.agreedAt ? new Date(t.meetup.at) : null;
+    tradeTags.set(t.counterparty.id, {
+      label: at
+        ? `Meetup ${at.toLocaleDateString("en-US", { weekday: "short" })} ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+        : `${t.status === "PENDING" ? "Request" : "Trade on"} · ${get?.title ?? "trade"}`,
+      image: get?.image ?? null,
+      good: !!at || t.status === "ACCEPTED",
+    });
+  }
+  const tradingIds = new Set(tradeTags.keys());
   const shown = conversations.filter(
     (c) =>
       (!q || c.partnerName?.toLowerCase().includes(q) || previewFromContent(c.content, c.fromMe).toLowerCase().includes(q)) &&
@@ -248,7 +266,7 @@ export default function MessagesScreen() {
               >
                 <View style={styles.metaRow}>
                   <Text style={[styles.name, item.unreadCount > 0 && styles.unreadText]}>{item.partnerName}</Text>
-                  <Text style={styles.time}>{relativeTime(item.lastMessageAt)}</Text>
+                  <Text style={[styles.time, item.unreadCount > 0 && { color: color.forest, fontFamily: font.sansBold }]}>{relativeTime(item.lastMessageAt)}</Text>
                 </View>
                 <View style={styles.previewRow}>
                   <Text style={[styles.preview, item.unreadCount > 0 && styles.unreadText]} numberOfLines={1}>{label}</Text>
@@ -259,11 +277,17 @@ export default function MessagesScreen() {
                   ) : null}
                 </View>
                 {/* A trade is live in this chat: say so on the row. */}
-                {tradingIds.has(item.partnerId) ? (
-                  <View style={styles.tradeTag}>
-                    <Text style={styles.tradeTagText}>Trade in progress</Text>
-                  </View>
-                ) : null}
+                {tradeTags.get(item.partnerId) ? (() => {
+                  const tag = tradeTags.get(item.partnerId)!;
+                  return (
+                    <View style={[styles.tradeTag, tag.good && { backgroundColor: color.greenWash }]}>
+                      <View style={styles.tradeTagThumb}>
+                        {tag.image ? <Image source={{ uri: sizedImage(tag.image, "thumb") }} style={StyleSheet.absoluteFill} /> : null}
+                      </View>
+                      <Text style={[styles.tradeTagText, tag.good && { color: color.forest }]} numberOfLines={1}>{tag.label}</Text>
+                    </View>
+                  );
+                })() : null}
               </Tappable>
             </View>
           );
@@ -284,8 +308,9 @@ const styles = StyleSheet.create({
   filterTextOn: { color: "#FFFFFF", fontFamily: font.sansSemi },
   filterCount: { minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
   filterCountText: { fontFamily: font.sansBold, fontSize: 11, color: color.onGreen },
-  tradeTag: { alignSelf: "flex-start", marginTop: 4, height: 22, paddingHorizontal: 8, borderRadius: 11, backgroundColor: color.control, justifyContent: "center" },
-  tradeTagText: { fontFamily: font.sansSemi, fontSize: 12, color: color.inkSecondary },
+  tradeTag: { alignSelf: "flex-start", maxWidth: "100%", marginTop: 4, height: 22, flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 3, paddingRight: 8, borderRadius: 11, backgroundColor: color.control },
+  tradeTagThumb: { width: 16, height: 16, borderRadius: 4, overflow: "hidden", backgroundColor: "#CBD5DE" },
+  tradeTagText: { flexShrink: 1, fontFamily: font.sansSemi, fontSize: 12, color: "#3F3E37" },
   screen: {
     flex: 1,
     backgroundColor: color.surface,

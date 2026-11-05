@@ -46,18 +46,23 @@ export function PinnedTrade({
   const href = trade ? tradeHref(trade.id) : offerHref(offer!.id);
 
   return (
-    <View style={s.bar}>
-      <View style={s.thumb}>
-        {get?.image ? <Image source={{ uri: sizedImage(get.image, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+    <Tappable onPress={() => router.push(href as never)} accessibilityRole="button" accessibilityLabel={`${status}. ${title}. View`} style={s.bar}>
+      <View style={s.stack}>
+        <View style={[s.thumb, { left: 0 }]}>
+          {give?.image ? <Image source={{ uri: sizedImage(give.image, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+        </View>
+        <View style={[s.thumb, s.thumbFront]}>
+          {get?.image ? <Image source={{ uri: sizedImage(get.image, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+        </View>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.status} numberOfLines={1}>{status}</Text>
         <Text style={s.title} numberOfLines={1}>{title}</Text>
       </View>
-      <Tappable onPress={() => router.push(href as never)} accessibilityRole="button" accessibilityLabel={`View: ${status}`} style={s.view}>
+      <View style={s.view}>
         <Text style={s.viewText}>View</Text>
-      </Tappable>
-    </View>
+      </View>
+    </Tappable>
   );
 }
 
@@ -66,23 +71,21 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingLeft: 8,
+    paddingRight: 10,
     paddingVertical: 8,
-    backgroundColor: color.greenWash,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.greenLine,
-  },
-  thumb: { width: 40, height: 40, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
-  status: { fontSize: 12, fontWeight: "700", color: color.forest },
-  title: { fontSize: 14, fontWeight: "600", color: color.ink },
-  view: {
-    height: 32,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: color.searchSurface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: color.greenLine,
-    justifyContent: "center",
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
   },
-  viewText: { fontSize: 13, fontWeight: "700", color: color.forest },
+  stack: { width: 62, height: 40 },
+  thumb: { position: "absolute", width: 40, height: 40, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
+  thumbFront: { left: 22, borderWidth: 2, borderColor: color.searchSurface },
+  status: { fontSize: 13, fontWeight: "700", color: color.ink },
+  title: { fontSize: 12, color: color.inkSecondary },
+  view: { height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: color.control, justifyContent: "center" },
+  viewText: { fontSize: 13, fontWeight: "600", color: color.ink },
 });

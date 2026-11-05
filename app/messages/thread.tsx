@@ -89,7 +89,8 @@ function payloadTypeOf(content: string): string | undefined {
 export default function MessagesThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { partner, partnerName, partnerAvatar, messageId } = useLocalSearchParams<{
+  const { partner, partnerName, partnerAvatar, messageId, search } = useLocalSearchParams<{
+    search?: string;
     partner?: string;
     partnerName?: string;
     partnerAvatar?: string;
@@ -130,9 +131,18 @@ export default function MessagesThreadScreen() {
   const tradeHistory = useTradeHistory(true);
   const sendMessage = useSendMessage();
   const chatSettings = useChatSettings(partner);
+  const standing = (() => {
+    const p = partnerProfile.data;
+    if (!p) return null;
+    if (p.user.org) return p.user.org.verified ? "Verified shop" : "Shop";
+    const tier = p.user.trustTier ? p.user.trustTier.charAt(0) + p.user.trustTier.slice(1).toLowerCase() : null;
+    const rating = p.counts.reviews > 0 ? `★ ${p.user.rating.toFixed(1)}` : null;
+    return [tier, rating].filter(Boolean).join(" · ") || null;
+  })();
   const updateChat = useUpdateChatSettings(partner);
   // In-chat search (Chat info > Search): matches, and which one is shown.
-  const [searchOpen, setSearchOpen] = useState(false);
+  // Chat info's Search comes back here with ?search=1.
+  const [searchOpen, setSearchOpen] = useState(search === "1");
   const [searchText, setSearchText] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   // Swipe to reply: the message being answered, shown above the field.
@@ -497,6 +507,7 @@ export default function MessagesThreadScreen() {
     partnerProfile.data?.user.org?.name ||
     partnerProfile.data?.user.name ||
     "Conversation";
+  const otherFirst = (otherName ?? "").split(/\s+/)[0] || otherName;
   const otherAvatar =
     partnerAvatar ||
     thread.data?.partnerAvatar ||
@@ -602,16 +613,28 @@ export default function MessagesThreadScreen() {
           {avatarNode(36)}
           <View style={styles.identityText}>
             <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
-            {typingName ? <Text style={[styles.subtitle, { color: palette.forest }]} numberOfLines={1}>typing…</Text> : null}
+            {typingName ? (
+              <Text style={[styles.subtitle, { color: palette.forest }]} numberOfLines={1}>typing…</Text>
+            ) : standing ? (
+              // Their standing under the name: tier and rating.
+              <Text style={[styles.subtitle, { color: palette.inkSecondary }]} numberOfLines={1}>{standing}</Text>
+            ) : null}
           </View>
         </Tappable>
         {/* The menu's only action is Block (hiding conversations was removed in
             schema v2), and blocking is not offered while acting as a shop. */}
-        {getActingOrgId() ? null : (
-          <Tappable onPress={() => setMenuOpen(true)} style={styles.iconButton} pressedStyle={{ backgroundColor: palette.control }} accessibilityLabel="Conversation options">
-            <Ionicons name="information-circle-outline" size={24} color={palette.forest} />
-          </Tappable>
-        )}
+        {/* Chat info: its own screen (Profile / Search / Mute, trades, photos,
+            Report / Block / Delete chat). */}
+        <Tappable
+          onPress={() =>
+            router.push({ pathname: "/messages/info", params: { partner: partner ?? "", partnerName: otherName, partnerAvatar: otherAvatar ?? "" } })
+          }
+          style={styles.iconButton}
+          pressedStyle={{ backgroundColor: palette.control }}
+          accessibilityLabel="Chat info"
+        >
+          <Ionicons name="information-circle-outline" size={24} color={palette.forest} />
+        </Tappable>
       </View>
 
       {/* In-chat search: matches step from newest to oldest. */}
@@ -762,7 +785,11 @@ export default function MessagesThreadScreen() {
                   {quoted ? (
                     <QuotedReply
                       mine={mine}
-                      author={quoted.senderId === currentUserId ? "You" : otherName}
+                      label={
+                        mine
+                          ? `You replied to ${quoted.senderId === currentUserId ? "yourself" : otherFirst}`
+                          : `${otherFirst} replied to ${quoted.senderId === currentUserId ? "you" : "themself"}`
+                      }
                       text={previewFromContent(quoted.content, quoted.senderId === currentUserId)}
                       onPress={() => jumpTo(quoted.id)}
                     />
