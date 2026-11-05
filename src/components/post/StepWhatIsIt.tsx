@@ -26,7 +26,6 @@ import {
 import { CheckIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
-  Chip,
   ConfirmButton,
   Divider,
   Field,
@@ -491,77 +490,229 @@ function ItemTypeBlock({
       </HelperRow>
 
       {state.isPerishable ? (
-        <View style={{ marginTop: postSpace.what.dividerToLabel }}>
-          <View
-            ref={quantityRow}
-            style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}
-          >
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Quantity"
-                value={state.quantity}
-                placeholder="2"
-                keyboardType="decimal-pad"
-                onChangeText={(v) => dispatch({ type: "field/quantity", value: v })}
-                onFocus={() => setQuantityFocused(true)}
-                onBlur={() => setQuantityFocused(false)}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  textStyle(postType.smallTextLabel),
-                  { color: postColor.inkSecondary, marginBottom: postSpace.what.labelToField },
-                ]}
-              >
-                Unit
+        <View style={{ marginTop: postSpace.what.dividerToLabel, gap: 18 }}>
+          {state.perishablePrefilled ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: postRadius.field,
+                backgroundColor: postColor.greenWash,
+                borderWidth: 1,
+                borderColor: postColor.greenLine,
+              }}
+            >
+              <CheckIcon size={14} stroke={postIcon.check.stroke} color={postColor.forest} />
+              <Text style={[textStyle(postType.smallTextLabel), { color: postColor.onGreen, flex: 1 }]}>
+                Filled in from your photo. Check the amount before you post.
               </Text>
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                {(["KG", "PCS", "LITERS"] as const).map((u) => (
-                  <Chip
-                    key={u}
-                    label={unitLabel(u)}
-                    selected={state.quantityUnit === u}
-                    onPress={() => dispatch({ type: "field/quantity-unit", value: u })}
-                  />
-                ))}
-              </View>
             </View>
+          ) : null}
+
+          <View ref={quantityRow}>
+            <Text style={[textStyle(postType.smallTextLabel), perishableLabel]}>How much</Text>
+            <QuantityStepper
+              value={state.quantity}
+              unit={state.quantityUnit}
+              onChange={(v) => dispatch({ type: "field/quantity", value: v })}
+              onFocus={() => setQuantityFocused(true)}
+              onBlur={() => setQuantityFocused(false)}
+            />
+            <View style={{ height: 8 }} />
+            <Segmented
+              options={[
+                { value: "PCS", label: "Pieces" },
+                { value: "KG", label: "Kilos" },
+                { value: "LITERS", label: "Liters" },
+              ]}
+              selected={state.quantityUnit}
+              onSelect={(u) => dispatch({ type: "field/quantity-unit", value: u })}
+            />
+            <View style={{ height: postSpace.what.fieldToHelper }} />
+            <HelperRow>Optional. Leave it empty for a basket, a bundle or a tray.</HelperRow>
           </View>
 
-          <View style={{ height: postSpace.what.fieldToHelper }} />
-          <HelperRow>Leave the number blank if it does not have one — a basket, a bundle, a tray.</HelperRow>
-
-          <Text
-            style={[
-              textStyle(postType.smallTextLabel),
-              {
-                color: postColor.inkSecondary,
-                marginTop: postSpace.what.dividerToLabel,
-                marginBottom: postSpace.what.labelToField,
-              },
-            ]}
-          >
-            Trade within
-          </Text>
-          <View style={{ flexDirection: "row", gap: postSpace.what.confirmGap }}>
-            {([6, 24] as const).map((h) => (
-              <ConfirmButton
-                key={h}
-                label={h === 6 ? "6 hours" : "24 hours"}
-                tone={state.tradeWithinHours === h ? "confirm" : "outline"}
-                style={{ flex: 1 }}
-                onPress={() => dispatch({ type: "field/trade-within", value: h })}
-              />
-            ))}
+          <View>
+            <Text style={[textStyle(postType.smallTextLabel), perishableLabel]}>Trade within</Text>
+            <Segmented
+              options={[
+                { value: 6, label: "6 hours" },
+                { value: 24, label: "24 hours" },
+              ]}
+              selected={state.tradeWithinHours}
+              onSelect={(h) => dispatch({ type: "field/trade-within", value: h })}
+            />
+            <View style={{ height: postSpace.what.fieldToHelper }} />
+            <HelperRow>The listing is hidden after this. Nothing happens to you if it expires unsold.</HelperRow>
           </View>
-
-          <View style={{ height: postSpace.what.fieldToHelper }} />
-          <HelperRow>When the listing stops being shown. It is not a promise — nothing happens to you if it expires unsold.</HelperRow>
         </View>
       ) : null}
 
       {keyboardUp ? <View style={{ height: 12 }} /> : null}
+    </View>
+  );
+}
+
+const perishableLabel = {
+  color: postColor.inkSecondary,
+  marginBottom: postSpace.what.labelToField,
+};
+
+/** Step size for the stepper: whole pieces, half kilos and half liters. */
+function stepFor(unit: "KG" | "PCS" | "LITERS"): number {
+  return unit === "PCS" ? 1 : 0.5;
+}
+
+/**
+ * A number with a minus and a plus beside it. Empty means "no number", which
+ * is allowed, so the field shows "Any" rather than a made-up example value.
+ * Minus from the smallest step clears it back to empty.
+ */
+function QuantityStepper({
+  value,
+  unit,
+  onChange,
+  onFocus,
+  onBlur,
+}: {
+  value: string;
+  unit: "KG" | "PCS" | "LITERS";
+  onChange: (v: string) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const step = stepFor(unit);
+  const n = Number.parseFloat(value);
+  const current = Number.isFinite(n) ? n : 0;
+  const fmt = (x: number) => String(Math.round(x * 100) / 100);
+  const minus = () => {
+    const next = current - step;
+    onChange(next <= 0 ? "" : fmt(next));
+  };
+  const plus = () => onChange(fmt(current + step));
+
+  const button = (label: string, onPress: () => void, disabled: boolean, a11y: string) => (
+    <Tappable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      style={{
+        width: 52,
+        alignSelf: "stretch",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.35 : 1,
+      }}
+      pressedStyle={{ backgroundColor: postColor.inset }}
+    >
+      <Text style={{ fontSize: 22, lineHeight: 24, color: postColor.ink }}>{label}</Text>
+    </Tappable>
+  );
+
+  return (
+    <View
+      style={{
+        height: 52,
+        flexDirection: "row",
+        alignItems: "center",
+        borderRadius: postRadius.field,
+        borderWidth: focused ? 2 : 1,
+        borderColor: focused ? postColor.green : postColor.line,
+        backgroundColor: postColor.surface,
+        overflow: "hidden",
+      }}
+    >
+      {button("−", minus, current <= 0, "Less")}
+      <View style={{ width: 1, alignSelf: "stretch", backgroundColor: postColor.divider }} />
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6 }}>
+        <TextInput
+          value={value}
+          onChangeText={(v) => onChange(v.replace(",", ".").replace(/[^0-9.]/g, ""))}
+          onFocus={() => {
+            setFocused(true);
+            onFocus();
+          }}
+          onBlur={() => {
+            setFocused(false);
+            onBlur();
+          }}
+          placeholder="Any"
+          placeholderTextColor={postColor.inkMuted}
+          keyboardType="decimal-pad"
+          accessibilityLabel="Quantity"
+          style={[
+            textStyle(postType.fieldValue),
+            { width: value ? Math.max(24, value.length * 11 + 6) : 60, textAlign: "center", color: postColor.ink, fontSize: 18, padding: 0 },
+          ]}
+        />
+        {value ? (
+          <Text style={[textStyle(postType.smallTextLabel), { color: postColor.inkSecondary }]}>
+            {unitLabel(unit)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ width: 1, alignSelf: "stretch", backgroundColor: postColor.divider }} />
+      {button("+", plus, false, "More")}
+    </View>
+  );
+}
+
+/** One row of options in an inset track; the chosen one sits raised on top. */
+function Segmented<T extends string | number>({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: { value: T; label: string }[];
+  selected: T;
+  onSelect: (v: T) => void;
+}) {
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      style={{
+        flexDirection: "row",
+        padding: 3,
+        borderRadius: postRadius.field,
+        backgroundColor: postColor.inset,
+      }}
+    >
+      {options.map((o) => {
+        const on = o.value === selected;
+        return (
+          <Tappable
+            key={String(o.value)}
+            onPress={() => onSelect(o.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.label}
+            style={{
+              flex: 1,
+              height: 40,
+              borderRadius: postRadius.field - 3,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: on ? postColor.surface : "transparent",
+              borderWidth: on ? 1 : 0,
+              borderColor: postColor.line,
+            }}
+          >
+            <Text
+              style={[
+                textStyle(postType.smallTextLabel),
+                { color: on ? postColor.ink : postColor.inkSecondary },
+              ]}
+            >
+              {o.label}
+            </Text>
+          </Tappable>
+        );
+      })}
     </View>
   );
 }
