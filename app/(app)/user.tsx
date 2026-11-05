@@ -10,12 +10,14 @@ import { useBlockUser, useReport } from "../../src/api/item";
 import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { Avatar, Badges, ProfileSkeleton, ProfileTabs, ProfileTile, ReviewLoadError, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
-import { BlockIcon, ChevronLeftIcon, FlagIcon, KebabIcon } from "../../src/components/icons";
+import { BlockIcon, ChevronLeftIcon, ChevronRightIcon, FlagIcon, KebabIcon } from "../../src/components/icons";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { getApiBase } from "../../src/api/config";
 import { getActingOrgId } from "../../src/api/org-context";
 import { Tappable } from "../../src/components/Tappable";
+import { Image } from "expo-image";
+import { sizedImage } from "../../src/media/image-url";
 import { ReportSheet } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { showDialog } from "../../src/components/dialog";
@@ -41,6 +43,7 @@ export default function UserProfileScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<"posts" | "reviews">("posts");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [badgesOpen, setBadgesOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [acted, setActed] = useState<"reported" | null>(null);
   const reviewQuery = useProfileReviews(id, tab === "reviews");
@@ -213,11 +216,27 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
           }}
           secondary={{ label: "Message", onPress: openMessage }}
         />
-        {/* Badges they chose to show. Tap one to see what it is for. */}
-        {data.displayedAchievements.length > 0 ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} own={false} onMore={() => undefined} /> : null}
+        {/* Badges they chose to show, as one line; tap to open them, then a
+            badge to see what it is for. */}
+        {data.displayedAchievements.length > 0 ? (
+          <>
+            <Tappable onPress={() => setBadgesOpen((v) => !v)} accessibilityRole="button" accessibilityLabel={`Badges: ${data.displayedAchievements.map((a) => a.name).join(", ")}`} style={s.badgeLine}>
+              <View style={s.badgeLineThumb}>
+                {data.displayedAchievements[0]!.imageUrl ? (
+                  <Image source={{ uri: sizedImage(data.displayedAchievements[0]!.imageUrl, "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} />
+                ) : null}
+              </View>
+              <Text style={[s.badgeLineText, { color: palette.secondary }]} numberOfLines={1}>
+                {data.displayedAchievements.map((a) => a.name).join(" · ")}
+              </Text>
+              <ChevronRightIcon size={16} stroke={2} color={palette.muted} />
+            </Tappable>
+            {badgesOpen ? <Badges dark={dark} achievements={data.displayedAchievements} showMore={false} own={false} onMore={() => undefined} /> : null}
+          </>
+        ) : null}
       </PersonHeader>
       )}
-      <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+      <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: data.counts.listed, reviews: data.counts.reviews }} />
       {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
     </>}
     renderItem={({ item: row }) => row.kind === "posts" ? <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View> : <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { if (row.review.item) router.push({ pathname: "/item", params: { id: row.review.item.id } }); }} />}
@@ -270,7 +289,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
   </>;
 }
 
-function chunkItems(items: Item[]): Item[][] { const rows: Item[][] = []; for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3)); return rows; }
+function chunkItems(items: Item[]): Item[][] { const rows: Item[][] = []; for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2)); return rows; }
 function BackRow({ title, insetsTop, dark, onPress, onMenu }: { title: string; insetsTop: number; dark: boolean; onPress: () => void; onMenu?: () => void }) {
   const palette = dark ? darkColors : lightColors;
   return (
@@ -293,6 +312,9 @@ function BackRow({ title, insetsTop, dark, onPress, onMenu }: { title: string; i
 function Stat({ dark, label, value, onPress }: { dark: boolean; label: string; value: number; onPress?: () => void }) { const palette = dark ? darkColors : lightColors; const content = <><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></>; return onPress ? <Pressable onPress={onPress} style={s.stat} accessibilityRole="button">{content}</Pressable> : <View style={s.stat}>{content}</View>; }
 
 const s = StyleSheet.create({
+  badgeLine: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgeLineThumb: { width: 40, height: 40, borderRadius: 10, overflow: "hidden", backgroundColor: "#DDE7EE" },
+  badgeLineText: { flex: 1, fontSize: 13 },
   screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1 }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 }, footer: { paddingVertical: 18 },
 });
 const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider, border: color.controlLine, green: color.green };
