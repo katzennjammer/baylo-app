@@ -36,6 +36,7 @@ export function PhotoCarousel({
   images,
   title,
   counter = true,
+  counterAt = "top",
   aspectRatio = size.detail.photoAspect,
   hairline = true,
   onPressPhoto,
@@ -50,6 +51,8 @@ export function PhotoCarousel({
    * more buttons sit in that corner; the dots alone carry the position.
    */
   counter?: boolean;
+  /** Item detail puts it bottom-right, clear of the round buttons (4 Nov 2026). */
+  counterAt?: "top" | "bottom";
   /** The box's ratio. The feed passes its cover's clamped ratio; detail keeps 4:5. */
   aspectRatio?: number;
   /** The bottom hairline the detail screen draws under the photo. */
@@ -145,7 +148,7 @@ export function PhotoCarousel({
       {images.length > 1 ? (
         <>
           {counter ? (
-            <View style={s.counter}>
+            <View style={[s.counter, counterAt === "bottom" && s.counterBottom]}>
               <Text style={[textStyle(type.metadata), { color: color.surface }]}>
                 {index + 1} / {images.length}
               </Text>
@@ -211,6 +214,7 @@ const s = StyleSheet.create({
   photo: { width: "100%", height: "100%" },
   failed: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.card.failedGap },
 
+  counterBottom: { top: undefined, bottom: 16 },
   counter: {
     position: "absolute",
     top: space.photoCaption.inset,
