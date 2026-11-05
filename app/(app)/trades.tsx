@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
 import { useProfileMe } from "../../src/api/profile";
@@ -15,6 +15,7 @@ import { TradesHost } from "../../src/components/trades/chrome";
 import * as copy from "../../src/components/trades/copy";
 import { HistoryContent } from "../../src/components/trades/HistoryContent";
 import { Chip, Face, UnderlineTabs, offerRelation } from "../../src/components/trades/listing-ui";
+import { ChevronRightIcon, LeafIcon } from "../../src/components/icons";
 import * as present from "../../src/components/trades/present";
 import { TradeCard } from "../../src/components/trades/TradeCard";
 import { CachedLabel, TradesErrorPanel, TradesSkeleton } from "../../src/components/trades/states";
@@ -235,11 +236,7 @@ export default function TradesScreen() {
               ) : null
             ) : (
               <>
-                <View style={s.listHead}>
-                  <Text style={s.h2} accessibilityRole="header">
-                    Your listings <Text style={{ color: color.inkMuted }}>{rows.length || ""}</Text>
-                  </Text>
-                </View>
+                {/* No "Your listings" heading: the tab above already says so. */}
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -251,17 +248,10 @@ export default function TradesScreen() {
                     <Chip key={o.id} label={o.label} on={sort === o.id} onPress={() => setSort(o.id)} />
                   ))}
                 </ScrollView>
-                <View style={s.cards}>
-                  {rows.map((row) => (
-                    <ListingCard
-                      key={row.item.id}
-                      row={row}
-                      onPress={() =>
-                        router.push(`/listing-offers?id=${encodeURIComponent(row.item.id)}`)
-                      }
-                    />
-                  ))}
-                </View>
+                <ListingSplit
+                  rows={rows}
+                  onOpen={(id) => router.push(`/listing-offers?id=${encodeURIComponent(id)}`)}
+                />
               </>
             )}
           </>
@@ -306,65 +296,148 @@ export default function TradesScreen() {
 
 /* ─────────────────────────────── a listing ─────────────────────────────── */
 
-function ListingCard({ row, onPress }: { row: ListingRow; onPress: () => void }) {
+/* ─────────────── listings: offers first, the rest in a grid ─────────────── */
+
+const GRID_GAP = 12;
+
+function offersLabel(n: number): string {
+  return `${n} offer${n === 1 ? "" : "s"}`;
+}
+
+/** Big photo, offers pinned on it, title and value under it. */
+function ListingTile({ row, width, onPress }: { row: ListingRow; width: number; onPress: () => void }) {
   const { item, offers } = row;
   const value = item.valueLeaves;
+  const live = offers.length > 0;
   const faces = [...offers].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 3);
-  const activity = offers.length
-    ? `${offers.length} offer${offers.length === 1 ? "" : "s"} · ${row.sameBracket} same bracket`
-    : "No offers yet";
-  const valueLine = value != null ? `${value.toLocaleString("en-US")} Leaves · Bracket ${bracketOf(value)}` : "No value yet";
-
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${valueLine}. ${activity}.`}
-      style={s.listing}
-      pressedStyle={{ backgroundColor: color.inset }}
+      accessibilityLabel={`${item.title}. ${live ? offersLabel(offers.length) : "No offers yet"}.`}
+      style={{ width, gap: 8 }}
+      pressedStyle={{ opacity: 0.85 }}
     >
-      <View style={s.listingPhoto}>
+      <View style={[s.tilePhoto, { width, height: width }, live && s.tilePhotoLive]}>
         {item.images[0] ? (
-          <Image
-            source={{ uri: sizedImage(item.images[0], "thumb") }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-          />
+          <Image source={{ uri: sizedImage(item.images[0], "card") }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
         ) : null}
-      </View>
-      <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-          <Text style={s.listingTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-          {offers.length ? (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{offers.length}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={s.meta}>{valueLine}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 22 }}>
-          {faces.length ? (
+        <View style={[s.tilePill, live ? s.tilePillLive : s.tilePillQuiet]}>
+          {live ? (
             <View style={{ flexDirection: "row" }}>
               {faces.map((o, i) => (
-                <Face
-                  key={o.id}
-                  name={o.counterparty.name}
-                  avatar={o.counterparty.avatar}
-                  size={22}
-                  ring="#FFFFFF"
-                  style={i ? { marginLeft: -6 } : undefined}
-                />
+                <Face key={o.id} name={o.counterparty.name} avatar={o.counterparty.avatar} size={18} ring={color.green} style={i ? { marginLeft: -5 } : undefined} />
               ))}
             </View>
           ) : null}
-          <Text style={s.meta}>{activity}</Text>
+          <Text style={live ? s.tilePillTextLive : s.tilePillTextQuiet}>
+            {live ? offersLabel(offers.length) : "No offers yet"}
+          </Text>
+        </View>
+      </View>
+      <View style={{ gap: 3, paddingHorizontal: 2 }}>
+        <Text style={s.tileTitle} numberOfLines={1}>{item.title}</Text>
+        {value != null ? (
+          <View style={s.valueRow}>
+            <LeafIcon size={13} stroke={2.2} color={color.forest} />
+            <Text style={s.valueText}>
+              {value.toLocaleString("en-US")}
+              <Text style={s.meta}>{`  ·  Bracket ${bracketOf(value)}`}</Text>
+            </Text>
+          </View>
+        ) : (
+          <Text style={s.meta}>No value yet</Text>
+        )}
+      </View>
+    </Tappable>
+  );
+}
+
+function ListingGrid({ rows, onOpen }: { rows: ListingRow[]; onOpen: (id: string) => void }) {
+  const { width } = useWindowDimensions();
+  const tile = Math.floor((Math.min(width, 520) - space.screenX * 2 - GRID_GAP) / 2);
+  return (
+    <View style={s.grid}>
+      {rows.map((row) => (
+        <ListingTile key={row.item.id} row={row} width={tile} onPress={() => onOpen(row.item.id)} />
+      ))}
+    </View>
+  );
+}
+
+/** A listing with offers: a big photo, who offered, and a button to see them. */
+function OffersCard({ row, onPress }: { row: ListingRow; onPress: () => void }) {
+  const { item, offers } = row;
+  const value = item.valueLeaves;
+  const faces = [...offers].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 3);
+  const names = faces.map((o) => o.counterparty.name.split(" ")[0]);
+  const who =
+    offers.length === 1
+      ? `${names[0]} offered`
+      : `${names[0]} and ${offers.length - 1} other${offers.length === 2 ? "" : "s"}`;
+  return (
+    <Tappable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}. ${who}.`}
+      style={s.offersCard}
+      pressedStyle={{ backgroundColor: color.inset }}
+    >
+      <View style={{ flexDirection: "row", gap: 14 }}>
+        <View style={s.offersPhoto}>
+          {item.images[0] ? (
+            <Image source={{ uri: sizedImage(item.images[0], "thumb") }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+          ) : null}
+        </View>
+        <View style={{ flex: 1, minWidth: 0, gap: 5, justifyContent: "center" }}>
+          <Text style={[s.listingTitle, { flex: 0 }]} numberOfLines={2}>{item.title}</Text>
+          {value != null ? (
+            <View style={s.valueRow}>
+              <LeafIcon size={13} stroke={2.2} color={color.forest} />
+              <Text style={s.valueText}>
+                {value.toLocaleString("en-US")}
+                <Text style={s.meta}>{`  ·  Bracket ${bracketOf(value)}`}</Text>
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+      <View style={s.offersFoot}>
+        <View style={{ flexDirection: "row" }}>
+          {faces.map((o, i) => (
+            <Face key={o.id} name={o.counterparty.name} avatar={o.counterparty.avatar} size={26} ring="#FFFFFF" style={i ? { marginLeft: -8 } : undefined} />
+          ))}
+        </View>
+        <Text style={s.offersWho} numberOfLines={1}>{who}</Text>
+        <View style={s.offersButton}>
+          <Text style={s.offersButtonText}>{`See ${offers.length}`}</Text>
+          <ChevronRightIcon size={14} stroke={2.2} color={color.onGreen} />
         </View>
       </View>
     </Tappable>
   );
 }
+
+function ListingSplit({ rows, onOpen }: { rows: ListingRow[]; onOpen: (id: string) => void }) {
+  const live = rows.filter((r) => r.offers.length > 0);
+  const quiet = rows.filter((r) => r.offers.length === 0);
+  return (
+    <View style={{ gap: 10 }}>
+      {live.length ? <Text style={s.groupHead}>{`Offers waiting · ${live.length}`}</Text> : null}
+      {live.map((row) => (
+        <OffersCard key={row.item.id} row={row} onPress={() => onOpen(row.item.id)} />
+      ))}
+      {quiet.length ? (
+        <>
+          <Text style={[s.groupHead, live.length ? { marginTop: 14 } : null]}>{`No offers yet · ${quiet.length}`}</Text>
+          <ListingGrid rows={quiet} onOpen={onOpen} />
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+
 
 /* ─────────────────────────── a new account ─────────────────────────── */
 
@@ -405,39 +478,12 @@ const s = StyleSheet.create({
   tabsWrap: { paddingHorizontal: space.screenX, paddingTop: 8 },
   cards: { gap: 10 },
   empty: { paddingTop: 24, paddingHorizontal: space.screenX },
-  listHead: { paddingHorizontal: space.screenX, paddingTop: 24 },
   h2: { fontFamily: font.displaySemi, fontSize: 20, color: color.ink },
-  chips: { gap: 8, paddingHorizontal: space.screenX, paddingTop: 12, paddingBottom: 14 },
-  listing: {
-    marginHorizontal: space.screenX,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: color.controlLine,
-    backgroundColor: "#FFFFFF",
-  },
-  listingPhoto: {
-    width: 72,
-    height: 72,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: offerColor.photoPlaceholder,
-  },
+  chips: { gap: 8, paddingHorizontal: space.screenX, paddingTop: 16, paddingBottom: 12 },
+  valueRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  valueText: { fontFamily: font.sansSemi, fontSize: 13, color: color.ink },
   listingTitle: { flex: 1, minWidth: 0, fontFamily: font.sansSemi, fontSize: 15, lineHeight: 20, color: color.ink },
   meta: { fontFamily: font.sans, fontSize: 13, color: color.inkSecondary },
-  badge: {
-    minWidth: 24,
-    height: 22,
-    paddingHorizontal: 7,
-    borderRadius: 11,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeText: { fontFamily: font.sansBold, fontSize: 12, color: color.onGreen },
   how: { marginTop: 20, borderTopWidth: 1, borderTopColor: color.divider },
   howRow: {
     flexDirection: "row",
@@ -454,5 +500,73 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP, paddingHorizontal: space.screenX },
+  tilePhoto: {
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: offerColor.photoPlaceholder,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+  },
+  tilePhotoLive: { borderColor: color.green, borderWidth: 2 },
+  tilePill: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 26,
+    paddingLeft: 4,
+    paddingRight: 10,
+    borderRadius: 13,
+  },
+  tilePillLive: { backgroundColor: color.green },
+  tilePillQuiet: { backgroundColor: "rgba(250, 250, 247, 0.92)", paddingLeft: 10 },
+  tilePillTextLive: { fontFamily: font.sansBold, fontSize: 12, color: color.onGreen },
+  tilePillTextQuiet: { fontFamily: font.sansSemi, fontSize: 12, color: color.inkSecondary },
+  tileTitle: { fontFamily: font.sansSemi, fontSize: 15, lineHeight: 20, color: color.ink },
+  groupHead: {
+    paddingHorizontal: space.screenX,
+    fontFamily: font.sansSemi,
+    fontSize: 13,
+    color: color.inkSecondary,
+  },
+  offersCard: {
+    marginHorizontal: space.screenX,
+    padding: 12,
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: color.greenLine,
+    backgroundColor: "#FFFFFF",
+  },
+  offersPhoto: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: offerColor.photoPlaceholder,
+  },
+  offersFoot: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: color.divider,
+  },
+  offersWho: { flex: 1, minWidth: 0, fontFamily: font.sansSemi, fontSize: 13, color: color.forest },
+  offersButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    height: 32,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 16,
+    backgroundColor: color.green,
+  },
+  offersButtonText: { fontFamily: font.sansBold, fontSize: 13, color: color.onGreen },
   textLink: { minHeight: 44, justifyContent: "center", alignSelf: "center", paddingHorizontal: 12 },
 });
