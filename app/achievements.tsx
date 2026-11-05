@@ -13,6 +13,7 @@ import { BackHeader } from "../src/components/BackHeader";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { CheckIcon, StarIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
+import { SheetRow, SheetRows, SheetShell } from "../src/components/sheet-ui";
 import { border, color, font, icon as iconToken, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { sizedImage } from "../src/media/image-url";
 import { MASCOT } from "../src/media/mascots";
@@ -126,6 +127,7 @@ export default function AchievementsScreen() {
 
   // CHANGES SAVE AS YOU TAP (4 Nov 2026): no Save button. Each tap sends the
   // new choice; the toast says what changed and offers Undo.
+  const [pickingHome, setPickingHome] = useState(false);
   const [undo, setUndo] = useState<{ ids: string[]; featured: string | null } | null>(null);
   const commit = (ids: string[], nextFeatured: string | null, text: string) => {
     setUndo({ ids: selected, featured });
@@ -179,119 +181,122 @@ export default function AchievementsScreen() {
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ paddingBottom: space.home.sectionTop }}>
-            <SectionHeader
-              accent="Home badge"
-              subtitle="Pick one earned badge to show beside your name on the home feed."
-              top={space.home.headingToContent}
-            />
-            {earned.length === 0 ? (
-              <Text style={[textStyle(type.detailBody), styles.gutter, styles.secondary]}>
-                Earn a badge and you can feature it here.
-              </Text>
-            ) : (
-              <View style={[styles.gutter, styles.chips]}>
-                {earned.map((achievement) => {
-                  const isFeatured = featured === achievement.id;
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 18 }}>
+            {/* A live preview of the profile strip: what others will see. */}
+            <View style={styles.preview}>
+              <View style={styles.previewHead}>
+                <Text style={styles.previewTitle}>On your profile</Text>
+                <Text style={styles.previewCount}>{selected.length} of {maxSlots}</Text>
+              </View>
+              <View style={styles.slots}>
+                {Array.from({ length: maxSlots }, (_, i) => {
+                  const a = achievements.find((x) => x.id === selected[i]);
                   return (
-                    <Tappable
-                      key={achievement.id}
-                      onPress={() =>
-                        commit(
-                          selected,
-                          featured === achievement.id ? null : achievement.id,
-                          featured === achievement.id ? "Home shows no badge now." : `${achievement.name} now shows on Home.`,
-                        )
-                      }
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: isFeatured }}
-                      accessibilityLabel={achievement.name}
-                      style={[styles.chip, isFeatured && styles.chipOn]}
-                      pressedStyle={styles.held}
-                    >
-                      <BadgeIcon icon={achievement.icon} imageUrl={achievement.imageUrl} size={22} />
-                      <Text style={[textStyle(type.trendingChip), isFeatured ? styles.forest : styles.ink]}>
-                        {achievement.name}
-                      </Text>
-                      {isFeatured ? (
-                        <CheckIcon size={iconToken.check.size} stroke={iconToken.check.stroke} color={color.forest} />
-                      ) : null}
-                    </Tappable>
+                    <View key={i} style={[styles.slot, !a && styles.slotEmpty]}>
+                      {a ? <BadgeIcon icon={a.icon} imageUrl={a.imageUrl} size={52} /> : null}
+                    </View>
                   );
                 })}
               </View>
-            )}
-
-            <SectionHeader
-              accent="Profile badges"
-              subtitle={`Tap an earned badge to show it on your profile. Up to ${maxSlots}; an empty slot is not shown.`}
-            />
-            <Text
-              style={[textStyle(type.metadata), styles.selectionCount]}
-              accessibilityLiveRegion="polite"
-            >
-              {`${selected.length} of ${maxSlots} selected`}
-            </Text>
-            <View style={styles.list}>
-              {achievements.map((achievement) => {
-                const progress = Math.min(achievement.progress, achievement.threshold);
-                const isSelected = selected.includes(achievement.id);
-                const isFeatured = featured === achievement.id;
-                const locked = !achievement.unlocked;
-                return (
-                  <Tappable
-                    key={achievement.id}
-                    disabled={locked}
-                    onPress={() => toggleSelected(achievement.id)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isSelected, disabled: locked }}
-                    accessibilityLabel={`${achievement.name}. ${achievement.description}`}
-                    style={[styles.row, isSelected && styles.rowOn]}
-                    pressedStyle={styles.held}
-                  >
-                    <View style={[styles.badge, isSelected && styles.badgeSelected]}>
-                      <BadgeIcon
-                        icon={achievement.icon}
-                        imageUrl={achievement.imageUrl}
-                        size={30}
-                        dimmed={locked}
-                      />
-                    </View>
-                    <View style={styles.rowBody}>
-                      <Text style={[textStyle(type.username), locked ? styles.stale : styles.ink]}>
-                        {achievement.name}
-                      </Text>
-                      <Text style={[textStyle(type.sectionSubcopy), locked ? styles.stale : styles.secondary]}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.unlocked ? (
-                        <Text style={[textStyle(type.metadata), styles.earned]}>
-                          Earned {new Date(achievement.unlockedAt!).toLocaleDateString()}
-                        </Text>
-                      ) : (
-                        <Text style={[textStyle(type.metadata), styles.muted]}>
-                          {progress} of {achievement.threshold} completed
-                        </Text>
-                      )}
-                    </View>
-                    {isFeatured ? (
-                      <StarIcon
-                        size={iconToken.sectionTitle.size}
-                        stroke={iconToken.sectionTitle.stroke}
-                        color={color.accentGold}
-                      />
-                    ) : null}
-                    {isSelected ? (
-                      <CheckIcon size={iconToken.check.size} stroke={iconToken.check.stroke} color={color.forest} />
-                    ) : null}
+              <View style={styles.homeRow}>
+                <Text style={styles.homeText}>
+                  Beside your name on Home:{" "}
+                  <Text style={{ fontWeight: "700" }}>{achievements.find((x) => x.id === featured)?.name ?? "none"}</Text>
+                </Text>
+                {earned.length > 0 ? (
+                  <Tappable onPress={() => setPickingHome(true)} accessibilityRole="button" style={styles.changeButton}>
+                    <Text style={styles.changeText}>Change</Text>
                   </Tappable>
-                );
-              })}
+                ) : null}
+              </View>
             </View>
+
+            {/* Earned: tap to put on (or take off) your profile. */}
+            {earned.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                <Text style={styles.groupTitle}>EARNED · {earned.length} · tap to show on your profile</Text>
+                <View style={styles.earnedGrid}>
+                  {earned.map((a) => {
+                    const on = selected.includes(a.id);
+                    return (
+                      <Tappable
+                        key={a.id}
+                        onPress={() => toggleSelected(a.id)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={`${a.name}. ${a.description}`}
+                        style={[styles.earnedTile, on && styles.earnedTileOn]}
+                      >
+                        <BadgeIcon icon={a.icon} imageUrl={a.imageUrl} size={56} />
+                        <Text style={styles.earnedName} numberOfLines={2}>{a.name}</Text>
+                        {on ? (
+                          <View style={styles.earnedCheck}>
+                            <CheckIcon size={12} stroke={3} color={color.onGreen} />
+                          </View>
+                        ) : null}
+                      </Tappable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Not yet: what to do to get them. */}
+            {achievements.some((a) => !a.unlocked) ? (
+              <View style={{ gap: 6 }}>
+                <Text style={styles.groupTitle}>NOT YET · {achievements.filter((a) => !a.unlocked).length}</Text>
+                <View style={styles.notYet}>
+                  {achievements
+                    .filter((a) => !a.unlocked)
+                    .map((a, i) => (
+                      <View key={a.id} style={[styles.notYetRow, i > 0 && styles.notYetLine]}>
+                        <View style={styles.notYetIcon}>
+                          <BadgeIcon icon={a.icon} imageUrl={a.imageUrl} size={30} dimmed />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                          <Text style={styles.notYetName}>{a.name}</Text>
+                          <Text style={styles.notYetSub}>{a.description}</Text>
+                        </View>
+                        <Text style={styles.notYetProgress}>
+                          {Math.min(a.progress, a.threshold)}/{a.threshold}
+                        </Text>
+                      </View>
+                    ))}
+                </View>
+              </View>
+            ) : null}
             {achievements.length === 0 ? (
               <Text style={[textStyle(type.emptyBody), styles.empty]}>No achievements are available yet.</Text>
             ) : null}
           </ScrollView>
+
+          {/* Change the Home badge. */}
+          {pickingHome ? (
+            <SheetShell title="Beside your name on Home" onClose={() => setPickingHome(false)}>
+              <SheetRows>
+                {earned.map((a) => (
+                  <SheetRow
+                    key={a.id}
+                    glyph={<BadgeIcon icon={a.icon} imageUrl={a.imageUrl} size={24} />}
+                    label={featured === a.id ? `${a.name} (showing)` : a.name}
+                    onPress={() => {
+                      setPickingHome(false);
+                      if (featured !== a.id) commit(selected, a.id, `${a.name} now shows on Home.`);
+                    }}
+                  />
+                ))}
+                {featured ? (
+                  <SheetRow
+                    label="Show no badge"
+                    onPress={() => {
+                      setPickingHome(false);
+                      commit(selected, null, "Home shows no badge now.");
+                    }}
+                  />
+                ) : null}
+              </SheetRows>
+            </SheetShell>
+          ) : null}
 
           {/* Saved: a small toast with the duck, and Undo. */}
           {saveMessage ? (
@@ -350,6 +355,30 @@ const toastStyles = {
 };
 
 const styles = StyleSheet.create({
+  preview: { gap: 10, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface },
+  previewHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  previewTitle: { fontFamily: font.sansBold, fontSize: 15, color: color.ink },
+  previewCount: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
+  slots: { flexDirection: "row", gap: 8 },
+  slot: { flex: 1, aspectRatio: 1, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash, borderWidth: 2, borderColor: color.green, overflow: "hidden" },
+  slotEmpty: { backgroundColor: "transparent", borderColor: color.dashed, borderStyle: "dashed" },
+  homeRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: color.divider },
+  homeText: { flex: 1, fontFamily: font.sans, fontSize: 13, color: "#3F3E37" },
+  changeButton: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: color.controlLineStrong, justifyContent: "center" },
+  changeText: { fontFamily: font.sansSemi, fontSize: 13, color: color.ink },
+  groupTitle: { marginHorizontal: 4, fontFamily: font.sansBold, fontSize: 13, color: color.inkSecondary },
+  earnedGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  earnedTile: { width: "31.5%", alignItems: "center", gap: 6, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 16, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface },
+  earnedTileOn: { borderColor: color.green, borderWidth: 2, backgroundColor: color.greenWash },
+  earnedName: { fontFamily: font.sansBold, fontSize: 12, textAlign: "center", color: color.ink },
+  earnedCheck: { position: "absolute", right: 6, top: 6, width: 20, height: 20, borderRadius: 10, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
+  notYet: { borderRadius: 16, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface, overflow: "hidden" },
+  notYetRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  notYetLine: { borderTopWidth: 1, borderTopColor: color.divider },
+  notYetIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: "#EFEDE5", alignItems: "center", justifyContent: "center" },
+  notYetName: { fontFamily: font.sansSemi, fontSize: 14, color: color.ink },
+  notYetSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
+  notYetProgress: { fontFamily: font.sansBold, fontSize: 13, color: color.forest },
   ...toastStyles,
   screen: { flex: 1, backgroundColor: color.surface },
   gutter: { paddingHorizontal: space.screenX },
