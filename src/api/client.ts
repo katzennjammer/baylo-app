@@ -1118,8 +1118,14 @@ function sendMultipart(
  * of which resolveSession() answers with a 401 that looks exactly like an
  * expiry. Looping on it would spin forever against a user who cannot be let in.
  */
-export async function request(path: string, init: RequestInit = {}): Promise<Response> {
+export async function request(
+  path: string,
+  init: RequestInit = {},
+  /** Longer than the 30-second default, for the one slow endpoint (the online price check). */
+  options: { timeoutMs?: number } = {},
+): Promise<Response> {
   const url = `${requireBase()}${path}`;
+  const timeoutMs = options.timeoutMs ?? API_REQUEST_TIMEOUT_MS;
 
   // Decided once, outside send(), so the retry below takes the same transport.
   // Re-sending is safe on this path: the parts hold uris, not consumed streams,
@@ -1138,7 +1144,7 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
   const transmit = async (accessToken: string | null) => {
     if (multipart) return sendMultipart(url, init, accessToken);
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), API_REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
     try {
       return await fetch(url, {
         ...init,
@@ -1149,7 +1155,7 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
     } catch (cause) {
       sendFailure(
         cause instanceof Error && cause.name === "AbortError"
-          ? new Error(`The API did not respond within ${API_REQUEST_TIMEOUT_MS / 1000} seconds`)
+          ? new Error(`The API did not respond within ${timeoutMs / 1000} seconds`)
           : cause,
       );
     } finally {

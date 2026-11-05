@@ -149,8 +149,8 @@ export function AiValuationDetails() {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 20 }}>
           <ActivityIndicator size="small" color={postColor.forest} />
           <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary, flex: 1 }]}>
-            Checking online asking prices for this item. This can take up to 20 seconds. Only the
-            title, category and condition are sent, not your photo.
+            Checking online prices for this item. This can take up to a minute. Only the title,
+            category and condition are sent, not your photo.
           </Text>
         </View>
       </View>
