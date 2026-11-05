@@ -322,6 +322,11 @@ export interface IdentifyResult {
   tags: string[];
   brand?: string | null;
   brandEvidence?: string | null;
+  /** The photo looks perishable (food, drinks, produce, flowers). A suggestion. */
+  perishable?: boolean;
+  /** For a perishable: how many / how much the photo shows, when it can tell. */
+  quantity?: number | null;
+  unit?: "PCS" | "KG" | "LITERS" | null;
 }
 
 /**

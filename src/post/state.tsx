@@ -269,6 +269,8 @@ export interface PostState {
   /** Null is legitimate on a perishable — "a basket of calamansi" has no number. */
   quantity: string;
   quantityUnit: QuantityUnit;
+  /** Perishable and its amount were preselected from the photo (not chosen). */
+  perishablePrefilled?: boolean;
   /** 6 or 24. Only meaningful while `isPerishable`. */
   tradeWithinHours: TradeWithinHours;
 
@@ -512,6 +514,16 @@ function step(s: PostState, a: PostAction): PostState {
         title: keepsTitle(s) ? s.title : sentenceCase(a.result.name),
         condition,
         conditionPrefilled: true,
+        // Perishable is preselected from the photo, with the amount it could
+        // count, unless the person already set the item type themselves.
+        ...(a.result.perishable && !s.perishablePrefilled && !s.isPerishable && s.quantity === ""
+          ? {
+              isPerishable: true,
+              perishablePrefilled: true,
+              quantity: a.result.quantity != null ? String(a.result.quantity) : "",
+              quantityUnit: a.result.unit ?? (a.result.quantity != null ? "PCS" : s.quantityUnit),
+            }
+          : {}),
       };
     }
 
@@ -571,9 +583,10 @@ function step(s: PostState, a: PostAction): PostState {
       // Turning it ON does NOT reset them, so flipping off and back on inside
       // one session keeps what was typed. The clear is about what LEAVES the
       // device, not about being tidy.
+      // The person chose, so the photo's suggestion no longer stands.
       return a.perishable
-        ? { ...s, isPerishable: true }
-        : { ...s, isPerishable: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
+        ? { ...s, isPerishable: true, perishablePrefilled: false }
+        : { ...s, isPerishable: false, perishablePrefilled: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
 
     case "field/quantity":
       // Held as the raw STRING the user typed, not as a number. "1." and "0."
