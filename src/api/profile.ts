@@ -108,6 +108,26 @@ export function useFollow() {
   });
 }
 
+/**
+ * Remove someone as YOUR follower (they stop following you). They are not
+ * told and can follow again. DELETE /api/follows/[id]?as=follower.
+ */
+export function useRemoveFollower(viewerId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const response = await request(`/api/follows/${encodeURIComponent(userId)}?as=follower`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not remove this follower");
+    },
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
+      void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      if (viewerId) void queryClient.invalidateQueries({ queryKey: ["profile", viewerId] });
+      void queryClient.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+    },
+  });
+}
+
 export function useUnfollow() {
   const queryClient = useQueryClient();
   return useMutation({
