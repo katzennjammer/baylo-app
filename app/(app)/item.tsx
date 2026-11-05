@@ -730,7 +730,7 @@ export default function ItemDetailScreen() {
 
       {menu ? (
         <SheetShell
-          title={menu === "report" ? "Why are you reporting this listing?" : item.title}
+          title={menu === "report" ? "Why are you reporting this listing?" : "Listing options"}
           onBack={menu === "report" ? () => setMenu("menu") : undefined}
           onClose={() => setMenu(null)}
           busy={report.isPending || block.isPending}
@@ -739,6 +739,18 @@ export default function ItemDetailScreen() {
             <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
           ) : (
             <>
+            {/* The listing this menu is about. */}
+            <View style={s.menuHead}>
+              <View style={s.menuThumb}>
+                {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.menuTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={s.menuSub} numberOfLines={1}>
+                  {[firstName(item.owner.name), item.valueLeaves !== null ? bracketLabel(bracketOf(item.valueLeaves)) : null].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+            </View>
             {/* One-tap actions first: share and save. Safety rows below. */}
             <View style={s.menuActions}>
               <MenuAction
@@ -1436,6 +1448,10 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: color.greenWash,
   },
+  menuHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 },
+  menuThumb: { width: 44, height: 44, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
+  menuTitle: { fontFamily: font.sansBold, fontSize: 15, color: color.ink },
+  menuSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
   menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 14 },
   menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
   menuActionCircle: {

@@ -292,7 +292,7 @@ export default function OfferScreen() {
         : copy.pending.termsFree;
     return (
       <OfferScreenHost imeInset={0}>
-        <OfferNav title="Your offer" onBack={() => router.back()} />
+        <OfferNav title="Your offer" subtitle={`To ${context.item.owner.name}${existing ? ` · sent ${copy.sentAgo(existing.createdAt)}` : ""}`} onBack={() => router.back()} />
         <ScrollView>
           {failed ? (
             <Section pad={offerSpace.section.offering}>
@@ -510,6 +510,7 @@ export default function OfferScreen() {
     <OfferScreenHost imeInset={0} dimmed={sending}>
       <OfferNav
         title={copy.chrome.navTitle}
+        subtitle={`To ${context.item.owner.name}${context.item.owner.rating > 0 ? ` · ★ ${context.item.owner.rating.toFixed(1)}` : ""}`}
         // "Sending": the back control is REMOVED, not disabled.
         onBack={sending ? null : () => router.back()}
       />

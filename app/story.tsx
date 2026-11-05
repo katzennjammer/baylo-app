@@ -332,7 +332,9 @@ export default function StoryViewer() {
       <Animated.View style={[s.stage, { opacity, transform: [{ translateY: dragY }] }]}>
         {/* ── the photo, and the gesture layer over it ── */}
         {cover ? (
-          <Image source={{ uri: sizedImage(cover, "full") }} contentFit="contain" style={StyleSheet.absoluteFill} transition={120} />
+          // The photo fills the screen (4 Nov 2026), so there is no black band
+          // above and below it; the caption and listing card sit on it.
+          <Image source={{ uri: sizedImage(cover, "full") }} contentFit="cover" style={StyleSheet.absoluteFill} transition={120} />
         ) : (
           <View style={[StyleSheet.absoluteFill, s.noPhoto]}>
             <ImageIcon size={icon.failedPhoto.size} stroke={icon.failedPhoto.stroke} color={color.failedIcon} />
