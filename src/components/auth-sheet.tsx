@@ -60,7 +60,6 @@ import {
   defaultDobParts,
   formatLongDate,
   selectableYears,
-  todayParts,
   type DateParts,
 } from "../lib/dob";
 import {
@@ -1850,11 +1849,11 @@ export function DateOfBirthField({
  */
 function useNativeDatePicker(current: DateParts | null, onPicked: (next: DateParts) => void) {
   const [iosOpen, setIosOpen] = useState(false);
-  const [draft, setDraft] = useState<DateParts>(() => current ?? todayParts());
+  const [draft, setDraft] = useState<DateParts>(() => current ?? defaultDobParts());
 
   const tryOpen = useCallback(
     (onUnavailable: () => void) => {
-      const seed = current ?? todayParts();
+      const seed = current ?? defaultDobParts();
 
       if (!nativeDatePickerAvailable) {
         onUnavailable();

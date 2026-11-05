@@ -155,6 +155,21 @@ export default function RegisterScreen() {
   const [refused, setRefused] = useState<DateParts | null>(null);
   const [stage, setStage] = useState<SignupStage>({ kind: "account-type" });
   const [accountType, setAccountType] = useState<AccountType | null>(null);
+  /**
+   * Which kind of signup the form's contents were typed for. Back from the
+   * form keeps them for the same kind, but switching between a trader and a
+   * business starts a clean form: an owner's details are not a trader's, and
+   * carrying a name, email, password and date of birth across read as the app
+   * remembering someone else's answers.
+   */
+  const filledFor = useRef<"individual" | "organization">("individual");
+  const openForm = (kind: "individual" | "organization") => {
+    if (filledFor.current !== kind) {
+      setForm(EMPTY_FORM);
+      filledFor.current = kind;
+    }
+    setStage({ kind: "form" });
+  };
 
   if (refused) {
     return (
@@ -173,13 +188,13 @@ export default function RegisterScreen() {
         <AccountTypeStep
           value={accountType}
           onChange={setAccountType}
-          onContinue={() => setStage({ kind: "form" })}
+          onContinue={() => openForm(accountType === "organization" ? "organization" : "individual")}
           // "Decide later" is the individual form without the person having to
           // claim to be one. Any card tapped on the way is dropped, so the form
           // does not ask for an owner nobody confirmed.
           onSkip={() => {
             setAccountType(null);
-            setStage({ kind: "form" });
+            openForm("individual");
           }}
           onBack={() => router.back()}
         />
