@@ -431,7 +431,7 @@ export default function ItemDetailScreen() {
         scrollEventThrottle={16}
       >
         <View>
-          <PhotoCarousel images={item.images} title={item.title} counter={false} />
+          <PhotoCarousel images={item.images} title={item.title} counter={item.images.length > 1} counterAt="bottom" />
 
           {/* The top of the photo darkened, so the clock and the round
               buttons read on a white or busy photo. */}
@@ -531,8 +531,8 @@ export default function ItemDetailScreen() {
               }
             >
               <View style={s.bracketPill}>
-                <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-                <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
+                <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.surface} />
+                <Text style={[textStyle(type.detailLeaves), { color: color.surface }]}>
                   {bracketLabel(listingBracket)}
                 </Text>
               </View>
@@ -557,11 +557,26 @@ export default function ItemDetailScreen() {
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
 
-          {wanted ? (
-            <SwapTicket title={item.title} wanted={wanted} lookingFor={lookingFor} own={own} />
+          {/* What the owner wants back, as chips. */}
+          {item.lookingForLabels.length > 0 || wanted ? (
+            <View style={s.lookingFor}>
+              <Text style={s.lookingForTitle}>LOOKING FOR</Text>
+              {item.lookingForLabels.length > 0 ? (
+                <View style={s.lookingForChips}>
+                  {item.lookingForLabels.map((label) => (
+                    <View key={label} style={s.lookingForChip}>
+                      <Text style={s.lookingForChipText}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {wanted ? <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>{wanted}</Text> : null}
+            </View>
           ) : null}
 
-          {/* Sections below are separated by hairlines, not boxes. */}
+          {/* The person, with the trust signals next to the name, and the
+              question row in the same card. */}
+          <View style={s.sellerCard}>
           <SellerRow
             owner={item.owner}
             onPress={() => router.push({ pathname: "/user", params: { id: item.owner.id } })}
@@ -570,7 +585,7 @@ export default function ItemDetailScreen() {
           <Tappable
             onPress={() => setCommentsOpen(true)}
             accessibilityRole="button"
-            style={s.askRow}
+            style={[s.askRow, s.askInCard]}
             pressedStyle={s.pressed}
           >
             <CommentIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.forest} />
@@ -582,10 +597,11 @@ export default function ItemDetailScreen() {
                   : `Ask ${firstName(item.owner.name)} a question`}
             </Text>
           </Tappable>
+          </View>
 
           {!own && hubs.length > 0 ? (
             <View style={s.section}>
-              <Text style={[textStyle(type.gridMeta), s.meetAt]}>Meet at</Text>
+              <Text style={s.lookingForTitle}>MEET AT A SAFE-ZONE HUB</Text>
               {hubs.map((h, i) => (
                 <HubBlock key={h.id} hub={h}>
                   {/* The map once, under the first hub. The whole preview is
@@ -714,7 +730,7 @@ export default function ItemDetailScreen() {
 
       {menu ? (
         <SheetShell
-          title={menu === "report" ? "Why are you reporting this listing?" : item.title}
+          title={menu === "report" ? "Why are you reporting this listing?" : "Listing options"}
           onBack={menu === "report" ? () => setMenu("menu") : undefined}
           onClose={() => setMenu(null)}
           busy={report.isPending || block.isPending}
@@ -723,6 +739,18 @@ export default function ItemDetailScreen() {
             <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
           ) : (
             <>
+            {/* The listing this menu is about. */}
+            <View style={s.menuHead}>
+              <View style={s.menuThumb}>
+                {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.menuTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={s.menuSub} numberOfLines={1}>
+                  {[firstName(item.owner.name), item.valueLeaves !== null ? bracketLabel(bracketOf(item.valueLeaves)) : null].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+            </View>
             {/* One-tap actions first: share and save. Safety rows below. */}
             <View style={s.menuActions}>
               <MenuAction
@@ -898,9 +926,9 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
         .filter(Boolean)
         .join(" · ")
     : [
-        tier,
-        owner.location?.trim() || null,
+        owner.rating > 0 ? `★ ${owner.rating.toFixed(1)}` : null,
         `${owner.totalTrades} ${owner.totalTrades === 1 ? "trade" : "trades"}`,
+        owner.location?.trim() || null,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -930,6 +958,11 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
           </Text>
           {org?.verified ? (
             <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+          ) : null}
+          {!org && tier ? (
+            <View style={s.tierPill}>
+              <Text style={s.tierPillText}>{tier.split(" ")[0]!.toUpperCase()}</Text>
+            </View>
           ) : null}
         </View>
         <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
@@ -1345,15 +1378,12 @@ const s = StyleSheet.create({
   ticketLabel: { color: color.inkSecondary },
   ticketSub: { color: color.inkSecondary, marginTop: 1 },
 
+  // Inside the seller card (4 Nov 2026): no hairlines of its own.
   seller: {
-    marginTop: space.detail.sectionY,
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.ownerGap,
-    paddingVertical: space.detail.ownerY,
-    borderTopWidth: border.hairline,
-    borderBottomWidth: border.hairline,
-    borderColor: color.divider,
+    padding: 14,
   },
   avatar: {
     width: size.avatar.owner,
@@ -1381,14 +1411,16 @@ const s = StyleSheet.create({
   },
 
   // A hairline above, not a box around.
-  section: {
-    marginTop: space.detail.hubGap,
-    paddingTop: space.detail.sectionY - 4,
-    borderTopWidth: border.hairline,
-    borderTopColor: color.divider,
-  },
+  // Where you'd meet, compact (4 Nov 2026): each hub one white card.
+  section: { marginTop: 20, gap: 10 },
   meetAt: { color: color.inkSecondary },
-  hubBlock: { paddingBottom: space.detail.hubGap },
+  hubBlock: {
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+  },
   bracketPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1396,8 +1428,17 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 14,
-    backgroundColor: color.greenWash,
+    backgroundColor: color.ink,
   },
+  lookingFor: { marginTop: 16, gap: 8 },
+  lookingForTitle: { fontFamily: font.sansBold, fontSize: 13, letterSpacing: 0.4, color: color.inkSecondary },
+  lookingForChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  lookingForChip: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: color.controlLineStrong, justifyContent: "center" },
+  lookingForChipText: { fontFamily: font.sansMedium, fontSize: 13, color: color.ink },
+  sellerCard: { marginTop: 16, borderRadius: 18, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface, overflow: "hidden" },
+  askInCard: { alignSelf: "stretch", borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: 14 },
+  tierPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: color.control },
+  tierPillText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: color.ink },
   reachCard: {
     marginTop: 12,
     flexDirection: "row",
@@ -1407,6 +1448,10 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: color.greenWash,
   },
+  menuHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 },
+  menuThumb: { width: 44, height: 44, borderRadius: 10, overflow: "hidden", backgroundColor: color.control },
+  menuTitle: { fontFamily: font.sansBold, fontSize: 15, color: color.ink },
+  menuSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
   menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 14 },
   menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
   menuActionCircle: {
@@ -1481,20 +1526,22 @@ const s = StyleSheet.create({
     borderTopColor: color.divider,
   },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  // 54 square, bordered, white (4 Nov 2026), beside a 54-high Send offer.
   heart: {
-    width: size.detail.actionButton,
-    height: size.detail.actionButton,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
+    backgroundColor: color.searchSurface,
     alignItems: "center",
     justifyContent: "center",
   },
   action: {
     flex: 1,
-    minHeight: size.detail.actionButton,
+    minHeight: 54,
     paddingHorizontal: 12,
-    borderRadius: radius.primaryButton,
+    borderRadius: 16,
     backgroundColor: color.green,
     alignItems: "center",
     justifyContent: "center",

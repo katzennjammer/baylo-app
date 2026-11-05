@@ -203,6 +203,9 @@ function HelperSheet({
 
   const match = last.match;
   const chips = match ? chipsOf(match.filters) : [];
+  // With results showing, the sheet is about the results (4 Nov 2026): no
+  // title row, the close button beside the field, See all pinned at the foot.
+  const showingResults = !isPeopleSearch && !!match && match.understood && chips.length > 0;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -212,6 +215,7 @@ function HelperSheet({
         <View style={s.handle} />
 
         {/* The magnifier duck sets the tone; one short line instead of a paragraph. */}
+        {showingResults ? null : (
         <View style={s.titleRow}>
           <Image source={MASCOT.search} contentFit="contain" style={s.titleDuck} accessible={false} />
           <View style={{ flex: 1 }}>
@@ -228,6 +232,7 @@ function HelperSheet({
             <CloseIcon size={icon.clear.size + 2} stroke={icon.clear.stroke} color={color.inkSecondary} />
           </Tappable>
         </View>
+        )}
 
         {/* Input at the TOP, so the keyboard never covers what is being typed. */}
         <View style={s.inputRow}>
@@ -262,6 +267,11 @@ function HelperSheet({
               <ArrowRightIcon size={20} stroke={2.4} color={color.onGreen} />
             </Tappable>
           </View>
+          {showingResults ? (
+            <Tappable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={6} style={s.close}>
+              <CloseIcon size={icon.clear.size + 2} stroke={icon.clear.stroke} color={color.ink} />
+            </Tappable>
+          ) : null}
         </View>
 
         <ScrollView
@@ -281,9 +291,9 @@ function HelperSheet({
             <NotUnderstood onExample={run} />
           ) : (
             <>
-              <Text style={[textStyle(type.sheetLabel), s.label]}>Understood as</Text>
               {chips.length > 0 ? (
-                <View style={s.chips}>
+                <View style={[s.chips, { alignItems: "center", marginTop: 0 }]}>
+                  <Text style={[textStyle(type.gridMeta), s.muted]}>Showing</Text>
                   {chips.map((chip) => (
                     <RemovableChip
                       key={chip.key}
@@ -314,12 +324,12 @@ function HelperSheet({
                   filters={match.filters}
                   viewerId={viewerId}
                   onOpen={openItem}
-                  onSeeAll={() => seeAll(match.filters)}
                 />
               ) : null}
             </>
           )}
         </ScrollView>
+        {showingResults && match ? <SeeAllBar filters={match.filters} onSeeAll={() => seeAll(match.filters)} /> : null}
       </View>
     </Modal>
   );
@@ -428,12 +438,10 @@ function Results({
   filters,
   viewerId,
   onOpen,
-  onSeeAll,
 }: {
   filters: HelperFilters;
   viewerId: string | null;
   onOpen: (item: Item) => void;
-  onSeeAll: () => void;
 }) {
   const browseFilters = useMemo(() => toBrowseFilters(filters), [filters]);
   const { items, hasNextPage, isPending, isError, refetch } = useBrowse(browseFilters);
@@ -532,11 +540,23 @@ function Results({
           </View>
         </>
       ) : null}
+    </View>
+  );
+}
+
+/** "See all N in Marketplace", pinned under the results. Same query, so no extra request. */
+function SeeAllBar({ filters, onSeeAll }: { filters: HelperFilters; onSeeAll: () => void }) {
+  const browseFilters = useMemo(() => toBrowseFilters(filters), [filters]);
+  const { items, hasNextPage } = useBrowse(browseFilters);
+  if (items.length === 0) return null;
+  const count = `${items.length}${hasNextPage ? "+" : ""}`;
+  return (
+    <View style={s.seeAllBar}>
       <Tappable
         onPress={onSeeAll}
         accessibilityRole="button"
         accessibilityLabel={`See all ${count} results in Marketplace`}
-        style={s.seeAll}
+        style={[s.seeAll, { marginTop: 0 }]}
         pressedStyle={s.goPressed}
       >
         <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
@@ -675,6 +695,7 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
   examplePressed: { opacity: 0.75 },
+  seeAllBar: { paddingHorizontal: space.sheet.x, paddingTop: 12, paddingBottom: 28, borderTopWidth: border.hairline, borderTopColor: color.divider, backgroundColor: color.surface },
   exampleList: {
     marginTop: 8,
     borderRadius: 16,

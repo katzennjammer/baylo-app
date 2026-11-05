@@ -20,6 +20,7 @@ import { BackHeader } from "../src/components/BackHeader";
 import { showDialog } from "../src/components/dialog";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { ChevronRightIcon, SearchIcon } from "../src/components/icons";
+import { Ionicons } from "@expo/vector-icons";
 import { sizedImage } from "../src/media/image-url";
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
 import { Tappable } from "../src/components/Tappable";
@@ -176,135 +177,101 @@ export default function SettingsScreen() {
           </Tappable>
         ) : null}
         <SettingsQuery.Provider value={query.trim().toLowerCase()}>
-        {query ? null : (
-          <SectionHeader accent="Account" top={space.home.headingToContent} />
-        )}
-        <View style={styles.card}>
-        <InfoRow label="Email" value={email} sub={signInLine(profile?.user.hasPassword)} />
-        {profile ? (
-          profile.user.isVerified ? (
-            <InfoRow label="Email verification" value="Verified" />
-          ) : (
+        {/* The design's six groups (4 Nov 2026), each one card of rows with an
+            icon square, a value on the right, and ↗ for browser pages. */}
+        <Group title="Your account" hidden={!!query}>
+          {profile ? (
+            profile.user.isVerified ? (
+              <InfoRow icon="mail-outline" label="Email verification" value="Verified" good sub={email} />
+            ) : (
+              <SettingsRow
+                icon="mail-outline"
+                label="Verify your email"
+                sub={resending ? "Sending…" : "Not verified yet. Tap to send the link again"}
+                onPress={() => void resendVerification()}
+              />
+            )
+          ) : null}
+          <SettingsRow
+            icon="key-outline"
+            label="Change password"
+            sub={signInLine(profile?.user.hasPassword) ?? "Or set one if you signed up with Google"}
+            onPress={() => router.push("/change-password")}
+          />
+          <SettingsRow
+            icon="id-card-outline"
+            label="ID verification"
+            value={idVerification.data?.verified || idVerification.data?.status === "approved" ? "Verified" : undefined}
+            good
+            sub={idVerification.data?.verified || idVerification.data?.status === "approved" ? undefined : idStatusLine(idVerification.data?.status, idVerification.data?.verified)}
+            onPress={() => router.push("/verify-id")}
+          />
+          <SettingsRow
+            icon="phone-portrait-outline"
+            label="Active sessions"
+            sub="Where you're signed in"
+            onPress={() => router.push("/active-sessions")}
+          />
+        </Group>
+
+        <Group title="Your profile" hidden={!!query}>
+          <SettingsRow
+            icon="ribbon-outline"
+            label="Achievements"
+            value={profile ? `${profile.displayedAchievements.length} shown` : undefined}
+            onPress={() => router.push("/achievements")}
+          />
+          {myShop ? (
             <SettingsRow
-              label="Verify your email"
-              sub={resending ? "Sending…" : "Not verified yet. Tap to send the link again"}
-              onPress={() => void resendVerification()}
+              icon="storefront-outline"
+              label="My shop"
+              sub={`${myShop.name} · ${organizationStatusLine(myShop)}`}
+              onPress={() =>
+                router.push({
+                  pathname: "/edit-org",
+                  params: {
+                    id: myShop.id,
+                    userId: myShop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "",
+                  },
+                })
+              }
             />
-          )
-        ) : null}
-        {myShop ? (
+          ) : organizationsQuery.isSuccess && organizations.length === 0 ? (
+            <SettingsRow
+              icon="storefront-outline"
+              label="Register your shop"
+              sub="For MSMEs: trade as a shop, co-op or non-profit"
+              onPress={() => router.push("/register-shop")}
+            />
+          ) : null}
+        </Group>
+
+        <Group title="Trading" hidden={!!query}>
           <SettingsRow
-            label="My shop"
-            sub={`${myShop.name} · ${organizationStatusLine(myShop)}`}
-            onPress={() =>
-              router.push({
-                pathname: "/edit-org",
-                params: {
-                  id: myShop.id,
-                  userId: myShop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "",
-                },
-              })
-            }
+            icon="swap-horizontal"
+            label="How trading works"
+            sub="Brackets, bridging fees, your tier"
+            onPress={() => setExplainerOpen(true)}
           />
-        ) : organizationsQuery.isSuccess && organizations.length === 0 ? (
-          <SettingsRow
-            label="Register your shop"
-            sub="For MSMEs: trade as a shop, co-op or non-profit"
-            onPress={() => router.push("/register-shop")}
-          />
-        ) : null}
-        {/*
-          No "Posting as" card (removed 20 Oct 2026). A shop owner switches
-          between themselves and the shop on the Profile tab (the shop card,
-          "Switch to Myself") and in the post flow ("Post as myself"). The row
-          above shows the shop's review status and opens its existing manage screen.
-        */}
-        </View>
+          <SettingsRow icon="star-outline" label="Premium" value={premiumValue(profile?.reputation)} onPress={() => openPremium(router)} />
+          <SettingsRow icon="document-text-outline" label="Trading policy" external onPress={() => openPage(TRADING_POLICY_PATH)} />
+        </Group>
 
-        {query ? null : (
-          <SectionHeader accent="Profile and security" />
-        )}
-        <View style={styles.card}>
-        <SettingsRow
-          label="Edit profile"
-          sub="Name, photo, bio and location"
-          onPress={() => router.push("/edit-profile")}
-        />
-        <SettingsRow
-          label="Change password"
-          sub="Or set one if you signed up with Google"
-          onPress={() => router.push("/change-password")}
-        />
-        <SettingsRow
-          label="Verify your ID"
-          sub={idStatusLine(idVerification.data?.status, idVerification.data?.verified)}
-          onPress={() => router.push("/verify-id")}
-        />
-        <SettingsRow
-          label="Achievements"
-          sub="Choose which badges show on your profile"
-          onPress={() => router.push("/achievements")}
-        />
-        </View>
+        <Group title="Privacy" hidden={!!query}>
+          <SettingsRow icon="ban-outline" label="Blocked users" onPress={() => router.push("/blocked-users")} />
+        </Group>
 
-        {query ? null : (
-          <SectionHeader accent="Trading" />
-        )}
-        <View style={styles.card}>
-        <SettingsRow
-          label="How trading works"
-          sub="Brackets, bridging fees and your tier's ceiling"
-          onPress={() => setExplainerOpen(true)}
-        />
-        <SettingsRow
-          label="Trading policy"
-          sub="Opens in your browser"
-          // The same page the bridging-fee consent sheet links to.
-          onPress={() => openPage(TRADING_POLICY_PATH)}
-        />
-        <SettingsRow label="Premium" sub={premiumLine(profile?.reputation)} onPress={() => openPremium(router)} />
-        </View>
+        <Group title="Support and about" hidden={!!query}>
+          <SettingsRow icon="help-circle-outline" label="Help" sub="Common questions and how to reach us" onPress={() => openPage(HELP_PATH)} />
+          <SettingsRow icon="document-text-outline" label="Terms of service" external onPress={() => openPage(TERMS_PATH)} />
+          <SettingsRow icon="lock-closed-outline" label="Privacy policy" external onPress={() => openPage(PRIVACY_PATH)} />
+          <InfoRow icon="information-circle-outline" label="Version" value={version} />
+        </Group>
 
-        {query ? null : (
-          <SectionHeader accent="Privacy and safety" />
-        )}
-        <View style={styles.card}>
-        <SettingsRow
-          label="Active sessions"
-          sub="See where you're signed in and log out other devices"
-          onPress={() => router.push("/active-sessions")}
-        />
-        <SettingsRow
-          label="Blocked users"
-          sub="See who you have blocked and unblock them"
-          onPress={() => router.push("/blocked-users")}
-        />
-        </View>
-
-        {query ? null : (
-          <SectionHeader accent="About" />
-        )}
-        <View style={styles.card}>
-        {/* Three pages beside the trading policy, opened the same way. Help is
-            where "Contact support" leads: several refusals say it, and until
-            that page nothing said how. */}
-        <SettingsRow label="Help" sub="Common questions and how to contact us" onPress={() => openPage(HELP_PATH)} />
-        <SettingsRow label="Terms of service" sub="Opens in your browser" onPress={() => openPage(TERMS_PATH)} />
-        <SettingsRow label="Privacy policy" sub="Opens in your browser" onPress={() => openPage(PRIVACY_PATH)} />
-        <InfoRow label="Version" value={version} />
-        </View>
-
-        {/* No title: the two rows that end the session say what they are. The
-            section gap alone sets them apart from About. */}
-        <View style={[styles.card, styles.leaving]}>
-          <SettingsRow label="Sign out" sub="On this device" onPress={confirmSignOut} />
-          <SettingsRow
-            danger
-            label="Delete account"
-            sub="Permanently erase your account and listings"
-            onPress={() => router.push("/delete-account")}
-          />
-        </View>
+        <Group title="Signing out" hidden={!!query}>
+          <SettingsRow icon="log-out-outline" label="Sign out" sub="On this device" plain onPress={confirmSignOut} />
+          <SettingsRow icon="trash-outline" danger label="Delete account" onPress={() => router.push("/delete-account")} />
+        </Group>
 
         </SettingsQuery.Provider>
 
@@ -314,6 +281,7 @@ export default function SettingsScreen() {
           <>
             <SectionHeader accent="Developer" />
             <SettingsRow
+              icon="construct-outline"
               label="Reset “How trading works” seen flag"
               sub={
                 resetDone
@@ -356,19 +324,51 @@ const SettingsQuery = createContext("");
 const matches = (q: string, ...text: (string | null | undefined)[]) =>
   !q || text.some((t) => t?.toLowerCase().includes(q));
 
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+/** A titled group: the title above, the rows in one rounded card. */
+function Group({ title, hidden, children }: { title: string; hidden: boolean; children: React.ReactNode }) {
+  return (
+    <View style={styles.group}>
+      {hidden ? null : <Text style={styles.groupTitle}>{title}</Text>}
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+function RowIcon({ name, danger }: { name: IconName; danger?: boolean }) {
+  return (
+    <View style={styles.rowIcon}>
+      <Ionicons name={name} size={18} color={danger ? color.urgent : color.ink} />
+    </View>
+  );
+}
+
 function SettingsRow({
+  icon: iconName,
   label,
   sub,
+  value,
+  good = false,
+  external = false,
+  plain = false,
   onPress,
   danger = false,
 }: {
+  icon: IconName;
   label: string;
-  sub: string;
+  sub?: string;
+  value?: string;
+  good?: boolean;
+  /** Opens in the browser: ↗ instead of a chevron. */
+  external?: boolean;
+  /** No chevron at all (Sign out). */
+  plain?: boolean;
   onPress: () => void;
   danger?: boolean;
 }) {
   const q = useContext(SettingsQuery);
-  if (!matches(q, label, sub)) return null;
+  if (!matches(q, label, sub, value)) return null;
   return (
     <Tappable
       onPress={onPress}
@@ -378,50 +378,44 @@ function SettingsRow({
       style={styles.row}
       pressedStyle={styles.pressed}
     >
+      <RowIcon name={iconName} danger={danger} />
       <View style={styles.rowText}>
-        <Text style={[textStyle(type.username), danger ? styles.danger : styles.ink]}>{label}</Text>
-        <Text style={[textStyle(type.sectionSubcopy), styles.secondary]}>{sub}</Text>
+        <Text style={[styles.rowLabel, danger && styles.danger]}>{label}</Text>
+        {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
       </View>
-      <ChevronRightIcon
-        size={icon.chevron.size}
-        stroke={icon.chevron.stroke}
-        color={danger ? color.urgent : color.inkMuted}
-      />
+      {value ? <Text style={[styles.rowValue, good && value === "Verified" && { color: color.forest }]}>{value}</Text> : null}
+      {external ? (
+        <Ionicons name="arrow-up-outline" size={15} color={color.inkMuted} style={{ transform: [{ rotate: "45deg" }] }} />
+      ) : plain || danger ? null : (
+        <ChevronRightIcon size={icon.chevron.size} stroke={icon.chevron.stroke} color={color.inkMuted} />
+      )}
     </Tappable>
   );
 }
 
-/**
- * A fact, not a destination: no chevron and not pressable, so it does not
- * promise a screen behind it. The value sits where a SettingsRow keeps its
- * second line when there is a `sub` to carry, and on the right when there is
- * not (Version).
- */
-function InfoRow({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
+/** A fact, not a destination: no chevron and not pressable. */
+function InfoRow({ icon: iconName, label, value, sub, good = false }: { icon: IconName; label: string; value: string; sub?: string | null; good?: boolean }) {
   const q = useContext(SettingsQuery);
   if (!matches(q, label, value, sub)) return null;
   return (
-    <View
-      style={styles.row}
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={`${label}: ${value}${sub ? `. ${sub}` : ""}`}
-    >
+    <View style={styles.row} accessible accessibilityRole="text" accessibilityLabel={`${label}: ${value}${sub ? `. ${sub}` : ""}`}>
+      <RowIcon name={iconName} />
       <View style={styles.rowText}>
-        <Text style={[textStyle(type.username), styles.ink]}>{label}</Text>
-        {sub ? (
-          <>
-            <Text style={[textStyle(type.sectionSubcopy), styles.ink]} numberOfLines={1}>
-              {value}
-            </Text>
-            <Text style={[textStyle(type.sectionSubcopy), styles.secondary]}>{sub}</Text>
-          </>
-        ) : null}
+        <Text style={styles.rowLabel}>{label}</Text>
+        {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
       </View>
-      {sub ? null : <Text style={[textStyle(type.sectionSubcopy), styles.secondary]}>{value}</Text>}
+      <Text style={[styles.rowValue, good && { color: color.forest }]}>{value}</Text>
     </View>
   );
 }
+
+function premiumValue(rep: ViewerReputation | undefined): string | undefined {
+  if (!rep) return undefined;
+  if (rep.vip) return "VIP";
+  if (rep.premium) return rep.premiumLifetime ? "Lifetime" : "Active";
+  return "Not subscribed";
+}
+
 
 /** The Verify-your-ID row's second line, from the same state verify-id renders. */
 function idStatusLine(status: IdVerificationStatus | undefined, verified: boolean | undefined): string {
@@ -469,6 +463,12 @@ function premiumLine(rep: ViewerReputation | undefined): string {
 }
 
 const styles = StyleSheet.create({
+  group: { marginTop: 18, gap: 4 },
+  groupTitle: { marginHorizontal: 20, marginBottom: 4, fontFamily: font.sansBold, fontSize: 13, color: color.inkSecondary },
+  rowIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: color.control, alignItems: "center", justifyContent: "center" },
+  rowLabel: { fontFamily: font.sansMedium, fontSize: 15, color: color.ink },
+  rowSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
+  rowValue: { fontFamily: font.sansSemi, fontSize: 13, color: color.inkSecondary },
   screen: { flex: 1, backgroundColor: color.surface },
 
 
@@ -477,10 +477,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: space.home.tileBody,
-    minHeight: size.control.tabItem,
-    paddingHorizontal: space.screenX,
-    paddingVertical: space.home.tileBody,
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderBottomWidth: border.hairline,
     borderBottomColor: color.divider,
   },

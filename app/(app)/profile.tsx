@@ -10,7 +10,7 @@ import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
-import { bracketLabel } from "../../src/lib/brackets";
+import { bracketLabel, bracketOf as bracketOfValue } from "../../src/lib/brackets";
 import { color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
@@ -268,7 +268,7 @@ export default function ProfileScreen() {
           <Badges dark={dark} achievements={profile?.displayedAchievements ?? []} onMore={() => router.push("/achievements")} />
           {profile ? <FinishProfile profile={profile} dark={dark} /> : null}
         </PersonHeader>
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: profile?.counts.listed ?? items.length, reviews: profile?.counts.reviews ?? 0 }} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} loadError={reviewsLoadError} onRetry={() => void refetchReviews()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
@@ -548,7 +548,8 @@ type ProfileListRow =
 
 function chunkItems(items: Item[]): Item[][] {
   const rows: Item[][] = [];
-  for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3));
+  // Two across (4 Nov 2026): a photo with its title and value under it.
+  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
   return rows;
 }
 
@@ -557,18 +558,24 @@ function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, follow
   return <View style={s.header}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Pressable onPress={onFollowers} style={s.stat} accessibilityRole="button" accessibilityLabel={`${followers} followers`}><Text style={[s.statValue, { color: palette.ink }]}>{followers}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Followers</Text></Pressable><Pressable onPress={onFollowing} style={s.stat} accessibilityRole="button" accessibilityLabel={`${following} following`}><Text style={[s.statValue, { color: palette.ink }]}>{following}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Following</Text></Pressable></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /></View>;
 }
 
-export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active: "posts" | "reviews"; onChange: (tab: "posts" | "reviews") => void }) {
+export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean; active: "posts" | "reviews"; onChange: (tab: "posts" | "reviews") => void; counts?: { posts: number; reviews: number } }) {
   const palette = dark ? darkColors : lightColors;
+  // Words with counts (4 Nov 2026): "Listings 5   Reviews 2", underlined.
+  const tab = (key: "posts" | "reviews", label: string, count: number | undefined) => {
+    const on = active === key;
+    return (
+      <Pressable onPress={() => onChange(key)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }} style={[s.tab, { borderBottomColor: on ? palette.ink : "transparent" }]}>
+        <Text style={[s.tabText, { color: on ? palette.ink : palette.secondary, fontFamily: on ? font.sansBold : font.sansMedium }]}>
+          {label}
+          {count !== undefined ? <Text style={[s.tabCount, { color: palette.muted }]}>{`  ${count}`}</Text> : null}
+        </Text>
+      </Pressable>
+    );
+  };
   return (
-    <View style={[s.tabs, { borderTopColor: palette.divider, borderBottomColor: palette.divider }]}>
-      <Pressable onPress={() => onChange("posts")} accessibilityRole="tab" accessibilityLabel="Posts" accessibilityState={{ selected: active === "posts" }} style={s.tab}>
-        <GridIcon size={20} stroke={1.7} color={active === "posts" ? palette.green : palette.muted} />
-        <View style={[s.tabUnderline, { backgroundColor: active === "posts" ? palette.green : "transparent" }]} />
-      </Pressable>
-      <Pressable onPress={() => onChange("reviews")} accessibilityRole="tab" accessibilityLabel="Reviews" accessibilityState={{ selected: active === "reviews" }} style={s.tab}>
-        <Ionicons name="star-outline" size={21} color={active === "reviews" ? palette.green : palette.muted} />
-        <View style={[s.tabUnderline, { backgroundColor: active === "reviews" ? palette.green : "transparent" }]} />
-      </Pressable>
+    <View style={[s.tabs, { borderBottomColor: palette.border }]}>
+      {tab("posts", "Listings", counts?.posts)}
+      {tab("reviews", "Reviews", counts?.reviews)}
     </View>
   );
 }
@@ -658,12 +665,14 @@ export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   const inTrade = item.status === "IN_TRADE";
-  return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
-    <View style={[s.tileContent, inTrade && s.dimmed]}>
+  const value = item.valueLeaves !== null ? `${item.valueLeaves} L · ${bracketLabel(bracketOfValue(item.valueLeaves))}` : "";
+  return <Pressable onPress={onPress} style={s.tile} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
+    <View style={[s.tilePhoto, { backgroundColor: palette.control }, inTrade && s.dimmed]}>
       {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
+      {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
     </View>
-    {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
-    {item.valueLeaves !== null ? <View style={s.leavesPill}><Ionicons name="leaf-outline" size={12} color="#FFFFFF" /><Text style={s.leavesText}>{item.valueLeaves}</Text></View> : null}
+    <Text style={[s.tileTitle, { color: palette.ink }]} numberOfLines={1}>{item.title}</Text>
+    {value ? <Text style={[s.tileValue, { color: palette.secondary }]} numberOfLines={1}>{value}</Text> : null}
   </Pressable>;
 }
 
@@ -931,8 +940,10 @@ const s = StyleSheet.create({
   badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
   moreBadge: { borderStyle: "dashed", borderWidth: 1, padding: 0 },
   badgeLabel: { width: 76, fontFamily: font.sans, fontSize: 11, lineHeight: 14, marginTop: 4, textAlign: "center" },
-  tabs: { height: 45, flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", position: "relative" },
+  tabs: { marginTop: 14, paddingHorizontal: 20, flexDirection: "row", gap: 22, borderBottomWidth: 1 },
+  tab: { height: 42, justifyContent: "center", borderBottomWidth: 2, marginBottom: -1 },
+  tabText: { fontSize: 15 },
+  tabCount: { fontFamily: font.sansSemi, fontSize: 15 },
   tabUnderline: { position: "absolute", bottom: -StyleSheet.hairlineWidth, width: 24, height: 2 },
   summary: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 16, paddingHorizontal: 16 },
   summaryLoading: { height: 64, alignItems: "center", justifyContent: "center" },
@@ -956,8 +967,11 @@ const s = StyleSheet.create({
   reviewItemTitle: { fontFamily: font.sansSemi, fontSize: 13 },
   reviewItemMeta: { fontFamily: font.sans, fontSize: 11, marginTop: 3 },
   footer: { paddingVertical: 18 },
-  gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 },
-  tile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
+  gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 },
+  tile: { flexGrow: 0, flexBasis: "48%", width: "48%", minWidth: 0, gap: 6 },
+  tilePhoto: { aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
+  tileTitle: { fontFamily: font.sansSemi, fontSize: 14 },
+  tileValue: { fontFamily: font.sans, fontSize: 12, marginTop: -4 },
   tileContent: { flex: 1 },
   tileImage: { width: "100%", height: "100%" },
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },

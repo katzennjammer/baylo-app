@@ -85,12 +85,13 @@ export function SwipeToReply({
  * Tapping jumps to the original.
  */
 export function QuotedReply({
-  author,
+  label,
   text,
   mine,
   onPress,
 }: {
-  author: string;
+  /** "You replied to John" / "John replied to you". */
+  label: string;
   text: string;
   mine: boolean;
   onPress?: () => void;
@@ -100,11 +101,17 @@ export function QuotedReply({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Replying to ${author}: ${text}. Jump to it`}
-      style={[s.quote, mine ? s.quoteMine : s.quoteTheirs]}
+      accessibilityLabel={`${label}: ${text}. Jump to it`}
+      style={[s.quoteWrap, mine ? s.quoteMine : s.quoteTheirs]}
     >
-      <Text style={s.quoteAuthor} numberOfLines={1}>{author}</Text>
-      <Text style={s.quoteText} numberOfLines={2}>{text}</Text>
+      <View style={s.quoteLabelRow}>
+        <Ionicons name="arrow-undo" size={11} color={color.inkSecondary} />
+        <Text style={s.quoteLabel} numberOfLines={1}>{label}</Text>
+      </View>
+      {/* The quote sits behind the reply bubble, peeking out above it. */}
+      <View style={s.quote}>
+        <Text style={s.quoteText} numberOfLines={2}>{text}</Text>
+      </View>
     </Tappable>
   );
 }
@@ -117,19 +124,11 @@ const s = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
   },
-  quote: {
-    maxWidth: "78%",
-    marginBottom: -6,
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 12,
-    borderRadius: 14,
-    backgroundColor: color.control,
-    borderLeftWidth: 3,
-    borderLeftColor: color.green,
-  },
-  quoteMine: { alignSelf: "flex-end", marginRight: 12 },
-  quoteTheirs: { alignSelf: "flex-start", marginLeft: 46 },
-  quoteAuthor: { fontSize: 12, fontWeight: "700", color: color.forest },
+  quoteWrap: { maxWidth: "72%", gap: 2, marginBottom: -10 },
+  quoteMine: { alignSelf: "flex-end", alignItems: "flex-end", marginRight: 12 },
+  quoteTheirs: { alignSelf: "flex-start", alignItems: "flex-start", marginLeft: 46 },
+  quoteLabelRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  quoteLabel: { fontSize: 11, color: color.inkSecondary },
+  quote: { paddingHorizontal: 12, paddingTop: 7, paddingBottom: 14, borderRadius: 14, backgroundColor: "#ECEAE2" },
   quoteText: { fontSize: 13, color: color.inkSecondary },
 });
