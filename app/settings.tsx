@@ -257,6 +257,10 @@ export default function SettingsScreen() {
           <SettingsRow icon="document-text-outline" label="Trading policy" external onPress={() => openPage(TRADING_POLICY_PATH)} />
         </Group>
 
+        <Group title="Activity" hidden={!!query}>
+          <SettingsRow icon="heart-outline" label="Your activity" sub="Listings you liked" onPress={() => router.push("/activity")} />
+        </Group>
+
         <Group title="Privacy" hidden={!!query}>
           <SettingsRow icon="ban-outline" label="Blocked users" onPress={() => router.push("/blocked-users")} />
         </Group>

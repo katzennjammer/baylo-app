@@ -3,13 +3,16 @@ import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useConversations, useSendMessage } from "../../api/messages";
+import { useProfileConnections } from "../../api/profile";
+import { useSession } from "../../auth/session";
 import { sizedImage } from "../../media/image-url";
-import { color } from "../../theme/tokens";
+import { color, space } from "../../theme/tokens";
 import { SheetShell } from "../sheet-ui";
 import { Tappable } from "../Tappable";
 
 /**
- * "Send in chat" from a listing's menu: pick one of your recent chats and the
+ * "Send in chat" from a listing's menu: pick one of your recent chats -- or a
+ * mutual follower you have not chatted with yet -- and the
  * listing goes over as a card (the existing `shared_post` message) that
  * opens the listing when tapped. Each row says Sent once it has gone, so the
  * same listing can go to a few people without the sheet closing.
@@ -27,7 +30,21 @@ export function SendToChatSheet({
   const [sending, setSending] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const conversations = data?.conversations ?? [];
+  const chats = data?.conversations ?? [];
+  // Mutual followers (you follow them and they follow you) with no chat yet,
+  // after your chats. Sending starts the conversation, as messaging them from
+  // their profile would. Only the first page of who you follow: enough for a
+  // share sheet, and it is the cached list the Following screen uses.
+  const { session } = useSession();
+  const following = useProfileConnections(session?.user.id, "following");
+  const inChats = new Set(chats.map((c) => c.partnerId));
+  const mutuals = following.users
+    .filter((u) => u.followsYou && u.follow.status === "ACCEPTED" && !inChats.has(u.id))
+    .map((u) => ({ partnerId: u.id, partnerName: u.name, partnerAvatar: u.avatar, mutual: true }));
+  const conversations = [
+    ...chats.map((c) => ({ partnerId: c.partnerId, partnerName: c.partnerName, partnerAvatar: c.partnerAvatar, mutual: false })),
+    ...mutuals,
+  ];
   const content = JSON.stringify({
     type: "shared_post",
     postId: item.id,
@@ -53,16 +70,20 @@ export function SendToChatSheet({
     <SheetShell title="Send in chat" onClose={onClose}>
       {isPending ? (
         <ActivityIndicator color={color.green} style={{ marginVertical: 24 }} />
-      ) : isError || conversations.length === 0 ? (
+      ) : (isError && mutuals.length === 0) || conversations.length === 0 ? (
         <Text style={s.empty}>
-          {isError ? "Could not load your chats." : "No chats yet. Message someone first, then you can send listings to them."}
+          {isError ? "Could not load your chats." : "No chats or mutual followers yet. Follow people who follow you, or message someone first."}
         </Text>
       ) : (
-        <ScrollView style={{ maxHeight: 380 }}>
-          {conversations.map((c) => {
+        <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ paddingHorizontal: space.sheet.x, paddingTop: 4 }}>
+          {conversations.map((c, i) => {
             const done = sent.has(c.partnerId);
+            const firstMutual = c.mutual && (i === 0 || !conversations[i - 1].mutual);
             return (
-              <View key={c.partnerId} style={s.row}>
+              <View key={c.partnerId}>
+              {i === 0 && !c.mutual ? <Text style={s.group}>Recent chats</Text> : null}
+              {firstMutual ? <Text style={s.group}>Mutual followers</Text> : null}
+              <View style={s.row}>
                 {c.partnerAvatar ? (
                   <Image source={{ uri: sizedImage(c.partnerAvatar, "thumb") }} style={s.avatar} />
                 ) : (
@@ -85,6 +106,7 @@ export function SendToChatSheet({
                   )}
                 </Tappable>
               </View>
+              </View>
             );
           })}
         </ScrollView>
@@ -95,9 +117,10 @@ export function SendToChatSheet({
 }
 
 const s = StyleSheet.create({
-  empty: { fontSize: 14, color: color.inkSecondary, paddingVertical: 16 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
+  empty: { fontSize: 14, color: color.inkSecondary, paddingVertical: 16, paddingHorizontal: space.sheet.x },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+  group: { fontSize: 12, fontWeight: "700", letterSpacing: 0.4, color: color.inkMuted, marginTop: 10, marginBottom: 2, textTransform: "uppercase" },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   fallback: { backgroundColor: color.greenWash, alignItems: "center", justifyContent: "center" },
   initial: { fontSize: 16, fontWeight: "700", color: color.forest },
   name: { flex: 1, fontSize: 15, fontWeight: "600", color: color.ink },
@@ -105,5 +128,5 @@ const s = StyleSheet.create({
   sent: { backgroundColor: color.control },
   sendText: { fontSize: 14, fontWeight: "700", color: color.onGreen },
   sentText: { color: color.inkSecondary },
-  error: { fontSize: 13, color: color.urgent, paddingTop: 8 },
+  error: { fontSize: 13, color: color.urgent, paddingTop: 8, paddingHorizontal: space.sheet.x },
 });

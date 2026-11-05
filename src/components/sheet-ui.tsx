@@ -3,7 +3,6 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "rea
 import { ChevronLeftIcon } from "./icons";
 import { Tappable } from "./Tappable";
 import {
-  border,
   color,
   icon,
   radius,
@@ -53,7 +52,9 @@ export function SheetShell({
   colors,
   children,
 }: {
-  title: string;
+  /** Omitted (or empty): no title row, for a sheet whose first content
+   *  already says what it is about (the listing menu's item row). */
+  title?: string;
   /** Present only while a sub-panel is showing. See the note above. */
   onBack?: () => void;
   onClose: () => void;
@@ -78,7 +79,7 @@ export function SheetShell({
       <View style={[s.sheet, colors ? { backgroundColor: colors.surface } : null]}>
         <View style={s.handle} />
 
-        <View style={s.titleRow}>
+        {title || onBack ? <View style={s.titleRow}>
           {onBack ? (
             <Tappable
               onPress={onBack}
@@ -91,10 +92,12 @@ export function SheetShell({
             </Tappable>
           ) : null}
 
-          <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={2}>
-            {title}
-          </Text>
-        </View>
+          {title ? (
+            <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={2}>
+              {title}
+            </Text>
+          ) : null}
+        </View> : <View style={{ height: 12 }} />}
 
         {children}
 
@@ -108,7 +111,7 @@ export function SheetShell({
               style={s.cancel}
               pressedStyle={s.cancelPressed}
             >
-              <Text style={[textStyle(type.secondaryButton), { color: colors?.inkSecondary ?? color.inkSecondary }]}>
+              <Text style={[textStyle(type.secondaryButton), { color: colors?.ink ?? color.ink }]}>
                 {closeLabel}
               </Text>
             </Tappable>
@@ -227,24 +230,23 @@ const s = StyleSheet.create({
     color: color.inkMuted,
   },
 
+  // A soft filled button with no rule above it (5 Nov 2026): the outlined
+  // box under a divider read as a second, heavier sheet stuck to the first.
   footer: {
-    marginTop: space.sheet.actionsTop,
+    marginTop: 8,
     paddingHorizontal: space.sheet.x,
-    paddingTop: space.sheet.actionsTop,
-    borderTopWidth: border.hairline,
-    borderTopColor: color.divider,
+    paddingTop: 8,
     alignItems: "center",
     justifyContent: "center",
     minHeight: size.sheet.action,
   },
   cancel: {
     alignSelf: "stretch",
-    height: size.sheet.action,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: color.control,
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelPressed: { backgroundColor: color.control },
+  cancelPressed: { backgroundColor: color.controlLine },
 });
