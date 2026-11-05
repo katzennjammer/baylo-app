@@ -745,7 +745,9 @@ export default function ItemDetailScreen() {
 
       {menu ? (
         <SheetShell
-          title={menu === "report" ? "Why are you reporting this listing?" : "Listing options"}
+          // No title on the menu itself: the listing's row at the top already
+          // says what these options are about.
+          title={menu === "report" ? "Why are you reporting this listing?" : undefined}
           onBack={menu === "report" ? () => setMenu("menu") : undefined}
           onClose={() => setMenu(null)}
           busy={report.isPending || block.isPending}
