@@ -6,11 +6,14 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image as ExpoImage } from "expo-image";
+import { MASCOT } from "../src/media/mascots";
 
 import { ApiError } from "../src/api/client";
 import {
@@ -115,7 +118,7 @@ export default function VerifyIdScreen() {
       {data.verified ? (
         <Approved payload={data} onDone={() => router.back()} />
       ) : data.status === "pending" ? (
-        <Pending payload={data} />
+        <Pending payload={data} onDone={() => router.back()} />
       ) : data.status === "exhausted" ? (
         <Exhausted payload={data} />
       ) : (
@@ -128,6 +131,10 @@ export default function VerifyIdScreen() {
             // who submits and goes straight to an offer sees "Verify your
             // ID" on the DPA row for up to sixty seconds after doing so.
             qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+            // Back to where you came from (the post screen shows the "being
+            // reviewed" duck), rather than a second copy of it here that the
+            // back button would show again.
+            router.back();
           }}
         />
       )}
@@ -225,65 +232,72 @@ function Note({ children }: { children: React.ReactNode }) {
 
 /* ────────────────────────────── branches ────────────────────────────── */
 
-function Approved({ payload, onDone }: { payload: IdVerificationPayload; onDone: () => void }) {
+/**
+ * The three end states as ONE centered duck screen, the same one the post
+ * screen shows, so submitting and pressing back never shows the same news
+ * twice in two different layouts.
+ */
+function DuckState({
+  pose,
+  title,
+  body,
+  cta,
+}: {
+  pose: "idCard" | "celebrate" | "worry";
+  title: string;
+  body: string;
+  cta?: { label: string; onPress: () => void };
+}) {
   return (
-    <>
-      <Text style={[textStyle(type.emptyHeadline), { color: color.ink }]}>
-        You are verified
+    <View style={{ alignItems: "center", paddingTop: 40 }}>
+      <ExpoImage source={MASCOT[pose]} contentFit="contain" style={{ width: 130, height: 190, marginBottom: 18 }} accessible={false} />
+      <Text style={[textStyle(type.emptyHeadline), { color: color.ink, textAlign: "center" }]}>{title}</Text>
+      <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary, marginTop: gap.sm, lineHeight: 21, textAlign: "center" }]}>
+        {body}
       </Text>
-      <Note>
-        {payload.grandfathered
-          ? "This account was already active when ID checks launched, so you were let through without one. You can post items and propose deferred agreements."
-          : "Your ID was approved. You can post items and propose deferred agreements."}
-      </Note>
-      <Button label="Back" onPress={onDone} />
-    </>
+      <View style={v.openBox}>
+        <Text style={v.openTitle}>Still open while you wait</Text>
+        <Text style={v.openBody}>Browsing, searching, messaging, liking, commenting, and accepting a trade someone offers you.</Text>
+      </View>
+      {cta ? <View style={{ alignSelf: "stretch" }}><Button label={cta.label} onPress={cta.onPress} /></View> : null}
+    </View>
   );
 }
 
-function Pending({ payload }: { payload: IdVerificationPayload }) {
+function Approved({ payload, onDone }: { payload: IdVerificationPayload; onDone: () => void }) {
+  return (
+    <View style={{ alignItems: "center", paddingTop: 40 }}>
+      <ExpoImage source={MASCOT.celebrate} contentFit="contain" style={{ width: 150, height: 190, marginBottom: 18 }} accessible={false} />
+      <Text style={[textStyle(type.emptyHeadline), { color: color.ink, textAlign: "center" }]}>You are verified</Text>
+      <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary, marginTop: gap.sm, lineHeight: 21, textAlign: "center" }]}>
+        {payload.grandfathered
+          ? "This account was already active when ID checks launched, so you were let through without one. You can post items and propose deferred agreements."
+          : "Your ID was approved. You can post items and propose deferred agreements."}
+      </Text>
+      <View style={{ alignSelf: "stretch" }}><Button label="Done" onPress={onDone} /></View>
+    </View>
+  );
+}
+
+function Pending({ payload, onDone }: { payload: IdVerificationPayload; onDone: () => void }) {
   const sentAt = formatSubmittedAt(payload.latest?.submittedAt);
   return (
-    <>
-      <Text style={[textStyle(type.emptyHeadline), { color: color.ink }]}>
-        Your ID is being reviewed
-      </Text>
-      <Note>
-        Sent {sentAt ?? "recently"}. A person looks at every one, usually within a day.
-      </Note>
-      {/*
-        The most useful thing this screen can say, and the reason it says it
-        prominently: almost nothing is actually blocked. Somebody who reads
-        "pending" and assumes the app is frozen for them closes it and does not
-        come back.
-      */}
-      <Note>
-        Nothing else is on hold. You can browse, search, message, like and comment as normal, and
-        you can still accept a trade somebody offers you — only posting an item and proposing a
-        deferred agreement wait for this.
-      </Note>
-    </>
+    <DuckState
+      pose="idCard"
+      title="Your ID is being reviewed"
+      body={`Sent ${sentAt ?? "recently"}. A person looks at every one, usually within a day. As soon as it is approved you can post.`}
+      cta={{ label: "Got it", onPress: onDone }}
+    />
   );
 }
 
 function Exhausted({ payload }: { payload: IdVerificationPayload }) {
   return (
-    <>
-      <Text style={[textStyle(type.emptyHeadline), { color: color.ink }]}>
-        No attempts left
-      </Text>
-      <Note>
-        {payload.latest?.rejectionFix ??
-          "Your last submission was not approved."}
-      </Note>
-      <Note>
-        That was attempt {payload.maxAttempts} of {payload.maxAttempts}. To go further you will
-        need to talk to a person — email support and mention this account.
-      </Note>
-      <Note>
-        Everything except posting and proposing deferred agreements still works normally.
-      </Note>
-    </>
+    <DuckState
+      pose="worry"
+      title="No attempts left"
+      body={`${payload.latest?.rejectionFix ?? "Your last submission was not approved."} That was attempt ${payload.maxAttempts} of ${payload.maxAttempts}; to go further, email support and mention this account.`}
+    />
   );
 }
 
@@ -361,6 +375,9 @@ function SubmitForm({
 
   const ready = !!idType && idNumber.trim().length >= payload.limits.minIdNumberLength && !!image;
 
+  const done1 = !!idType;
+  const done2 = idNumber.trim().length >= payload.limits.minIdNumberLength;
+
   return (
     <>
       <Text style={[textStyle(type.emptyHeadline), { color: color.ink }]}>
@@ -368,63 +385,34 @@ function SubmitForm({
       </Text>
 
       {rejected && payload.latest?.rejectionFix ? (
-        <View
-          style={{
-            marginTop: gap.md,
-            padding: gap.md,
-            borderRadius: radius.card,
-            backgroundColor: color.urgentWash,
-            borderWidth: 1,
-            borderColor: color.urgentLine,
-          }}
-        >
-          {/* The server's sentence, verbatim. It names the specific thing to
-              change — the whole point of a closed reason list is that the user
-              is never left guessing which part to fix. */}
+        <View style={v.warn}>
+          {/* The server's sentence, verbatim: it names the one thing to fix. */}
           <Text style={[textStyle(type.emptyBody), { color: color.ink, lineHeight: 21 }]}>
             {payload.latest.rejectionFix}
           </Text>
         </View>
       ) : (
-        <Note>
-          Posting an item and proposing a deferred agreement need a government ID. Everything else
-          — browsing, searching, messaging, and accepting a trade someone offers you — stays open
-          whether you do this or not.
-        </Note>
+        <Text style={v.lead}>
+          Needed to post items and propose deferred agreements. Browsing, messaging and accepting
+          trades stay open either way.
+        </Text>
       )}
 
-      <Note>
-        {payload.attemptsRemaining} of {payload.maxAttempts} attempts left. We keep the outcome
-        and a one-way digest of the number; the photo is deleted the moment somebody reviews it.
-      </Note>
-
-      {/* ── ID type ── */}
-      <Text style={[textStyle(type.sectionHeading), { color: color.ink, marginTop: gap.xl }]}>
-        Which ID?
-      </Text>
-      <Note>Student IDs are not accepted.</Note>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: gap.sm, marginTop: gap.md }}>
+      {/* ── 1. which ID ── a real sequence, so the steps are numbered. */}
+      <Step n={1} done={done1} title="Which ID?" hint="Student IDs are not accepted." />
+      <View style={v.typeGrid}>
         {payload.idTypes.map((t) => {
           const on = idType === t.value;
           return (
             <Tappable
               key={t.value}
               onPress={() => setIdType(t.value)}
-              style={{
-                paddingHorizontal: gap.md,
-                paddingVertical: gap.sm,
-                borderRadius: radius.primaryButton,
-                borderWidth: 1,
-                borderColor: on ? color.green : color.controlLine,
-                backgroundColor: on ? color.greenWash : color.control,
-              }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on }}
+              style={[v.type, on && v.typeOn]}
             >
-              <Text
-                style={[
-                  textStyle(type.chip),
-                  { color: on ? color.forest : color.inkSecondary },
-                ]}
-              >
+              <View style={[v.radio, on && v.radioOn]}>{on ? <View style={v.radioDot} /> : null}</View>
+              <Text style={[v.typeText, on && { color: color.forest }]} numberOfLines={1}>
                 {t.label}
               </Text>
             </Tappable>
@@ -432,11 +420,8 @@ function SubmitForm({
         })}
       </View>
 
-      {/* ── number ── */}
-      <Text style={[textStyle(type.sectionHeading), { color: color.ink, marginTop: gap.xl }]}>
-        The number on it
-      </Text>
-      <Note>Exactly as printed. Spaces and dashes do not matter.</Note>
+      {/* ── 2. number ── */}
+      <Step n={2} done={done2} title="ID number" hint="As printed. Spaces and dashes don't matter." />
       <TextInput
         value={idNumber}
         onChangeText={setIdNumber}
@@ -445,67 +430,43 @@ function SubmitForm({
         maxLength={payload.limits.maxIdNumberLength}
         placeholder="e.g. 1234-5678-9012"
         placeholderTextColor={color.inkStale}
-        style={{
-          marginTop: gap.md,
-          height: 52,
-          borderRadius: radius.card,
-          backgroundColor: color.control,
-          borderWidth: 1,
-          borderColor: color.controlLine,
-          paddingHorizontal: gap.md,
-          color: color.ink,
-          fontSize: 16,
-        }}
+        style={v.input}
       />
 
-      {/* ── photo ── */}
-      <Text style={[textStyle(type.sectionHeading), { color: color.ink, marginTop: gap.xl }]}>
-        A photo of it
-      </Text>
-      <Note>
-        Flat, in good light, with all four corners in frame. We strip the location data your
-        camera writes into the file.
-      </Note>
-
+      {/* ── 3. photo ── the empty frame is ID-card shaped, so it says what
+          goes in it before the hint is read. */}
+      <Step n={3} done={!!image} title="Photo of the ID" hint="Flat, in good light, all four corners in frame." />
       {image ? (
         <View style={{ marginTop: gap.md }}>
-          <Image
-            source={{ uri: image.uri }}
-            style={{
-              width: "100%",
-              aspectRatio: 1.586, // ID-1, the card format every one of these uses.
-              borderRadius: radius.card,
-              backgroundColor: color.control,
-            }}
-            resizeMode="cover"
-          />
-          <Button label="Choose a different photo" tone="quiet" onPress={() => pick("camera")} />
+          <Image source={{ uri: image.uri }} style={v.photo} resizeMode="cover" />
+          <Tappable onPress={() => pick("camera")} style={v.retake}>
+            <Text style={v.link}>Retake photo</Text>
+          </Tappable>
         </View>
       ) : (
-        <View style={{ flexDirection: "row", gap: gap.sm, marginTop: gap.md }}>
-          <View style={{ flex: 1 }}>
-            <Button label="Take a photo" tone="quiet" onPress={() => pick("camera")} />
+        <View style={v.frame}>
+          <View style={v.frameCard}>
+            <View style={v.frameFace} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <View style={[v.frameLine, { width: "80%" }]} />
+              <View style={[v.frameLine, { width: "55%" }]} />
+              <View style={[v.frameLine, { width: "65%" }]} />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Button label="Choose one" tone="quiet" onPress={() => pick("library")} />
+          <View style={v.frameButtons}>
+            <Tappable onPress={() => pick("camera")} style={v.frameBtn}>
+              <Text style={[textStyle(type.primaryButton), { color: color.onGreen, fontSize: 15 }]}>Take a photo</Text>
+            </Tappable>
+            <Tappable onPress={() => pick("library")} style={[v.frameBtn, v.frameBtnQuiet]}>
+              <Text style={[textStyle(type.primaryButton), { color: color.ink, fontSize: 15 }]}>From gallery</Text>
+            </Tappable>
           </View>
         </View>
       )}
 
       {error && (
-        <View
-          style={{
-            marginTop: gap.lg,
-            padding: gap.md,
-            borderRadius: radius.card,
-            backgroundColor: color.urgentWash,
-            borderWidth: 1,
-            borderColor: color.urgentLine,
-          }}
-        >
-          <Text style={[textStyle(type.emptyBody), { color: color.urgent, lineHeight: 21 }]}>
-            {error}
-          </Text>
+        <View style={v.warn}>
+          <Text style={[textStyle(type.emptyBody), { color: color.urgent, lineHeight: 21 }]}>{error}</Text>
         </View>
       )}
 
@@ -516,9 +477,60 @@ function SubmitForm({
         busy={submit.isPending}
       />
 
-      <Note>
-        A person reviews it, usually within a day. You will get a notification either way.
-      </Note>
+      {/* What happens to it, in two short facts rather than a paragraph. */}
+      <View style={v.facts}>
+        <Text style={v.fact}>Reviewed by a person, usually within a day. You get a notification.</Text>
+        <Text style={v.fact}>
+          The photo is deleted once reviewed; we keep only the result. {payload.attemptsRemaining} of {payload.maxAttempts} attempts left.
+        </Text>
+      </View>
     </>
   );
 }
+
+function Step({ n, done, title, hint }: { n: number; done: boolean; title: string; hint: string }) {
+  return (
+    <View style={v.step}>
+      <View style={[v.stepNum, done && v.stepNumDone]}>
+        <Text style={[v.stepNumText, done && { color: color.onGreen }]}>{done ? "✓" : n}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[textStyle(type.sectionHeading), { color: color.ink }]}>{title}</Text>
+        <Text style={v.hint}>{hint}</Text>
+      </View>
+    </View>
+  );
+}
+
+const v = StyleSheet.create({
+  lead: { ...textStyle(type.emptyBody), color: color.inkSecondary, marginTop: gap.sm, lineHeight: 21 },
+  warn: { marginTop: gap.md, padding: gap.md, borderRadius: radius.card, backgroundColor: color.urgentWash, borderWidth: 1, borderColor: color.urgentLine },
+  step: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: gap.xl },
+  stepNum: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: color.controlLineStrong, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  stepNumDone: { backgroundColor: color.green, borderColor: color.green },
+  stepNumText: { fontSize: 13, fontWeight: "700", color: color.inkSecondary },
+  hint: { ...textStyle(type.emptyBody), color: color.inkSecondary, marginTop: 2, fontSize: 14 },
+  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: gap.md },
+  type: { width: "48.6%", flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface },
+  typeOn: { borderColor: color.green, backgroundColor: color.greenWash },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: color.controlLineStrong, alignItems: "center", justifyContent: "center" },
+  radioOn: { borderColor: color.green },
+  radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: color.green },
+  typeText: { flex: 1, fontSize: 14, fontWeight: "600", color: color.ink },
+  input: { marginTop: gap.md, height: 52, borderRadius: 12, backgroundColor: color.searchSurface, borderWidth: 1, borderColor: color.controlLine, paddingHorizontal: gap.md, color: color.ink, fontSize: 16, letterSpacing: 0.5 },
+  frame: { marginTop: gap.md, padding: 14, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: color.controlLineStrong, backgroundColor: color.searchSurface, gap: 14 },
+  frameCard: { alignSelf: "center", width: "70%", aspectRatio: 1.586, borderRadius: 10, backgroundColor: color.control, flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  frameFace: { width: "30%", aspectRatio: 0.8, borderRadius: 6, backgroundColor: color.controlLine },
+  frameLine: { height: 7, borderRadius: 4, backgroundColor: color.controlLine },
+  frameButtons: { flexDirection: "row", gap: 8 },
+  frameBtn: { flex: 1, height: 46, borderRadius: radius.primaryButton, backgroundColor: color.green, alignItems: "center", justifyContent: "center" },
+  frameBtnQuiet: { backgroundColor: color.control },
+  photo: { width: "100%", aspectRatio: 1.586, borderRadius: radius.card, backgroundColor: color.control },
+  retake: { alignSelf: "center", paddingVertical: 10 },
+  link: { fontSize: 15, fontWeight: "600", color: color.forest },
+  facts: { marginTop: gap.md, gap: 6 },
+  openBox: { alignSelf: "stretch", marginTop: 20, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: color.greenWash, gap: 2 },
+  openTitle: { fontSize: 13, fontWeight: "600", color: color.forest },
+  openBody: { fontSize: 13, lineHeight: 18, color: color.inkSecondary },
+  fact: { ...textStyle(type.emptyBody), fontSize: 13, lineHeight: 18, color: color.inkMuted, textAlign: "center" },
+});

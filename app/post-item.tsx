@@ -377,7 +377,7 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           // status the app might have forgotten. The CTA opens /verify-id,
           // whose pending branch has no form on it.
           body: `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. As soon as it is approved you can post.`,
-          cta: "See where it is up to",
+          cta: "Got it",
         }
       : state.status === "exhausted"
         ? {
@@ -413,26 +413,26 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
         </Tappable>
       </View>
 
-      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
+      <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: "center", alignItems: "center" }}>
         {/* The duck holding an ID says what is being asked before a word is
             read. Out of attempts is not a cheerful moment, so that state gets
             the worried duck instead. Decorative: hidden from screen readers. */}
         <Image
           source={state.status === "exhausted" ? MASCOT.worry : MASCOT.idCard}
           contentFit="contain"
-          style={{ width: 104, height: 168, marginBottom: 20 }}
+          style={{ width: 120, height: 190, marginBottom: 16 }}
           accessible={false}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         />
-        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>
+        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink, textAlign: "center" }]}>
           {copy.title}
         </Text>
 
         <Text
           style={[
             textStyle(postType.stepSub),
-            { color: postColor.inkSecondary, marginTop: 12, lineHeight: 22 },
+            { color: postColor.inkSecondary, marginTop: 10, lineHeight: 22, textAlign: "center" },
           ]}
         >
           {copy.body}
@@ -444,20 +444,18 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           the truthful answer is that almost nothing is affected — including,
           deliberately, accepting a trade somebody offers them.
         */}
-        <Text
-          style={[
-            textStyle(postType.stepSub),
-            { color: postColor.inkSecondary, marginTop: 16, lineHeight: 22 },
-          ]}
-        >
-          Everything else stays open: browsing, searching, messaging, liking, commenting, and
-          accepting a trade someone offers you.
-        </Text>
+        <View style={gateStyles.openBox}>
+          <Text style={gateStyles.openTitle}>Still open without an ID</Text>
+          <Text style={gateStyles.openBody}>
+            Browsing, searching, messaging, liking, commenting, and accepting a trade someone offers you.
+          </Text>
+        </View>
 
         <PrimaryButton
           label={copy.cta}
-          onPress={() => router.push("/verify-id")}
-          style={{ marginTop: 28 }}
+          // Being reviewed: nothing to do but wait, so the button just closes.
+          onPress={() => (state.status === "pending" ? router.back() : router.push("/verify-id"))}
+          style={{ marginTop: 24, alignSelf: "stretch" }}
         />
 
         {/* An MSME verifies with business documents, never this screen. The
@@ -475,6 +473,12 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
     </View>
   );
 }
+
+const gateStyles = {
+  openBox: { alignSelf: "stretch", marginTop: 20, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: postColor.greenWash, gap: 2 },
+  openTitle: { fontFamily: "PublicSans-SemiBold", fontSize: 13, color: postColor.forest },
+  openBody: { fontFamily: "PublicSans-Regular", fontSize: 13, lineHeight: 18, color: postColor.inkSecondary },
+} as const;
 
 /* ────────────────────────────── the wizard ──────────────────────────── */
 
