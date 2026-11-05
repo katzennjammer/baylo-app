@@ -51,7 +51,12 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
       <View style={[s.sheet, { paddingBottom: overlap > 0 ? overlap + KEYBOARD_GAP : space.sheet.bottom + insets.bottom }]}>
         <View style={s.handle} />
         <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>{(() => { const n = Math.max(item.stats.comments, comments.reduce((t, c) => t + 1 + (c.replies?.length ?? 0), 0)); return n === 1 ? "1 comment" : `${n} comments`; })()}</Text>
-        <View style={s.list}>{isPending ? <View style={s.state}><ActivityIndicator color={color.green} /></View> : isError ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>{error instanceof ApiError && error.code === "NOT_FOUND" ? "This listing is no longer available." : "Could not load the comments."}</Text><Tappable onPress={() => refetch()} accessibilityRole="button" style={s.retry}><Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Try again</Text></Tappable></View> : comments.length === 0 ? <View style={s.state}><MascotEmptyState pose="search" size={96} title="No questions yet" message="Ask the owner anything you need to know before you offer." /></View> : <FlatList data={comments} keyExtractor={(comment) => comment.id} renderItem={({ item: comment }) => <CommentRow comment={comment} ownerId={item.owner.id} onReply={(id, name, text) => setReplyTo({ id, name, text })} onAuthor={(id) => router.push({ pathname: "/user", params: { id } })} />} onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage(); }} onEndReachedThreshold={0.5} keyboardShouldPersistTaps="handled" ListFooterComponent={isFetchingNextPage ? <View style={s.more}><ActivityIndicator color={color.green} /></View> : null} />}</View>
+        <View style={s.list}>{isPending ? <View style={s.state}><ActivityIndicator color={color.green} /></View> : isError ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>{error instanceof ApiError && error.code === "NOT_FOUND" ? "This listing is no longer available." : "Could not load the comments."}</Text><Tappable onPress={() => refetch()} accessibilityRole="button" style={s.retry}><Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Try again</Text></Tappable></View> : comments.length === 0 ? <View style={s.state}><MascotEmptyState pose="search" size={96} title="No questions yet" message="Ask the owner anything you need to know before you offer." /></View> : <FlatList data={comments} keyExtractor={(comment) => comment.id} renderItem={({ item: comment }) => <CommentRow comment={comment} ownerId={item.owner.id} onReply={(id, name, text, isReply) => {
+  setReplyTo({ id, name, text });
+  // Answering a reply: the answer joins the same thread (replies are one
+  // level deep), so it starts with @name to say who it is for.
+  if (isReply && !draft.trim()) setDraft(`@${name} `);
+}} onAuthor={(id) => router.push({ pathname: "/user", params: { id } })} />} onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage(); }} onEndReachedThreshold={0.5} keyboardShouldPersistTaps="handled" ListFooterComponent={isFetchingNextPage ? <View style={s.more}><ActivityIndicator color={color.green} /></View> : null} />}</View>
         {replyTo ? (
           <View style={s.replyBar}>
             <View style={s.replyMark} />
@@ -136,13 +141,13 @@ function useKeyboardOverlap(active: boolean) {
  * marked, because "the owner answered" is what a buyer scans for. Replies
  * sit under it, indented, as smaller bubbles.
  */
-function CommentRow({ comment, ownerId, onReply, onAuthor }: { comment: ItemComment; ownerId: string; onReply: (id: string, name: string, text: string) => void; onAuthor: (id: string) => void }) {
+function CommentRow({ comment, ownerId, onReply, onAuthor }: { comment: ItemComment; ownerId: string; onReply: (id: string, name: string, text: string, isReply?: boolean) => void; onAuthor: (id: string) => void }) {
   return (
     <View style={s.thread}>
       <Bubble c={comment} ownerId={ownerId} onAuthor={onAuthor} onReply={() => onReply(comment.id, comment.user.name, comment.content)} />
       {comment.replies?.map((reply) => (
         <View key={reply.id} style={s.replyWrap}>
-          <Bubble c={reply} ownerId={ownerId} onAuthor={onAuthor} small onReply={() => onReply(comment.id, reply.user.name, reply.content)} />
+          <Bubble c={reply} ownerId={ownerId} onAuthor={onAuthor} small onReply={() => onReply(comment.id, reply.user.name, reply.content, true)} />
         </View>
       ))}
     </View>

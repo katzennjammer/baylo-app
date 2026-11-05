@@ -543,11 +543,17 @@ export async function fetchAiValuation(input: {
   condition: Condition;
 }): Promise<AiValuationResult> {
   const path = "/api/ai/valuation";
-  const res = await request(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  // Up to a minute: the price check opens shop pages, which takes longer
+  // than the app's usual 30 seconds. The server gives up at 50.
+  const res = await request(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    { timeoutMs: 60_000 },
+  );
   if (!res.ok) await legacyFailure(res, "AI valuation is unavailable right now");
   return readJson<AiValuationResult>(res, path);
 }
