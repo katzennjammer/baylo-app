@@ -314,11 +314,11 @@ export function initialState(): PostState {
     wanted: "",
     returnCategories: [],
     isPerishable: false,
-    // KG and 24 are the defaults a perishable takes the moment the toggle is
+    // Pieces and 24 are the defaults a perishable takes the moment the toggle is
     // flipped, so the step never renders with an empty unit or an unchosen
     // window. Inert while `isPerishable` is false; see the note above.
     quantity: "",
-    quantityUnit: "KG",
+    quantityUnit: "PCS",
     tradeWithinHours: 24,
     hubIds: [],
     hubsSkipped: false,
@@ -586,7 +586,7 @@ function step(s: PostState, a: PostAction): PostState {
       // The person chose, so the photo's suggestion no longer stands.
       return a.perishable
         ? { ...s, isPerishable: true, perishablePrefilled: false }
-        : { ...s, isPerishable: false, perishablePrefilled: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
+        : { ...s, isPerishable: false, perishablePrefilled: false, quantity: "", quantityUnit: "PCS", tradeWithinHours: 24 };
 
     case "field/quantity":
       // Held as the raw STRING the user typed, not as a number. "1." and "0."
