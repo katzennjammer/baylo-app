@@ -9,7 +9,7 @@ import { ApiError } from "../../src/api/client";
 import { useBlockUser, useReport } from "../../src/api/item";
 import { useSession } from "../../src/auth/session";
 import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
-import { Avatar, Badges, ProfileSkeleton, ProfileTabs, ProfileTile, ReviewLoadError, ReviewRow, ReviewSummary, shelfLabel } from "./profile";
+import { Avatar, Badges, ProfileSkeleton, ProfileTabs, ProfileTile, ReviewLoadError, ReviewRow, ReviewSummary, shelfLabel, type ShelfTab } from "./profile";
 import { BlockIcon, ChevronLeftIcon, ChevronRightIcon, FlagIcon, KebabIcon } from "../../src/components/icons";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
@@ -41,7 +41,7 @@ export default function UserProfileScreen() {
   const dark = useColorScheme() === "dark";
   const palette = dark ? darkColors : lightColors;
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const [tab, setTab] = useState<ShelfTab>("posts");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [badgesOpen, setBadgesOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);

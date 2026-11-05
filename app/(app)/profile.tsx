@@ -27,6 +27,8 @@ import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
+import { showDialog } from "../../src/components/dialog";
+import { request } from "../../src/api/client";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -46,7 +48,7 @@ export default function ProfileScreen() {
   const { session } = useSession();
   const { data: profile, refetch, isError: profileError, isRefetching: profileRefetching, isPending: profileLoading } = useProfileMe();
   const dark = useColorScheme() === "dark";
-  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const [tab, setTab] = useState<ShelfTab>("posts");
 
   // Badge art, the shelf and the counts are written by other screens and by the
   // admin panel, and this tab stays mounted behind them. Without this the shelf
@@ -157,10 +159,38 @@ export default function ProfileScreen() {
     void selectShop(adoptShopId);
   }, [adoptShopId, selectShop]);
 
+  // Two shelves (5 Nov 2026). Listings: what is on the marketplace or on its
+  // way (live, in a trade, waiting for review), so the tab's number and its
+  // grid agree. Traded: your history, both what you gave away (TRADED) and
+  // what you received (OWNED, which can be relisted). Received items used to
+  // sit unlabelled among the listings and read as listings.
   const items = profile?.items ?? [];
+  const isHistory = (i: Item) => i.status === "TRADED" || i.status === "OWNED";
+  const listingItems = items.filter((i) => !isHistory(i));
+  const tradedItems = items.filter(isHistory);
   const rows: ProfileListRow[] = tab === "posts"
-    ? chunkItems(items).map((postItems) => ({ kind: "posts", items: postItems }))
-    : reviews.map((review) => ({ kind: "review", review }));
+    ? chunkItems(listingItems).map((postItems) => ({ kind: "posts", items: postItems }))
+    : tab === "traded"
+      ? chunkItems(tradedItems).map((postItems) => ({ kind: "posts", items: postItems }))
+      : reviews.map((review) => ({ kind: "review", review }));
+  const relist = (item: Item) => {
+    showDialog("Relist this item?", `"${item.title}" goes back on the marketplace with the value it has now.`, [
+      { text: "Not now", style: "cancel" },
+      {
+        text: "Relist",
+        onPress: () => {
+          void request(`/api/items/${encodeURIComponent(item.id)}/relist`, { method: "POST" }).then(async (res) => {
+            if (!res.ok) {
+              const body = (await res.json().catch(() => null)) as { error?: string } | null;
+              showDialog("Could not relist that", body?.error ?? "Something went wrong. Please try again.");
+              return;
+            }
+            void refetch();
+          });
+        },
+      },
+    ]);
+  };
   const onRefresh = useCallback(() => {
     if (tab === "reviews") void refetchReviews();
     else void refetch();
@@ -269,11 +299,18 @@ export default function ProfileScreen() {
           <Badges dark={dark} achievements={profile?.displayedAchievements ?? []} onMore={() => router.push("/achievements")} />
           {profile ? <FinishProfile profile={profile} dark={dark} /> : null}
         </PersonHeader>
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: profile?.counts.listed ?? items.length, reviews: profile?.counts.reviews ?? 0 }} />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: listingItems.length, traded: tradedItems.length, reviews: profile?.counts.reviews ?? 0 }} />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} loadError={reviewsLoadError} onRetry={() => void refetchReviews()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
-        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item}
+          onPress={() => router.push({ pathname: shelfLabel(item) && item.status !== "OWNED" ? "/listing-review" : "/item", params: { id: item.id } })}
+          footer={item.status === "OWNED" ? (
+            <Pressable onPress={() => relist(item)} accessibilityRole="button" accessibilityLabel={`Relist ${item.title}`} style={[s.relist, { borderColor: dark ? darkColors.border : color.controlLine }]}>
+              <Text style={[s.relistText, { color: dark ? darkColors.green : color.forest }]}>Relist</Text>
+            </Pressable>
+          ) : null}
+        />)}</View>
       ) : (
         <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
       )}
@@ -285,6 +322,8 @@ export default function ProfileScreen() {
         <ReviewLoadError dark={dark} onRetry={() => void refetchReviews()} />
       ) : tab === "reviews" ? (
         <Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>No reviews yet.</Text>
+      ) : tab === "traded" ? (
+        <MascotEmptyState pose="leaf" size={96} title="No trades yet" message="Items you trade away and items you get show here." />
       ) : (
         <MascotEmptyState
           pose="box"
@@ -474,7 +513,7 @@ function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: A
  */
 function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUserId: string; viewerId: string | null; topSlot: React.ReactNode }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const [tab, setTab] = useState<ShelfTab>("posts");
   const { data, isPending, isError, refetch, isRefetching } = usePublicProfile(orgUserId);
   const reviewQuery = useProfileReviews(orgUserId, tab === "reviews");
   const palette = dark ? darkColors : lightColors;
@@ -559,10 +598,13 @@ function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, follow
   return <View style={s.header}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Pressable onPress={onFollowers} style={s.stat} accessibilityRole="button" accessibilityLabel={`${followers} followers`}><Text style={[s.statValue, { color: palette.ink }]}>{followers}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Followers</Text></Pressable><Pressable onPress={onFollowing} style={s.stat} accessibilityRole="button" accessibilityLabel={`${following} following`}><Text style={[s.statValue, { color: palette.ink }]}>{following}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Following</Text></Pressable></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /></View>;
 }
 
-export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean; active: "posts" | "reviews"; onChange: (tab: "posts" | "reviews") => void; counts?: { posts: number; reviews: number } }) {
+export type ShelfTab = "posts" | "traded" | "reviews";
+
+/** Your own profile passes `counts.traded` and gets a third tab, Traded. */
+export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean; active: ShelfTab; onChange: (tab: ShelfTab) => void; counts?: { posts: number; reviews: number; traded?: number } }) {
   const palette = dark ? darkColors : lightColors;
   // Words with counts (4 Nov 2026): "Listings 5   Reviews 2", underlined.
-  const tab = (key: "posts" | "reviews", label: string, count: number | undefined) => {
+  const tab = (key: ShelfTab, label: string, count: number | undefined) => {
     const on = active === key;
     return (
       <Pressable onPress={() => onChange(key)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }} style={[s.tab, { borderBottomColor: on ? palette.ink : "transparent" }]}>
@@ -576,6 +618,7 @@ export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean;
   return (
     <View style={[s.tabs, { borderBottomColor: palette.border }]}>
       {tab("posts", "Listings", counts?.posts)}
+      {counts?.traded !== undefined ? tab("traded", "Traded", counts.traded) : null}
       {tab("reviews", "Reviews", counts?.reviews)}
     </View>
   );
@@ -674,12 +717,13 @@ export function shelfLabel(item: Item): string | null {
   if (item.status === "PENDING_REVIEW") return "Waiting for review";
   if (item.status === "VALUE_REJECTED") return "Value not approved";
   if (item.status === "IN_TRADE") return "In trade";
-  if (item.status === "TRADED") return "Traded";
+  if (item.status === "TRADED") return "Traded away";
+  if (item.status === "OWNED") return "Got in a trade";
   return null;
 }
 
 /** One shelf tile. (The owner's Boost pill and Featured pill went with Featured boosts in schema v2.) */
-export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
+export function ProfileTile({ dark, item, onPress, footer }: { dark: boolean; item: Item; onPress: () => void; footer?: React.ReactNode }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   const inTrade = item.status === "IN_TRADE";
@@ -699,6 +743,7 @@ export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item
         </Text>
       </View>
     ) : null}
+    {footer}
   </Pressable>;
 }
 
@@ -997,6 +1042,8 @@ const s = StyleSheet.create({
   tile: { flexGrow: 0, flexBasis: "48%", width: "48%", minWidth: 0, gap: 6 },
   tilePhoto: { aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
   tileTitle: { fontFamily: font.sansSemi, fontSize: 14 },
+  relist: { alignSelf: "flex-start", marginTop: 2, height: 30, paddingHorizontal: 14, borderRadius: 15, borderWidth: 1, justifyContent: "center" },
+  relistText: { fontFamily: font.sansSemi, fontSize: 13 },
   tileValueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
   tileValue: { flexShrink: 1, fontFamily: font.sansSemi, fontSize: 12 },
   tileContent: { flex: 1 },
