@@ -18,6 +18,8 @@ import { offerBorder, offerColor, offerRadius, offerSpace, offerType, textStyle 
 import { showDialog } from "../src/components/dialog";
 import { startRelist } from "../src/post/relist";
 import { sizedImage } from "../src/media/image-url";
+import { PencilIcon, TrashIcon } from "../src/components/icons";
+import { color } from "../src/theme/tokens";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
@@ -171,17 +173,47 @@ function ExpiredBody({ item }: { item: Item }) {
         </Text>
       </Section>
 
-      <Gutter style={{ paddingTop: 8, gap: 12 }}>
-        <PrimaryButton label="Relist" onPress={() => void startRelist(item, () => router.replace("/post-item"))} />
-      </Gutter>
-
-      <Section pad={{ top: 4, bottom: 12 }}>
-        <Tappable onPress={remove.isPending ? undefined : confirmDelete} accessibilityRole="button" accessibilityState={{ disabled: remove.isPending }}>
-          <Text style={[textStyle(offerType.buttonSecondary), { color: offerColor.warm, textAlign: "center", paddingVertical: 12 }]}>
-            {remove.isPending ? "Deleting…" : "Delete this listing"}
-          </Text>
+      <Gutter style={{ paddingTop: 8, flexDirection: "row", gap: 10 }}>
+        <Tappable
+          onPress={() => void startRelist(item, () => router.replace("/post-item"))}
+          accessibilityRole="button"
+          accessibilityLabel="Edit and relist as a new listing"
+          style={{
+            flex: 1,
+            height: 54,
+            borderRadius: 16,
+            backgroundColor: color.green,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+          pressedStyle={{ opacity: 0.88 }}
+        >
+          <PencilIcon size={18} stroke={2} color={color.onGreen} />
+          <Text style={[textStyle(offerType.buttonPrimary), { color: color.onGreen }]}>Edit and relist</Text>
         </Tappable>
-      </Section>
+        <Tappable
+          onPress={remove.isPending ? undefined : confirmDelete}
+          accessibilityRole="button"
+          accessibilityLabel="Delete listing"
+          accessibilityState={{ disabled: remove.isPending }}
+          style={{
+            width: 54,
+            height: 54,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: color.urgentLine,
+            backgroundColor: "#FFFFFF",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: remove.isPending ? 0.5 : 1,
+          }}
+          pressedStyle={{ backgroundColor: color.urgentWash }}
+        >
+          <TrashIcon size={22} stroke={1.9} color={color.urgent} />
+        </Tappable>
+      </Gutter>
     </ScrollView>
   );
 }

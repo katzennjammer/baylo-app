@@ -310,8 +310,8 @@ export default function ProfileScreen() {
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item}
           onPress={() => router.push({ pathname: shelfLabel(item) && item.status !== "OWNED" ? "/listing-review" : "/item", params: { id: item.id } })}
           footer={item.status === "OWNED" ? (
-            <Pressable onPress={() => relist(item)} accessibilityRole="button" accessibilityLabel={`Relist ${item.title}`} style={[s.relist, { borderColor: dark ? darkColors.border : color.controlLine }]}>
-              <Text style={[s.relistText, { color: dark ? darkColors.green : color.forest }]}>Relist</Text>
+            <Pressable onPress={() => relist(item)} accessibilityRole="button" accessibilityLabel={`Relist ${item.title}`} style={({ pressed }) => [s.relist, { opacity: pressed ? 0.85 : 1 }]}>
+              <Text style={s.relistText}>Relist</Text>
             </Pressable>
           ) : null}
         />)}</View>
@@ -1047,8 +1047,8 @@ const s = StyleSheet.create({
   tile: { flexGrow: 0, flexBasis: "48%", width: "48%", minWidth: 0, gap: 6 },
   tilePhoto: { aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
   tileTitle: { fontFamily: font.sansSemi, fontSize: 14 },
-  relist: { alignSelf: "flex-start", marginTop: 2, height: 30, paddingHorizontal: 14, borderRadius: 15, borderWidth: 1, justifyContent: "center" },
-  relistText: { fontFamily: font.sansSemi, fontSize: 13 },
+  relist: { alignSelf: "flex-start", marginTop: 2, height: 32, paddingHorizontal: 16, borderRadius: 16, backgroundColor: color.green, justifyContent: "center" },
+  relistText: { fontFamily: font.sansBold, fontSize: 13, color: color.onGreen },
   tileValueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
   tileValue: { flexShrink: 1, fontFamily: font.sansSemi, fontSize: 12 },
   tileContent: { flex: 1 },

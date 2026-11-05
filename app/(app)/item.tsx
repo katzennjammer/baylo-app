@@ -21,7 +21,7 @@ import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { Splash } from "../../src/components/Splash";
-import { useBlockUser, useItem, useReport } from "../../src/api/item";
+import { useBlockUser, useDeleteItem, useItem, useReport } from "../../src/api/item";
 import { useLike } from "../../src/api/social";
 import {
   ArrowUpRightIcon,
@@ -35,7 +35,9 @@ import {
   PersonIcon,
   KebabIcon,
   LeafIcon,
+  PencilIcon,
   ShareIcon,
+  TrashIcon,
   WarningIcon,
 } from "../../src/components/icons";
 import { CountdownPill } from "../../src/components/CountdownPill";
@@ -187,6 +189,7 @@ export default function ItemDetailScreen() {
 
   const report = useReport();
   const block = useBlockUser();
+  const remove = useDeleteItem();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
   const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
@@ -713,6 +716,21 @@ export default function ItemDetailScreen() {
             onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
             onEdit={() => setEditing(true)}
             onRelist={() => void startRelist(item, () => router.push("/post-item"))}
+            deleting={remove.isPending}
+            onDelete={() =>
+              showDialog("Delete this listing?", "It is removed from your profile for good.", [
+                { text: "Keep it", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: () =>
+                    remove.mutate(item.id, {
+                      onSuccess: () => router.back(),
+                      onError: () => showDialog("Could not delete that", "Check your connection and try again."),
+                    }),
+                },
+              ])
+            }
             onSeeOffers={() => router.push(`/listing-offers?id=${encodeURIComponent(item.id)}`)}
             onOffer={() => {
               if (cannotOffer) {
@@ -1160,6 +1178,8 @@ function BottomBar({
   onLike,
   onEdit,
   onRelist,
+  onDelete,
+  deleting,
   onSeeOffers,
   onOffer,
 }: {
@@ -1177,6 +1197,9 @@ function BottomBar({
   onEdit: () => void;
   /** An ended perishable: start a NEW listing from it. */
   onRelist: () => void;
+  /** An ended perishable: remove it for good. */
+  onDelete: () => void;
+  deleting: boolean;
   /** Your own listing: the offers inbox for it. */
   onSeeOffers: () => void;
   onOffer: () => void;
@@ -1195,17 +1218,30 @@ function BottomBar({
     }
     if (ended) {
       // An expired perishable cannot be traded, so editing it changes a
-      // listing nobody can offer on. Relisting starts a fresh one from it.
+      // listing nobody can offer on. "Edit and relist" opens the post flow
+      // filled in from it (a fresh listing with a fresh window); the square
+      // beside it deletes it for good, after a confirm.
       return (
         <View style={s.barRow}>
           <Tappable
             onPress={onRelist}
             accessibilityRole="button"
-            accessibilityLabel="Ended. Relist as a new listing"
-            style={[s.action, s.actionOutline]}
+            accessibilityLabel="Ended. Edit and relist as a new listing"
+            style={[s.action, s.actionRow]}
             pressedStyle={s.pressed}
           >
-            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Relist</Text>
+            <PencilIcon size={18} stroke={2} color={color.onGreen} />
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>Edit and relist</Text>
+          </Tappable>
+          <Tappable
+            onPress={deleting ? undefined : onDelete}
+            accessibilityRole="button"
+            accessibilityLabel="Delete listing"
+            accessibilityState={{ disabled: deleting }}
+            style={[s.deleteSquare, deleting && { opacity: 0.5 }]}
+            pressedStyle={{ backgroundColor: color.urgentWash }}
+          >
+            <TrashIcon size={22} stroke={1.9} color={color.urgent} />
           </Tappable>
         </View>
       );
@@ -1611,13 +1647,21 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  actionOutline: {
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.forest,
-  },
   actionPlain: { backgroundColor: color.searchSurface, borderWidth: 1, borderColor: color.controlLineStrong },
   actionInert: { backgroundColor: color.control },
+  actionRow: { flexDirection: "row", gap: 8 },
+  // Same 54 square as the heart, in the warm colour that only ever means
+  // "this goes away".
+  deleteSquare: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.urgentLine,
+    backgroundColor: color.searchSurface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionLocked: { flexDirection: "row", gap: 8 },
   // Wraps to a second line at large text sizes rather than truncating beside
   // the heart; the bar measures itself, so the scroll padding follows.
