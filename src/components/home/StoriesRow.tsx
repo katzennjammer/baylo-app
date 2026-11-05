@@ -59,8 +59,10 @@ export function StoriesRow({
   return (
     <View style={{ backgroundColor: color.surface }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail}>
-        {/* "Create story" always first; "Your story" once you have one (4 Nov 2026). */}
-        {!actingAsShop && viewer ? <CreateStory onPress={openShare} /> : null}
+        {/* ONE circle for you: "Create story" until you have one, then
+            "Your story", whose small + adds another. Both at once showed two
+            plus signs side by side. */}
+        {!actingAsShop && viewer && !(own && own.stories.length > 0) ? <CreateStory onPress={openShare} /> : null}
         {!actingAsShop && viewer && own && own.stories.length > 0 ? (
           <YourStory
             viewer={viewer}
