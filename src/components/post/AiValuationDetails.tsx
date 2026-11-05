@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Text, View } from "react-native";
 import { ApiError } from "../../api/client";
 import { fetchAiValuation, type Category } from "../../api/post";
 import { aiKeyOf, currentAi, effectiveValue, usePost } from "../../post/state";
+import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { postColor, postSpace, postType, textStyle } from "../../theme/post-tokens";
 import { Tappable } from "../Tappable";
 import { HelperRow, TextButton } from "./ui";
@@ -11,7 +12,7 @@ import { HelperRow, TextButton } from "./ui";
 /**
  * The online-price half of step 4: asks /api/ai/valuation once per (title,
  * category, condition), and shows what came back — the typical asking price,
- * the Baylo price level it falls in, and the listings it came from — or why
+ * the suggested value at 1 Leaf = ₱1 and its bracket, and the listings it came from — or why
  * there is no online-price value.
  *
  * ── WHAT IS SENT ────────────────────────────────────────────────────────────
@@ -101,14 +102,6 @@ export function useAiValuation() {
 
 const php = (n: number) => `₱${n.toLocaleString("en-PH")}`;
 
-/** "₱2K", "₱25K", "₱1.5K", "₱800" — the cut-off labels under the track. */
-function shortPhp(n: number): string {
-  if (n >= 1000) {
-    const k = n / 1000;
-    return `₱${Number.isInteger(k) ? k : k.toFixed(1)}K`;
-  }
-  return `₱${n}`;
-}
 
 function SectionLabel({ children, top = 20 }: { children: string; top?: number }) {
   return (
@@ -127,8 +120,8 @@ const Divider = ({ top = 20 }: { top?: number }) => (
  * labels, no card.
  *
  *   ONLINE ASKING PRICE       what the AI found (median, count)
- *   PRICE LEVEL · CATEGORY    Baylo's fixed levels, drawn like the value band,
- *                             the item's level in green
+ *   SUGGESTED VALUE           the typical price in Leaves (1 Leaf = ₱1) and
+ *                             its bracket
  *   LISTINGS CHECKED          each listing, its site and its price
  */
 export function AiValuationDetails() {
@@ -185,20 +178,9 @@ export function AiValuationDetails() {
     );
   }
 
-  const { market, level, sources } = result;
-  const current = level.levels[level.index];
-  // Where the value on the slider above sits among the levels: the nearest
-  // one. The green bar is what the online price says; this mark follows the
-  // slider, so dragging it shows which level your own value matches.
+  const { market, sources } = result;
+  const suggested = result.valuation?.suggestedLeaves ?? Math.round(market.typicalPhp);
   const chosen = effectiveValue(state);
-  const chosenIndex =
-    chosen === null
-      ? level.index
-      : level.levels.reduce(
-          (best, l, i) =>
-            Math.abs(l.leaves - chosen) < Math.abs(level.levels[best].leaves - chosen) ? i : best,
-          0,
-        );
   const checkedAt = formatCheckedAt(result.checkedAt);
 
   return (
@@ -216,83 +198,26 @@ export function AiValuationDetails() {
         </Text>
       </View>
 
-      <SectionLabel>{`PRICE LEVEL · ${level.categoryLabel.toUpperCase()}`}</SectionLabel>
-      <View
-        accessible
-        accessibilityLabel={`Price level ${level.name}. ${level.levels
-          .map((l) => `${l.name} ${l.leaves} Leaves`)
-          .join(", ")}.`}
-      >
-        <View style={{ flexDirection: "row", gap: 4, marginTop: 10 }}>
-          {level.levels.map((l, i) => (
-            <View
-              key={l.name}
-              style={{
-                flex: 1,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: i === level.index ? postColor.green : postColor.line,
-              }}
-            />
-          ))}
-        </View>
-        <View style={{ flexDirection: "row", gap: 4, marginTop: 4 }}>
-          {level.levels.map((l, i) => (
-            <View key={l.name} style={{ flex: 1, alignItems: "center", height: 10 }}>
-              {i === chosenIndex && chosen !== null ? (
-                <Text style={{ fontSize: 9, lineHeight: 10, color: postColor.ink }}>▲</Text>
-              ) : null}
-            </View>
-          ))}
-        </View>
-        <View style={{ flexDirection: "row", gap: 4, marginTop: 2 }}>
-          {level.levels.map((l, i) => {
-            const here = i === level.index;
-            return (
-              <View key={l.name} style={{ flex: 1, alignItems: "center" }}>
-                <Text
-                  style={[
-                    textStyle(postType.bandLabel),
-                    { color: here ? postColor.forest : postColor.inkMuted },
-                  ]}
-                >
-                  {l.name.toUpperCase()}
-                </Text>
-                <Text
-                  style={[
-                    textStyle(postType.bandValue),
-                    { color: here ? postColor.forest : postColor.inkSecondary, marginTop: 2 },
-                  ]}
-                >
-                  {l.leaves.toLocaleString("en-US")}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-        {/* The cut-offs sit on the joins between levels: the middle three of
-            four quarters, so the row is inset by an eighth each side. */}
-        <View style={{ flexDirection: "row", marginTop: 6, paddingHorizontal: "12.5%" }}>
-          {level.cutoffsPhp.map((c) => (
-            <Text
-              key={c}
-              style={[
-                textStyle(postType.counter),
-                { flex: 1, textAlign: "center", color: postColor.inkMuted },
-              ]}
-            >
-              {shortPhp(c)}
-            </Text>
-          ))}
-        </View>
+      {/*
+        1 Leaf = ₱1. Not an exchange rate (Leaves are never bought or cashed
+        out); it is the scale the brackets are drawn in. So the online price
+        is the suggested value, and its bracket follows from it.
+      */}
+      <SectionLabel>{"SUGGESTED VALUE"}</SectionLabel>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 6 }}>
+        <Text style={[textStyle(postType.detectResult), { color: postColor.ink }]}>
+          {`${suggested.toLocaleString("en-US")} Leaves`}
+        </Text>
+        <Text style={[textStyle(postType.helper), { color: postColor.inkSecondary }]}>
+          {bracketLabel(bracketOf(suggested))}
+        </Text>
       </View>
-
-      <View style={{ marginTop: 14 }}>
+      <View style={{ marginTop: 10 }}>
         <HelperRow gap={postSpace.value.helperIconGap}>
-          {`The online price, ${php(market.typicalPhp)}, is ${level.name} for ${level.categoryLabel.toLowerCase()}, so Baylo suggests ${current.leaves.toLocaleString("en-US")} Leaves (green).` +
-            (chosen !== null && chosen !== current.leaves
-              ? ` Your value, ${chosen.toLocaleString("en-US")} Leaves (▲), is closest to ${level.levels[chosenIndex].name}.`
-              : " Drag the slider above to set your own value; the ▲ shows which level it matches.")}
+          {`1 Leaf = ₱1, so a typical online price of ${php(market.typicalPhp)} suggests ${suggested.toLocaleString("en-US")} Leaves.` +
+            (chosen !== null && chosen !== suggested
+              ? ` You set ${chosen.toLocaleString("en-US")} Leaves, which is ${bracketLabel(bracketOf(chosen))}.`
+              : "")}
         </HelperRow>
       </View>
 
@@ -351,7 +276,7 @@ export function AiValuationDetails() {
       ) : null}
 
       <Text style={[textStyle(postType.helper), { color: postColor.inkMuted, marginTop: 8 }]}>
-        {`Asking prices found by AI${checkedAt ? ` on ${checkedAt}` : ""}, not confirmed sales. Leaves are not pesos: the price only sets the level.`}
+        {`Asking prices found by AI${checkedAt ? ` on ${checkedAt}` : ""}, not confirmed sales.`}
       </Text>
     </View>
   );
