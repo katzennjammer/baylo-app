@@ -243,6 +243,14 @@ export function useComments(itemId: string | null, enabled: boolean) {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: enabled && !!itemId,
+    // Live while the sheet is open (5 Nov 2026): fresh on every open, and
+    // re-read every few seconds, so a comment that arrives while you are
+    // reading or replying shows up without leaving the app. Comments have
+    // no live channel of their own; the sheet also refetches the moment a
+    // push about this listing lands (CommentsSheet).
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: enabled && itemId ? 5_000 : false,
   });
 
   return {
