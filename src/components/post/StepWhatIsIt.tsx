@@ -119,7 +119,7 @@ export function StepWhatIsIt({
 
   const addBrandToTitle = () => {
     if (brand && !titleAlreadyHasBrand && !brandTitleTooLong) {
-      dispatch({ type: "field/title", value: titleWithBrand });
+      dispatch({ type: "detect/brand-title", value: titleWithBrand });
     }
     setBrandAdded(true);
   };

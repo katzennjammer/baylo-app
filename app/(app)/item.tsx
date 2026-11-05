@@ -41,6 +41,7 @@ import {
 import { CountdownPill } from "../../src/components/CountdownPill";
 import { SwapSeam } from "../../src/components/SwapSeam";
 import { unitLabel } from "../../src/post/state";
+import { startRelist } from "../../src/post/relist";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportReasonRows } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -685,6 +686,7 @@ export default function ItemDetailScreen() {
             liked={item.stats.liked}
             onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
             onEdit={() => setEditing(true)}
+            onRelist={() => void startRelist(item, () => router.push("/post-item"))}
             onOffer={() => {
               if (cannotOffer) {
                 setReachDialogOpen(true);
@@ -1128,6 +1130,7 @@ function BottomBar({
   liked,
   onLike,
   onEdit,
+  onRelist,
   onOffer,
 }: {
   own: boolean;
@@ -1142,6 +1145,8 @@ function BottomBar({
   liked: boolean;
   onLike: () => void;
   onEdit: () => void;
+  /** An ended perishable: start a NEW listing from it. */
+  onRelist: () => void;
   onOffer: () => void;
 }) {
   const inert = (label: string) => (
@@ -1155,6 +1160,23 @@ function BottomBar({
   if (own) {
     if (action === "IN_TRADE" || action === "TRADED") {
       return <View style={s.barRow}>{inert(action === "IN_TRADE" ? "In trade" : "Traded")}</View>;
+    }
+    if (ended) {
+      // An expired perishable cannot be traded, so editing it changes a
+      // listing nobody can offer on. Relisting starts a fresh one from it.
+      return (
+        <View style={s.barRow}>
+          <Tappable
+            onPress={onRelist}
+            accessibilityRole="button"
+            accessibilityLabel="Ended. Relist as a new listing"
+            style={[s.action, s.actionOutline]}
+            pressedStyle={s.pressed}
+          >
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Relist</Text>
+          </Tappable>
+        </View>
+      );
     }
     return (
       <View style={s.barRow}>

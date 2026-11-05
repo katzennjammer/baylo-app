@@ -344,6 +344,9 @@ export type PostAction =
   | { type: "detect/done"; result: IdentifyResult }
   | { type: "detect/fail" }
   | { type: "detect/correct"; category: Category; title: string }
+  | { type: "detect/reset" }
+  /** "Add to title": detection's brand added to detection's name -- still not typed. */
+  | { type: "detect/brand-title"; value: string }
   | { type: "detect/undo" }
   | { type: "field/title"; value: string }
   | { type: "field/category"; value: Category }
@@ -465,6 +468,19 @@ function step(s: PostState, a: PostAction): PostState {
       return { ...s, selectedPhoto: Math.max(0, Math.min(s.photos.length - 1, a.index)) };
 
     /* ── detection ── */
+
+    case "detect/brand-title":
+      return { ...s, title: a.value.slice(0, rules.titleMax) };
+
+    case "detect/reset":
+      // The photo detection answered about is gone. Forget the answer and any
+      // title only it wrote; a typed title stays.
+      return {
+        ...s,
+        detection: { phase: "idle", original: null, slow: false },
+        title: keepsTitle(s) ? s.title : "",
+        conditionPrefilled: false,
+      };
 
     case "detect/start":
       return { ...s, detection: { phase: "detecting", original: null, slow: false } };

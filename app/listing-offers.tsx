@@ -98,7 +98,7 @@ export default function ListingOffersScreen() {
   const post = all[0]?.post;
   const title = item?.title ?? post?.title ?? "Offers";
   const value = item?.valueLeaves ?? post?.valueLeaves ?? null;
-  const subtitle = value != null ? `${value.toLocaleString("en-US")} L · Bracket ${bracketOf(value)}` : undefined;
+  const subtitle = value != null ? `Bracket ${bracketOf(value)}` : undefined;
 
   const cycleSort = () => {
     const i = SORTS.findIndex((x) => x.id === sort);
@@ -213,7 +213,7 @@ export default function ListingOffersScreen() {
 function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }) {
   const item = offer.offeredItems[0];
   const v = item?.valueLeaves ?? null;
-  const meta = v != null ? `${v.toLocaleString("en-US")} L · Bracket ${bracketOf(v)}` : "No value";
+  const meta = v != null ? `Bracket ${bracketOf(v)}` : "No value";
   const who = offer.counterparty;
   const rating = who.rating ? `★ ${who.rating.toFixed(1)}` : null;
 

@@ -7,6 +7,7 @@ import { ApiError } from "../src/api/client";
 import { APPEAL_MESSAGE_MAX, useAppealListing, useDeleteItem, useItem, useUpdateItem } from "../src/api/item";
 import type { Item, ListingReview } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { Hairline, OfferScreenHost, PrimaryButton, SecondaryButton, Section, SectionLabel } from "../src/components/offer/chrome";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
@@ -74,6 +75,25 @@ export default function ListingReviewScreen() {
         <TradesSkeleton />
       ) : detail.data.viewer.isOwner && item.status === "EXPIRED" ? (
         <ExpiredBody item={item} />
+      ) : detail.data.viewer.isOwner && (item.status === "IN_TRADE" || item.status === "TRADED") ? (
+        // The profile's "In trade" / "Traded" tiles open here. Say what the
+        // label means and where the trade is, rather than "nothing waiting".
+        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 60 }}>
+          <MascotEmptyState
+            pose={item.status === "TRADED" ? "celebrate" : "search"}
+            size={120}
+            title={item.status === "TRADED" ? "This item has been traded" : "This item is in a trade"}
+            message={
+              item.status === "TRADED"
+                ? "The trade is done, so it is off the marketplace for good."
+                : "You accepted an offer for it. It is off the marketplace while you meet up, and comes back if the trade is cancelled."
+            }
+            action={{ label: "Go to my trades", onPress: () => router.navigate("/(app)/trades") }}
+          />
+          <Gutter style={{ paddingTop: 8 }}>
+            <SecondaryButton label="Open the listing" onPress={() => router.replace({ pathname: "/item", params: { id: item.id } })} />
+          </Gutter>
+        </View>
       ) : !detail.data.viewer.isOwner || review === null ? (
         /*
          * Reached with a stale notification — the listing has since been

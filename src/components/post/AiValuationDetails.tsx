@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, Text, View } from "react-native";
 
 import { ApiError } from "../../api/client";
 import { fetchAiValuation, type Category } from "../../api/post";
-import { aiKeyOf, currentAi, usePost } from "../../post/state";
+import { aiKeyOf, currentAi, effectiveValue, usePost } from "../../post/state";
 import { postColor, postSpace, postType, textStyle } from "../../theme/post-tokens";
 import { Tappable } from "../Tappable";
 import { HelperRow, TextButton } from "./ui";
@@ -187,6 +187,18 @@ export function AiValuationDetails() {
 
   const { market, level, sources } = result;
   const current = level.levels[level.index];
+  // Where the value on the slider above sits among the levels: the nearest
+  // one. The green bar is what the online price says; this mark follows the
+  // slider, so dragging it shows which level your own value matches.
+  const chosen = effectiveValue(state);
+  const chosenIndex =
+    chosen === null
+      ? level.index
+      : level.levels.reduce(
+          (best, l, i) =>
+            Math.abs(l.leaves - chosen) < Math.abs(level.levels[best].leaves - chosen) ? i : best,
+          0,
+        );
   const checkedAt = formatCheckedAt(result.checkedAt);
 
   return (
@@ -224,7 +236,16 @@ export function AiValuationDetails() {
             />
           ))}
         </View>
-        <View style={{ flexDirection: "row", gap: 4, marginTop: 8 }}>
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 4 }}>
+          {level.levels.map((l, i) => (
+            <View key={l.name} style={{ flex: 1, alignItems: "center", height: 10 }}>
+              {i === chosenIndex && chosen !== null ? (
+                <Text style={{ fontSize: 9, lineHeight: 10, color: postColor.ink }}>▲</Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 2 }}>
           {level.levels.map((l, i) => {
             const here = i === level.index;
             return (
@@ -268,7 +289,10 @@ export function AiValuationDetails() {
 
       <View style={{ marginTop: 14 }}>
         <HelperRow gap={postSpace.value.helperIconGap}>
-          {`${php(market.typicalPhp)} is ${level.name} for ${level.categoryLabel.toLowerCase()}. ${level.name} is always ${current.leaves.toLocaleString("en-US")} Leaves for an item in this condition, so the same price gives the same value.`}
+          {`The online price, ${php(market.typicalPhp)}, is ${level.name} for ${level.categoryLabel.toLowerCase()}, so Baylo suggests ${current.leaves.toLocaleString("en-US")} Leaves (green).` +
+            (chosen !== null && chosen !== current.leaves
+              ? ` Your value, ${chosen.toLocaleString("en-US")} Leaves (▲), is closest to ${level.levels[chosenIndex].name}.`
+              : " Drag the slider above to set your own value; the ▲ shows which level it matches.")}
         </HelperRow>
       </View>
 
