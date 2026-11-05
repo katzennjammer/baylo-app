@@ -52,6 +52,7 @@ import { LISTING_PREVIEW_ZOOM_OUT } from "../../src/components/map/osm";
 import { HubTypeGlyph } from "../../src/components/map/MapLegend";
 import { openDirections } from "../../src/components/map/directions";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
 import { CommentsSheet } from "../../src/components/home/CommentsSheet";
 import { Tappable } from "../../src/components/Tappable";
@@ -262,7 +263,20 @@ export default function ItemDetailScreen() {
     return (
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
-        <BrowseError
+        {apiError?.code === "NOT_FOUND" ? (
+          // Gone for good (traded, removed or taken down), so "Try again" was
+          // the wrong button: the way on is back. Reached from a review's
+          // traded item, too, once that item has changed hands.
+          <View style={{ flex: 1, justifyContent: "center", paddingBottom: 80 }}>
+            <MascotEmptyState
+              pose="worry"
+              size={120}
+              title="Listing unavailable"
+              message="This listing is no longer available. It may have been traded, removed by its owner, or taken down."
+              action={{ label: "Go back", onPress: () => router.back() }}
+            />
+          </View>
+        ) : <BrowseError
           headline={
             apiError?.code === "NOT_FOUND" ? "Listing unavailable" : "Could not open this listing"
           }
@@ -273,7 +287,7 @@ export default function ItemDetailScreen() {
                 "Check your mobile data or Wi-Fi and try again. Nothing you posted was lost.")
           }
           onRetry={refetch}
-        />
+        />}
       </View>
     );
   }

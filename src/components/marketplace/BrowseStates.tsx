@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { MASCOT } from "../../media/mascots";
 
-import { WarningIcon, RefreshIcon } from "../icons";
+import { RefreshIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
   border,
@@ -142,9 +144,8 @@ export function BrowseError({
 }) {
   return (
     <View style={s.wrap}>
-      <View style={s.circleError}>
-        <WarningIcon size={icon.errorMark.size} stroke={icon.errorMark.stroke} color={color.urgent} />
-      </View>
+      {/* The worried duck, as on every other error and empty state. */}
+      <Image source={MASCOT.worry} contentFit="contain" style={{ width: 110, height: 110, marginBottom: 8 }} accessible={false} />
 
       <Text style={[textStyle(type.errorHeadline), s.headline]}>{headline}</Text>
       <Text style={[textStyle(type.emptyBody), s.body]}>{message}</Text>
