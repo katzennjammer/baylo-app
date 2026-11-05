@@ -1,6 +1,7 @@
 import { usePathname, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -86,6 +87,9 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   const queryClient = useQueryClient();
   const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAt, setMenuAt] = useState({ top: 100, right: 16 });
+  const menuAnchor = useRef<View>(null);
+  const { width: windowWidth } = useWindowDimensions();
 
   const quests = useQuests({ enabled: showQuests });
   const questBadge = quests.data ? quests.data.quests.filter((q) => !q.completed).length : 0;
@@ -258,20 +262,36 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               />
             </HeaderIconButton>
             {pathname.endsWith("/profile") ? (
-              <View style={s.menuAnchor}>
+              <View style={s.menuAnchor} ref={menuAnchor} collapsable={false}>
                 <HeaderIconButton
                   label={menuOpen ? "Close account menu" : "Open account menu"}
                   count={0}
                   tight={tight}
-                  onPress={() => setMenuOpen((open) => !open)}
+                  onPress={() => {
+                    if (menuOpen) {
+                      setMenuOpen(false);
+                      return;
+                    }
+                    // Where the button is on screen, so the menu opens under
+                    // it inside a full-screen layer.
+                    menuAnchor.current?.measureInWindow((x, y, w, h) => {
+                      setMenuAt({ top: y + h + 4, right: Math.max(8, windowWidth - (x + w)) });
+                      setMenuOpen(true);
+                    });
+                  }}
                 >
                   <Ionicons name="menu" size={24} color={color.ink} />
                 </HeaderIconButton>
-                {menuOpen ? (
-                  <AccountMenu
-                    onClose={() => setMenuOpen(false)}
-                  />
-                ) : null}
+                {/*
+                  A transparent full-screen Modal, so a tap ANYWHERE outside the
+                  menu closes it (and Android back does too). Drawn inside the
+                  header before, it only covered the header: taps on the page
+                  below went to the page and the menu stayed open.
+                */}
+                <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)} statusBarTranslucent>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} accessibilityLabel="Close account menu" />
+                  <AccountMenu style={{ top: menuAt.top, right: menuAt.right }} onClose={() => setMenuOpen(false)} />
+                </Modal>
               </View>
             ) : null}
           </View>
@@ -290,7 +310,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   );
 }
 
-function AccountMenu({ onClose }: { onClose: () => void }) {
+function AccountMenu({ onClose, style }: { onClose: () => void; style?: object }) {
   const router = useRouter();
   const { signOut } = useSession();
   // No Quests item. It used to open a "coming soon" dialog from here; Quests
@@ -309,7 +329,7 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <View style={s.accountMenu} accessibilityRole="menu">
+    <View style={[s.accountMenu, style]} accessibilityRole="menu">
       <Pressable
         onPress={() => {
           onClose();
@@ -331,6 +351,17 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       >
         <Ionicons name="star-outline" size={19} color={color.ink} />
         <Text style={s.accountMenuText}>Premium</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
+          router.push("/activity");
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="heart-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Your activity</Text>
       </Pressable>
       <Pressable
         onPress={() => {
@@ -506,9 +537,7 @@ const s = StyleSheet.create({
   menuAnchor: { position: "relative" },
   accountMenu: {
     position: "absolute",
-    top: size.control.headerIcon + 4,
-    right: 0,
-    minWidth: 166,
+    minWidth: 190,
     backgroundColor: color.surface,
     borderColor: color.divider,
     borderWidth: 1,
