@@ -86,7 +86,7 @@ export function PeopleResults({
     <FlatList
       data={users}
       keyExtractor={(user) => user.id}
-      renderItem={({ item }) => <PersonRow user={item} onPress={() => onOpen(item.id)} />}
+      renderItem={({ item }) => <PersonRow user={item} query={query} onPress={() => onOpen(item.id)} />}
       ListHeaderComponent={listHeader}
       ListEmptyComponent={emptyState}
       ListFooterComponent={
@@ -104,7 +104,21 @@ export function PeopleResults({
   );
 }
 
-function PersonRow({ user, onPress }: { user: UserSearchResult; onPress: () => void }) {
+/** The part of the name that matched the search, marked. */
+function highlight(name: string, query: string): React.ReactNode {
+  const q = query.trim().replace(/^@/, "");
+  const at = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (at < 0) return name;
+  return (
+    <>
+      {name.slice(0, at)}
+      <Text style={{ backgroundColor: "#FFF1B8" }}>{name.slice(at, at + q.length)}</Text>
+      {name.slice(at + q.length)}
+    </>
+  );
+}
+
+function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPress: () => void; query?: string }) {
   const image = user.org?.logoUrl ?? user.avatar;
   const displayName = user.org?.name ?? user.name;
   const badge = user.org
@@ -154,7 +168,7 @@ function PersonRow({ user, onPress }: { user: UserSearchResult; onPress: () => v
       <View style={s.identity}>
         <View style={s.nameRow}>
           <Text style={[textStyle(type.username), s.name]} numberOfLines={1}>
-            {displayName}
+            {highlight(displayName, query)}
           </Text>
           {badge ? (
             <View style={s.badge}>
@@ -172,46 +186,16 @@ function PersonRow({ user, onPress }: { user: UserSearchResult; onPress: () => v
           ) : null}
         </View>
 
-        {user.reviewCount > 0 && user.rating > 0 ? (
-          <View style={s.ratingRow} accessible={false}>
-            <View style={s.stars}>
-              {Array.from({ length: 5 }, (_, index) => {
-                const rating = user.rating - index;
-                const name = rating >= 1 ? "star" : rating >= 0.5 ? "star-half" : "star-outline";
-                return (
-                  <Ionicons
-                    key={index}
-                    name={name}
-                    size={14}
-                    color={rating >= 0.5 ? RATING_GOLD : color.inkMuted}
-                  />
-                );
-              })}
-            </View>
-            <Text style={[textStyle(type.metadata), s.rating]}>
-              {user.rating.toFixed(1)} <Text style={s.secondary}>({user.reviewCount})</Text>
-            </Text>
-          </View>
-        ) : (
-          <Text style={[textStyle(type.metadata), s.unrated]}>No ratings yet</Text>
-        )}
-
-        <View style={s.metaRow}>
-          <View style={s.metaItem}>
-            <SwapIcon size={15} stroke={1.6} color={color.inkSecondary} />
-            <Text style={[textStyle(type.metadata), s.secondary]}>
-              {user.totalTrades} {user.totalTrades === 1 ? "trade" : "trades"}
-            </Text>
-          </View>
-          {user.location ? (
-            <View style={s.metaItem}>
-              <PinIcon size={15} stroke={1.6} color={color.inkSecondary} />
-              <Text style={[textStyle(type.metadata), s.secondary]} numberOfLines={1}>
-                {user.location}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        {/* One quiet line (4 Nov 2026): rating, trades, place. */}
+        <Text style={[textStyle(type.metadata), s.secondary]} numberOfLines={1}>
+          {[
+            user.reviewCount > 0 && user.rating > 0 ? `★ ${user.rating.toFixed(1)} (${user.reviewCount})` : "No ratings yet",
+            `${user.totalTrades} ${user.totalTrades === 1 ? "trade" : "trades"}`,
+            user.location,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
       </View>
 
       <ChevronRightIcon size={18} stroke={1.6} color={color.inkMuted} />
