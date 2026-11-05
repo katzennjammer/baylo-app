@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { MascotEmptyState } from "../MascotEmptyState";
 
 import { useHubs } from "../../api/hubs";
 import type { SafeZoneHub } from "../../api/types";
@@ -90,11 +91,7 @@ export function StepHubs({ board }: { board: Board }) {
       {isPending ? (
         <HubSkeleton board={board} />
       ) : isError || hubs.length === 0 ? (
-        <View style={{ paddingHorizontal: board.hubX, paddingTop: 4 }}>
-          <HelperRow>
-            No safe hubs near you yet. You can post without one and agree a place in chat.
-          </HelperRow>
-        </View>
+        <MascotEmptyState pose="search" size={96} title="No safe hubs near you yet" message="You can post without one and agree a place in chat." />
       ) : (
         <View>
           {/* The first hairline. Every row draws its own bottom rule, so this is

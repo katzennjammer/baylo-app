@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { MascotEmptyState } from "../MascotEmptyState";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -71,9 +72,11 @@ export function SendToChatSheet({
       {isPending ? (
         <ActivityIndicator color={color.green} style={{ marginVertical: 24 }} />
       ) : (isError && mutuals.length === 0) || conversations.length === 0 ? (
-        <Text style={s.empty}>
-          {isError ? "Could not load your chats." : "No chats or mutual followers yet. Follow people who follow you, or message someone first."}
-        </Text>
+        isError ? (
+          <Text style={s.empty}>Could not load your chats.</Text>
+        ) : (
+          <MascotEmptyState pose="search" size={90} title="No one to send to yet" message="Message someone first, or follow people who follow you back." />
+        )
       ) : (
         <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ paddingHorizontal: space.sheet.x, paddingTop: 4 }}>
           {conversations.map((c, i) => {

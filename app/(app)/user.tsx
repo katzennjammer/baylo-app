@@ -174,10 +174,10 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
   ) : null;
   const emptyList = org ? (
     tab === "reviews"
-      ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." />
+      ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." pose="search" />
       : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} pose="box" />
   ) : tab === "reviews" ? (
-    <Text style={[s.empty, { color: palette.muted }]}>No reviews yet.</Text>
+    <MascotEmptyState pose="search" size={96} title="No reviews yet" message="Reviews appear here after a completed trade." />
   ) : (
     // Nothing listed: still a whole profile. Only this area says so.
     <MascotEmptyState

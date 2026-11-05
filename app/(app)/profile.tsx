@@ -321,7 +321,7 @@ export default function ProfileScreen() {
       ListEmptyComponent={tab === "reviews" && reviewsLoadError ? (
         <ReviewLoadError dark={dark} onRetry={() => void refetchReviews()} />
       ) : tab === "reviews" ? (
-        <Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>No reviews yet.</Text>
+        <MascotEmptyState pose="search" size={96} title="No reviews yet" message="Reviews appear here after your first completed trade." />
       ) : tab === "traded" ? (
         <MascotEmptyState pose="leaf" size={96} title="No trades yet" message="Items you trade away and items you get show here." />
       ) : (
@@ -574,7 +574,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       ListEmptyComponent={tab === "reviews" && reviewQuery.isLoadingError
         ? <ReviewLoadError dark={dark} onRetry={() => void reviewQuery.refetch()} />
         : tab === "reviews"
-          ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
+          ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." pose="search" />
           : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." pose="box" />}
     />
   );

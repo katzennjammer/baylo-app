@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
@@ -190,11 +191,7 @@ export default function EditHubsScreen() {
         <View style={{ height: 14 }} />
 
         {rows.length === 0 ? (
-          <Gutter>
-            <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-              No safe hubs to choose from right now.
-            </Text>
-          </Gutter>
+          <MascotEmptyState pose="search" size={100} title="No safe hubs yet" message="There are no safe hubs to choose from right now. They are added city by city." />
         ) : (
           <>
             {hasSuggested ? <SectionLabel>They already offer — adding one makes it shared</SectionLabel> : null}

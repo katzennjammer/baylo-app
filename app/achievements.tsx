@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { Image as ExpoImage } from "expo-image";
 import { useRouter } from "expo-router";
 
@@ -266,7 +267,7 @@ export default function AchievementsScreen() {
               </View>
             ) : null}
             {achievements.length === 0 ? (
-              <Text style={[textStyle(type.emptyBody), styles.empty]}>No achievements are available yet.</Text>
+              <MascotEmptyState pose="celebrate" size={110} title="No badges yet" message="Achievements appear here once they are added." />
             ) : null}
           </ScrollView>
 
