@@ -25,6 +25,8 @@ import {
   type,
 } from "../../theme/tokens";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
+import { bracketsBeyondReach } from "../../lib/gap";
+import { useReach } from "../../api/offer";
 import type { Item } from "../../api/types";
 
 /**
@@ -157,6 +159,9 @@ export const FeedCard = memo(function FeedCard({
   const wanted = item.wanted?.trim();
   const perishable = item.perishable ?? null;
   const isOwnListing = viewerId !== null && item.owner.id === viewerId;
+  const { gridReach } = useReach();
+  const inReach =
+    !isOwnListing && gridReach != null && item.valueLeaves !== null && bracketsBeyondReach(item.valueLeaves, gridReach) === 0;
   const offerAction =
     isOwnListing || item.status !== "AVAILABLE" || item.hiddenByModerator
       ? undefined
@@ -206,13 +211,22 @@ export const FeedCard = memo(function FeedCard({
         <KebabButton owner={item.owner.name} onPress={onMenu && (() => onMenu(item))} />
       </View>
 
-      {/* ── photo ── */}
-      <Photo
-        images={item.images}
-        title={item.title}
-        perishable={perishable}
-        onOpen={onOpen && (() => onOpen(item))}
-      />
+      {/* ── photo ── Inset with rounded corners (4 Nov 2026), and a
+          "Within your reach" chip when you can offer on it. */}
+      <View style={s.photoFrame}>
+        <Photo
+          images={item.images}
+          title={item.title}
+          perishable={perishable}
+          onOpen={onOpen && (() => onOpen(item))}
+        />
+        {inReach && !perishable ? (
+          <View style={s.reachChip} pointerEvents="none">
+            <LeafIcon size={13} stroke={2.2} color={color.forest} />
+            <Text style={s.reachChipText}>Within your reach</Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* ── title + value ── */}
       <View style={s.titleRow}>
@@ -666,8 +680,8 @@ function OfferButton({
       style={inline ? s.offerInline : s.offerPill}
       pressedStyle={s.offerPressed}
     >
-      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.forest} />
-      <Text style={[textStyle(type.primaryButton), { color: color.forest }]} numberOfLines={1}>
+      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.onGreen} />
+      <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]} numberOfLines={1}>
         Offer trade
       </Text>
     </Tappable>
@@ -877,8 +891,8 @@ const s = StyleSheet.create({
     minHeight: size.control.offerInline,
     paddingHorizontal: size.control.offerInlineX,
     borderRadius: radius.offerInline,
-    borderWidth: border.chip,
-    borderColor: color.forest,
+    // Filled green (4 Nov 2026): the one action on the card.
+    backgroundColor: color.green,
   },
 
   offerWrap: { paddingHorizontal: space.screenX, marginTop: space.card.socialToButton },
@@ -892,11 +906,13 @@ const s = StyleSheet.create({
     minHeight: size.control.offerPill,
     paddingHorizontal: size.control.offerPillX,
     borderRadius: radius.offerPill,
-    borderWidth: border.chip,
-    borderColor: color.forest,
+    backgroundColor: color.green,
   },
 
   // The outline fills with the green wash while held, the same pressed state
   // the app's other outlined chips use.
-  offerPressed: { backgroundColor: color.greenWash },
+  offerPressed: { opacity: 0.85 },
+  photoFrame: { marginHorizontal: 12, borderRadius: 16, overflow: "hidden" },
+  reachChip: { position: "absolute", left: 10, bottom: 10, height: 26, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, borderRadius: 13, backgroundColor: "rgba(250,250,247,0.94)" },
+  reachChipText: { fontSize: 12, fontWeight: "700", color: color.forest },
 });
