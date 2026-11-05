@@ -23,6 +23,11 @@ export function pushMessagePartnerId(data: PushData | null | undefined): string 
   const type = str(data?.type)?.trim();
   const entityType = str(data?.entityType)?.trim();
   if (type !== "NEW_MESSAGE" && entityType !== "conversation") return null;
+  // A comment on a listing is also typed NEW_MESSAGE, but it points at the
+  // ITEM. Read as a chat it opened a thread with the listing's id as the
+  // "person": an empty conversation called "Conversation". Only a row about
+  // a conversation (or about nothing, the plain chat message) is a chat.
+  if (entityType && entityType !== "conversation") return null;
   return str(data?.partnerId) ?? str(data?.entityId) ?? (type === "NEW_MESSAGE" ? str(data?.actorId) : null);
 }
 

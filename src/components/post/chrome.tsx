@@ -135,6 +135,45 @@ export function TickRail({ step }: { step: number }) {
   );
 }
 
+/**
+ * The seven screens as THREE named parts: Item (photos, what it is,
+ * condition), Value (value, what you want back) and Meet-up (hubs, review).
+ * Seven dashes read as seven chores; three words say how far along you are.
+ * Each part's bar fills as you go through its screens.
+ */
+const PHASES = [
+  { label: "Item", steps: [0, 1, 2] },
+  { label: "Value", steps: [3, 4] },
+  { label: "Meet-up", steps: [5, 6] },
+] as const;
+
+export function PhaseRail({ step }: { step: number }) {
+  const current = PHASES.findIndex((p) => (p.steps as readonly number[]).includes(step));
+  return (
+    <View
+      style={{ flex: 1, flexDirection: "row", gap: 6, marginRight: 12 }}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${PHASES[current]?.label ?? ""}, part ${current + 1} of ${PHASES.length}`}
+    >
+      {PHASES.map((p, i) => {
+        const done = i < current;
+        const here = i === current;
+        const fill = done ? 1 : here ? ((p.steps as readonly number[]).indexOf(step) + 1) / p.steps.length : 0;
+        return (
+          <View key={p.label} style={{ flex: p.steps.length, gap: 5 }}>
+            <View style={{ height: 4, borderRadius: 2, backgroundColor: postColor.line, overflow: "hidden" }}>
+              <View style={{ width: `${fill * 100}%`, height: "100%", backgroundColor: postColor.green }} />
+            </View>
+            <Text style={{ fontFamily: here ? "PublicSans-SemiBold" : "PublicSans-Regular", fontSize: 12, color: here || done ? postColor.ink : postColor.inkMuted }}>
+              {p.label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 /* ───────────────────────────── the header ───────────────────────────── */
 
 export interface HeaderProps {
@@ -233,14 +272,14 @@ export function PostHeader({
         style={{
           marginTop: chrome.railAbove,
           marginBottom: chrome.railBelow,
-          paddingLeft: chrome.railInset,
+          paddingLeft: b.headerX,
           paddingRight: b.headerX,
           flexDirection: "row",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
         }}
       >
-        <TickRail step={step} />
+        <PhaseRail step={step} />
         {railTrailing}
       </View>
     </View>
