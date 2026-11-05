@@ -32,6 +32,8 @@ eq("chat message (legacy, no entity)", pushTarget({ type: "NEW_MESSAGE", entityT
 eq("chat message prefers explicit partnerId", pushMessagePartnerId({ type: "NEW_MESSAGE", partnerId: "u4", entityId: "u2", actorId: "u3" }), "u4");
 eq("chat message falls back to entityId", pushMessagePartnerId({ type: "NEW_MESSAGE", entityId: "u2", actorId: "u3" }), "u2");
 eq("chat message falls back to actorId", pushMessagePartnerId({ type: "NEW_MESSAGE", actorId: "u3" }), "u3");
+eq("a listing comment (NEW_MESSAGE on an item) is not a chat", pushMessagePartnerId({ type: "NEW_MESSAGE", entityType: "item", entityId: "item9", actorId: "u3" }), null);
+eq("a listing comment push opens the listing with its comments", pushTarget({ type: "NEW_MESSAGE", entityType: "item", entityId: "item9", actorId: "u3" })?.startsWith("/item?id=item9"), true);
 eq("shop conversation routes using its peer partner id", pushTarget({ type: "NEW_MESSAGE", entityType: "conversation", entityId: "shop-peer", actorId: "sender" }), "/messages/thread?partner=shop-peer");
 eq("same active partner message is suppressed", shouldSuppressMessageNotification({ type: "NEW_MESSAGE", partnerId: "u2" }, "u2", true), true);
 eq("different partner message is shown", shouldSuppressMessageNotification({ type: "NEW_MESSAGE", entityId: "u3" }, "u2", true), false);
