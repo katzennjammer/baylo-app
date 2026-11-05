@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { StyleSheet, Text, View } from "react-native";
+
+import { useProfileConnections } from "../../api/profile";
+import { sizedImage } from "../../media/image-url";
 
 import { color, font } from "../../theme/tokens";
 import { Tappable } from "../Tappable";
@@ -15,7 +19,8 @@ import { Tappable } from "../Tappable";
  *             (shield) New trader
  *             Lapu-Lapu City · Joined Oct 2026
  *   Gadgets and bags. Usually free on weekends.
- *   5 listings · 2 trades · 4 followers · 5 following
+ *   5 listings · 2 completed trades
+ *   (faces) 4 followers · 5 following
  *   [actions]
  *
  * Followers and following open their lists; the other counts are facts.
@@ -28,6 +33,7 @@ export function PersonHeader({
   locationSlot,
   onFollowers,
   onFollowing,
+  userId,
   children,
 }: {
   /** The screen's own avatar component, so both screens keep their fallbacks. */
@@ -45,10 +51,16 @@ export function PersonHeader({
   locationSlot?: ReactNode;
   onFollowers: () => void;
   onFollowing: () => void;
+  /** Whose followers to show as faces. Omitted: no faces, just the counts. */
+  userId?: string;
   /** The action buttons under the counts. */
   children?: ReactNode;
 }) {
   const joined = joinedLabel(user.createdAt);
+  // The three latest followers, from the same list the Followers screen
+  // shows (and caches), so opening it after is instant.
+  const followersList = useProfileConnections(userId, "followers", !!userId && counts.followers > 0);
+  const faces = followersList.users.slice(0, 3);
   // The trust tier, written as words: "New trader", not a bare "NEW" chip
   // that read as a label on the rating beside it.
   const tierName = user.trustTier
@@ -92,17 +104,38 @@ export function PersonHeader({
         </Text>
       ) : null}
 
-      <Text style={[s.counts, { color: palette.secondary }]}>
-        <Text style={[s.num, { color: palette.ink }]}>{counts.listed}</Text> {counts.listed === 1 ? "listing" : "listings"} ·{" "}
-        <Text style={[s.num, { color: palette.ink }]}>{counts.completedTrades}</Text> {counts.completedTrades === 1 ? "trade" : "trades"} ·{" "}
-        <Text onPress={onFollowers} accessibilityRole="link">
-          <Text style={[s.num, { color: palette.ink }]}>{counts.followers}</Text> {counts.followers === 1 ? "follower" : "followers"}
-        </Text>{" "}
-        ·{" "}
-        <Text onPress={onFollowing} accessibilityRole="link">
-          <Text style={[s.num, { color: palette.ink }]}>{counts.following}</Text> following
-        </Text>
+      {/*
+        The facts as one quiet line; the social part as its own row, led by
+        the faces of the latest followers (Threads-style). The faces and the
+        two counts are what you tap, which the old single line never showed.
+      */}
+      <Text style={[s.line, { color: palette.secondary }]}>
+        {`${counts.listed} ${counts.listed === 1 ? "listing" : "listings"} · ${counts.completedTrades} completed ${counts.completedTrades === 1 ? "trade" : "trades"}`}
       </Text>
+      <View style={s.socialRow}>
+        {faces.length > 0 ? (
+          <Tappable onPress={onFollowers} accessibilityLabel="Open followers" style={s.faces}>
+            {faces.map((f, i) => (
+              <View key={f.id} style={[s.face, { marginLeft: i ? -8 : 0, zIndex: faces.length - i, backgroundColor: palette.control }]}>
+                {f.avatar ? (
+                  <Image source={{ uri: sizedImage(f.avatar, "thumb") }} contentFit="cover" style={s.faceImage} />
+                ) : (
+                  <Text style={s.faceInitial}>{f.name.trim().charAt(0).toUpperCase() || "?"}</Text>
+                )}
+              </View>
+            ))}
+          </Tappable>
+        ) : null}
+        <Text style={[s.line, { color: palette.secondary }]}>
+          <Text onPress={onFollowers} accessibilityRole="link" style={[s.strong, { color: palette.ink }]}>
+            {`${counts.followers} ${counts.followers === 1 ? "follower" : "followers"}`}
+          </Text>
+          {"  ·  "}
+          <Text onPress={onFollowing} accessibilityRole="link" style={[s.strong, { color: palette.ink }]}>
+            {`${counts.following} following`}
+          </Text>
+        </Text>
+      </View>
 
       {children}
     </View>
@@ -159,8 +192,13 @@ const s = StyleSheet.create({
   ratingCount: { fontSize: 13, fontFamily: font.sans },
   place: { fontSize: 13 },
   bio: { fontSize: 14, lineHeight: 20 },
-  counts: { fontSize: 14 },
-  num: { fontFamily: font.sansBold },
+  line: { fontSize: 14, lineHeight: 20 },
+  strong: { fontFamily: font.sansSemi },
+  socialRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: -4 },
+  faces: { flexDirection: "row" },
+  face: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: color.surface, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  faceImage: { width: "100%", height: "100%" },
+  faceInitial: { fontFamily: font.sansBold, fontSize: 11, color: color.forest },
   buttons: { flexDirection: "row", gap: 8 },
   button: {
     flex: 1,

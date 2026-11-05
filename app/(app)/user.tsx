@@ -199,6 +199,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
       <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={org ? undefined : () => setActionsOpen(true)} />
       {header ?? (
       <PersonHeader
+          userId={data.user.id}
         avatar={<Avatar uri={data.user.avatar} name={data.user.name} />}
         user={{ ...data.user, trustTier: data.user.trustTier }}
         counts={data.counts}
