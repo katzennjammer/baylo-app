@@ -1,5 +1,4 @@
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRef } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
@@ -10,8 +9,7 @@ import { compactCount, formatFollowers } from "../lib/format";
 import { ORG_BADGE_LABEL } from "../lib/org";
 import { border, color, dark as darkTokens, icon, radius, size, space, textStyle, type } from "../theme/tokens";
 import { useKeyboardState } from "./auth-sheet";
-import { CheckIcon, ChevronLeftIcon, MessageIcon, PinIcon, PlusIcon, ShareIcon, SparkleIcon, StoreIcon, VerifiedOrgIcon } from "./icons";
-import { BracketChip } from "./BracketChip";
+import { CheckIcon, ChevronLeftIcon, MessageIcon, PlusIcon, ShareIcon, VerifiedOrgIcon } from "./icons";
 import { bracketOf } from "../lib/brackets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tappable } from "./Tappable";
@@ -93,9 +91,6 @@ export function useStorefrontKeyboard() {
   return { keyboardUp, imeInset };
 }
 
-/** A shop younger than this reads "New shop" beside its logo. */
-const NEW_SHOP_DAYS = 30;
-
 export function OrgStorefrontHeader({
   dark,
   org,
@@ -125,112 +120,91 @@ export function OrgStorefrontHeader({
    * shelf, which is exactly what the checklist must not lead them into.
    */
   onPost?: () => void;
-  /** Drawn over the cover (6 Nov 2026): the shop page has no separate top bar. */
+  /** The pushed screen's back button. Absent on the Profile tab, which has its own header. */
   onBack?: () => void;
   /** The backing account's location line, e.g. "Tagbilaran, Bohol". */
   location?: string | null;
-  /** Leaf values of the shop's live listings, for the "Trades in brackets" card. */
+  /** Leaf values of the shop's live listings: the bracket range in the facts line. */
   listingValues?: (number | null)[];
 }) {
   const palette = dark ? darkPalette : lightPalette;
-  // The cover runs up under the status bar only on the pushed screen, which
-  // has no top bar of its own (onBack). As a tab it sits under the app header.
   const insets = useSafeAreaInsets();
-  const coverTop = onBack ? insets.top : 0;
   const role = org.viewerRole ?? null;
   const isOwner = role === "OWNER";
   const logo = orgLogoUrl(org.logoUrl);
   const banner = org.bannerUrl ? orgLogoUrl(org.bannerUrl) : null;
   const completedTrades = org.completedTrades ?? counts.completedTrades;
   const joined = joinedMonth(org.createdAt);
-  const isNew = Date.now() - new Date(org.createdAt).getTime() < NEW_SHOP_DAYS * 86_400_000;
-  // The brackets the shop's live listings sit in, low to high. A trader can
-  // offer on any of them with an item within one bracket -- the same rule the
-  // offer screen enforces -- so the card states the rule, not a promise.
-  const brackets = [...new Set(listingValues.filter((v): v is number => v !== null).map(bracketOf))].sort((a, b) => a - b);
-  // The owner's own view of a shop that is not verified yet. Outsiders see no
-  // badge at all, which is what they already saw.
+  const brackets = listingValues.filter((v): v is number => v !== null).map(bracketOf);
+  const lo = brackets.length ? Math.min(...brackets) : null;
+  const hi = brackets.length ? Math.max(...brackets) : null;
+  const range = lo === null ? null : lo === hi ? `Bracket ${lo}` : `Brackets ${lo}–${hi}`;
+  // Only the owner ever learns why there is no badge; for everyone else an
+  // unverified shop simply has none.
   const verificationStatus = useOrganizations(isOwner).data?.data.organizations.find((o) => o.id === org.id)?.verificationStatus;
+  const place = [location?.trim() || null, joined ? `Joined ${joined}` : null].filter(Boolean).join(" · ");
 
   return (
     <View style={s.root}>
-      {/* ── Cover, with back / share over it and the logo on its bottom edge ── */}
-      <View>
-        {banner ? (
-          <Image source={{ uri: sizedImage(banner, "full") }} contentFit="cover" style={[s.banner, { height: COVER + coverTop }]} accessibilityLabel={`${org.name} cover image`} />
-        ) : (
-          // No banner yet: a token gradient, so a new shop's page still reads
-          // as designed rather than as an image that failed to load.
-          <LinearGradient colors={[color.forest, color.green]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.banner, { height: COVER + coverTop }]} />
-        )}
-        <View style={[s.coverBar, { top: coverTop + 8 }]}>
-          {onBack ? (
-            <Tappable onPress={onBack} style={s.coverButton} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel="Go back">
-              <ChevronLeftIcon size={20} stroke={2.4} color={color.onScrim} />
-            </Tappable>
-          ) : <View />}
-          <View style={s.coverRight}>
-            {isOwner ? (
-              // Edit shop is where the banner is changed, so this is a shortcut to
-              // the same screen, not a second editor.
-              <Tappable onPress={onEdit} hitSlop={5} style={s.overlayPill} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel={banner ? "Change cover image" : "Add a cover image"}>
-                <Text style={[textStyle(type.storefrontOverlay), { color: color.onScrim }]}>{banner ? "Change cover" : "Add cover"}</Text>
-              </Tappable>
-            ) : null}
-            <Tappable onPress={onShare} style={s.coverButton} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel="Share shop">
-              <ShareIcon size={18} stroke={2.2} color={color.onScrim} />
-            </Tappable>
-          </View>
+      {/* ── Back and share, on the page (the pushed screen only) ── */}
+      {onBack ? (
+        <View style={[s.topBar, { paddingTop: insets.top }]}>
+          <Tappable onPress={onBack} style={s.topButton} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel="Go back">
+            <ChevronLeftIcon size={22} stroke={2.4} color={palette.ink} />
+          </Tappable>
+          <Tappable onPress={onShare} style={s.topButton} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel="Share shop">
+            <ShareIcon size={20} stroke={2.2} color={palette.ink} />
+          </Tappable>
         </View>
-      </View>
+      ) : null}
 
       <View style={s.body}>
-        {/* ── Logo (verified seal on its corner), "New shop" on the right ── */}
-        <View style={s.logoRow}>
-          <View>
-            <View style={[s.logoFrame, { borderColor: palette.surface, backgroundColor: palette.surface }]}>
-              {logo ? (
-                <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.logo} accessibilityLabel={`${org.name} logo`} />
-              ) : (
-                <View style={[s.logo, s.logoFallback]} accessibilityLabel={`${org.name}, no logo`}>
-                  <Text style={[textStyle(type.storefrontLogoInitial), { color: color.onGreen }]}>{org.name.trim().charAt(0).toUpperCase() || "?"}</Text>
-                </View>
-              )}
-            </View>
-            {org.verified ? (
-              <View style={[s.seal, { borderColor: palette.surface }]} accessible={false}>
-                <CheckIcon size={12} stroke={3} color={color.onGreen} />
-              </View>
-            ) : null}
-          </View>
-          {isNew ? (
-            <View style={[s.newPill, { backgroundColor: palette.control }]}>
-              <SparkleIcon size={13} stroke={2} color={color.urgent} />
-              <Text style={[textStyle(type.storefrontStaffRole), { color: palette.ink }]}>New shop</Text>
-            </View>
+        {/* ── Cover and logo as ONE block: the logo sits on the cover's bottom edge ── */}
+        <View style={s.coverBlock}>
+          {banner ? (
+            <Image source={{ uri: sizedImage(banner, "full") }} contentFit="cover" style={s.cover} accessibilityLabel={`${org.name} cover image`} />
+          ) : (
+            // No cover yet: flat brand green, no gradient.
+            <View style={[s.cover, { backgroundColor: color.forest }]} />
+          )}
+          {isOwner ? (
+            <Tappable onPress={onEdit} hitSlop={5} style={s.overlayPill} pressedStyle={s.pressed} accessibilityRole="button" accessibilityLabel={banner ? "Change cover image" : "Add a cover image"}>
+              <Text style={[textStyle(type.storefrontOverlay), { color: color.onScrim }]}>{banner ? "Change cover" : "Add cover"}</Text>
+            </Tappable>
           ) : null}
+          <View style={[s.logoFrame, { borderColor: palette.surface, backgroundColor: palette.surface }]}>
+            {logo ? (
+              <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.logo} accessibilityLabel={`${org.name} logo`} />
+            ) : (
+              <View style={[s.logo, s.logoFallback]} accessibilityLabel={`${org.name}, no logo`}>
+                <Text style={[textStyle(type.storefrontLogoInitial), { color: color.onGreen }]}>{org.name.trim().charAt(0).toUpperCase() || "?"}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <Text style={[textStyle(type.storefrontName), s.name, { color: palette.ink }]} numberOfLines={2}>{org.name}</Text>
 
-        {/* ── Badges: Verified MSME ONLY when an admin approved it; the category always ── */}
-        <View style={s.pills}>
+        {/*
+          "Verified MSME" ONLY when org.verified -- true only after an admin
+          approved the shop (verificationStatus VERIFIED on the server). A
+          pending or rejected shop shows the category alone; its owner also
+          sees why, marked as visible only to them.
+        */}
+        <View style={s.identityLine}>
           {org.verified ? (
-            <View style={[s.badge, { backgroundColor: palette.wash }]} accessibilityRole="text" accessibilityLabel={ORG_BADGE_LABEL.full}>
-              <VerifiedOrgIcon size={icon.storefrontBadge.size} stroke={icon.storefrontBadge.stroke} color={palette.onWash} />
-              <Text style={[textStyle(type.storefrontBadge), { color: palette.onWash }]}>{ORG_BADGE_LABEL.full}</Text>
-            </View>
+            <>
+              <VerifiedOrgIcon size={15} stroke={2} color={palette.link} />
+              <Text style={[textStyle(type.storefrontMeta), s.verified, { color: palette.link }]} accessibilityLabel={ORG_BADGE_LABEL.full}>{ORG_BADGE_LABEL.full}</Text>
+              <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}> · </Text>
+            </>
           ) : isOwner ? (
-            // Only the owner sees this; everyone else simply sees no badge.
-            <View style={[s.badge, { backgroundColor: palette.control }]} accessibilityRole="text">
-              <Text style={[textStyle(type.storefrontBadge), { color: palette.muted }]}>
-                {verificationStatus === "REJECTED" ? "Not approved · only you see this" : "Pending review · only you see this"}
-              </Text>
-            </View>
+            <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>
+              {verificationStatus === "REJECTED" ? "Not approved (only you see this)" : "Pending review (only you see this)"}
+              {" · "}
+            </Text>
           ) : null}
-          <View style={[s.badge, s.outlinePill, { borderColor: palette.border }]}>
-            <Text style={[textStyle(type.storefrontBadge), { color: palette.ink }]}>{businessCategoryLabel(org.businessCategory)}</Text>
-          </View>
+          <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>{businessCategoryLabel(org.businessCategory)}</Text>
         </View>
 
         {/* ── Tagline, or the owner's prompt to write one ── */}
@@ -245,56 +219,34 @@ export function OrgStorefrontHeader({
           </Tappable>
         ) : null}
 
-        {/* ── Where and since when ── */}
-        <View style={s.metaRow}>
-          {location?.trim() ? (
-            <View style={s.metaItem}>
-              <PinIcon size={14} stroke={2} color={palette.muted} />
-              <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>{location.trim()}</Text>
-            </View>
-          ) : null}
-          {joined ? (
-            <View style={s.metaItem}>
-              <StoreIcon size={14} stroke={2} color={palette.muted} />
-              <Text style={[textStyle(type.storefrontMeta), { color: palette.muted }]}>Joined {joined}</Text>
-            </View>
-          ) : null}
-        </View>
+        {place ? <Text style={[textStyle(type.storefrontMeta), s.place, { color: palette.muted }]}>{place}</Text> : null}
+
+        {/* ── The numbers as a sentence: "4 listings in Brackets 1–3 · No trades yet" ── */}
+        <Text style={[textStyle(type.storefrontBody), s.facts, { color: palette.ink }]}>
+          <Text style={s.strong}>{counts.listed === 0 ? "No listings yet" : `${counts.listed} ${counts.listed === 1 ? "listing" : "listings"}`}</Text>
+          {counts.listed > 0 && range ? ` in ${range}` : ""}
+          {" · "}
+          <Text style={s.strong}>{completedTrades === 0 ? "No trades yet" : `${completedTrades} ${completedTrades === 1 ? "trade" : "trades"}`}</Text>
+          {"\n"}
+          <Text style={{ color: palette.muted }} accessibilityLabel={formatFollowers(counts.followers)}>
+            {compactCount(counts.followers)} {counts.followers === 1 ? "follower" : "followers"}
+          </Text>
+        </Text>
 
         {/* ── Actions: the owner manages and shares; everyone else follows and messages. ── */}
         <View style={s.actions}>
           {isOwner ? (
             <>
               <ActionButton palette={palette} label="Edit shop" onPress={onEdit} primary />
-              <ActionButton palette={palette} label="Share shop" onPress={onShare} withShareIcon />
+              <ActionButton palette={palette} label="Share shop" onPress={onShare} />
             </>
           ) : (
             <>
               <ActionButton palette={palette} label={follow.busy ? "Updating..." : follow.label} onPress={follow.onPress} disabled={follow.disabled} primary={follow.primary} />
-              <ActionButton palette={palette} label="Message" onPress={onMessage} withMessageIcon />
+              <ActionButton palette={palette} label="Message" onPress={onMessage} />
             </>
           )}
         </View>
-
-        {/* ── Business numbers. All three are real counts from the server. ── */}
-        <View style={[s.statsCard, { borderColor: palette.divider, backgroundColor: palette.card }]}>
-          <Stat palette={palette} label={counts.listed === 1 ? "Listing" : "Listings"} value={counts.listed} />
-          <Stat palette={palette} label={completedTrades === 1 ? "Trade" : "Trades"} value={completedTrades} ruled />
-          <Stat palette={palette} label={counts.followers === 1 ? "Follower" : "Followers"} value={compactCount(counts.followers)} ruled />
-        </View>
-
-        {/* ── Which brackets this shop trades in, from its own listings ── */}
-        {brackets.length > 0 ? (
-          <View style={[s.bracketCard, { borderColor: palette.greenLine, backgroundColor: palette.wash }]}>
-            <View style={s.flex}>
-              <Text style={[textStyle(type.storefrontStep), { color: palette.onWash, fontWeight: "700" }]}>Trades in brackets</Text>
-              <Text style={[textStyle(type.storefrontStaffRole), { color: palette.onWash }]}>Offer an item within one bracket of these</Text>
-            </View>
-            <View style={s.bracketChips}>
-              {brackets.map((b) => <BracketChip key={b} bracket={b} small />)}
-            </View>
-          </View>
-        ) : null}
 
         {isOwner ? (
           <SetupCard
@@ -305,7 +257,6 @@ export function OrgStorefrontHeader({
             onPost={onPost}
           />
         ) : null}
-
       </View>
     </View>
   );
@@ -447,14 +398,6 @@ export function StorefrontEmpty({
   );
 }
 
-function Stat({ palette, label, value, ruled = false }: { palette: Palette; label: string; value: number | string; ruled?: boolean }) {
-  return (
-    <View style={[s.stat, ruled && { borderLeftWidth: border.hairline, borderLeftColor: palette.divider }]} accessibilityRole="text" accessibilityLabel={`${value} ${label}`}>
-      <Text style={[textStyle(type.storefrontStat), { color: palette.ink }]}>{value}</Text>
-      <Text style={[textStyle(type.storefrontStatLabel), { color: palette.muted }]} numberOfLines={1}>{label}</Text>
-    </View>
-  );
-}
 
 function ActionButton({ palette, label, onPress, disabled = false, primary = false, withShareIcon = false, withMessageIcon = false }: {
   palette: Palette;
@@ -485,15 +428,18 @@ function ActionButton({ palette, label, onPress, disabled = false, primary = fal
 const LOGO_INNER = size.storefront.logo;
 const LOGO_OUTER = LOGO_INNER + size.storefront.logoRing * 2;
 /** Cover height below the status bar; the cover runs up under it (no top bar on a shop). */
-const COVER = 190;
+const COVER = 160;
 
 const s = StyleSheet.create({
   root: { paddingBottom: space.storefront.bottom },
-  banner: { width: "100%" },
-  coverBar: { position: "absolute", left: 12, right: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  coverRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  coverButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.captionFill, alignItems: "center", justifyContent: "center" },
+  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 8, paddingBottom: 4 },
+  topButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  coverBlock: { marginTop: 8, marginBottom: LOGO_OUTER / 2 },
+  cover: { width: "100%", height: COVER, borderRadius: 18 },
   overlayPill: {
+    position: "absolute",
+    top: 12,
+    right: 12,
     height: size.storefront.pill,
     paddingHorizontal: size.storefront.pillX,
     borderRadius: radius.storefrontPill,
@@ -504,38 +450,12 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: space.screenX },
   // The logo straddles the banner's bottom edge. The page-coloured ring is what
   // separates it from a busy banner.
-  logoRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
-  seal: {
-    position: "absolute",
-    right: -4,
-    bottom: -4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  newPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, height: 28, borderRadius: 14, marginBottom: 4 },
-  pills: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: space.storefront.nameToMeta + 6 },
-  outlinePill: { borderWidth: border.hairline },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  bracketCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: space.storefront.block,
-    padding: 14,
-    borderWidth: border.hairline,
-    borderStyle: "dashed",
-    borderRadius: radius.storefrontCard,
-  },
-  bracketChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "flex-end", maxWidth: "55%" },
   logoFrame: {
+    position: "absolute",
+    left: 16,
+    bottom: -LOGO_OUTER / 2,
     width: LOGO_OUTER,
     height: LOGO_OUTER,
-    marginTop: -size.storefront.logoLift,
     borderWidth: size.storefront.logoRing,
     borderRadius: radius.storefrontLogo,
     overflow: "hidden",
@@ -543,7 +463,12 @@ const s = StyleSheet.create({
   logo: { width: LOGO_INNER, height: LOGO_INNER, borderRadius: radius.storefrontLogo - size.storefront.logoRing },
   logoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.green },
   nameRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.storefront.nameGap, marginTop: space.storefront.logoToName },
-  name: { flexShrink: 1, marginTop: space.storefront.logoToName },
+  name: { flexShrink: 1, marginTop: 10 },
+  identityLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 4 },
+  verified: { fontWeight: "700", marginLeft: 5 },
+  place: { marginTop: 8 },
+  facts: { marginTop: 14 },
+  strong: { fontWeight: "700" },
   badge: {
     flexDirection: "row",
     alignItems: "center",
