@@ -12,6 +12,7 @@ import { MascotEmptyState } from "../MascotEmptyState";
 import { Tappable } from "../Tappable";
 import { Face, firstName, offerRelation } from "./listing-ui";
 import { RatingLine, TierChip } from "../profile/PersonHeader";
+import { BracketChip } from "../BracketChip";
 import { Thumb } from "./rows";
 import { FailurePopup } from "../FailurePopup";
 
@@ -343,9 +344,8 @@ function Ticket({
           {title}
         </Text>
         {/* The bracket, with the leaf -- not "574 L". Same chip as item detail. */}
-        <View style={s.ticketBracket}>
-          <LeafIcon size={14} stroke={2.2} color={color.surface} />
-          <Text style={s.ticketBracketText}>{bracket != null ? `Bracket ${bracket}` : "No bracket yet"}</Text>
+        <View style={{ marginTop: 6 }}>
+          <BracketChip bracket={bracket} />
         </View>
       </View>
     </View>
@@ -404,18 +404,6 @@ const s = StyleSheet.create({
   },
   ticketLabel: { fontFamily: font.sansBold, fontSize: 11, letterSpacing: 0.6, color: color.inkSecondary },
   ticketTitle: { fontFamily: font.sansSemi, fontSize: 14, lineHeight: 18, color: color.ink, minHeight: 36 },
-  ticketBracket: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 5,
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: color.ink,
-  },
-  ticketBracketText: { fontFamily: font.sansBold, fontSize: 13, color: color.surface },
   disc: {
     position: "absolute",
     left: "50%",

@@ -16,6 +16,7 @@ import {
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
+import { RatingLine, TierChip } from "../../src/components/profile/PersonHeader";
 import { openHubOnMap } from "../../src/lib/open-hub-map";
 import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
 import { secondsLeft } from "../../src/lib/perishable";
@@ -979,7 +980,6 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
         .filter(Boolean)
         .join(" · ")
     : [
-        owner.rating > 0 ? `★ ${owner.rating.toFixed(1)}` : null,
         `${owner.totalTrades} ${owner.totalTrades === 1 ? "trade" : "trades"}`,
         owner.location?.trim() || null,
       ]
@@ -1012,12 +1012,15 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
           {org?.verified ? (
             <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           ) : null}
-          {!org && tier ? (
-            <View style={s.tierPill}>
-              <Text style={s.tierPillText}>{tier.split(" ")[0]!.toUpperCase()}</Text>
-            </View>
-          ) : null}
         </View>
+        {/* A person: the profile header's tier chip and gold-star rating,
+            not the old "RISING" caps tag and a grey star. */}
+        {!org ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <TierChip tier={tier} palette={{ ink: color.ink, control: color.control }} />
+            <RatingLine rating={owner.rating} reviews={null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={14} />
+          </View>
+        ) : null}
         <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
           {meta}
         </Text>
