@@ -203,7 +203,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
             numberOfLines={1}
             accessibilityLabel="Baylo"
           >
-            baylo<Text style={s.wordmarkDot}>.</Text>
+            Baylo<Text style={s.wordmarkDot}>.</Text>
           </Text>
 
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>

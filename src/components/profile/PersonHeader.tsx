@@ -44,6 +44,12 @@ export function PersonHeader({
     createdAt: string;
     rating: number;
     trustTier: string | null;
+    /**
+     * Government ID approved. Only then does the tier pill carry its
+     * checkmark; an unverified person gets the tier name on its own.
+     * Absent (an older server) reads as not verified.
+     */
+    idVerified?: boolean;
   };
   counts: { listed: number; completedTrades: number; reviews: number; followers: number; following: number };
   palette: { ink: string; secondary: string; control: string };
@@ -86,7 +92,9 @@ export function PersonHeader({
           )}
           {tierName ? (
             <View style={[s.tier, { backgroundColor: palette.control }]}>
-              <Ionicons name="shield-checkmark" size={12} color={color.green} />
+              {user.idVerified ? (
+                <Ionicons name="shield-checkmark" size={12} color={color.green} accessibilityLabel="ID verified" />
+              ) : null}
               <Text style={[s.tierText, { color: palette.ink }]}>{tierName}</Text>
             </View>
           ) : null}

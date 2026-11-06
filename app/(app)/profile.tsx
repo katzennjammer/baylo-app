@@ -270,6 +270,7 @@ export default function ProfileScreen() {
             createdAt: profile?.user.createdAt ?? "",
             rating: profile?.user.rating ?? 0,
             trustTier: profile?.reputation.tier ?? null,
+            idVerified: profile?.idVerification?.verified ?? false,
           }}
           counts={{
             listed: profile?.counts.listed ?? items.length,

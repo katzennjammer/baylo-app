@@ -538,6 +538,8 @@ export interface PublicProfilePayload {
   user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
     rank: { label: string };
     trustTier: string | null;
+    /** Government ID approved. Optional: a server older than 6 Nov 2026 omits it. */
+    idVerified?: boolean;
     /**
      * Set when this profile is an organisation. Null for a person, which is
      * almost every profile.
