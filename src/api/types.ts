@@ -628,7 +628,11 @@ export interface LiveOffer {
     name: string;
     avatar: string | null;
     rating?: number;
+    /** Reviews behind `rating`. Optional: a server older than 6 Nov 2026 omits it. */
+    reviewCount?: number;
     trustTier?: TrustTier | null;
+    /** Government ID approved. Optional, and absent reads as not verified. */
+    idVerified?: boolean;
   };
   /**
    * THE BRIDGE, as this screen needs it. Both brackets as they stood when the

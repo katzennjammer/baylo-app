@@ -25,6 +25,7 @@ import { getActingOrgId } from "../src/api/org-context";
 import { useProfileMe } from "../src/api/profile";
 import { STORY_CAPTION_MAX, useCreateStory, useStories } from "../src/api/stories";
 import { clockTime } from "../src/lib/format";
+import { bracketLabel, bracketOf } from "../src/lib/brackets";
 import type { Item } from "../src/api/types";
 import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
 
@@ -200,7 +201,7 @@ export default function ShareStoryScreen() {
           </View>
           <Text style={[textStyle(type.gridMeta), { color: color.ink, marginTop: 4 }]} numberOfLines={1}>{item.title}</Text>
           {item.valueLeaves !== null ? (
-            <Text style={[textStyle(type.gridMeta), { color: color.forest }]}>{item.valueLeaves} L</Text>
+            <Text style={[textStyle(type.gridMeta), { color: color.forest }]}>{bracketLabel(bracketOf(item.valueLeaves))}</Text>
           ) : null}
         </Tappable>
         {on ? (
@@ -269,7 +270,7 @@ export default function ShareStoryScreen() {
                 <View style={s.previewCard}>
                   <Text style={[textStyle(type.itemTitle), { color: color.ink }]} numberOfLines={1}>{chosen.title}</Text>
                   <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>
-                    {chosen.valueLeaves !== null ? `${chosen.valueLeaves} L · ` : ""}{chosen.conditionLabel}
+                    {chosen.valueLeaves !== null ? `${bracketLabel(bracketOf(chosen.valueLeaves))} · ` : ""}{chosen.conditionLabel}
                   </Text>
                 </View>
               ) : null}

@@ -10,7 +10,8 @@ import type { LiveOffer } from "../src/api/types";
 import { BackHeader } from "../src/components/BackHeader";
 import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { Tappable } from "../src/components/Tappable";
-import { Face, RelationPill, TierPill, offerRelation } from "../src/components/trades/listing-ui";
+import { Face, RelationPill, offerRelation } from "../src/components/trades/listing-ui";
+import { RatingLine, TierChip } from "../src/components/profile/PersonHeader";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { bracketOf } from "../src/lib/brackets";
 import { usePullToRefresh } from "../src/lib/pull-to-refresh";
@@ -215,7 +216,6 @@ function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }
   const v = item?.valueLeaves ?? null;
   const meta = v != null ? `Bracket ${bracketOf(v)}` : "No value";
   const who = offer.counterparty;
-  const rating = who.rating ? `★ ${who.rating.toFixed(1)}` : null;
 
   return (
     <Tappable
@@ -244,8 +244,8 @@ function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }
         <Text style={{ fontFamily: font.sansSemi, fontSize: 13, color: color.ink, flexShrink: 1 }} numberOfLines={1}>
           {who.name}
         </Text>
-        <TierPill tier={who.trustTier} />
-        {rating ? <Text style={s.small}>{rating}</Text> : null}
+        <TierChip tier={who.trustTier} idVerified={who.idVerified} palette={{ ink: color.ink, control: color.control }} />
+        <RatingLine rating={who.rating ?? 0} reviews={who.reviewCount ?? null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={13} />
         <View style={{ flex: 1 }} />
         <Text style={s.small}>{ago(offer.createdAt)}</Text>
       </View>

@@ -15,6 +15,7 @@ import { useOfferDecisionFlow } from "../trades/useOfferDecisionFlow";
 import { grouped } from "../../lib/gap";
 import { color, radius, size, space, textStyle, type } from "../../theme/tokens";
 import { offerBorder } from "../../theme/offer-tokens";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * A trade offer in a chat thread, in the Trades tab's design (Round 2).
@@ -146,11 +147,7 @@ export function ChatOfferCard({
               {copy.waiting.youWouldPay(flow.fee)}
             </Text>
           ) : null}
-          {flow.failure ? (
-            <Text accessibilityLiveRegion="polite" style={[textStyle(type.metadata), { color: color.urgent }]}>
-              {flow.failure}
-            </Text>
-          ) : null}
+          <FailurePopup message={flow.failure} title="Could not finish that" />
           <View style={s.pair}>
             <TradeButton
               label={copy.waiting.decline}

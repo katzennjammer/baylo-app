@@ -39,11 +39,11 @@ export function offerRelation(offer: LiveOffer): Relation {
 
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-/** The short label on a card: "Same bracket", "One below · Ana pays 60 L". */
+/** The short label on a card: "Same bracket", "One below · Ana pays 60 Leaves". */
 export function relationLabel(offer: LiveOffer): string {
   const r = offerRelation(offer);
   if (r.kind === "same") return "Same bracket";
-  const fee = r.fee ? ` ${r.fee} L` : " the fee";
+  const fee = r.fee ? ` ${r.fee} Leaves` : " the fee";
   return r.kind === "below"
     ? `One below · ${firstName(offer.counterparty.name)} pays${fee}`
     : `One above · you pay${fee}`;
