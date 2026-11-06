@@ -227,7 +227,7 @@ export function OfferSheet({
  * `How trading works`. Once on the first faded grid, and on demand from
  * Settings.
  *
- * One scrollable sheet: a heading, the four rules as titled paragraphs, then
+ * One scrollable sheet: a heading, the three rules as titled paragraphs, then
  * the faded-tile rule with its swatch pair, and `Got it` pinned under the
  * scroll. The first-run rules still hold — it is dismissed only by `Got it`,
  * never by a scrim tap or the back gesture — and the same component serves the
