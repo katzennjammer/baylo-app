@@ -16,6 +16,7 @@ import {
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
+import { openHubOnMap } from "../../src/lib/open-hub-map";
 import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
 import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
@@ -613,7 +614,8 @@ export default function ItemDetailScreen() {
                       touches, so this Tappable receives them. */}
                   {i === 0 ? (
                     <Tappable
-                      onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
+                      // Straight to the map, on the hub the trader chose (the first one).
+                      onPress={() => openHubOnMap(router, hubs[0]!.id)}
                       accessibilityRole="button"
                       accessibilityLabel={
                         `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +

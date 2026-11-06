@@ -28,6 +28,7 @@ import {
 } from "../../src/components/marketplace/BrowseStates";
 import { GridTile } from "../../src/components/marketplace/GridTile";
 import { Tappable } from "../../src/components/Tappable";
+import { openHubOnMap } from "../../src/lib/open-hub-map";
 import {
   border,
   color,
@@ -119,7 +120,7 @@ export default function HubScreen() {
     );
   }
 
-  const openMap = (h: SafeZoneHub) => router.push({ pathname: "/hubs", params: { focus: h.id } });
+  const openMap = (h: SafeZoneHub) => openHubOnMap(router, h.id);
 
   const header = hub ? (
     <View>

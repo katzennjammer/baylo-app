@@ -162,7 +162,6 @@ export default function AppLayout() {
 
       {/* The Safe-Zone map and one hub's listings. Same flat-file, query-param
           arrangement as `item` above, and for the same reason. */}
-      <Tabs.Screen name="hubs" options={{ href: null, title: "Safe hubs" }} />
       {/* No app header on one hub's page: its map strip runs to the top edge. */}
       <Tabs.Screen name="hub" options={{ href: null, title: "Safe hub", headerShown: false }} />
     </Tabs>
