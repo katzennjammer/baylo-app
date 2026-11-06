@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 
 import { goBack } from "../src/lib/go-back";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
@@ -13,12 +13,13 @@ import { useProfileMe } from "../src/api/profile";
 import { uploadPhoto } from "../src/api/post";
 import { color, font } from "../src/theme/tokens";
 import { showDialog } from "../src/components/dialog";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data, refetch } = useProfileMe();
+  const { data, refetch, isError } = useProfileMe();
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
@@ -26,8 +27,13 @@ export default function EditProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Fill the form ONCE, from the first profile that arrives. Re-seeding on
+  // every refetch (focus, the 60 s stale timer) replaced what the person was
+  // in the middle of typing with the saved values.
+  const seeded = useRef(false);
   useEffect(() => {
-    if (!data) return;
+    if (!data || seeded.current) return;
+    seeded.current = true;
     setName(data.user.name);
     setBio(data.user.bio ?? "");
     setLocation(data.user.location ?? "");
@@ -65,7 +71,9 @@ export default function EditProfileScreen() {
   }
 
   async function save() {
-    if (!name.trim() || saving) return;
+    // Never save a form that was not filled from the profile: the empty bio
+    // and city would be written over the real ones.
+    if (!data || !name.trim() || saving) return;
     setSaving(true);
     try {
       const response = await request("/api/user", {
@@ -100,7 +108,7 @@ export default function EditProfileScreen() {
     }
   }
 
-  const disabled = saving || uploadingAvatar || !name.trim();
+  const disabled = !data || saving || uploadingAvatar || !name.trim();
   const idVerified = data?.idVerification.verified ?? false;
 
   return <View style={s.screen}>
@@ -112,6 +120,20 @@ export default function EditProfileScreen() {
         <Text style={[s.saveText, disabled && s.disabled]}>{saving ? "Saving..." : "Save"}</Text>
       </Pressable>
     </View>
+    {!data ? (
+      isError ? (
+        <View style={s.state}>
+          <MascotEmptyState
+            pose="worry"
+            title="Could not load your profile"
+            message="Nothing was changed. Check your connection and try again."
+            action={{ label: "Try again", onPress: () => void refetch() }}
+          />
+        </View>
+      ) : (
+        <View style={s.state}><ActivityIndicator color={color.green} /></View>
+      )
+    ) : (
     <ScrollView style={s.scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
     {/* Photo and its action on one row. */}
     <View style={s.photoRow}>
@@ -153,6 +175,7 @@ export default function EditProfileScreen() {
     </Pressable>
     {saving ? <ActivityIndicator color={color.green} style={s.spinner} /> : null}
     </ScrollView>
+    )}
   </View>;
 }
 
@@ -171,6 +194,8 @@ function Field({ label, value, onChangeText, multiline = false, help, counter, m
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
   scroll: { flex: 1 },
+  /** Loading or failed: the duck (or the spinner) centred in the space below the bar. */
+  state: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   content: { paddingHorizontal: 20, paddingBottom: 120 },
   top: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: color.divider },
   topButton: { minWidth: 72, minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },

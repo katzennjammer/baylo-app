@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiV1, request } from "./client";
+import { ApiError, apiV1, legacyFailure, request } from "./client";
+import { showDialog } from "../components/dialog";
 import type { BrowsePayload, FollowStatus, ProfileConnectionUser, ProfileMePayload, PublicProfilePayload } from "./types";
 
 /**
@@ -74,6 +75,22 @@ export function usePublicProfile(id: string | undefined) {
   });
 }
 
+/**
+ * Every follow-family failure gets the same popup. Raised from the hook, not
+ * the call sites, because there are five of those (profile, connections, shop
+ * matches) and none of them said anything: the optimistic button simply
+ * flipped back. A 4xx carries the server's own reason; anything else is
+ * about the connection.
+ */
+function sayFollowFailed(title: string, error: unknown) {
+  showDialog(
+    title,
+    error instanceof ApiError && error.status < 500 ? error.message : "Check your connection and try again.",
+    [{ text: "Got it" }],
+    { pose: "worry" },
+  );
+}
+
 export function useFollow() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -83,7 +100,7 @@ export function useFollow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ followeeId: userId }),
       });
-      if (!response.ok) throw new Error("Could not follow this user");
+      if (!response.ok) await legacyFailure(response, "Could not follow this user");
     },
     onMutate: async ({ userId }) => {
       await queryClient.cancelQueries({ queryKey: ["profile", userId] });
@@ -92,11 +109,13 @@ export function useFollow() {
       updateConnectionCaches(queryClient, userId, "ACCEPTED");
       updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
     },
-    onError: (_error, { userId }) => {
+    onError: (error, { userId }) => {
       // The status flags on every connections list this patched; the count
       // and the followee's own list are re-read in onSettled.
       void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
       updateBrowseOrgCaches(queryClient, userId, "NONE");
+      // The button has already flipped back; say why, or it reads as a glitch.
+      sayFollowFailed("Could not follow", error);
     },
     // Success or not: the server's count and the followee's follower list are
     // the truth the optimistic patch guessed at. The list has to be refetched
@@ -117,8 +136,9 @@ export function useRemoveFollower(viewerId: string | undefined) {
   return useMutation({
     mutationFn: async ({ userId }: { userId: string }) => {
       const response = await request(`/api/follows/${encodeURIComponent(userId)}?as=follower`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Could not remove this follower");
+      if (!response.ok) await legacyFailure(response, "Could not remove this follower");
     },
+    onError: (error) => sayFollowFailed("Could not remove follower", error),
     onSettled: (_data, _error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
       void queryClient.invalidateQueries({ queryKey: ["profile", userId] });
@@ -133,7 +153,7 @@ export function useUnfollow() {
   return useMutation({
     mutationFn: async ({ userId }: { userId: string }) => {
       const response = await request(`/api/follows/${encodeURIComponent(userId)}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Could not unfollow this user");
+      if (!response.ok) await legacyFailure(response, "Could not unfollow this user");
     },
     onMutate: async ({ userId }) => {
       await queryClient.cancelQueries({ queryKey: ["profile", userId] });
@@ -142,11 +162,12 @@ export function useUnfollow() {
       updateConnectionCaches(queryClient, userId, "NONE");
       updateBrowseOrgCaches(queryClient, userId, "NONE");
     },
-    onError: (_error, { userId }) => {
+    onError: (error, { userId }) => {
       // The status flags on every connections list this patched; the count
       // and the followee's own list are re-read in onSettled.
       void queryClient.invalidateQueries({ queryKey: ["profile-connections"] });
       updateBrowseOrgCaches(queryClient, userId, "ACCEPTED");
+      sayFollowFailed("Could not unfollow", error);
     },
     // Success or not: the server's count and the followee's follower list are
     // the truth the optimistic patch guessed at. The list has to be refetched
