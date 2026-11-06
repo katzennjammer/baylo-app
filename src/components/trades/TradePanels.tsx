@@ -26,6 +26,7 @@ import { TradeButton } from "./trade-ui";
 import { consent as consentCopy, replyBy } from "../offer/copy";
 import { color, radius, space, textStyle, type } from "../../theme/tokens";
 import { offerBorder } from "../../theme/offer-tokens";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * The trade screen's step panels (Round 2, 1 Oct 2026). Each one is the
@@ -65,13 +66,9 @@ function Body({ children, tone = "secondary" }: { children: ReactNode; tone?: "i
   );
 }
 
+/** A failure on a trade panel: a popup with the worried duck, not red text. */
 export function Failure({ children }: { children: string | null }) {
-  if (!children) return null;
-  return (
-    <Text accessibilityLiveRegion="polite" style={[textStyle(type.detailBody), { color: color.urgent }]}>
-      {children}
-    </Text>
-  );
+  return <FailurePopup message={children} />;
 }
 
 /** Decline (outlined) · Accept (solid forest), equal widths. */

@@ -3,7 +3,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Image,
   Keyboard,
@@ -533,7 +532,19 @@ export default function MessagesThreadScreen() {
         {
           text: "Block",
           style: "destructive",
-          onPress: () => block.mutate(partner, { onSuccess: () => router.back() }),
+          onPress: () =>
+            block.mutate(partner, {
+              onSuccess: () => router.back(),
+              // Without this a failed block did nothing visible, and the
+              // person left believing they were blocked.
+              onError: (error) =>
+                showDialog(
+                  "Could not block",
+                  error instanceof ApiError && error.status < 500 ? error.message : "Check your connection and try again.",
+                  [{ text: "Got it" }],
+                  { pose: "worry" },
+                ),
+            }),
         },
       ],
     );
@@ -971,11 +982,13 @@ export default function MessagesThreadScreen() {
         onToggleMute={() =>
           updateChat.mutate(
             { muted: !(chatSettings.data?.muted ?? false) },
-            { onError: (e) => showDialog("Could not change that", e instanceof Error ? e.message : "Try again.") },
+            { onError: (e) => showDialog("Could not change that", e instanceof Error ? e.message : "Try again.", [{ text: "Got it" }], { pose: "worry" }) },
           )
         }
         onDeleteChat={() =>
-          Alert.alert(
+          // The app dialog, not Alert.alert: every other confirm in the app
+          // uses it, and the system popup looked like a different app.
+          showDialog(
             "Delete this chat?",
             `It is removed for you only. ${otherName} keeps their copy, and new messages will still arrive.`,
             [
@@ -991,7 +1004,7 @@ export default function MessagesThreadScreen() {
                         setMenuOpen(false);
                         router.back();
                       },
-                      onError: (e) => showDialog("Could not delete the chat", e instanceof Error ? e.message : "Try again."),
+                      onError: (e) => showDialog("Could not delete the chat", e instanceof Error ? e.message : "Try again.", [{ text: "Got it" }], { pose: "worry" }),
                     },
                   ),
               },

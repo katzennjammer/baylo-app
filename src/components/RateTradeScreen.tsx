@@ -112,7 +112,9 @@ export default function RateTradeScreen() {
             void history.refetch();
             return;
           }
-          setError(cause instanceof ApiError ? cause.message : "Could not submit your review.");
+          const message = cause instanceof ApiError ? cause.message : "Could not submit your review.";
+          setError(message);
+          showDialog("Your review was not sent", message, [{ text: "Got it" }], { pose: "worry" });
         },
       },
     );

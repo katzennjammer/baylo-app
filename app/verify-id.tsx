@@ -16,6 +16,7 @@ import { Image as ExpoImage } from "expo-image";
 import { MASCOT } from "../src/media/mascots";
 
 import { ApiError } from "../src/api/client";
+import { showDialog } from "../src/components/dialog";
 import {
   fetchIdVerification,
   formatSubmittedAt,
@@ -333,11 +334,14 @@ function SubmitForm({
       // whether this was a duplicate ID, a bad file or a spent budget, and
       // rewriting it here would mean maintaining a second copy of five
       // refusals that a client cannot compute.
-      setError(
+      const message =
         e instanceof ApiError
           ? e.message
-          : "We could not send that just now. Try again in a moment.",
-      );
+          : "We could not send that just now. Try again in a moment.";
+      // Inline AND a popup: the inline line sits above the button and is easy
+      // to miss after the keyboard closes; the popup cannot be missed.
+      setError(message);
+      showDialog("Your ID was not sent", message, [{ text: "Got it" }], { pose: "worry" });
     },
   });
 

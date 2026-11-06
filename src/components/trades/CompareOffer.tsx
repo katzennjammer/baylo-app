@@ -10,8 +10,11 @@ import { showDialog } from "../dialog";
 import { ChevronLeftIcon, ChevronRightIcon, LeafIcon, MessageIcon, SwapIcon } from "../icons";
 import { MascotEmptyState } from "../MascotEmptyState";
 import { Tappable } from "../Tappable";
-import { Face, TierPill, firstName, offerRelation } from "./listing-ui";
+import { Face, firstName, offerRelation } from "./listing-ui";
+import { RatingLine, TierChip } from "../profile/PersonHeader";
+import { BracketChip } from "../BracketChip";
 import { Thumb } from "./rows";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * The received-offer view of /trade (Nov 2026): one offer, compared side by
@@ -156,8 +159,8 @@ export function CompareOffer({
       <ScrollView contentContainerStyle={s.body}>
         {/* The trade, as two equal tickets. */}
         <View style={s.tickets}>
-          <Ticket label="YOU GIVE" title={mine.title} image={mine.image ?? null} value={myValue} />
-          <Ticket label="YOU GET" title={theirs?.title ?? "An item"} image={theirs?.image ?? null} value={theirValue} highlight />
+          <Ticket label="YOU GIVE" title={mine.title} image={mine.image ?? null} bracket={myBracket} />
+          <Ticket label="YOU GET" title={theirs?.title ?? "An item"} image={theirs?.image ?? null} bracket={theirBracket} highlight />
           <View style={s.disc} pointerEvents="none" importantForAccessibility="no-hide-descendants">
             <SwapIcon size={16} stroke={2.2} color={color.surface} />
           </View>
@@ -212,13 +215,22 @@ export function CompareOffer({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Face name={offer.counterparty.name} avatar={offer.counterparty.avatar} size={48} />
             <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.ink }}>{offer.counterparty.name}</Text>
-                <TierPill tier={offer.counterparty.trustTier} />
-              </View>
-              {offer.counterparty.rating ? (
-                <Text style={s.meta}>{`★ ${offer.counterparty.rating.toFixed(1)}`}</Text>
-              ) : null}
+              <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.ink }} numberOfLines={1}>
+                {offer.counterparty.name}
+              </Text>
+              {/* The same rating line and tier chip as their profile header. */}
+              <RatingLine
+                rating={offer.counterparty.rating ?? 0}
+                // An older server sends no count: show the stars alone.
+                reviews={offer.counterparty.reviewCount ?? null}
+                palette={{ ink: color.ink, secondary: color.inkSecondary }}
+                size={15}
+              />
+              <TierChip
+                tier={offer.counterparty.trustTier}
+                idVerified={offer.counterparty.idVerified}
+                palette={{ ink: color.ink, control: color.control }}
+              />
             </View>
             <Tappable
               onPress={onChat}
@@ -242,11 +254,7 @@ export function CompareOffer({
           </Text>
         ) : null}
 
-        {flow.failure ? (
-          <Text accessibilityLiveRegion="polite" style={{ fontFamily: font.sansMedium, fontSize: 13, color: color.urgent }}>
-            {flow.failure}
-          </Text>
-        ) : null}
+        <FailurePopup message={flow.failure} title="Could not finish that" />
       </ScrollView>
 
       <View style={[s.bar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -269,7 +277,7 @@ export function CompareOffer({
             <ActivityIndicator color={color.onGreen} />
           ) : (
             <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.onGreen }}>
-              {flow.receiverPays ? `Accept · pay ${flow.fee} L` : "Accept trade"}
+              {flow.receiverPays ? `Accept · pay ${flow.fee} Leaves` : "Accept trade"}
             </Text>
           )}
         </Tappable>
@@ -317,13 +325,14 @@ function Ticket({
   label,
   title,
   image,
-  value,
+  bracket,
   highlight = false,
 }: {
   label: string;
   title: string;
   image: string | null;
-  value: number | null;
+  /** The item's BRACKET. The exact Leaf value is not shown on a trade card. */
+  bracket: number | null;
   highlight?: boolean;
 }) {
   return (
@@ -334,7 +343,10 @@ function Ticket({
         <Text style={s.ticketTitle} numberOfLines={2}>
           {title}
         </Text>
-        <Text style={s.ticketValue}>{value != null ? `${value.toLocaleString("en-US")} L` : "—"}</Text>
+        {/* The bracket, with the leaf -- not "574 L". Same chip as item detail. */}
+        <View style={{ marginTop: 6 }}>
+          <BracketChip bracket={bracket} />
+        </View>
       </View>
     </View>
   );
@@ -392,7 +404,6 @@ const s = StyleSheet.create({
   },
   ticketLabel: { fontFamily: font.sansBold, fontSize: 11, letterSpacing: 0.6, color: color.inkSecondary },
   ticketTitle: { fontFamily: font.sansSemi, fontSize: 14, lineHeight: 18, color: color.ink, minHeight: 36 },
-  ticketValue: { fontFamily: font.sansBold, fontSize: 18, color: color.ink, marginTop: 4 },
   disc: {
     position: "absolute",
     left: "50%",

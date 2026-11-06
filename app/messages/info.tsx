@@ -119,7 +119,15 @@ export default function ChatInfoScreen() {
   const confirmBlock = () =>
     showDialog(`Block ${name}?`, "You will not see each other's listings and neither of you can message the other. Trades already in progress are not cancelled.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Block", style: "destructive", onPress: () => block.mutate(partner!, { onSuccess: () => router.dismissTo("/messages") }) },
+      { text: "Block", style: "destructive", onPress: () => block.mutate(partner!, {
+        onSuccess: () => router.dismissTo("/messages"),
+        onError: (error) => showDialog(
+          "Could not block",
+          error instanceof ApiError && error.status < 500 ? error.message : "Check your connection and try again.",
+          [{ text: "Got it" }],
+          { pose: "worry" },
+        ),
+      }) },
     ]);
   const confirmDelete = () =>
     showDialog("Delete this chat?", `It is removed for you only. ${first} keeps their copy, and new messages will still arrive.`, [

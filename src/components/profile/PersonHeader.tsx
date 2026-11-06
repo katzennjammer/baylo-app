@@ -44,6 +44,12 @@ export function PersonHeader({
     createdAt: string;
     rating: number;
     trustTier: string | null;
+    /**
+     * Government ID approved. Only then does the tier pill carry its
+     * checkmark; an unverified person gets the tier name on its own.
+     * Absent (an older server) reads as not verified.
+     */
+    idVerified?: boolean;
   };
   counts: { listed: number; completedTrades: number; reviews: number; followers: number; following: number };
   palette: { ink: string; secondary: string; control: string };
@@ -61,11 +67,6 @@ export function PersonHeader({
   // shows (and caches), so opening it after is instant.
   const followersList = useProfileConnections(userId, "followers", !!userId && counts.followers > 0);
   const faces = followersList.users.slice(0, 3);
-  // The trust tier, written as words: "New trader", not a bare "NEW" chip
-  // that read as a label on the rating beside it.
-  const tierName = user.trustTier
-    ? user.trustTier.toLowerCase().replace(/^./, (c) => c.toUpperCase())
-    : null;
   const place = [user.location, joined ? `Joined ${joined}` : null].filter(Boolean).join(" · ");
 
   return (
@@ -73,23 +74,8 @@ export function PersonHeader({
       <View style={s.identity}>
         {avatar}
         <View style={s.signals}>
-          {counts.reviews > 0 ? (
-            <Text style={[s.rating, { color: palette.ink }]}>
-              <Text style={s.star}>★</Text> {user.rating.toFixed(1)}
-              <Text style={[s.ratingCount, { color: palette.secondary }]}>
-                {"  "}
-                {counts.reviews} {counts.reviews === 1 ? "review" : "reviews"}
-              </Text>
-            </Text>
-          ) : (
-            <Text style={[s.ratingCount, { color: palette.secondary }]}>No reviews yet</Text>
-          )}
-          {tierName ? (
-            <View style={[s.tier, { backgroundColor: palette.control }]}>
-              <Ionicons name="shield-checkmark" size={12} color={color.green} />
-              <Text style={[s.tierText, { color: palette.ink }]}>{tierName}</Text>
-            </View>
-          ) : null}
+          <RatingLine rating={user.rating} reviews={counts.reviews} palette={palette} />
+          <TierChip tier={user.trustTier} idVerified={user.idVerified} palette={palette} />
           {user.location ? (
             <Text style={[s.place, { color: palette.secondary }]} numberOfLines={1}>{place}</Text>
           ) : (
@@ -212,3 +198,67 @@ const s = StyleSheet.create({
   buttonFilled: { backgroundColor: color.green },
   buttonText: { fontSize: 15, fontWeight: "600" },
 });
+
+/**
+ * "★ 4.5  4 reviews" -- or "No reviews yet". The profile header's rating line,
+ * exported so the offer screen's trader card says it the same way (it used to
+ * draw a grey star and no count).
+ */
+export function RatingLine({
+  rating,
+  reviews,
+  palette,
+  size = 17,
+}: {
+  rating: number;
+  /** `null` when unknown (an older server): the stars show without a count. */
+  reviews: number | null;
+  palette: { ink: string; secondary: string };
+  size?: number;
+}) {
+  if (reviews === null) {
+    if (rating <= 0) return null;
+    return (
+      <Text style={[s.rating, { fontSize: size, color: palette.ink }]}>
+        <Text style={s.star}>★</Text> {rating.toFixed(1)}
+      </Text>
+    );
+  }
+  if (reviews <= 0) {
+    return <Text style={[s.ratingCount, { color: palette.secondary }]}>No reviews yet</Text>;
+  }
+  return (
+    <Text style={[s.rating, { fontSize: size, color: palette.ink }]}>
+      <Text style={s.star}>★</Text> {rating.toFixed(1)}
+      <Text style={[s.ratingCount, { color: palette.secondary }]}>
+        {"  "}
+        {reviews} {reviews === 1 ? "review" : "reviews"}
+      </Text>
+    </Text>
+  );
+}
+
+/**
+ * The trust tier as words -- "Rising trader", not a bare "RISING" -- with the
+ * shield checkmark ONLY when the person's government ID is approved.
+ */
+export function TierChip({
+  tier,
+  idVerified,
+  palette,
+}: {
+  tier: string | null | undefined;
+  idVerified?: boolean;
+  palette: { ink: string; control: string };
+}) {
+  if (!tier) return null;
+  const name = tier.toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  return (
+    <View style={[s.tier, { backgroundColor: palette.control }]}>
+      {idVerified ? (
+        <Ionicons name="shield-checkmark" size={12} color={color.green} accessibilityLabel="ID verified" />
+      ) : null}
+      <Text style={[s.tierText, { color: palette.ink }]}>{name}</Text>
+    </View>
+  );
+}

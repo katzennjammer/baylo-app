@@ -50,6 +50,7 @@ import { meetupWhen } from "../src/lib/gap";
 import { openPremium, premiumGateReason } from "../src/lib/premium";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
+import { FailurePopup } from "../src/components/FailurePopup";
 
 /**
  * ONE SCREEN PER TRADE (Round 2, 1 Oct 2026).
@@ -454,11 +455,7 @@ export default function TradeScreen() {
           </Gutter>
         )}
 
-        {withdraw.failure ? (
-          <Gutter style={{ paddingTop: space.home.tileBody }}>
-            <Text style={[textStyle(type.detailBody), { color: color.urgent }]}>{withdraw.failure}</Text>
-          </Gutter>
-        ) : null}
+        <FailurePopup message={withdraw.failure} />
 
         {/* A finished trade's way back to the person, as on the old summary. */}
         {trade && !live && trade.status !== "PENDING" && !keyboardUp ? (

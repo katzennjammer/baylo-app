@@ -10,7 +10,9 @@ import type { LiveOffer } from "../src/api/types";
 import { BackHeader } from "../src/components/BackHeader";
 import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { Tappable } from "../src/components/Tappable";
-import { Face, RelationPill, TierPill, offerRelation } from "../src/components/trades/listing-ui";
+import { Face, RelationPill, offerRelation } from "../src/components/trades/listing-ui";
+import { RatingLine, TierChip } from "../src/components/profile/PersonHeader";
+import { BracketChip } from "../src/components/BracketChip";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { bracketOf } from "../src/lib/brackets";
 import { usePullToRefresh } from "../src/lib/pull-to-refresh";
@@ -213,9 +215,9 @@ export default function ListingOffersScreen() {
 function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }) {
   const item = offer.offeredItems[0];
   const v = item?.valueLeaves ?? null;
-  const meta = v != null ? `Bracket ${bracketOf(v)}` : "No value";
+  const bracket = v != null ? bracketOf(v) : null;
+  const meta = bracket != null ? `Bracket ${bracket}` : "No value";
   const who = offer.counterparty;
-  const rating = who.rating ? `★ ${who.rating.toFixed(1)}` : null;
 
   return (
     <Tappable
@@ -235,18 +237,27 @@ function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }
           <Text style={s.title} numberOfLines={2}>
             {item?.title ?? "An item"}
           </Text>
-          <Text style={s.meta}>{meta}</Text>
-          <RelationPill offer={offer} />
+          {/* The dark leaf chip, as on the item page and the offer screen. */}
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <BracketChip bracket={bracket} small />
+            <RelationPill offer={offer} />
+          </View>
         </View>
       </View>
       <View style={s.footer}>
-        <Face name={who.name} avatar={who.avatar} size={24} />
-        <Text style={{ fontFamily: font.sansSemi, fontSize: 13, color: color.ink, flexShrink: 1 }} numberOfLines={1}>
-          {who.name}
-        </Text>
-        <TierPill tier={who.trustTier} />
-        {rating ? <Text style={s.small}>{rating}</Text> : null}
-        <View style={{ flex: 1 }} />
+        <Face name={who.name} avatar={who.avatar} size={36} />
+        {/* Name on its own line; the trader's signals under it, the same
+            rating line and tier chip as their profile. One row could not
+            hold all four without squeezing the name. */}
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <Text style={{ fontFamily: font.sansSemi, fontSize: 14, color: color.ink }} numberOfLines={1}>
+            {who.name}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <TierChip tier={who.trustTier} idVerified={who.idVerified} palette={{ ink: color.ink, control: color.control }} />
+            <RatingLine rating={who.rating ?? 0} reviews={who.reviewCount ?? null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={13} />
+          </View>
+        </View>
         <Text style={s.small}>{ago(offer.createdAt)}</Text>
       </View>
     </Tappable>

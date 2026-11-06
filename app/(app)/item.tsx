@@ -16,6 +16,8 @@ import {
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
+import { RatingLine, TierChip } from "../../src/components/profile/PersonHeader";
+import { openHubOnMap } from "../../src/lib/open-hub-map";
 import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
 import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
@@ -353,13 +355,6 @@ export default function ItemDetailScreen() {
     beyond === null ? null : beyond === 0 ? "within your reach" : `${bracketsWord(beyond)} above you`;
 
   const amount = item.perishable ? perishableAmount(item.perishable) : null;
-  // One bracket either side of the listing can trade for it (a bridge above
-  // or below), the same rule the offer screen enforces.
-  const offerableRange = (b: number) => {
-    const lo = Math.max(1, b - 1);
-    const hi = Math.min(10, b + 1);
-    return lo === hi ? `Bracket ${lo}` : `Brackets ${lo}–${hi}`;
-  };
   const wanted = item.wanted?.trim() ?? "";
   const lookingFor = item.lookingForLabels.join(" · ");
 
@@ -564,17 +559,6 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
-          {/* "Within your reach", said as something you can act on. */}
-          {!own && beyond === 0 && listingBracket !== null ? (
-            <View style={s.reachCard}>
-              <CheckIcon size={18} stroke={2.6} color={color.forest} />
-              <Text style={[textStyle(type.detailBody), { flex: 1, color: color.forest }]}>
-                <Text style={{ fontWeight: "700" }}>Within your reach. </Text>
-                You can offer any of your items in {offerableRange(listingBracket)}.
-              </Text>
-            </View>
-          ) : null}
-
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
@@ -631,7 +615,8 @@ export default function ItemDetailScreen() {
                       touches, so this Tappable receives them. */}
                   {i === 0 ? (
                     <Tappable
-                      onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
+                      // Straight to the map, on the hub the trader chose (the first one).
+                      onPress={() => openHubOnMap(router, hubs[0]!.id)}
                       accessibilityRole="button"
                       accessibilityLabel={
                         `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +
@@ -733,6 +718,23 @@ export default function ItemDetailScreen() {
             }
             onSeeOffers={() => router.push(`/listing-offers?id=${encodeURIComponent(item.id)}`)}
             onOffer={() => {
+              // NOTHING POSTED YET. An offer is a swap of one of your own
+              // items, so with none the real answer is "post one first" -- not
+              // "this item is too far above your items", which is what the
+              // reach check said to someone who had no items at all.
+              if (me && shelfValues.length === 0) {
+                showDialog(
+                  "Post an item first",
+                  "An offer swaps one of your items for this one, and you haven't posted anything yet. " +
+                    "Post an item, then come back and send your offer.",
+                  [
+                    { text: "Not now", style: "cancel" },
+                    { text: "Post an item", onPress: () => router.push("/post-item") },
+                  ],
+                  { pose: "box" },
+                );
+                return;
+              }
               if (cannotOffer) {
                 setReachDialogOpen(true);
                 return;
@@ -772,6 +774,9 @@ export default function ItemDetailScreen() {
                 `Trade for items closer to what you own to move your reach higher.`
         }
         icon={<WarningIcon size={24} stroke={2} color={color.forest} />}
+        // The worried duck, centred above the title, like the app's other
+        // refusals. The warning icon stays as the no-mascot fallback.
+        pose="worry"
         onDismiss={() => setReachDialogOpen(false)}
       />
 
@@ -975,7 +980,6 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
         .filter(Boolean)
         .join(" · ")
     : [
-        owner.rating > 0 ? `★ ${owner.rating.toFixed(1)}` : null,
         `${owner.totalTrades} ${owner.totalTrades === 1 ? "trade" : "trades"}`,
         owner.location?.trim() || null,
       ]
@@ -1008,12 +1012,15 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
           {org?.verified ? (
             <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           ) : null}
-          {!org && tier ? (
-            <View style={s.tierPill}>
-              <Text style={s.tierPillText}>{tier.split(" ")[0]!.toUpperCase()}</Text>
-            </View>
-          ) : null}
         </View>
+        {/* A person: the profile header's tier chip and gold-star rating,
+            not the old "RISING" caps tag and a grey star. */}
+        {!org ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <TierChip tier={tier} palette={{ ink: color.ink, control: color.control }} />
+            <RatingLine rating={owner.rating} reviews={null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={14} />
+          </View>
+        ) : null}
         <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
           {meta}
         </Text>

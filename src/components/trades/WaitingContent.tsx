@@ -4,12 +4,12 @@ import { Text, View } from "react-native";
 import { meetupState, type WaitingItem } from "../../api/trades";
 import type { ActiveTrade } from "../../api/types";
 import { color, textStyle as baseTextStyle, type } from "../../theme/tokens";
-import { offerColor, offerType, textStyle } from "../../theme/offer-tokens";
 import { Gutter } from "./chrome";
 import * as copy from "./copy";
 import * as present from "./present";
 import { CardLink, TradeCard } from "./TradeCard";
 import type { useWithdraw } from "./useWithdraw";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * Everything waiting on the other person — offers you sent, and trades where
@@ -107,16 +107,9 @@ export function WaitingCard({ item, onWithdraw }: { item: WaitingItem; onWithdra
  * away the only part the reader can act on.
  */
 export function FailureLine({ children }: { children: string }) {
-  return (
-    <Gutter style={{ paddingTop: 12 }}>
-      <Text
-        accessibilityLiveRegion="polite"
-        style={[textStyle(offerType.errorText), { color: offerColor.warm }]}
-      >
-        {children}
-      </Text>
-    </Gutter>
-  );
+  // A popup now, not a red line under the card: the server's sentence is
+  // still shown verbatim, just where it cannot be missed.
+  return <FailurePopup message={children} />;
 }
 
 

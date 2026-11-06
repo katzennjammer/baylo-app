@@ -140,7 +140,7 @@ const LOCATION_FIX_TIMEOUT_MS = 10_000;
  * the search; see "The search does not outlive the visit" below. `messages`
  * because an item's "Message" goes there and back comes through the item.
  */
-const SEARCH_DRILL_DOWNS = new Set(["item", "user", "hub", "hubs", "connections", "messages"]);
+const SEARCH_DRILL_DOWNS = new Set(["item", "user", "hub", "connections", "messages"]);
 
 export default function MarketplaceScreen() {
   const router = useRouter();
@@ -287,8 +287,11 @@ export default function MarketplaceScreen() {
     q: arrivingQuery,
     [MARKETPLACE_FILTERS_PARAM]: arrivingFilters,
     openFilters: arrivingOpenFilters,
+    hub: arrivingHub,
     applyAt,
   } = useLocalSearchParams<{
+    /** A hub to show on the map, selected. See openHubOnMap(). */
+    hub?: string;
     openFilters?: string;
     category?: string;
     q?: string;
@@ -297,6 +300,16 @@ export default function MarketplaceScreen() {
   }>();
   useEffect(() => {
     if (!applyAt) return;
+    // A listing's (or a hub page's) map preview: the map, on that hub. The
+    // type filter and name search are cleared so they cannot hide the pin.
+    if (arrivingHub) {
+      setHubTypeFilter(null);
+      setHubSearch("");
+      setFocusHubId(arrivingHub);
+      setSelectedHubId(arrivingHub);
+      setView("map");
+      return;
+    }
     // Home's filter button: open the filter sheet over the grid, and keep
     // the filters already set. This screen stays mounted, so without the
     // explicit grid it reopened on whatever view was left -- the map.
@@ -324,6 +337,12 @@ export default function MarketplaceScreen() {
   }, [applyAt]);
   /** Which pin's card is up. Owned here so the map and the sheet cannot disagree. */
   const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
+  /**
+   * The hub the map should OPEN on, when one was handed in. Separate from the
+   * selection: a selection pushed into a WebView that has not loaded yet is
+   * lost, while the opening view is built into the document itself.
+   */
+  const [focusHubId, setFocusHubId] = useState<string | null>(null);
   /**
    * Selecting a hub. A hub in the nearby strip is shown selected IN the strip
    * -- outlined card, ringed pin, and its own Directions / View listings --
@@ -1085,6 +1104,7 @@ export default function MarketplaceScreen() {
                   hubs={mapHubs}
                   userLocation={userLocation}
                   interactive
+                  focusHubId={focusHubId ?? undefined}
                   selectedHubId={selectedHubId}
                   onSelectHub={selectHub}
                   // The nearby strip and the hub card sit over the bottom edge.

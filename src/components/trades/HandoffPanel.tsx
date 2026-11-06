@@ -22,6 +22,7 @@ import * as copy from "./copy";
 import { StepHeading, TradeButton } from "./trade-ui";
 import { color, size, space, textStyle, type } from "../../theme/tokens";
 import { offerType, textStyle as offerTextStyle } from "../../theme/offer-tokens";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * The handoff step: read your code, type theirs. `app/trade-code.tsx`'s
@@ -228,14 +229,7 @@ export function HandoffPanel({
           </>
         )}
 
-        {failure ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[textStyle(type.detailBody), { color: color.urgent }]}
-          >
-            {failure}
-          </Text>
-        ) : null}
+        <FailurePopup message={failure} />
 
         {burned ? (
           <TradeButton label={copy.code.readItAgainButton(partner)} tone="outline" onPress={reissue} />

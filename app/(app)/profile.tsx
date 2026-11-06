@@ -15,7 +15,7 @@ import { color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
 import { LeafIcon, StoreIcon } from "../../src/components/icons";
-import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
+import { OrgStorefrontHeader, ShopAbout, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
@@ -270,6 +270,7 @@ export default function ProfileScreen() {
             createdAt: profile?.user.createdAt ?? "",
             rating: profile?.user.rating ?? 0,
             trustTier: profile?.reputation.tier ?? null,
+            idVerified: profile?.idVerification?.verified ?? false,
           }}
           counts={{
             listed: profile?.counts.listed ?? items.length,
@@ -540,7 +541,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
 
   const rows: ProfileListRow[] = tab === "posts"
     ? chunkItems(data.items).map((postItems) => ({ kind: "posts", items: postItems }))
-    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+    : tab === "reviews"
+      ? reviewQuery.reviews.map((review) => ({ kind: "review", review }))
+      : [];
   const inert = () => undefined;
 
   return (
@@ -562,8 +565,10 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
           onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
           onShare={() => void Share.share({ message: `${org.name} on Baylo\n${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
           onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+          location={data.user.location}
+          listingValues={data.items.filter((item) => item.status === "AVAILABLE").map((item) => item.valueLeaves)}
         />
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} about />
         {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
@@ -577,7 +582,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
       ListEmptyComponent={tab === "reviews" && reviewQuery.isLoadingError
         ? <ReviewLoadError dark={dark} onRetry={() => void reviewQuery.refetch()} />
-        : tab === "reviews"
+        : tab === "about"
+          ? <ShopAbout dark={dark} org={org} location={data.user.location} completedTrades={org.completedTrades ?? data.counts.completedTrades} />
+          : tab === "reviews"
           ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." pose="search" />
           : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." pose="box" />}
     />
@@ -602,10 +609,10 @@ function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, follow
   return <View style={s.header}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Pressable onPress={onFollowers} style={s.stat} accessibilityRole="button" accessibilityLabel={`${followers} followers`}><Text style={[s.statValue, { color: palette.ink }]}>{followers}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Followers</Text></Pressable><Pressable onPress={onFollowing} style={s.stat} accessibilityRole="button" accessibilityLabel={`${following} following`}><Text style={[s.statValue, { color: palette.ink }]}>{following}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Following</Text></Pressable></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /></View>;
 }
 
-export type ShelfTab = "posts" | "traded" | "reviews";
+export type ShelfTab = "posts" | "traded" | "reviews" | "about";
 
 /** Your own profile passes `counts.traded` and gets a third tab, Traded. */
-export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean; active: ShelfTab; onChange: (tab: ShelfTab) => void; counts?: { posts: number; reviews: number; traded?: number } }) {
+export function ProfileTabs({ dark, active, onChange, counts, about = false }: { dark: boolean; active: ShelfTab; onChange: (tab: ShelfTab) => void; counts?: { posts: number; reviews: number; traded?: number }; /** A shop's "About" tab. */ about?: boolean }) {
   const palette = dark ? darkColors : lightColors;
   // Words with counts (4 Nov 2026): "Listings 5   Reviews 2", underlined.
   const tab = (key: ShelfTab, label: string, count: number | undefined) => {
@@ -624,6 +631,7 @@ export function ProfileTabs({ dark, active, onChange, counts }: { dark: boolean;
       {tab("posts", "Listings", counts?.posts)}
       {counts?.traded !== undefined ? tab("traded", "Traded", counts.traded) : null}
       {tab("reviews", "Reviews", counts?.reviews)}
+      {about ? tab("about", "About", undefined) : null}
     </View>
   );
 }

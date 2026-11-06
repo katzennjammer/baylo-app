@@ -100,7 +100,7 @@ export function HomePinnedHeader({ scrollY }: { scrollY: Animated.Value }) {
       />
       <View style={[s.headerRow, { paddingHorizontal: tight ? space.screenXTight : space.screenX }]}>
         <Text style={s.wordmark} accessibilityLabel="Baylo">
-          baylo<Text style={s.wordmarkDot}>.</Text>
+          Baylo<Text style={s.wordmarkDot}>.</Text>
         </Text>
         <View style={s.headerActions}>
           <LeavesPill

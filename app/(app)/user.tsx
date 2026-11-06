@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -12,7 +12,7 @@ import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { Avatar, Badges, ProfileSkeleton, ProfileTabs, ProfileTile, ReviewLoadError, ReviewRow, ReviewSummary, shelfLabel, type ShelfTab } from "./profile";
 import { BlockIcon, ChevronLeftIcon, ChevronRightIcon, FlagIcon, KebabIcon } from "../../src/components/icons";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
-import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
+import { OrgStorefrontHeader, ShopAbout, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { getApiBase } from "../../src/api/config";
 import { getActingOrgId } from "../../src/api/org-context";
 import { Tappable } from "../../src/components/Tappable";
@@ -42,6 +42,8 @@ export default function UserProfileScreen() {
   const palette = dark ? darkColors : lightColors;
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<ShelfTab>("posts");
+  /** A shop's category chip under its tabs; null is "All". */
+  const [shelfCategory, setShelfCategory] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [badgesOpen, setBadgesOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -83,9 +85,17 @@ export default function UserProfileScreen() {
   /** Non-null exactly when this profile is an organisation. See the header block. */
   const org = data.user.org;
   const busy = follow.isPending || unfollow.isPending;
+  // A shop's listings can be narrowed by category, from the categories its
+  // own listings are in -- the chips only appear when there are two or more.
+  const shopCategories = org
+    ? [...new Map(data.items.map((item) => [item.category, item.categoryLabel] as const)).entries()]
+    : [];
+  const shelfItems = org && shelfCategory ? data.items.filter((item) => item.category === shelfCategory) : data.items;
   const rows: ProfileRow[] = tab === "posts"
-    ? chunkItems(data.items).map((items) => ({ kind: "posts", items }))
-    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+    ? chunkItems(shelfItems).map((items) => ({ kind: "posts", items }))
+    : tab === "reviews"
+      ? reviewQuery.reviews.map((review) => ({ kind: "review", review }))
+      : [];
 
   function toggleFollow() {
     if (!data || busy || status === "PENDING") return;
@@ -170,10 +180,15 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
       // Only while acting AS this shop -- otherwise Post lists on the viewer's
       // personal shelf. getActingOrgId() is read per render, as elsewhere.
       onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+      onBack={() => router.back()}
+      location={data.user.location}
+      listingValues={data.items.filter((item) => item.status === "AVAILABLE").map((item) => item.valueLeaves)}
     />
   ) : null;
   const emptyList = org ? (
-    tab === "reviews"
+    tab === "about"
+      ? <ShopAbout dark={dark} org={org} location={data.user.location} completedTrades={org.completedTrades ?? data.counts.completedTrades} />
+      : tab === "reviews"
       ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after a completed trade." pose="search" />
       : <StorefrontEmpty dark={dark} title="No listings yet" body={org.viewerRole ? "Listings posted as this shop appear here." : "This shop hasn't listed anything yet."} pose="box" />
   ) : tab === "reviews" ? (
@@ -196,7 +211,8 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
     data={rows}
     keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
     ListHeaderComponent={<>
-      <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={org ? undefined : () => setActionsOpen(true)} />
+      {/* A shop draws its back button over its cover instead. */}
+      {org ? null : <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={() => setActionsOpen(true)} />}
       {header ?? (
       <PersonHeader
           userId={data.user.id}
@@ -237,7 +253,26 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
         ) : null}
       </PersonHeader>
       )}
-      <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: data.counts.listed, reviews: data.counts.reviews }} />
+      <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: data.counts.listed, reviews: data.counts.reviews }} about={!!org} />
+      {org && tab === "posts" && shopCategories.length >= 2 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+          {[[null, "All"] as const, ...shopCategories].map(([key, label]) => {
+            const on = shelfCategory === key;
+            return (
+              <Tappable
+                key={key ?? "all"}
+                onPress={() => setShelfCategory(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                // Plain words with a green underline, not pill buttons.
+                style={[s.chip, { borderBottomColor: on ? palette.green : "transparent" }]}
+              >
+                <Text style={[s.chipText, { color: on ? palette.ink : palette.secondary, fontFamily: on ? font.sansBold : font.sansMedium }]}>{label}</Text>
+              </Tappable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
       {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier={!!org} loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
     </>}
     renderItem={({ item: row }) => row.kind === "posts" ? <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View> : <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { if (row.review.item) router.push({ pathname: "/item", params: { id: row.review.item.id } }); }} />}
@@ -316,7 +351,7 @@ const s = StyleSheet.create({
   badgeLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   badgeLineThumb: { width: 40, height: 40, borderRadius: 10, overflow: "hidden", backgroundColor: "#DDE7EE" },
   badgeLineText: { flex: 1, fontSize: 13 },
-  screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1 }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 }, footer: { paddingVertical: 18 },
+  screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1 }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, chips: { gap: 18, paddingHorizontal: 20, paddingTop: 12 }, chip: { minHeight: 36, justifyContent: "center", borderBottomWidth: 2 }, chipText: { fontSize: 14 }, gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 }, footer: { paddingVertical: 18 },
 });
 const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider, border: color.controlLine, green: color.green };
 const darkColors = { surface: darkTokens.surface, control: darkTokens.control, ink: darkTokens.ink, secondary: darkTokens.secondary, muted: darkTokens.muted, divider: darkTokens.divider, border: darkTokens.border, green: darkTokens.green };
