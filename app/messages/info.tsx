@@ -18,6 +18,7 @@ import { offerHref, tradeHref } from "../../src/components/trades/present";
 import { getActingOrgId } from "../../src/api/org-context";
 import { sizedImage } from "../../src/media/image-url";
 import { color, font } from "../../src/theme/tokens";
+import { StarText } from "../../src/components/StarText";
 
 /**
  * Chat info -- the i button in a chat (4 Nov 2026 design). Messenger's info
@@ -164,7 +165,7 @@ export default function ChatInfoScreen() {
             </View>
           )}
           <Text style={s.name} numberOfLines={1}>{name}</Text>
-          {facts ? <Text style={s.facts} numberOfLines={1}>{facts}</Text> : null}
+          {facts ? <StarText style={s.facts} numberOfLines={1}>{facts}</StarText> : null}
         </View>
 
         {/* Three round shortcuts, Messenger-style. No group chats on Baylo. */}

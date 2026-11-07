@@ -3,7 +3,9 @@ import { useState, type ReactNode } from "react";
 
 import { ApiError } from "../../api/client";
 import { currentConsent } from "../../api/offer";
-import { useActiveTrades, useOfferDecision, type OfferDecided } from "../../api/trades";
+import { useQueryClient } from "@tanstack/react-query";
+import { TRADES_ACTIVE_KEY, useActiveTrades, useOfferDecision, type OfferDecided } from "../../api/trades";
+import { showDialog } from "../dialog";
 import type { LiveOffer } from "../../api/types";
 import { openPremium, premiumGateReason } from "../../lib/premium";
 import { BridgeConsentSheet } from "../offer/BridgeConsentSheet";
@@ -30,6 +32,11 @@ export function useOfferDecisionFlow(offer: LiveOffer | null): {
   /** What this screen decided, once it has. */
   decided: { action: "accept" | "decline"; result: OfferDecided } | null;
   failure: string | null;
+  /**
+   * The item in this offer has gone (traded or taken off the market). The
+   * offer can only be declined now: callers hide Accept and say why.
+   */
+  unavailable: boolean;
   receiverPays: boolean;
   fee: number;
   /** The fee is held from this balance — the acting identity's, shop or person. */
@@ -40,6 +47,8 @@ export function useOfferDecisionFlow(offer: LiveOffer | null): {
   const active = useActiveTrades();
   const decide = useOfferDecision();
   const [failure, setFailure] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const qc = useQueryClient();
   const [consentOpen, setConsentOpen] = useState(false);
   const [decided, setDecided] = useState<{
     action: "accept" | "decline";
@@ -69,6 +78,23 @@ export function useOfferDecisionFlow(offer: LiveOffer | null): {
           const gated = premiumGateReason(e);
           if (gated) {
             openPremium(router, gated, offer.offeredBracket ?? undefined);
+            return;
+          }
+          // THE ITEM IS GONE (409 "…no longer available"). Not a red line and
+          // not a generic "Could not finish that": say what happened, offer
+          // the one thing still possible, and stop showing Accept.
+          if (action === "accept" && e instanceof ApiError && e.status === 409 && /no longer available/i.test(e.message)) {
+            setUnavailable(true);
+            void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
+            showDialog(
+              "This item isn't available any more",
+              "It was traded or taken off the market, so this offer can't go ahead.",
+              [
+                { text: "OK", style: "cancel" },
+                { text: "Decline offer", onPress: () => run("decline") },
+              ],
+              { pose: "worry" },
+            );
             return;
           }
           setFailure(
@@ -110,6 +136,7 @@ export function useOfferDecisionFlow(offer: LiveOffer | null): {
     busy: decide.isPending,
     decided,
     failure,
+    unavailable,
     receiverPays,
     fee,
     balance,

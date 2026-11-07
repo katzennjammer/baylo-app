@@ -38,6 +38,8 @@ export interface DecisionFlow {
   busy: boolean;
   decided: { action: "accept" | "decline"; result: OfferDecided } | null;
   failure: string | null;
+  /** The item in the offer has gone; only Decline is left. */
+  unavailable?: boolean;
   receiverPays: boolean;
   fee: number;
 }
@@ -267,6 +269,8 @@ export function CompareOffer({
         >
           <Text style={{ fontFamily: font.sansSemi, fontSize: 15, color: color.ink }}>Decline</Text>
         </Tappable>
+        {/* The item went away: Decline is the only thing left to do. */}
+        {flow.unavailable ? null : (
         <Tappable
           onPress={confirmAccept}
           disabled={flow.busy}
@@ -281,6 +285,7 @@ export function CompareOffer({
             </Text>
           )}
         </Tappable>
+        )}
       </View>
     </View>
   );

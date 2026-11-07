@@ -48,6 +48,7 @@ import { color, font, radius, textStyle } from "../../src/theme/tokens";
 import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
 import { cacheMeasuredChatImageSize } from "../../src/components/messages/chat-image-sizing";
+import { StarText } from "../../src/components/StarText";
 
 /** Consecutive messages from one sender closer than this are one run. */
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -628,7 +629,7 @@ export default function MessagesThreadScreen() {
               <Text style={[styles.subtitle, { color: palette.forest }]} numberOfLines={1}>typing…</Text>
             ) : standing ? (
               // Their standing under the name: tier and rating.
-              <Text style={[styles.subtitle, { color: palette.inkSecondary }]} numberOfLines={1}>{standing}</Text>
+              <StarText style={[styles.subtitle, { color: palette.inkSecondary }]} numberOfLines={1}>{standing}</StarText>
             ) : null}
           </View>
         </Tappable>
