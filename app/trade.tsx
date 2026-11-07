@@ -149,6 +149,8 @@ export default function TradeScreen() {
   const offerFlow = useOfferDecisionFlow(liveOffer ?? heldOffer);
   const decideTrade = useTradeDecision();
   const arrive = useArrive(tradeId);
+  /** "Show code" is reading the location: the button says so instead of looking stuck. */
+  const [locating, setLocating] = useState(false);
   const [requestFailure, setRequestFailure] = useState<string | null>(null);
   const withdraw = useWithdraw(() => router.back());
 
@@ -267,7 +269,11 @@ export default function TradeScreen() {
    */
   const confirmAtHub = async (hub: SafeZoneHub) => {
     // Asked here, with the reason on screen, never on launch. See ensureLocation.
-    const here = await ensureLocation("Baylo checks you're at the hub before showing the codes, so they aren't used up on the way.");
+    if (locating) return;
+    setLocating(true);
+    const here = await ensureLocation("Baylo checks you're at the hub before showing the codes, so they aren't used up on the way.").finally(() =>
+      setLocating(false),
+    );
     const km = here ? distanceKm(here.latitude, here.longitude, hub) : null;
     const far = km !== null && km > 0.3 ? ` Your phone puts you about ${formatDistanceKm(km)} away.` : "";
     showDialog(
@@ -384,7 +390,11 @@ export default function TradeScreen() {
           pose="box"
           size={120}
           title={`You're at ${trade!.meetup.hub.name}`}
-          message={`Waiting for ${partner}. We've told them you're here. Your codes start when you're both at the hub.`}
+          message={
+            arrive.isPending
+              ? `Telling ${partner} you're here…`
+              : `Waiting for ${partner}. We've told them you're here. Your codes start when you're both at the hub.`
+          }
         />
       </View>
     );
@@ -399,7 +409,8 @@ export default function TradeScreen() {
         }
         links={
           <TradeButton
-            label={copy.tradeCard.action.showCode}
+            label={locating ? "Checking where you are…" : copy.tradeCard.action.showCode}
+            disabled={locating}
             onPress={() => void confirmAtHub(trade!.meetup!.hub)}
             style={{ flex: 1 }}
           />

@@ -54,7 +54,13 @@ export async function ensureLocation(reason: string): Promise<Point | null> {
 }
 
 async function currentPoint(): Promise<Point | null> {
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+  // LAST KNOWN FIRST (7 Nov 2026): it is instant, and a fix from the last
+  // couple of minutes is as good as a new one for "about how far away".
+  // Only without one is a fresh fix waited for, and then for 1.5 s at most:
+  // the distance is a hint, and waiting 5 s made "Show code" feel stuck.
+  const recent = await Location.getLastKnownPositionAsync({ maxAge: 2 * 60 * 1000 }).catch(() => null);
+  if (recent) return { latitude: recent.coords.latitude, longitude: recent.coords.longitude };
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
   const fresh = await Promise.race([
     Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
     timeout,
