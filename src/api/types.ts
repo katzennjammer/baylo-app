@@ -710,7 +710,13 @@ export interface ActiveTrade {
    * task rewards filed under it (Safe-Zone meetup, First trade). A 0-Leaf line
    * is a recorded denial. Optional: a server older than 7 Nov 2026 omits it.
    */
-  rewards?: { kind: string; leaves: number; note: string | null }[];
+  rewards?: { kind: string; leaves: number; note: string | null; reason?: "repeat_partner" | "weekly_cap" | null }[];
+  /**
+   * Who has tapped "I'm here" at the hub in the last two hours. The codes are
+   * issued only once both have. Optional: a server older than 7 Nov 2026
+   * omits it, and the screen then behaves as before.
+   */
+  arrival?: { me: boolean; partner: boolean };
   codesMatchedAt: string | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;

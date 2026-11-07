@@ -555,8 +555,8 @@ export const help = {
 
 /** The hub picker (`app/trade-meetup.tsx`). */
 export const picker = {
-  noShared: "No hub is on both your listings yet, so no safe hub reward this time.",
-  addHub: "Add a hub to my listing",
+  noShared:
+    "No hub is on both your listings yet, so no safe hub reward this time. Add the same hub to both listings to earn it next time.",
   rewardChip: "Safe hub reward",
   suggestedChip: (partner: string) => `${partner} suggested`,
   when: "When",
