@@ -298,7 +298,7 @@ export interface ItemDetailPayload {
   viewer: {
     isOwner: boolean;
     state: string;
-    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE";
+    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE" | "RELIST";
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
     /**
@@ -705,6 +705,12 @@ export interface ActiveTrade {
   myReview: { rating: number } | null;
   receivedReview: { rating: number } | null;
   rewardLeaves: number | null;
+  /**
+   * Every reward line this trade earned the viewer: the trade reward and the
+   * task rewards filed under it (Safe-Zone meetup, First trade). A 0-Leaf line
+   * is a recorded denial. Optional: a server older than 7 Nov 2026 omits it.
+   */
+  rewards?: { kind: string; leaves: number; note: string | null }[];
   codesMatchedAt: string | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;

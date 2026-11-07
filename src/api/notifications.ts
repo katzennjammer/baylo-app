@@ -146,9 +146,12 @@ export function notificationTarget(n: NotificationItem): string | null {
       if (n.type === "TRADE_COMPLETED") {
         return id ? `/rate-trade?id=${encodeURIComponent(id)}` : "/trades-history";
       }
-      // `handoff=1` opens the trade screen on its code panel, which is what
-      // the old /trade-code landing did — issuing the codes included.
-      return id ? `/trade?id=${encodeURIComponent(id)}&handoff=1` : "/(app)/trades";
+      // The trade screen, on whatever step the trade is at. NOT `handoff=1`
+      // (7 Nov 2026): opening the code panel is what ISSUES the two
+      // 15-minute codes, so tapping "accepted your offer" started the
+      // handover before anyone had picked a hub. Codes are opened from the
+      // trade screen, at the hub, behind an "Are you there?" check.
+      return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "meetup":
       // The trade screen's hub step, where "Agree" lives since Round 2.
       return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
@@ -244,6 +247,9 @@ export function useMarkAllNotificationsRead() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
+      // Loaded lazily: the badge module pulls in the native notifications
+      // library, which this API module must not need just to be imported.
+      void import("../notifications/badge").then((m) => m.syncAppBadge()).catch(() => undefined);
     },
   });
 }
@@ -278,6 +284,9 @@ export function useMarkNotificationRead() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
+      // Loaded lazily: the badge module pulls in the native notifications
+      // library, which this API module must not need just to be imported.
+      void import("../notifications/badge").then((m) => m.syncAppBadge()).catch(() => undefined);
     },
   });
 }

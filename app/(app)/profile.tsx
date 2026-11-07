@@ -27,8 +27,7 @@ import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
-import { showDialog } from "../../src/components/dialog";
-import { request } from "../../src/api/client";
+import { confirmRelist } from "../../src/api/relist";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -177,24 +176,7 @@ export default function ProfileScreen() {
     : tab === "traded"
       ? chunkItems(tradedItems).map((postItems) => ({ kind: "posts", items: postItems }))
       : reviews.map((review) => ({ kind: "review", review }));
-  const relist = (item: Item) => {
-    showDialog("Relist this item?", `"${item.title}" goes back on the marketplace with the value it has now.`, [
-      { text: "Not now", style: "cancel" },
-      {
-        text: "Relist",
-        onPress: () => {
-          void request(`/api/items/${encodeURIComponent(item.id)}/relist`, { method: "POST" }).then(async (res) => {
-            if (!res.ok) {
-              const body = (await res.json().catch(() => null)) as { error?: string } | null;
-              showDialog("Could not relist that", body?.error ?? "Something went wrong. Please try again.");
-              return;
-            }
-            void refetch();
-          });
-        },
-      },
-    ]);
-  };
+  const relist = (item: Item) => confirmRelist(item, () => void refetch());
   const onRefresh = useCallback(() => {
     if (tab === "reviews") void refetchReviews();
     else void refetch();
@@ -736,7 +718,13 @@ export function shelfLabel(item: Item): string | null {
 }
 
 /** One shelf tile. (The owner's Boost pill and Featured pill went with Featured boosts in schema v2.) */
-export function ProfileTile({ dark, item, onPress, footer }: { dark: boolean; item: Item; onPress: () => void; footer?: React.ReactNode }) {
+/**
+ * `own` (default true: your own shelf) decides the value line. The exact Leaf
+ * figure is the OWNER's; everyone else sees the bracket only, the same rule
+ * GridTile and the item page follow. Someone else's profile and your Liked
+ * list pass `own={false}` (7 Nov 2026: they showed "200 · Bracket 2").
+ */
+export function ProfileTile({ dark, item, onPress, footer, own = true }: { dark: boolean; item: Item; onPress: () => void; footer?: React.ReactNode; own?: boolean }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
   const inTrade = item.status === "IN_TRADE";
@@ -748,12 +736,16 @@ export function ProfileTile({ dark, item, onPress, footer }: { dark: boolean; it
     </View>
     <Text style={[s.tileTitle, { color: palette.ink }]} numberOfLines={1}>{item.title}</Text>
     {item.valueLeaves !== null ? (
-      <View style={s.tileValueRow} accessibilityLabel={`${item.valueLeaves} Leaves, ${bracket}`}>
+      <View style={s.tileValueRow} accessibilityLabel={own ? `${item.valueLeaves} Leaves, ${bracket}` : `${bracket}`}>
         <LeafIcon size={13} stroke={2} color={palette.green} />
-        <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>
-          {item.valueLeaves}
-          <Text style={{ color: palette.secondary }}>{`  ·  ${bracket}`}</Text>
-        </Text>
+        {own ? (
+          <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>
+            {item.valueLeaves}
+            <Text style={{ color: palette.secondary }}>{`  ·  ${bracket}`}</Text>
+          </Text>
+        ) : (
+          <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>{bracket}</Text>
+        )}
       </View>
     ) : null}
     {footer}

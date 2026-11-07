@@ -494,8 +494,13 @@ export const handoff = {
   hide: "Hide",
   hiddenNote: "Hidden so others nearby can't see",
   step2: (partner: string) => `Type ${partner}'s code`,
-  refresh: "Codes refresh every 15 minutes.",
-  refreshAtHub: "Codes refresh every 15 minutes, and if either of you leaves the hub.",
+  // The old refreshAtHub line said codes also refresh "if either of you leaves
+  // the hub". Nothing checks location, so it promised something that never
+  // happened (7 Nov 2026). Both lines now say what is true.
+  refresh: "Codes last 15 minutes. If they run out, get new ones here.",
+  refreshAtHub: "Codes last 15 minutes. If they run out, get new ones here.",
+  expired: "Your codes ran out. Get new ones when you're both ready.",
+  newCodes: "Get new codes",
   theyTypedYours: (partner: string) => `${partner} has typed yours in.`,
   readAgain: (partner: string) => `Ask ${partner} to read it again.`,
   somethingWrong: "Something went wrong at the meetup?",
@@ -601,10 +606,12 @@ export const picker = {
   /** `n` comes from /api/v1/profile/me's task list; null words it without one. */
   rewardBody: (n: number | null) =>
     n === null
-      ? "You both listed this hub as a meetup spot. Meet here and you each earn Leaves once the trade is completed."
-      : `You both listed this hub as a meetup spot. Meet here and you each earn ${grouped(n)} Leaves once the trade is completed.`,
+      ? "You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn Leaves once the trade is completed."
+      : `You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn ${grouped(n)} Leaves once the trade is completed.`,
+  // The two conditions the server checks that this screen cannot: the hub must
+  // be AGREED (not just suggested) and still on both listings at the handover.
   rewardSmallPrint:
-    "Doesn't apply to shop accounts, a repeat trade with the same person within 30 days, or past the weekly task limit.",
+    "Both of you must agree on this hub, and keep it on your listings until the trade is done. Doesn't apply to shop accounts, a repeat trade with the same person within 30 days, or past the weekly task limit.",
   rewardShop: "Shop accounts don't earn this reward.",
   gotIt: "Got it",
 } as const;

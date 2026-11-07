@@ -7,6 +7,8 @@ import { AppState, Platform } from "react-native";
 
 import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
+import { TRADES_ACTIVE_KEY, meetupKey } from "../api/trades";
+import { syncAppBadge } from "./badge";
 import { getActiveConversationPartnerId } from "./active-conversation";
 import { Notifications, notificationsAvailable } from "./notifications-safe";
 import { pushMessageId, pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
@@ -155,6 +157,9 @@ export function usePushNotifications(userId: string | undefined) {
         void Promise.all([
           qc.invalidateQueries({ queryKey: ["home"] }),
           qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+          // A trade or meetup push means the trade lists moved too.
+          qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY }),
+          syncAppBadge(),
         ]).catch((error: unknown) => {
           console.warn("[push] Could not refresh notification counts", error);
         });
@@ -181,7 +186,18 @@ export function usePushNotifications(userId: string | undefined) {
       }
 
       const id = pushNotificationId(data);
-      if (id) markRead.mutate(id);
+      if (id) markRead.mutate(id, { onSettled: () => void syncAppBadge() });
+      // The screen the tap opens reads the trade lists and the meetup plan.
+      // Their caches can predate the event the push is about (the app was in
+      // the background, the socket missed it), which is how "That trade is not
+      // open any more" and a second "Choose a hub" appeared for live, agreed
+      // trades. Refetch them before routing.
+      const entityType = typeof data?.entityType === "string" ? data.entityType : null;
+      const entityId = typeof data?.entityId === "string" ? data.entityId : null;
+      if (entityType === "trade" || entityType === "meetup") {
+        void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
+        if (entityId) void qc.invalidateQueries({ queryKey: meetupKey(entityId) });
+      }
       const partnerId = pushMessagePartnerId(data);
       if (partnerId) {
         const messageId = pushMessageId(data);
@@ -197,7 +213,18 @@ export function usePushNotifications(userId: string | undefined) {
     } catch (error) {
       console.warn("[push] Ignoring malformed notification response", error);
     }
-  }, [last, userId, navigationState.key, pathname, params.partner, router, markRead]);
+  }, [last, userId, navigationState.key, pathname, params.partner, router, markRead, qc]);
+
+  // The app-icon badge follows the server's unread counts: on sign-in and
+  // every time the app comes back to the foreground. See ./badge.
+  useEffect(() => {
+    if (!userId) return;
+    void syncAppBadge();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void syncAppBadge();
+    });
+    return () => sub.remove();
+  }, [userId]);
 
   useEffect(() => {
     try {
