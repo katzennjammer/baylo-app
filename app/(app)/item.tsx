@@ -7,7 +7,7 @@ import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-nat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
-import { useProfileMe } from "../../src/api/profile";
+import { PROFILE_ME_KEY, useProfileMe } from "../../src/api/profile";
 import { useReach } from "../../src/api/offer";
 import { firstName, premium as premiumCopy, vip as vipCopy } from "../../src/components/offer/copy";
 import { LockIcon } from "../../src/components/offer/icons";
@@ -83,6 +83,8 @@ import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { SendToChatSheet } from "../../src/components/messages/SendToChatSheet";
 import { sizedImage } from "../../src/media/image-url";
+import { useQueryClient } from "@tanstack/react-query";
+import { confirmRelist } from "../../src/api/relist";
 
 function normalizeListingText(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -148,6 +150,7 @@ export default function ItemDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id, comments } = useLocalSearchParams<{ id?: string; comments?: string }>();
   const { data, isPending, isError, error, refetch, isFetching } = useItem(id);
+  const qc = useQueryClient();
   useRefetchOnFocus(refetch);
 
   /*
@@ -550,7 +553,11 @@ export default function ItemDetailScreen() {
               <View style={s.bracketPill}>
                 <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.surface} />
                 <Text style={[textStyle(type.detailLeaves), { color: color.surface }]}>
-                  {bracketLabel(listingBracket)}
+                  {/* Your own item: the exact figure as well (7 Nov 2026). The
+                      bracket-only rule protects OTHER people's values. */}
+                  {own && item.valueLeaves !== null
+                    ? `${item.valueLeaves.toLocaleString("en-US")} Leaves · ${bracketLabel(listingBracket)}`
+                    : bracketLabel(listingBracket)}
                 </Text>
               </View>
               {reachLine && beyond !== 0 ? (
@@ -701,6 +708,12 @@ export default function ItemDetailScreen() {
             onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
             onEdit={() => setEditing(true)}
             onRelist={() => void startRelist(item, () => router.push("/post-item"))}
+            onRelistOwned={() =>
+              confirmRelist(item, () => {
+                void refetch();
+                void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+              })
+            }
             deleting={remove.isPending}
             onDelete={() =>
               showDialog("Delete this listing?", "It is removed from your profile for good.", [
@@ -1185,6 +1198,7 @@ function BottomBar({
   onLike,
   onEdit,
   onRelist,
+  onRelistOwned,
   onDelete,
   deleting,
   onSeeOffers,
@@ -1193,7 +1207,7 @@ function BottomBar({
   own: boolean;
   available: boolean;
   status: string;
-  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE";
+  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE" | "RELIST";
   canOffer: boolean;
   checkingAvailability: boolean;
   existingOfferId: string | null;
@@ -1204,6 +1218,8 @@ function BottomBar({
   onEdit: () => void;
   /** An ended perishable: start a NEW listing from it. */
   onRelist: () => void;
+  /** An item you got in a trade (OWNED): put it back on the marketplace. */
+  onRelistOwned: () => void;
   /** An ended perishable: remove it for good. */
   onDelete: () => void;
   deleting: boolean;
@@ -1220,7 +1236,25 @@ function BottomBar({
   );
 
   if (own) {
-    if (action === "IN_TRADE" || action === "TRADED") {
+    // Got it in a trade and not listed: it is yours, not a listing, so there is
+    // nothing to edit and no offers to see. One thing to do with it: relist.
+    // `status` covers a server that still sends "EDIT" for every owner.
+    if (action === "RELIST" || status === "OWNED") {
+      return (
+        <View style={s.barRow}>
+          <Tappable
+            onPress={onRelistOwned}
+            accessibilityRole="button"
+            accessibilityLabel="Relist this item on the marketplace"
+            style={s.action}
+            pressedStyle={s.pressed}
+          >
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>Relist</Text>
+          </Tappable>
+        </View>
+      );
+    }
+    if (action === "IN_TRADE" || action === "TRADED" || status === "IN_TRADE") {
       return <View style={s.barRow}>{inert(action === "IN_TRADE" ? "In trade" : "Traded")}</View>;
     }
     if (ended) {

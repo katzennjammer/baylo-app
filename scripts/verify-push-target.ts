@@ -41,7 +41,7 @@ eq("non-message notification is shown", shouldSuppressMessageNotification({ type
 eq("other notification with conversation entity is shown", shouldSuppressMessageNotification({ type: "NEW_REVIEW", entityType: "conversation", entityId: "u2" }, "u2", true), false);
 eq("message with no active conversation is shown", shouldSuppressMessageNotification({ type: "NEW_MESSAGE", partnerId: "u2" }, null, true), false);
 eq("follow", pushTarget({ type: "FOLLOW_REQUEST", entityType: null, entityId: null, actorId: "u3" }), "/user?id=u3");
-eq("trade accepted", pushTarget({ type: "TRADE_ACCEPTED", entityType: "trade", entityId: "t1", actorId: "u2" }), "/trade?id=t1&handoff=1");
+eq("trade accepted", pushTarget({ type: "TRADE_ACCEPTED", entityType: "trade", entityId: "t1", actorId: "u2" }), "/trade?id=t1"); // not handoff=1: opening the codes issues them (7 Nov 2026)
 eq("trade completed", pushTarget({ type: "TRADE_COMPLETED", entityType: "trade", entityId: "t1", actorId: "u2" }), "/rate-trade?id=t1");
 eq("meetup", pushTarget({ type: "MEETUP_PROPOSED", entityType: "meetup", entityId: "t1", actorId: "u2" }), "/trade?id=t1");
 eq("shop verified -> Profile (Posting as is gone)", pushTarget({ type: "ID_VERIFICATION_APPROVED", entityType: "organization", entityId: "o1", actorId: null }), "/(app)/profile");

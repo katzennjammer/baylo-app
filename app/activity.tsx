@@ -54,7 +54,7 @@ export default function ActivityScreen() {
           renderItem={({ item: row }) => (
             <View style={s.gridRow}>
               {row.map((item) => (
-                <ProfileTile key={item.id} dark={false} item={item} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />
+                <ProfileTile key={item.id} dark={false} item={item} own={false} onPress={() => router.push({ pathname: "/item", params: { id: item.id } })} />
               ))}
             </View>
           )}

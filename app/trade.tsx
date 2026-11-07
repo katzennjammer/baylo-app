@@ -10,7 +10,7 @@ import {
   useTradeDecision,
   useTradeHistory,
 } from "../src/api/trades";
-import type { ActiveTrade, LiveOffer } from "../src/api/types";
+import type { ActiveTrade, LiveOffer, SafeZoneHub } from "../src/api/types";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import { Splash } from "../src/components/Splash";
 import { Tappable } from "../src/components/Tappable";
@@ -51,6 +51,8 @@ import { openPremium, premiumGateReason } from "../src/lib/premium";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
 import { FailurePopup } from "../src/components/FailurePopup";
+import { distanceKm, formatDistanceKm, useLastKnownLocation } from "../src/lib/hub-distance";
+import { showDialog } from "../src/components/dialog";
 
 /**
  * ONE SCREEN PER TRADE (Round 2, 1 Oct 2026).
@@ -116,6 +118,8 @@ export default function TradeScreen() {
   /** "What happened?" — opened from the handoff panel's link and the ⋯ menu alike. */
   const [helpOpen, setHelpOpen] = useState(false);
   const [forceHandoff, setForceHandoff] = useState(params.handoff === "1");
+  /** Passive: only if location is already allowed. Feeds the "are you there?" check. */
+  const here = useLastKnownLocation();
   const arrivedAgreed = useRef<boolean | null>(null);
 
   /* ── Resolve the row. The live list first, then history; and the last row
@@ -148,6 +152,19 @@ export default function TradeScreen() {
 
   const refreshing = active.isFetching || history.isFetching;
   const trade = liveTrade ?? (refreshing ? heldTrade : null);
+
+  // AN ID THE CACHED LISTS DO NOT HAVE IS ASKED FOR ONCE BEFORE IT IS CALLED
+  // GONE. A push opens this screen on lists cached before the event it is
+  // about: an offer accepted a moment ago is still under offers[] there, so
+  // the brand-new trade looked "not open any more" until the next refetch.
+  const refetchedFor = useRef<string | null>(null);
+  const missing = (tradeId && !liveTrade) || (offerId && !liveOffer) ? (tradeId ?? offerId) : null;
+  useEffect(() => {
+    if (!missing || refreshing || refetchedFor.current === missing) return;
+    refetchedFor.current = missing;
+    void active.refetch();
+    if (tradeId) void history.refetch();
+  }, [missing, refreshing, active, history, tradeId]);
   // An offer this screen decided stays on screen with its outcome.
   const offer = liveOffer ?? (offerFlow.decided || refreshing ? heldOffer : null);
 
@@ -157,7 +174,9 @@ export default function TradeScreen() {
   const goBack = () => router.back();
 
   if (!trade && !offer) {
-    const loading = active.isPending || (!!tradeId && history.isPending);
+    // Still loading while that one refetch is in flight, or about to start.
+    const loading =
+      active.isPending || (!!tradeId && history.isPending) || refreshing || (missing !== null && refetchedFor.current !== missing);
     return (
       <OfferScreenHost imeInset={0}>
         <TradesBackTitle title="" onBack={goBack} />
@@ -230,7 +249,31 @@ export default function TradeScreen() {
   const handoff =
     !!trade &&
     (trade.status === "CONFIRMING" ||
-      (trade.status === "ACCEPTED" && ((agreedNow && arrivedAgreed.current) || forceHandoff)));
+      // Only on an explicit "I'm here" (7 Nov 2026). Arriving on an agreed trade
+      // used to open the codes on its own, so tapping a "meetup agreed" push
+      // days early minted the two 15-minute codes. See confirmAtHub().
+      (trade.status === "ACCEPTED" && forceHandoff));
+
+  /**
+   * "Show code" asks first. Opening the code panel ISSUES both codes and they
+   * last 15 minutes, so opening them on the way (or days early) wastes them.
+   * Location, when the phone already allows it, adds how far away it thinks
+   * you are -- a hint, never a block: indoor GPS at a mall is often hundreds
+   * of metres off, and refusing a real meetup would be worse than a nudge.
+   */
+  const confirmAtHub = (hub: SafeZoneHub) => {
+    const km = here ? distanceKm(here.latitude, here.longitude, hub) : null;
+    const far = km !== null && km > 0.3 ? ` Your phone puts you about ${formatDistanceKm(km)} away.` : "";
+    showDialog(
+      `Are you at ${hub.name} now?`,
+      `Your codes last 15 minutes, so open them when you're both there.${far}`,
+      [
+        { text: "Not yet", style: "cancel" },
+        { text: "I'm here", onPress: () => setForceHandoff(true) },
+      ],
+      { pose: "box" },
+    );
+  };
 
   const onTradeError = (e: unknown) => {
     const gated = premiumGateReason(e);
@@ -311,7 +354,7 @@ export default function TradeScreen() {
         links={
           <TradeButton
             label={copy.tradeCard.action.showCode}
-            onPress={() => setForceHandoff(true)}
+            onPress={() => confirmAtHub(trade!.meetup!.hub)}
             style={{ flex: 1 }}
           />
         }

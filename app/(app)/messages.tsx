@@ -254,8 +254,12 @@ export default function MessagesScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const preview = previewFromContent(item.content, item.fromMe);
-          const label = item.fromMe ? `You: ${preview}` : preview;
+          // A system event is written as a pair of rows, so the newest one is
+          // often "from" the viewer. It is nobody's message: no "You: " on it.
+          // `system` is the server's flag; the content check covers an older one.
+          const system = item.system ?? /"type":"(trade_completed|offer_update)"/.test(item.content);
+          const preview = previewFromContent(item.content, item.fromMe && !system);
+          const label = item.fromMe && !system ? `You: ${preview}` : preview;
 
           return (
             <View style={styles.row}>

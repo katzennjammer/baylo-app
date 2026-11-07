@@ -37,6 +37,11 @@ export interface ConversationListItem {
   lastMessageAt: string;
   unreadCount: number;
   fromMe: boolean;
+  /**
+   * A system event ("Trade completed", an offer update), which is nobody's
+   * message. Optional: a server older than 7 Nov 2026 omits it.
+   */
+  system?: boolean;
 }
 
 export interface ConversationListResponse {

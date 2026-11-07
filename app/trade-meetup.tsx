@@ -119,6 +119,16 @@ export default function TradeMeetupScreen() {
   const [note, setNote] = useState("");
   const [picking, setPicking] = useState<"date" | "time" | null>(null);
   const [sheet, setSheet] = useState<"hubs" | null>(null);
+  /** "Add a hub to my listing", waiting for the hub sheet to finish closing. */
+  const [pendingEditHubs, setPendingEditHubs] = useState<{ itemId: string; suggest: string } | null>(null);
+  useEffect(() => {
+    if (!pendingEditHubs || sheet !== null) return;
+    const target = pendingEditHubs;
+    setPendingEditHubs(null);
+    // One more frame so the Modal's dismissal has reached the native side.
+    const t = setTimeout(() => router.push({ pathname: "/edit-hubs", params: target }), 50);
+    return () => clearTimeout(t);
+  }, [pendingEditHubs, sheet, router]);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   /** The plan a send counters. `undefined` until fresh data has arrived. */
@@ -403,11 +413,13 @@ export default function TradeMeetupScreen() {
           kmTo={kmTo}
           showNoShared={shared.size === 0}
           onAddHub={() => {
+            const itemId = options.data?.yourItemId;
+            if (!itemId) return;
+            // Close the sheet FIRST and navigate once it is gone (the effect
+            // below). Pushing in the same tick as the native Modal tears down
+            // was dropped on device: the link did nothing.
+            setPendingEditHubs({ itemId, suggest: [...theirs].join(",") });
             setSheet(null);
-            router.push({
-              pathname: "/edit-hubs",
-              params: { itemId: options.data?.yourItemId ?? "", suggest: [...theirs].join(",") },
-            });
           }}
           onPick={(picked) => {
             setFailure(null);
