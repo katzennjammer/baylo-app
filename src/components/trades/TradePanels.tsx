@@ -103,6 +103,7 @@ export function OfferPanel({
     decline: () => void;
     decided: { action: "accept" | "decline"; result: OfferDecided } | null;
     failure: string | null;
+    unavailable?: boolean;
     receiverPays: boolean;
     fee: number;
     balance: number | null;
@@ -149,6 +150,12 @@ export function OfferPanel({
               onPress={() => onOpenTrade(flow.decided!.result.tradeId!)}
             />
           ) : null}
+        </View>
+      ) : flow.unavailable ? (
+        // The item went away: say so, and leave Decline as the only action.
+        <View style={{ gap: space.browse.searchGap }}>
+          <Body tone="muted">This item isn't available any more, so the offer can't go ahead.</Body>
+          <TradeButton label={copy.waiting.decline} tone="outline" onPress={flow.decline} />
         </View>
       ) : (
         <>

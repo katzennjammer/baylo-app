@@ -27,6 +27,7 @@ import {
   textStyle,
   type OfferBoard,
 } from "../../theme/offer-tokens";
+import { StarText } from "../StarText";
 
 /**
  * The chrome the offer flow wears, and the geometry §3.2's running y produces.
@@ -187,9 +188,9 @@ export function OfferNav({
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]} numberOfLines={1}>
+          <StarText style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]} numberOfLines={1}>
             {subtitle}
-          </Text>
+          </StarText>
         ) : null}
       </View>
 

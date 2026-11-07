@@ -133,8 +133,8 @@ export function ChatOfferCard({
             <Text style={s.sub} numberOfLines={2}>
               {message ? `“${message}”` : `${sides.give.title} for ${sides.get.title}`}
             </Text>
-            <Text style={[s.state, chip.tone === "green" ? { color: color.forest } : chip.tone === "amber" ? { color: color.accentGold } : null]} numberOfLines={1}>
-              {chip.label}
+            <Text style={[s.state, flow.unavailable ? { color: color.inkMuted } : chip.tone === "green" ? { color: color.forest } : chip.tone === "amber" ? { color: color.accentGold } : null]} numberOfLines={1}>
+              {flow.unavailable ? "Item no longer available" : chip.label}
             </Text>
           </View>
         </View>
@@ -156,6 +156,7 @@ export function ChatOfferCard({
               disabled={flow.busy}
               style={{ flex: 1 }}
             />
+            {flow.unavailable ? null : (
             <TradeButton
               label={flow.receiverPays ? `${copy.waiting.accept} · ${grouped(flow.fee)}` : copy.waiting.accept}
               onPress={flow.accept}
@@ -167,6 +168,7 @@ export function ChatOfferCard({
               }
               style={{ flex: 1 }}
             />
+            )}
           </View>
         </View>
       ) : settled && toTrade ? (

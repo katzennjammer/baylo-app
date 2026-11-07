@@ -11,6 +11,7 @@ import { border, color, icon, radius, space, textStyle, type } from "../../theme
 import { MascotEmptyState } from "../MascotEmptyState";
 import { ChevronRightIcon, PinIcon, StoreIcon, SwapIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { StarText } from "../StarText";
 
 export function PeopleResults({
   header,
@@ -187,7 +188,7 @@ function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPr
         </View>
 
         {/* One quiet line (4 Nov 2026): rating, trades, place. */}
-        <Text style={[textStyle(type.metadata), s.secondary]} numberOfLines={1}>
+        <StarText style={[textStyle(type.metadata), s.secondary]} numberOfLines={1}>
           {[
             user.reviewCount > 0 && user.rating > 0 ? `★ ${user.rating.toFixed(1)} (${user.reviewCount})` : "No ratings yet",
             `${user.totalTrades} ${user.totalTrades === 1 ? "trade" : "trades"}`,
@@ -195,7 +196,7 @@ function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPr
           ]
             .filter(Boolean)
             .join(" · ")}
-        </Text>
+        </StarText>
       </View>
 
       <ChevronRightIcon size={18} stroke={1.6} color={color.inkMuted} />

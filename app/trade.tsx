@@ -51,7 +51,8 @@ import { openPremium, premiumGateReason } from "../src/lib/premium";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
 import { FailurePopup } from "../src/components/FailurePopup";
-import { distanceKm, formatDistanceKm, useLastKnownLocation } from "../src/lib/hub-distance";
+import { distanceKm, formatDistanceKm } from "../src/lib/hub-distance";
+import { ensureLocation } from "../src/lib/location-ask";
 import { showDialog } from "../src/components/dialog";
 
 /**
@@ -118,8 +119,6 @@ export default function TradeScreen() {
   /** "What happened?" — opened from the handoff panel's link and the ⋯ menu alike. */
   const [helpOpen, setHelpOpen] = useState(false);
   const [forceHandoff, setForceHandoff] = useState(params.handoff === "1");
-  /** Passive: only if location is already allowed. Feeds the "are you there?" check. */
-  const here = useLastKnownLocation();
   const arrivedAgreed = useRef<boolean | null>(null);
 
   /* ── Resolve the row. The live list first, then history; and the last row
@@ -261,7 +260,9 @@ export default function TradeScreen() {
    * you are -- a hint, never a block: indoor GPS at a mall is often hundreds
    * of metres off, and refusing a real meetup would be worse than a nudge.
    */
-  const confirmAtHub = (hub: SafeZoneHub) => {
+  const confirmAtHub = async (hub: SafeZoneHub) => {
+    // Asked here, with the reason on screen, never on launch. See ensureLocation.
+    const here = await ensureLocation("Baylo checks you're at the hub before showing the codes, so they aren't used up on the way.");
     const km = here ? distanceKm(here.latitude, here.longitude, hub) : null;
     const far = km !== null && km > 0.3 ? ` Your phone puts you about ${formatDistanceKm(km)} away.` : "";
     showDialog(
@@ -354,7 +355,7 @@ export default function TradeScreen() {
         links={
           <TradeButton
             label={copy.tradeCard.action.showCode}
-            onPress={() => confirmAtHub(trade!.meetup!.hub)}
+            onPress={() => void confirmAtHub(trade!.meetup!.hub)}
             style={{ flex: 1 }}
           />
         }
