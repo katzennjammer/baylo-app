@@ -27,7 +27,6 @@ import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
-import { confirmRelist } from "../../src/api/relist";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -176,7 +175,6 @@ export default function ProfileScreen() {
     : tab === "traded"
       ? chunkItems(tradedItems).map((postItems) => ({ kind: "posts", items: postItems }))
       : reviews.map((review) => ({ kind: "review", review }));
-  const relist = (item: Item) => confirmRelist(item, () => void refetch());
   const onRefresh = useCallback(() => {
     if (tab === "reviews") void refetchReviews();
     else void refetch();
@@ -291,12 +289,9 @@ export default function ProfileScreen() {
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item}
+          // An item got in a trade opens its item page, where Relist lives (7 Nov
+          // 2026); the tile no longer carries its own Relist link.
           onPress={() => router.push({ pathname: shelfLabel(item) && item.status !== "OWNED" ? "/listing-review" : "/item", params: { id: item.id } })}
-          footer={item.status === "OWNED" ? (
-            <Pressable onPress={() => relist(item)} accessibilityRole="button" accessibilityLabel={`Relist ${item.title}`} style={({ pressed }) => [s.relist, { opacity: pressed ? 0.85 : 1 }]}>
-              <Text style={s.relistText}>Relist</Text>
-            </Pressable>
-          ) : null}
         />)}</View>
       ) : (
         <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />

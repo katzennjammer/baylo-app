@@ -566,6 +566,13 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
+          {/* Yours from a trade, not on the market: why Relist is the only button. */}
+          {own && item.status === "OWNED" ? (
+            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary, marginTop: 12 }]}>
+              You got this in a trade. Relist it to put it back on the marketplace.
+            </Text>
+          ) : null}
+
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}

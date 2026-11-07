@@ -20,6 +20,7 @@ import { startRelist } from "../src/post/relist";
 import { sizedImage } from "../src/media/image-url";
 import { PencilIcon, TrashIcon } from "../src/components/icons";
 import { color } from "../src/theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
@@ -133,6 +134,7 @@ export default function ListingReviewScreen() {
  * status, the clock -- is decided afresh. This listing stays as it is.
  */
 function ExpiredBody({ item }: { item: Item }) {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const remove = useDeleteItem();
   const image = item.images[0] ?? null;
@@ -149,8 +151,12 @@ function ExpiredBody({ item }: { item: Item }) {
           }),
       },
     ]);
+  // The message is centred in the space and the two buttons are pinned to
+  // the bottom, like the item page and the rest of the app (7 Nov 2026).
+  // They used to sit right under the text, high on the screen.
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+    <View style={{ flex: 1 }}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       <Section pad={{ top: 14, bottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
@@ -166,7 +172,7 @@ function ExpiredBody({ item }: { item: Item }) {
       </Section>
       <Hairline />
 
-      <View style={{ paddingTop: 20, paddingBottom: 8 }}>
+      <View style={{ flex: 1, justifyContent: "center", paddingVertical: 20 }}>
         <MascotEmptyState
           pose="worry"
           size={120}
@@ -175,7 +181,18 @@ function ExpiredBody({ item }: { item: Item }) {
         />
       </View>
 
-      <Gutter style={{ paddingTop: 8, flexDirection: "row", gap: 10 }}>
+    </ScrollView>
+      <Gutter
+        style={{
+          paddingTop: 14,
+          paddingBottom: Math.max(insets.bottom, 16),
+          flexDirection: "row",
+          gap: 10,
+          borderTopWidth: 1,
+          borderTopColor: color.divider,
+          backgroundColor: color.surface,
+        }}
+      >
         <Tappable
           onPress={() => void startRelist(item, () => router.replace("/post-item"))}
           accessibilityRole="button"
@@ -216,7 +233,7 @@ function ExpiredBody({ item }: { item: Item }) {
           <TrashIcon size={22} stroke={1.9} color={color.urgent} />
         </Tappable>
       </Gutter>
-    </ScrollView>
+    </View>
   );
 }
 
