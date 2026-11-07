@@ -7,6 +7,7 @@ import {
   meetupState,
   useActiveTrades,
   useListingOffers,
+  useArrive,
   useTradeDecision,
   useTradeHistory,
 } from "../src/api/trades";
@@ -54,6 +55,7 @@ import { FailurePopup } from "../src/components/FailurePopup";
 import { distanceKm, formatDistanceKm } from "../src/lib/hub-distance";
 import { ensureLocation } from "../src/lib/location-ask";
 import { showDialog } from "../src/components/dialog";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 
 /**
  * ONE SCREEN PER TRADE (Round 2, 1 Oct 2026).
@@ -146,6 +148,7 @@ export default function TradeScreen() {
 
   const offerFlow = useOfferDecisionFlow(liveOffer ?? heldOffer);
   const decideTrade = useTradeDecision();
+  const arrive = useArrive(tradeId);
   const [requestFailure, setRequestFailure] = useState<string | null>(null);
   const withdraw = useWithdraw(() => router.back());
 
@@ -251,7 +254,9 @@ export default function TradeScreen() {
       // Only on an explicit "I'm here" (7 Nov 2026). Arriving on an agreed trade
       // used to open the codes on its own, so tapping a "meetup agreed" push
       // days early minted the two 15-minute codes. See confirmAtHub().
-      (trade.status === "ACCEPTED" && forceHandoff));
+      // and, since the arrival handshake (7 Nov 2026), only once BOTH traders
+      // have said they are at the hub: then either phone opens the codes.
+      (trade.status === "ACCEPTED" && (forceHandoff || (!!trade.arrival?.me && !!trade.arrival?.partner))));
 
   /**
    * "Show code" asks first. Opening the code panel ISSUES both codes and they
@@ -270,11 +275,35 @@ export default function TradeScreen() {
       `Your codes last 15 minutes, so open them when you're both there.${far}`,
       [
         { text: "Not yet", style: "cancel" },
-        { text: "I'm here", onPress: () => setForceHandoff(true) },
+        { text: "I'm here", onPress: imHere },
       ],
       { pose: "box" },
     );
   };
+
+  /**
+   * "I'm here": tell the server, then show the codes only if the partner is
+   * there too. Otherwise the panel below waits for them, and they get a push.
+   * A server without the arrival route (404) falls back to the old behaviour.
+   */
+  const imHere = () =>
+    arrive.mutate(undefined, {
+      onSuccess: (a) => {
+        if (a.partner) setForceHandoff(true);
+      },
+      onError: (e) => {
+        if (e instanceof ApiError && e.status === 404) {
+          setForceHandoff(true);
+          return;
+        }
+        showDialog(
+          "Could not tell them you're here",
+          e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+          [{ text: "Got it" }],
+          { pose: "worry" },
+        );
+      },
+    });
 
   const onTradeError = (e: unknown) => {
     const gated = premiumGateReason(e);
@@ -347,11 +376,27 @@ export default function TradeScreen() {
         onSomethingWrong={() => setHelpOpen(true)}
       />
     );
+  } else if (agreedNow && trade!.meetup && trade!.arrival?.me && !trade!.arrival.partner) {
+    // You said you're here; your partner hasn't yet. The codes wait for both.
+    panel = (
+      <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+        <MascotEmptyState
+          pose="box"
+          size={120}
+          title={`You're at ${trade!.meetup.hub.name}`}
+          message={`Waiting for ${partner}. We've told them you're here. Your codes start when you're both at the hub.`}
+        />
+      </View>
+    );
   } else if (agreedNow && trade!.meetup) {
     panel = (
       <WaitingPanel
         line={`${copy.meetup.agreed} · ${copy.meetup.where(trade!.meetup.hub.name, meetupWhen(new Date(trade!.meetup.at)))}`}
-        detail={copy.tradeCard.showCodeAt(partner, trade!.meetup.hub.name)}
+        detail={
+          trade!.arrival?.partner
+            ? `${partner} is at ${trade!.meetup.hub.name} now. Tap Show code when you get there.`
+            : copy.tradeCard.showCodeAt(partner, trade!.meetup.hub.name)
+        }
         links={
           <TradeButton
             label={copy.tradeCard.action.showCode}

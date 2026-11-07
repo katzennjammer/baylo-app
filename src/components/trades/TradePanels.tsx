@@ -423,7 +423,13 @@ export function DonePanel({ trade }: { trade: ActiveTrade }) {
       <Body tone="ink">{headline}</Body>
       {trade.status === "COMPLETED" ? (
         <View style={s.details}>
-          <Detail label="Meetup hub" value={trade.safeZoneHub?.name ?? "No hub recorded"} />
+          {/* The hub that counted for the reward, else the one you agreed on
+              (7 Nov 2026): a hub on neither listing still was the meetup,
+              it just doesn't earn the Safe hub reward. */}
+          <Detail label="Meetup hub" value={trade.safeZoneHub?.name ?? trade.meetup?.hub.name ?? "No hub recorded"} />
+          {!trade.safeZoneHub && trade.meetup && !(trade.rewards ?? []).some((r) => r.kind === "SAFEZONE_MEETUP") ? (
+            <Detail label="Safe hub reward" value="Not eligible: this hub wasn't on both listings" />
+          ) : null}
           {/* Each reward on its own line (7 Nov 2026). Only the trade reward
               was read before, so a paid Safe-hub bonus showed as "None". */}
           {trade.rewards && trade.rewards.length > 0 ? (
@@ -431,7 +437,15 @@ export function DonePanel({ trade }: { trade: ActiveTrade }) {
               <Detail
                 key={`${r.kind}-${i}`}
                 label={REWARD_LABEL[r.kind] ?? "Leaves reward"}
-                value={r.leaves > 0 ? `+${r.leaves} Leaves` : REWARD_NOT_PAID[r.kind] ?? "Not paid"}
+                value={
+                  r.leaves > 0
+                    ? `+${r.leaves} Leaves`
+                    : r.reason === "repeat_partner"
+                      ? `Not paid: you traded with ${partner} in the last 30 days`
+                      : r.reason === "weekly_cap"
+                        ? "Not paid: weekly reward limit reached"
+                        : REWARD_NOT_PAID[r.kind] ?? "Not paid"
+                }
               />
             ))
           ) : (

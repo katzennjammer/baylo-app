@@ -1126,3 +1126,25 @@ function bracketed(item: { title: string; valueLeaves: number | null }): string 
     ? item.title
     : `${item.title} · ${bracketLabel(bracketOf(item.valueLeaves))}`;
 }
+
+/**
+ * "I'm here" at the meetup hub: POST /api/v1/trades/:id/arrived.
+ *
+ * The codes are issued only once BOTH traders have said so (7 Nov 2026), so
+ * one person arriving early no longer starts the other's 15-minute window.
+ * Answers who is there; the trade list refetches so the screen can show the
+ * codes (both here) or "Waiting for <partner>".
+ */
+export function useArrive(tradeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiV1<{ arrival: { me: boolean; partner: boolean } }>(
+        `/api/v1/trades/${encodeURIComponent(tradeId!)}/arrived`,
+        { method: "POST" },
+      );
+      return data.arrival;
+    },
+    onSuccess: () => invalidateTrades(qc),
+  });
+}
