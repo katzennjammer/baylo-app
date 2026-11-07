@@ -8,7 +8,7 @@ import { AppState, Platform } from "react-native";
 import { apiV1 } from "../api/client";
 import { NOTIFICATIONS_KEY, useMarkNotificationRead } from "../api/notifications";
 import { TRADES_ACTIVE_KEY, meetupKey } from "../api/trades";
-import { syncAppBadge } from "./badge";
+import { onAppOpened, syncAppBadge, syncAppBadgeSoon } from "./badge";
 import { getActiveConversationPartnerId } from "./active-conversation";
 import { Notifications, notificationsAvailable } from "./notifications-safe";
 import { pushMessageId, pushMessagePartnerId, pushNotificationId, pushTarget, shouldSuppressMessageNotification } from "./push-target";
@@ -219,12 +219,24 @@ export function usePushNotifications(userId: string | undefined) {
   // every time the app comes back to the foreground. See ./badge.
   useEffect(() => {
     if (!userId) return;
-    void syncAppBadge();
+    void onAppOpened();
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void syncAppBadge();
+      if (state === "active") void onAppOpened();
     });
-    return () => sub.remove();
-  }, [userId]);
+    // The icon follows what is read IN the app, as it is read (7 Nov 2026):
+    // whenever the chat list, a chat thread or the notification list is
+    // refetched (opening a chat marks it read on the server; reading or
+    // clearing notifications changes the bell), re-sync the count shortly.
+    const unsubscribe = qc.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success") return;
+      const root = event.query.queryKey[0];
+      if (root === "messages" || root === "notifications") syncAppBadgeSoon();
+    });
+    return () => {
+      sub.remove();
+      unsubscribe();
+    };
+  }, [userId, qc]);
 
   useEffect(() => {
     try {
