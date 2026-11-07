@@ -1145,6 +1145,42 @@ export function useArrive(tradeId: string | undefined) {
       );
       return data.arrival;
     },
-    onSuccess: () => invalidateTrades(qc),
+    // INSTANT (7 Nov 2026): the trade is marked "you're here" in the cached
+    // list the moment the button is tapped, so the waiting panel shows at once
+    // instead of after the request and a whole-list refetch. The server's
+    // answer then sets the partner side; a failure puts the old state back.
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: TRADES_ACTIVE_KEY });
+      const before = qc.getQueryData(TRADES_ACTIVE_KEY);
+      patchArrival(qc, tradeId, (a) => ({ me: true, partner: a?.partner ?? false }));
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before !== undefined) qc.setQueryData(TRADES_ACTIVE_KEY, ctx.before);
+    },
+    onSuccess: (arrival) => {
+      patchArrival(qc, tradeId, () => arrival);
+      invalidateTrades(qc);
+    },
+  });
+}
+
+/** Rewrite one trade's `arrival` in the cached active list (shape: { data: TradesPayload }). */
+function patchArrival(
+  qc: ReturnType<typeof useQueryClient>,
+  tradeId: string | undefined,
+  next: (current: { me: boolean; partner: boolean } | undefined) => { me: boolean; partner: boolean },
+) {
+  if (!tradeId) return;
+  qc.setQueryData(TRADES_ACTIVE_KEY, (old: unknown) => {
+    const box = old as { data?: TradesPayload } | undefined;
+    if (!box?.data) return old;
+    return {
+      ...box,
+      data: {
+        ...box.data,
+        trades: box.data.trades.map((t) => (t.id === tradeId ? { ...t, arrival: next(t.arrival) } : t)),
+      },
+    };
   });
 }
