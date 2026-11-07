@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 
 import { Splash } from "../src/components/Splash";
 import { useSession } from "../src/auth/session";
-import { bootRoute, introPending } from "../src/media/intro-gate";
+import { bootRoute, introNeeded, introNeededNow, introPending } from "../src/media/intro-gate";
 import { videoAvailable } from "../src/media/video-kit";
 
 /**
@@ -41,11 +42,26 @@ import { videoAvailable } from "../src/media/video-kit";
 export default function Index() {
   const { session, isLoading } = useSession();
 
+  // Once per install and once per tier change, not every cold start: see
+  // introNeeded() in src/media/intro-gate.
+  const [needed, setNeeded] = useState<boolean | null>(introNeededNow());
+  useEffect(() => {
+    if (needed !== null) return;
+    let alive = true;
+    void introNeeded().then((n) => {
+      if (alive) setNeeded(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [needed]);
+
   const route = bootRoute({
     introPending: introPending(),
     videoAvailable,
     isLoading,
     signedIn: !!session,
+    introNeeded: needed,
   });
 
   if (route === "splash") return <Splash tone="boot" waitingOn="Reading your saved session from secure storage" />;
