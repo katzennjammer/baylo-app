@@ -91,6 +91,17 @@ for (const c of combos) {
   check(`before: video=${c.videoAvailable} loading=${c.isLoading} signedIn=${c.signedIn}`, r, expected);
 }
 
+// Once per install and per tier change (7 Nov 2026): a film already seen for
+// this tier is skipped, and the splash holds while that is being read.
+check("seen for this tier: straight in (signed in)",
+  bootRoute({ introPending: true, videoAvailable: true, isLoading: false, signedIn: true, introNeeded: false }), "/(app)/home");
+check("seen for this tier: straight in (signed out)",
+  bootRoute({ introPending: true, videoAvailable: true, isLoading: false, signedIn: false, introNeeded: false }), "/(auth)/login");
+check("not seen for this tier: the film",
+  bootRoute({ introPending: true, videoAvailable: true, isLoading: false, signedIn: true, introNeeded: true }), "/intro");
+check("still reading the record: splash",
+  bootRoute({ introPending: true, videoAvailable: true, isLoading: false, signedIn: true, introNeeded: null }), "splash");
+
 // What intro.tsx's leave() does, in its order: lower the flag, THEN navigate
 // to "/". The fork that navigation lands on must not answer "/intro".
 markIntroPlayed();
