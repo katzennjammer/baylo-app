@@ -62,7 +62,7 @@ export function isUsable(rect: Rect, window: Size): boolean {
 }
 
 /** The hole for a target: padded, kept inside the window, round if asked. */
-export function holeFor(rect: Rect, shape: "rect" | "circle", window: Size): Hole {
+export function holeFor(rect: Rect, shape: "rect" | "pill" | "circle", window: Size): Hole {
   if (shape === "circle") {
     const d = Math.max(rect.width, rect.height) + HOLE_PAD * 2;
     return {
@@ -79,7 +79,8 @@ export function holeFor(rect: Rect, shape: "rect" | "circle", window: Size): Hol
   const bottom = Math.min(window.height - EDGE, rect.y + rect.height + HOLE_PAD);
   const width = right - left;
   const height = bottom - top;
-  return { x: left, y: top, width, height, radius: Math.min(HOLE_RADIUS, height / 2, width / 2) };
+  const round = Math.min(height / 2, width / 2);
+  return { x: left, y: top, width, height, radius: shape === "pill" ? round : Math.min(HOLE_RADIUS, round) };
 }
 
 export type Placement =
@@ -98,14 +99,55 @@ export function placementFor(hole: Hole | null, window: Size): Placement {
 }
 
 /**
- * The mascot's left edge. It points to ITS left (the viewer's right), so it
- * stands just left of the hole when there is room and against the screen edge
- * when there is not.
+ * Where each pointing pose's fingertip is, as fractions of the image box, read
+ * off the artwork: `up` raises a finger near its left edge; `down` holds a
+ * wing across its body aimed down and to the viewer's right at about 45°.
  */
-export function mascotLeft(hole: Hole, mascotWidth: number, window: Size): number {
+const TIP = {
+  up: { x: 0.18, y: 0.12 },
+  down: { x: 0.4, y: 0.68 },
+} as const;
+
+/** A hole wider than this share of the window has no single point to aim at. */
+const WIDE = 0.6;
+
+/**
+ * The mascot's left edge, chosen so the pose actually points at the hole.
+ *
+ * `up` (hole above the mascot): the fingertip goes directly under the hole's
+ * centre. A hole that spans most of the screen — the search bar — has no
+ * centre worth aiming at, so the mascot stands at the right and points at
+ * that end of it.
+ *
+ * `down` (hole below the mascot): the wing points diagonally, so the tip is
+ * set back to the left by as far as it is above the hole's centre; the line
+ * of the wing then runs through the middle of the target. `mascotBottom` is
+ * where the mascot's feet are, in the same coordinates as the hole.
+ *
+ * Either way it is clamped on screen: pointing slightly off beats a mascot
+ * cut in half by the edge of a narrow phone.
+ */
+export function mascotLeft(
+  pose: "up" | "down",
+  hole: Hole,
+  mascot: Size,
+  mascotBottom: number,
+  window: Size,
+): number {
   const margin = 8;
-  const wanted = hole.x - mascotWidth - 4;
-  return Math.max(margin, Math.min(wanted, window.width - mascotWidth - margin));
+  const centreX = hole.x + hole.width / 2;
+  let wanted: number;
+  if (pose === "up") {
+    wanted =
+      hole.width > window.width * WIDE
+        ? window.width - mascot.width - 24
+        : centreX - TIP.up.x * mascot.width;
+  } else {
+    const tipY = mascotBottom - (1 - TIP.down.y) * mascot.height;
+    const drop = hole.y + hole.height / 2 - tipY;
+    wanted = centreX - drop - TIP.down.x * mascot.width;
+  }
+  return Math.max(margin, Math.min(wanted, window.width - mascot.width - margin));
 }
 
 /**

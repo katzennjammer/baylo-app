@@ -56,6 +56,11 @@ export function nextTourStep() {
   if (state.active && state.index < TOUR_STEPS.length - 1) set({ active: true, index: state.index + 1 });
 }
 
+/** The step before; a no-op on the first. */
+export function prevTourStep() {
+  if (state.active && state.index > 0) set({ active: true, index: state.index - 1 });
+}
+
 /**
  * Skip or finish — the same thing as far as "seen" goes: someone who skipped
  * has answered the question, and asking again on the next launch is the

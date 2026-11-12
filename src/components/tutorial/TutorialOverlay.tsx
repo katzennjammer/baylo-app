@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import { useSession } from "../../auth/session";
@@ -30,6 +31,7 @@ import {
   endTour,
   measureTarget,
   nextTourStep,
+  prevTourStep,
   resetTour,
   useTourState,
 } from "../../tutorial/store";
@@ -66,14 +68,22 @@ import { Tappable } from "../Tappable";
  *
  * The scrim swallows every touch, the hole included. Letting the highlighted
  * control through would turn "this is where you post" into the post wizard
- * opening mid-tour. Only the card's buttons do anything, and Android's back
- * button is Skip.
+ * opening mid-tour. Only the card's buttons do anything. Android's back
+ * button is the card's Back — and Skip on the first step, where there is
+ * nothing to go back to.
+ *
+ * ── THE LOOK ────────────────────────────────────────────────────────────────
+ *
+ * Home's own vocabulary (HomeTopSection): the dark outline, the hard offset
+ * shadow and the yellow primary of its "View trades" button, so the tour
+ * reads as part of that screen rather than a dialog laid over it.
  */
 
 const POSES: Record<MascotPose, { source: number; ratio: number }> = {
   // ratio = width / height of the cut-out file, so the box never letterboxes.
   wave: { source: require("../../../assets/mascots/Tour_duck_waving.webp"), ratio: 492 / 640 },
-  point: { source: require("../../../assets/mascots/Tour_duck_pointing.webp"), ratio: 561 / 640 },
+  up: { source: require("../../../assets/mascots/Tour_duck_pointing_up.webp"), ratio: 528 / 640 },
+  down: { source: require("../../../assets/mascots/Tour_duck_pointing_down.webp"), ratio: 505 / 640 },
   cheer: { source: require("../../../assets/mascots/Tour_duck_cheering.webp"), ratio: 665 / 640 },
 };
 
@@ -81,10 +91,14 @@ const POSES: Record<MascotPose, { source: number; ratio: number }> = {
 const MASCOT_BESIDE = 150;
 const MASCOT_CENTRED = 200;
 /** How far the mascot's feet stand in front of the card's edge. */
-const OVERLAP = 12;
+const OVERLAP = 10;
 const CARD_MARGIN = 24;
 const CARD_MAX = 420;
 const RING = 3;
+/** The hard shadow's offset, down and right, as on Home's action buttons. */
+const SHADOW = 4;
+/** `color.homeOutline` at 74%: the dim is the brand's dark green, not grey. */
+const SCRIM = "rgba(13, 40, 23, 0.74)";
 
 export function TutorialOverlay() {
   const tour = useTourState();
@@ -131,14 +145,15 @@ function ActiveTour({ index }: { index: number }) {
     };
   }, [index, step, frame]);
 
-  // Android back is Skip. Registered last, so it wins over the tab navigator.
+  // Registered last, so it wins over the tab navigator.
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      endTour(userId);
+      if (first) endTour(userId);
+      else prevTourStep();
       return true;
     });
     return () => sub.remove();
-  }, [userId]);
+  }, [userId, first]);
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(`${step.title} ${step.body}`);
@@ -154,6 +169,7 @@ function ActiveTour({ index }: { index: number }) {
   const ready = frame !== null && measured !== null && measured.index === index;
   const hole = ready ? measured.hole : null;
   const window = frame ?? { width: 0, height: 0 };
+  const centred = step.targets.length === 0;
 
   const finish = () => endTour(userId);
   const postFirstItem = () => {
@@ -173,7 +189,7 @@ function ActiveTour({ index }: { index: number }) {
       <Pressable style={StyleSheet.absoluteFill} onPress={() => {}} accessible={false}>
         {frame ? (
           <Svg width={frame.width} height={frame.height}>
-            <Path d={scrimPath(frame, hole)} fill={color.captionFill} fillRule="evenodd" />
+            <Path d={scrimPath(frame, hole)} fill={SCRIM} fillRule="evenodd" />
           </Svg>
         ) : null}
       </Pressable>
@@ -196,17 +212,27 @@ function ActiveTour({ index }: { index: number }) {
 
       {ready ? (
         <Stage step={step} hole={hole} window={window} bob={bob}>
-          <Text style={[textStyle(type.sectionEyebrow), s.eyebrow]}>
-            {`${index + 1} OF ${TOUR_STEPS.length}`}
-          </Text>
-          <Text style={[textStyle(type.errorHeadline), s.title]} accessibilityRole="header">
+          {/* Progress on the left, Skip in the corner. The last step has
+              nothing left to skip, so its dots sit alone in the middle. */}
+          <View style={[s.header, last ? s.headerAlone : null]}>
+            <Dots index={index} />
+            {last ? null : <TourButton tone="text" label="Skip" onPress={finish} />}
+          </View>
+
+          <Text
+            style={[textStyle(centred ? type.dDisplay : type.dSheetTitle), s.title, centred ? s.centredText : null]}
+            accessibilityRole="header"
+          >
             {step.title}
           </Text>
-          <Text style={[textStyle(type.emptyBody), s.body]}>{step.body}</Text>
+          <Text style={[textStyle(type.emptyBody), s.body, centred ? s.centredText : null]}>{step.body}</Text>
 
           {last ? (
             <View style={s.stack}>
-              <TourButton tone="primary" label="Post my first item" onPress={postFirstItem} />
+              <View style={s.lastRow}>
+                <TourButton tone="outline" label="Back" icon="back" iconOnly onPress={prevTourStep} />
+                <TourButton tone="primary" label="Post my first item" onPress={postFirstItem} grow />
+              </View>
               <TourButton tone="outline" label="Start browsing" onPress={finish} />
               <Text style={[textStyle(type.emptyBody), s.footnote]}>
                 You can replay this tour anytime from Settings.
@@ -214,13 +240,12 @@ function ActiveTour({ index }: { index: number }) {
             </View>
           ) : first ? (
             <View style={s.stack}>
-              <TourButton tone="primary" label="Show me around" onPress={nextTourStep} />
-              <TourButton tone="text" label="Skip" onPress={finish} />
+              <TourButton tone="primary" label="Show me around" icon="forward" onPress={nextTourStep} />
             </View>
           ) : (
             <View style={s.row}>
-              <TourButton tone="text" label="Skip" onPress={finish} />
-              <TourButton tone="primary" label="Next" onPress={nextTourStep} inline />
+              <TourButton tone="outline" label="Back" icon="back" onPress={prevTourStep} />
+              <TourButton tone="primary" label="Next" icon="forward" onPress={nextTourStep} />
             </View>
           )}
         </Stage>
@@ -241,6 +266,25 @@ async function locate(step: TourStep, frame: Rect): Promise<Hole | null> {
   }
   const box = unionRect(found);
   return box ? holeFor(box, step.shape, frame) : null;
+}
+
+/** Six dots, the current one stretched; everything up to it is filled. */
+function Dots({ index }: { index: number }) {
+  return (
+    <View
+      style={s.dots}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`Step ${index + 1} of ${TOUR_STEPS.length}`}
+    >
+      {TOUR_STEPS.map((step, i) => (
+        <View
+          key={step.id}
+          style={[s.dot, i <= index ? s.dotDone : null, i === index ? s.dotCurrent : null]}
+        />
+      ))}
+    </View>
+  );
 }
 
 /** The mascot and the card, arranged around the hole (or centred without one). */
@@ -264,6 +308,17 @@ function Stage({
   const mascotHeight = place.mode === "center" ? MASCOT_CENTRED : MASCOT_BESIDE;
   const mascotWidth = Math.round(mascotHeight * pose.ratio);
 
+  // Aimed at the hole when the step has a pointing pose and a hole to point
+  // at; a step that lost its target is centred and never gets here.
+  let left = 0;
+  if (hole && place.mode !== "center") {
+    const aim = step.pose === "down" ? "down" : "up";
+    // In "above" the mascot is the last thing in a stack pinned `bottom` up
+    // from the window's bottom edge, so that is where its feet are.
+    const feet = place.mode === "above" ? window.height - place.bottom : 0;
+    left = mascotLeft(aim, hole, { width: mascotWidth, height: mascotHeight }, feet, window);
+  }
+
   const mascot = (
     <Animated.View
       // Decoration: the card's own text is what a screen reader should land on.
@@ -273,9 +328,7 @@ function Stage({
       style={[
         s.mascot,
         { width: mascotWidth, height: mascotHeight, transform: [{ translateY: bob }] },
-        place.mode === "center"
-          ? { alignSelf: "center", marginBottom: -OVERLAP }
-          : { marginLeft: hole ? mascotLeft(hole, mascotWidth, window) : 0 },
+        place.mode === "center" ? { alignSelf: "center", marginBottom: -OVERLAP } : { marginLeft: left },
         place.mode === "below" ? { marginBottom: -OVERLAP } : null,
         place.mode === "above" ? { marginTop: -OVERLAP / 2 } : null,
       ]}
@@ -285,8 +338,9 @@ function Stage({
   );
 
   const card = (
-    <View style={[s.card, { width: cardWidth }, place.mode === "center" ? s.cardCentred : null]}>
-      {children}
+    <View style={[s.cardSlot, { width: cardWidth }]}>
+      <View pointerEvents="none" style={s.cardShadow} />
+      <View style={s.card}>{children}</View>
     </View>
   );
 
@@ -318,37 +372,67 @@ function TourButton({
   tone,
   label,
   onPress,
-  inline = false,
+  icon,
+  iconOnly = false,
+  grow = false,
 }: {
   tone: "primary" | "outline" | "text";
   label: string;
   onPress: () => void;
-  /** Sized to its label rather than the card's width (the Next button). */
-  inline?: boolean;
+  /** A chevron: before the label for `back`, after it for `forward`. */
+  icon?: "back" | "forward";
+  /** A round button showing only the chevron; `label` is still what is read out. */
+  iconOnly?: boolean;
+  /** Takes the row's remaining width. */
+  grow?: boolean;
 }) {
+  const chevron = icon ? (
+    <Ionicons
+      name={icon === "back" ? "chevron-back" : "chevron-forward"}
+      size={18}
+      color={color.homeOutline}
+    />
+  ) : null;
+
+  if (tone === "text") {
+    return (
+      <Tappable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        pressedStyle={s.pressedText}
+        hitSlop={6}
+        style={s.textButton}
+      >
+        <Text style={[textStyle(type.primaryButton), { color: color.forest }]}>{label}</Text>
+      </Tappable>
+    );
+  }
+
   return (
-    <Tappable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      pressedStyle={s.pressed}
-      style={[
-        s.button,
-        tone === "primary" ? s.buttonPrimary : null,
-        tone === "outline" ? s.buttonOutline : null,
-        tone === "text" ? s.buttonText : null,
-        inline ? s.buttonInline : null,
-      ]}
-    >
-      <Text
+    <View style={grow ? s.grow : null}>
+      {tone === "primary" ? <View pointerEvents="none" style={s.buttonShadow} /> : null}
+      <Tappable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        // Primary sinks onto its own shadow; outline has none and just dims.
+        pressedStyle={tone === "primary" ? s.pressedPrimary : s.pressedText}
         style={[
-          textStyle(type.primaryButton),
-          { color: tone === "primary" ? color.onGreen : tone === "text" ? color.forest : color.ink },
+          s.button,
+          tone === "primary" ? s.buttonPrimary : s.buttonOutline,
+          iconOnly ? s.buttonRound : null,
         ]}
       >
-        {label}
-      </Text>
-    </Tappable>
+        {icon === "back" ? chevron : null}
+        {iconOnly ? null : (
+          <Text style={[textStyle(type.primaryButton), { color: color.homeOutline }]} numberOfLines={1}>
+            {label}
+          </Text>
+        )}
+        {icon === "forward" ? chevron : null}
+      </Tappable>
+    </View>
   );
 }
 
@@ -383,47 +467,91 @@ function useBob(): Animated.Value {
   return bob;
 }
 
+const BUTTON_HEIGHT = 46;
+const CARD_RADIUS = 22;
+
 const s = StyleSheet.create({
   ring: {
     position: "absolute",
     borderWidth: RING,
-    borderColor: color.green,
+    borderColor: color.homeYellow,
   },
   centre: { justifyContent: "center", alignItems: "center" },
   beside: { position: "absolute", left: 0, right: 0 },
   mascot: { zIndex: 1 },
   mascotImage: { width: "100%", height: "100%" },
-  card: {
-    alignSelf: "center",
-    backgroundColor: color.surface,
-    borderRadius: radius.sheet,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 14,
+
+  cardSlot: { alignSelf: "center" },
+  cardShadow: {
+    position: "absolute",
+    top: SHADOW,
+    left: SHADOW,
+    right: -SHADOW,
+    bottom: -SHADOW,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: color.homeOutline,
   },
-  cardCentred: { paddingTop: 28, paddingBottom: 18, alignItems: "stretch" },
-  eyebrow: { color: color.inkSecondary, letterSpacing: 0.6 },
-  title: { color: color.ink, marginTop: 8 },
-  body: { color: color.inkSecondary, marginTop: 8 },
-  footnote: { color: color.inkSecondary, textAlign: "center", marginTop: 4 },
-  stack: { marginTop: 18, gap: 8 },
-  row: {
-    marginTop: 14,
+  card: {
+    backgroundColor: color.surface,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 2,
+    borderColor: color.homeOutline,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+
+  header: {
+    height: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  headerAlone: { justifyContent: "center" },
+  dots: { flexDirection: "row", alignItems: "center", gap: 6, height: 24 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.dashed },
+  dotDone: { backgroundColor: color.accentGreen },
+  dotCurrent: { width: 20 },
+
+  title: { color: color.ink, marginTop: 2 },
+  body: { color: color.inkSecondary, marginTop: 6 },
+  centredText: { textAlign: "center" },
+  footnote: { color: color.inkSecondary, textAlign: "center" },
+
+  stack: { marginTop: 16, gap: 12 },
+  lastRow: { flexDirection: "row", gap: 8 },
+  row: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  grow: { flex: 1 },
+
   button: {
-    height: size.control.primaryButton,
-    borderRadius: radius.primaryButton,
+    height: BUTTON_HEIGHT,
+    borderRadius: BUTTON_HEIGHT / 2,
+    borderWidth: 2,
+    borderColor: color.homeOutline,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    gap: 4,
+    paddingHorizontal: 20,
   },
-  buttonPrimary: { backgroundColor: color.green },
-  buttonOutline: { borderWidth: 1, borderColor: color.controlLineStrong },
-  // No fill to pad: just wide enough to be a comfortable target.
-  buttonText: { paddingHorizontal: 0, minWidth: 56 },
-  buttonInline: { paddingHorizontal: 28 },
-  pressed: { opacity: 0.8 },
+  buttonPrimary: { backgroundColor: color.homeYellow },
+  buttonOutline: { backgroundColor: color.surface },
+  buttonRound: { width: BUTTON_HEIGHT, paddingHorizontal: 0 },
+  buttonShadow: {
+    position: "absolute",
+    top: 3,
+    left: 3,
+    right: -3,
+    bottom: -3,
+    borderRadius: BUTTON_HEIGHT / 2,
+    backgroundColor: color.homeOutline,
+  },
+  textButton: { height: 44, justifyContent: "center", paddingLeft: 12 },
+  pressedPrimary: { transform: [{ translateX: 3 }, { translateY: 3 }] },
+  pressedText: { opacity: 0.7 },
 });
