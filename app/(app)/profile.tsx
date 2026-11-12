@@ -143,6 +143,16 @@ export default function ProfileScreen() {
       setSwitchingToSelf(false);
     }
   }, [selectShop]);
+  // The other direction: into a shop, from the personal profile below.
+  const [switchingToShopId, setSwitchingToShopId] = useState<string | null>(null);
+  const switchToShop = useCallback(async (organizationId: string) => {
+    setSwitchingToShopId(organizationId);
+    try {
+      await selectShop(organizationId);
+    } finally {
+      setSwitchingToShopId(null);
+    }
+  }, [selectShop]);
 
   // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
   // ONCE per mount, which is once per sign-in because this tab stays mounted.
@@ -241,6 +251,27 @@ export default function ProfileScreen() {
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
+        {/* THE WAY INTO A SHOP FROM THE PERSONAL PROFILE (12 Nov 2026).
+
+            Reaching here means this person has their own history and is not
+            acting as a shop -- both branches that draw a storefront returned
+            above. Until this card, that was a dead end for an owner: the only
+            things that ever set the shop context were registering the shop and
+            the post flow, and anything that cleared it (signing out, "Switch
+            to Myself", "Post as myself instead" while the shop was in review)
+            left a profile with no sign a shop existed. Settings said "My
+            shop"; this tab said nothing. One card per shop, because nothing
+            caps how many a person may own. */}
+        {shops.map((shop) => (
+          <SwitchToShopCard
+            key={shop.id}
+            dark={dark}
+            shop={shop}
+            busy={switchingToShopId === shop.id}
+            disabled={switchingToShopId !== null}
+            onPress={() => void switchToShop(shop.id)}
+          />
+        ))}
         <PersonHeader
           userId={profile?.user.id}
           avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
@@ -455,6 +486,40 @@ function SwitchToMyselfCard({ dark, shopName, personName, busy, onPress }: { dar
       <Pressable onPress={busy ? undefined : onPress} style={[s.selfButton, { backgroundColor: palette.green, opacity: busy ? 0.6 : 1 }]} accessibilityRole="button" accessibilityState={{ busy }} accessibilityLabel={`Switch to myself${personName ? `, ${personName}` : ""}. Shows your personal profile`}>
         <Ionicons name="person-outline" size={16} color={dark ? "#10210F" : color.onGreen} />
         <Text style={[s.selfButtonText, { color: dark ? "#10210F" : color.onGreen }]}>{busy ? "Switching…" : "Switch to Myself"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The mirror of SwitchToMyselfCard: on the personal profile, the way into a
+ * shop this person owns. Same card and the same filled button, so the two read
+ * as one switch seen from either side.
+ *
+ * It names the review status because that is the first question after
+ * registering -- "did it go through?" -- and because a shop still in review
+ * opens onto an empty storefront that cannot post yet, which is better learnt
+ * here than by arriving there.
+ */
+function SwitchToShopCard({ dark, shop, busy, disabled, onPress }: { dark: boolean; shop: ActingOrg; busy: boolean; disabled: boolean; onPress: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  const status = shop.verificationStatus ?? (shop.verified ? "VERIFIED" : "PENDING");
+  const body =
+    status === "VERIFIED"
+      ? "Switch to see its storefront and post as the shop."
+      : status === "REJECTED"
+        ? "Not approved. You can still open its storefront; it cannot post."
+        : "Under review. You can open its storefront now; it can post once approved.";
+  return (
+    <View style={[s.selfCard, { backgroundColor: dark ? "#1F3326" : color.greenWash, borderColor: dark ? "#2F5A3B" : color.greenLine }]}>
+      <View style={s.selfCardText}>
+        <Text style={[s.shopEyebrow, { color: palette.muted }]}>Your shop</Text>
+        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
+        <Text style={[s.selfCardBody, { color: palette.secondary }]}>{body}</Text>
+      </View>
+      <Pressable onPress={disabled ? undefined : onPress} style={[s.selfButton, { backgroundColor: palette.green, opacity: disabled ? 0.6 : 1 }]} accessibilityRole="button" accessibilityState={{ busy, disabled }} accessibilityLabel={`Switch to ${shop.name}. Shows the shop's storefront`}>
+        <StoreIcon size={16} stroke={1.8} color={dark ? "#10210F" : color.onGreen} />
+        <Text style={[s.selfButtonText, { color: dark ? "#10210F" : color.onGreen }]}>{busy ? "Switching…" : "Switch to shop"}</Text>
       </Pressable>
     </View>
   );
