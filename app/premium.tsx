@@ -144,7 +144,16 @@ export default function PremiumScreen() {
   const shopPremium = usePublicProfile(shop?.orgUserId).data?.user.premium;
 
   const rep = data?.reputation;
-  const active = hasPremiumAccess(rep);
+  const personActive = hasPremiumAccess(rep);
+  // WHILE ACTING AS A SHOP THIS PAGE IS ABOUT THE SHOP, once the server has said
+  // what the shop's status is. Premium is bought separately per account, and
+  // the shop's is what the server reads when the shop accepts a Bracket 7+
+  // offer or pays a bridging fee -- so a page that kept saying "You're a
+  // Premium member" about the PERSON, under a shop's name and from a shop's
+  // refusal, was wrong for the question being asked. An older server does not
+  // send the shop's status; then the page stays the person's, with the note.
+  const viewingShop = shop !== undefined && shopPremium !== undefined;
+  const active = viewingShop ? shopPremium === true : personActive;
 
   // The opening film's cached tier follows the paywall's own read of the
   // server's verdict. There is no purchase callback to hang this on — the buy
@@ -187,18 +196,18 @@ export default function PremiumScreen() {
             ]}
             accessibilityRole="header"
           >
-            {active ? "You're a\n" : "Trade bigger.\nBridge "}
+            {active ? (viewingShop ? "Your shop is a\n" : "You're a\n") : "Trade bigger.\nBridge "}
             <Text style={{ color: offerColor.deep }}>{active ? "Premium member" : `${DISCOUNT_PERCENT}% cheaper`}</Text>
             {active ? "" : "."}
           </Text>
           {rep ? (
             <View style={{ alignItems: "center" }}>
-              <StatusPill active={active} rep={rep} />
+              <StatusPill active={active} rep={viewingShop ? {} : rep} />
             </View>
           ) : null}
 
           {/* ── Whose Premium this is, while acting as a shop ────────── */}
-          {shop ? <ShopPremiumNote name={shop.name} premium={shopPremium} /> : null}
+          {shop ? <ShopPremiumNote name={shop.name} shopPremium={shopPremium} personActive={personActive} /> : null}
 
           {/* ── Why you're here, when a gate sent you ────────────────── */}
           {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
@@ -496,25 +505,32 @@ function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: numb
 }
 
 /**
- * Shown while acting as a shop. Premium belongs to ONE account, and a shop's
- * account is not yours: this page reads the person's status, while the server
- * reads the SHOP's for what the shop does -- accepting an offer of Bracket 7 or
- * above on its listing, and the bridging fee when it is the one paying.
- * Without this the page greets somebody whose shop was just refused for not
- * having Premium with "You're a Premium member".
+ * Shown while acting as a shop: whose Premium the page is showing, and the
+ * other account's, so neither is mistaken for the other. Premium belongs to ONE
+ * account and a shop's account is not the person's. The server reads the
+ * SHOP's for what the shop does -- accepting an offer of Bracket 7 or above on
+ * its listing, and the bridging fee when it is the one paying -- and the
+ * PERSON's for the offers they send, which always go out as the person.
  *
- * `premium` is undefined from a server that does not send it (older than
- * 13 Nov 2026); the note then says whose Premium this is and nothing about the
- * shop's. Same quiet hairline treatment as BlockedNote: this is information,
- * not an error.
+ * `shopPremium` is undefined from a server that does not send it (older than
+ * 13 Nov 2026): the page is then the person's, and the note says so and says
+ * nothing about the shop's status. Same quiet hairline treatment as
+ * BlockedNote: this is information, not an error.
  */
-function ShopPremiumNote({ name, premium }: { name: string; premium: boolean | undefined }) {
-  const status =
-    premium === true
-      ? ` ${name} is a Premium member too.`
-      : premium === false
-        ? ` ${name} doesn't have Premium, so it can't accept items in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above.`
-        : "";
+function ShopPremiumNote({
+  name,
+  shopPremium,
+  personActive,
+}: {
+  name: string;
+  shopPremium: boolean | undefined;
+  personActive: boolean;
+}) {
+  const text =
+    shopPremium === undefined
+      ? `You're acting as ${name}. Premium belongs to one account: this page shows yours, and ${name} has its own.`
+      : `You're acting as ${name}, so this page shows ${name}'s Premium. Premium is separate for each account, and yours is ${personActive ? "active" : "not active"}.` +
+        (shopPremium ? "" : ` ${name} can't accept items in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above until it has Premium.`);
   return (
     <View
       style={{
@@ -529,9 +545,7 @@ function ShopPremiumNote({ name, premium }: { name: string; premium: boolean | u
       }}
     >
       <StoreIcon size={20} stroke={1.6} color={offerColor.inkSecondary} />
-      <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>
-        {`You're acting as ${name}. Premium belongs to one account: this page shows yours, and ${name} has its own.${status}`}
-      </Text>
+      <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>{text}</Text>
     </View>
   );
 }
