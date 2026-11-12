@@ -35,6 +35,7 @@ import { useHome } from "../api/home";
 import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
 import { showDialog } from "./dialog";
+import { tourTarget } from "../tutorial/store";
 
 /**
  * The header on every tab: wordmark, Leaves balance, notifications, messages
@@ -178,29 +179,36 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
           </Text>
 
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>
-            <LeavesPill
-              // A dash, not 0. Before the first response lands the balance is
-              // unknown, and 0 is a number someone might act on. The same dash
-              // covers the moment after a switch; see pillValue above.
-              value={pillValue}
-              owner={acting && !pillStale ? acting.name : undefined}
-              stale={offline}
-              tight={tight}
-            />
+            {/* The two wrappers are what the first-time tour measures (see
+                src/tutorial/store). They add no style: each holds one child
+                and takes its size, so the row lays out as it did. */}
+            <View ref={tourTarget("leaves")} collapsable={false}>
+              <LeavesPill
+                // A dash, not 0. Before the first response lands the balance is
+                // unknown, and 0 is a number someone might act on. The same dash
+                // covers the moment after a switch; see pillValue above.
+                value={pillValue}
+                owner={acting && !pillStale ? acting.name : undefined}
+                stale={offline}
+                tight={tight}
+              />
+            </View>
 
             {showQuests ? (
-              <HeaderIconButton
-                label="Quests"
-                count={0}
-                tight={tight}
-                onPress={() => router.push("/quests")}
-              >
-                <QuestIcon
-                  size={icon.headerAction.size}
-                  stroke={icon.headerAction.stroke}
-                  color={color.ink}
-                />
-              </HeaderIconButton>
+              <View ref={tourTarget("quests")} collapsable={false}>
+                <HeaderIconButton
+                  label="Quests"
+                  count={0}
+                  tight={tight}
+                  onPress={() => router.push("/quests")}
+                >
+                  <QuestIcon
+                    size={icon.headerAction.size}
+                    stroke={icon.headerAction.stroke}
+                    color={color.ink}
+                  />
+                </HeaderIconButton>
+              </View>
             ) : null}
 
             <HeaderIconButton

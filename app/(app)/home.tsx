@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -15,6 +15,7 @@ import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
+import { tourTarget, useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
 import { Tappable } from "../../src/components/Tappable";
 import { FilterButton, SearchField } from "../../src/components/marketplace/BrowseControls";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
@@ -133,6 +134,18 @@ export default function HomeScreen() {
   const { items, facets, isPending, isError, isRefetching } = browse;
   const hero = useMemo(() => items.find((i) => i.images.length > 0) ?? null, [items]);
 
+  // The first-time tour starts here, once per account, after the first load
+  // has settled either way — content, empty or error — so the hole is cut
+  // over a screen that has stopped moving. See src/tutorial/store.
+  useTutorialAutoStart(viewerId, !isPending);
+  // A replay from Settings can find this screen scrolled down, with the search
+  // row the tour points at out of view. Back to the top as it starts.
+  const scroll = useRef<ScrollView>(null);
+  const tourActive = useTourState().active;
+  useEffect(() => {
+    if (tourActive) scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [tourActive]);
+
   // Server-ordered by expiry. The client-side filter stays as a guard: an
   // item can lapse between the server's sweep and this render, and a server
   // without the perishables work omits `perishable` entirely -- `!= null`,
@@ -227,6 +240,7 @@ export default function HomeScreen() {
   return (
     <View style={s.screen}>
       <ScrollView
+        ref={scroll}
         style={s.screen}
         // The extra bottom room keeps the last row of tiles clear of the search
         // helper button, which floats over this corner.
@@ -246,7 +260,7 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* 1. Search + filter, BELOW AppHeader's wordmark row. */}
-        <View style={s.searchRow}>
+        <View ref={tourTarget("search")} collapsable={false} style={s.searchRow}>
           <SearchField
             value={draftQuery}
             onChange={setDraftQuery}

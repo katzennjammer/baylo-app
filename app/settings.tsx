@@ -16,6 +16,7 @@ import type { ViewerReputation } from "../src/api/types";
 import { useSession } from "../src/auth/session";
 import { BackHeader } from "../src/components/BackHeader";
 import { showDialog } from "../src/components/dialog";
+import { startTour } from "../src/tutorial/store";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { ChevronRightIcon } from "../src/components/icons";
 import { HowTradingWorksSheet } from "../src/components/offer/OfferSheet";
@@ -121,6 +122,14 @@ export default function SettingsScreen() {
     router.replace("/(auth)/login");
   }
 
+  // The tour is drawn over the tabs and points at Home, and this screen is a
+  // root route on top of them: leave first, land on Home, then start it.
+  function replayTutorial() {
+    if (router.canDismiss()) router.dismissAll();
+    router.navigate("/(app)/home");
+    startTour();
+  }
+
   function confirmSignOut() {
     showDialog(
       "Sign out?",
@@ -223,6 +232,7 @@ export default function SettingsScreen() {
             where "Contact support" leads: several refusals say it, and until
             that page nothing said how. */}
         <SettingsRow label="Help" sub="Common questions and how to contact us" onPress={() => openPage(HELP_PATH)} />
+        <SettingsRow label="Replay tutorial" sub="Take the quick tour of the app again" onPress={replayTutorial} />
         <SettingsRow label="Terms of service" sub="Opens in your browser" onPress={() => openPage(TERMS_PATH)} />
         <SettingsRow label="Privacy policy" sub="Opens in your browser" onPress={() => openPage(PRIVACY_PATH)} />
         <InfoRow label="Version" value={version} />
