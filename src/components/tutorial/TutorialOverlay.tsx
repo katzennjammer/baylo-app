@@ -302,7 +302,20 @@ function Stage({
   children: React.ReactNode;
 }) {
   const place = placementFor(hole, window);
-  const pose = POSES[step.pose];
+  // WHICH POINTING POSE IS DECIDED HERE, by where the mascot ended up, not by
+  // the step. The step only says "this one points". The same target can be
+  // above the mascot on one phone and below it on a taller one, and a finger
+  // raised at something underneath it is worse than no finger at all. A
+  // pointing step that lost its target has nothing to point at and waves.
+  const pointing = step.pose === "up" || step.pose === "down";
+  const poseKey: MascotPose = !pointing
+    ? step.pose
+    : place.mode === "below"
+      ? "up"
+      : place.mode === "above"
+        ? "down"
+        : "wave";
+  const pose = POSES[poseKey];
   const cardWidth = Math.min(window.width - CARD_MARGIN * 2, CARD_MAX);
 
   const mascotHeight = place.mode === "center" ? MASCOT_CENTRED : MASCOT_BESIDE;
@@ -312,7 +325,7 @@ function Stage({
   // at; a step that lost its target is centred and never gets here.
   let left = 0;
   if (hole && place.mode !== "center") {
-    const aim = step.pose === "down" ? "down" : "up";
+    const aim = poseKey === "down" ? "down" : "up";
     // In "above" the mascot is the last thing in a stack pinned `bottom` up
     // from the window's bottom edge, so that is where its feet are.
     const feet = place.mode === "above" ? window.height - place.bottom : 0;

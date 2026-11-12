@@ -10,7 +10,16 @@
  */
 
 /** A piece of real UI a step can point at. Registered where it is drawn. */
-export type TourTargetId = "search" | "post" | "trades" | "leaves" | "quests";
+export type TourTargetId =
+  | "search"
+  /** The Categories heading row, "See all" included. */
+  | "categories"
+  /** The first category tile — with the heading, it bounds the first row. */
+  | "categoryTile"
+  | "post"
+  | "trades"
+  | "leaves"
+  | "quests";
 
 /**
  * `up` and `down` are the two pointing poses: one finger straight up, for a
@@ -48,7 +57,19 @@ export const TOUR_STEPS: readonly TourStep[] = [
     shape: "pill",
     pose: "up",
     title: "Find what you need",
-    body: "Search here for an item or a trader, or scroll down to browse by category.",
+    body: "Looking for something specific? Search for an item here, or type @ to find a trader.",
+  },
+  {
+    // The way into the Marketplace: there is no tab for it, so the tour shows
+    // the row that opens it. Heading + first tile, spotlit as one hole, is the
+    // heading and the first row of tiles — the second row can sit behind the
+    // tab bar on a short phone and is left out on purpose.
+    id: "categories",
+    targets: ["categories", "categoryTile"],
+    shape: "rect",
+    pose: "down",
+    title: "Browse by category",
+    body: "Not sure what you want yet? Tap a category to see everything on offer in it, or See all for the full marketplace.",
   },
   {
     id: "post",

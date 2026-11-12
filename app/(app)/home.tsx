@@ -23,7 +23,7 @@ import { useActiveTrades } from "../../src/api/trades";
 import { useUserSearchSuggestions, userSearchErrorPresentation } from "../../src/api/users";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
-import { useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
+import { tourTarget, useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
 import { Tappable } from "../../src/components/Tappable";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
@@ -414,7 +414,11 @@ export default function HomeScreen() {
             {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}
-            <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
+            {/* The wrapper is what the first-time tour measures; see the
+                "categories" step in src/tutorial/steps.ts. */}
+            <View ref={tourTarget("categories")} collapsable={false}>
+              <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
+            </View>
             <CategoryCircles facets={facets} onSelect={browseInMarketplace} />
 
             {/* 4. Limited time (perishables): one row of large cards, soonest

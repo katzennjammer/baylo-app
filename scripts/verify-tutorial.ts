@@ -26,8 +26,9 @@ console.log("steps");
   check("every step in between points at something", TOUR_STEPS.slice(1, -1).every((s) => s.targets.length > 0));
   check("ids are unique", new Set(TOUR_STEPS.map((s) => s.id)).size === TOUR_STEPS.length);
   check("every step has words", TOUR_STEPS.every((s) => s.title.trim() !== "" && s.body.trim() !== ""));
+  check("seven steps, Categories straight after search", TOUR_STEPS.length === 7 && TOUR_STEPS[2].id === "categories");
   check("only the Post step is a circle", TOUR_STEPS.filter((s) => s.shape === "circle").map((s) => s.id).join() === "post");
-  check("targets above use the up pose, targets in the tab bar the down pose", TOUR_STEPS.filter((s) => s.pose === "up").map((s) => s.id).join() === "browse,leaves" && TOUR_STEPS.filter((s) => s.pose === "down").map((s) => s.id).join() === "post,trades");
+  check("targets above use the up pose, targets in the tab bar the down pose", TOUR_STEPS.filter((s) => s.pose === "up").map((s) => s.id).join() === "browse,leaves" && TOUR_STEPS.filter((s) => s.pose === "down").map((s) => s.id).join() === "categories,post,trades");
 }
 
 console.log("usable targets");
