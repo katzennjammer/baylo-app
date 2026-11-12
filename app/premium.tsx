@@ -4,10 +4,12 @@ import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "
 import { Image } from "expo-image";
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
-import { useProfileMe } from "../src/api/profile";
+import { getActingOrgId } from "../src/api/org-context";
+import { useOrganizations } from "../src/api/organizations";
+import { useProfileMe, usePublicProfile } from "../src/api/profile";
 import { LockIcon } from "../src/components/offer/icons";
 import { OfferSheet } from "../src/components/offer/OfferSheet";
-import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
+import { Glyph, LeafIcon, StarIcon, StoreIcon, type IconProps } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { BRACKET_COUNT, bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
 import { MASCOT } from "../src/media/mascots";
@@ -134,6 +136,13 @@ export default function PremiumScreen() {
   const { data, isLoading } = useProfileMe();
   const { height: windowHeight } = useWindowDimensions();
 
+  // ACTING AS A SHOP: this page reads the PERSON's status (profile/me), and a
+  // shop holds Premium on its own account. See ShopPremiumNote.
+  const actingOrgId = getActingOrgId();
+  const orgs = useOrganizations(actingOrgId !== null);
+  const shop = actingOrgId ? orgs.data?.data.organizations.find((o) => o.id === actingOrgId) : undefined;
+  const shopPremium = usePublicProfile(shop?.orgUserId).data?.user.premium;
+
   const rep = data?.reputation;
   const active = hasPremiumAccess(rep);
 
@@ -187,6 +196,9 @@ export default function PremiumScreen() {
               <StatusPill active={active} rep={rep} />
             </View>
           ) : null}
+
+          {/* ── Whose Premium this is, while acting as a shop ────────── */}
+          {shop ? <ShopPremiumNote name={shop.name} premium={shopPremium} /> : null}
 
           {/* ── Why you're here, when a gate sent you ────────────────── */}
           {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
@@ -479,6 +491,47 @@ function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: numb
     >
       <LockIcon size={offerIcon.lock.size} stroke={offerIcon.lock.stroke} color={offerColor.inkSecondary} />
       <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>{text}</Text>
+    </View>
+  );
+}
+
+/**
+ * Shown while acting as a shop. Premium belongs to ONE account, and a shop's
+ * account is not yours: this page reads the person's status, while the server
+ * reads the SHOP's for what the shop does -- accepting an offer of Bracket 7 or
+ * above on its listing, and the bridging fee when it is the one paying.
+ * Without this the page greets somebody whose shop was just refused for not
+ * having Premium with "You're a Premium member".
+ *
+ * `premium` is undefined from a server that does not send it (older than
+ * 13 Nov 2026); the note then says whose Premium this is and nothing about the
+ * shop's. Same quiet hairline treatment as BlockedNote: this is information,
+ * not an error.
+ */
+function ShopPremiumNote({ name, premium }: { name: string; premium: boolean | undefined }) {
+  const status =
+    premium === true
+      ? ` ${name} is a Premium member too.`
+      : premium === false
+        ? ` ${name} doesn't have Premium, so it can't accept items in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above.`
+        : "";
+  return (
+    <View
+      style={{
+        marginTop: 22,
+        flexDirection: "row",
+        gap: 12,
+        padding: 14,
+        borderRadius: offerRadius.row,
+        borderWidth: offerBorder.hairline,
+        borderColor: offerColor.rule,
+        backgroundColor: offerColor.sunk,
+      }}
+    >
+      <StoreIcon size={20} stroke={1.6} color={offerColor.inkSecondary} />
+      <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>
+        {`You're acting as ${name}. Premium belongs to one account: this page shows yours, and ${name} has its own.${status}`}
+      </Text>
     </View>
   );
 }
