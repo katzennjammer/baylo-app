@@ -86,6 +86,17 @@ const color = {
   greenLine: "#D2EAD8",
   accentGreen: "#2A833E",
   accentGold: "#A0740D",
+  /* The PREMIUM tag beside a Premium or VIP member's name. Gold, from the same
+     yellow as Home's `homeYellow`; the ink is dark enough for text on every
+     stop (9.2:1 on the start, 11.3:1 on the highlight, 6.5:1 on the end). One
+     set for light and dark: it is a badge with its own ground, not a surface. */
+  premiumStart: "#F6CF43",
+  premiumMid: "#FFE88A",
+  premiumEnd: "#E0A91A",
+  premiumInk: "#3B2A00",
+  premiumEdge: "rgba(160, 116, 13, 0.35)",
+  premiumShine: "rgba(255, 255, 255, 0.9)",
+  premiumShineClear: "rgba(255, 255, 255, 0)",
   like: "#C56A4B",
   urgent: "#B0553A",
   urgentWash: "#FBEEE9",
@@ -306,6 +317,9 @@ const type = {
   /** "Categories", "Exclusive". */
   homeSection: { fontFamily: font.displaySemi, fontSize: 20 },
   homeSeeAll: { fontFamily: font.sansSemi, fontSize: 13 },
+  /** The PREMIUM tag: on posts and listings, and the larger one on profiles. */
+  premiumTag: { fontFamily: font.figtreeBold, fontSize: 10, lineHeight: 12, letterSpacing: 0.9 },
+  premiumTagLarge: { fontFamily: font.figtreeBold, fontSize: 11.5, lineHeight: 14, letterSpacing: 1 },
   heroTitle: { fontFamily: font.displayBold, fontSize: 20, lineHeight: 25 },
   heroSubhead: { fontFamily: font.sans, fontSize: 13, lineHeight: 17.6 },
   heroCta: { fontFamily: font.sansBold, fontSize: 13 },

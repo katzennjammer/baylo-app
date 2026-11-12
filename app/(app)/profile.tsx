@@ -19,6 +19,7 @@ import { OrgStorefrontHeader, ShopAbout, StorefrontEmpty, useStorefrontKeyboard 
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
+import { hasPremiumAccess } from "../../src/lib/premium";
 import { getApiBase } from "../../src/api/config";
 import { DEFAULT_MAX_PROFILE_BADGES, fetchAchievements } from "../../src/api/achievements";
 import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
@@ -274,6 +275,8 @@ export default function ProfileScreen() {
         ))}
         <PersonHeader
           userId={profile?.user.id}
+          name={profile?.user.name ?? user?.name ?? undefined}
+          premium={hasPremiumAccess(profile?.reputation)}
           avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
           user={{
             bio: profile?.user.bio ?? null,
@@ -669,6 +672,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
         <OrgStorefrontHeader
           dark={dark}
           org={org}
+          premium={data.user.premium === true}
           counts={data.counts}
           viewerId={viewerId}
           follow={{ label: "", busy: false, disabled: true, primary: false, onPress: inert }}

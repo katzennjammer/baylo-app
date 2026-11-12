@@ -8,6 +8,7 @@ import { sizedImage } from "../../media/image-url";
 
 import { color, font } from "../../theme/tokens";
 import { Tappable } from "../Tappable";
+import { PremiumTag } from "../PremiumTag";
 
 /**
  * A person's profile header (4 Nov 2026): avatar beside the trust signals,
@@ -34,6 +35,8 @@ export function PersonHeader({
   onFollowers,
   onFollowing,
   userId,
+  name,
+  premium,
   children,
 }: {
   /** The screen's own avatar component, so both screens keep their fallbacks. */
@@ -59,6 +62,14 @@ export function PersonHeader({
   onFollowing: () => void;
   /** Whose followers to show as faces. Omitted: no faces, just the counts. */
   userId?: string;
+  /**
+   * The person's name, drawn as the first line beside the avatar with the
+   * PREMIUM tag after it. Only YOUR profile passes it: nobody else's profile
+   * needs it here, because the screen's top bar already carries their name
+   * (and their tag -- see user.tsx's BackRow).
+   */
+  name?: string;
+  premium?: boolean;
   /** The action buttons under the counts. */
   children?: ReactNode;
 }) {
@@ -74,6 +85,12 @@ export function PersonHeader({
       <View style={s.identity}>
         {avatar}
         <View style={s.signals}>
+          {name ? (
+            <View style={s.nameRow}>
+              <Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
+              {premium ? <PremiumTag size="large" /> : null}
+            </View>
+          ) : null}
           <RatingLine rating={user.rating} reviews={counts.reviews} palette={palette} />
           <TierChip tier={user.trustTier} idVerified={user.idVerified} palette={palette} />
           {user.location ? (
@@ -177,6 +194,8 @@ const s = StyleSheet.create({
   star: { color: "#E0A526" },
   ratingCount: { fontSize: 13, fontFamily: font.sans },
   place: { fontSize: 13 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "stretch" },
+  name: { flexShrink: 1, fontFamily: font.displaySemi, fontSize: 20, lineHeight: 24 },
   bio: { fontSize: 14, lineHeight: 20 },
   line: { fontSize: 14, lineHeight: 20 },
   strong: { fontFamily: font.sansSemi },

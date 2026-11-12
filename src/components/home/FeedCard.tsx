@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { PremiumTag } from "../PremiumTag";
 import { CountdownPill } from "../CountdownPill";
 import { PhotoCarousel } from "../marketplace/PhotoCarousel";
 import { sizedImage } from "../../media/image-url";
@@ -175,26 +176,15 @@ export const FeedCard = memo(function FeedCard({
           <Avatar uri={item.owner.avatar} name={item.owner.name} />
           <View style={s.ownerText}>
           <View style={s.nameRow}>
-            {/* The name yields and the achievement mark does not. */}
+            {/* The name yields and the PREMIUM tag does not. The achievement mark that
+                used to sit here is gone (13 Nov 2026): badges show on profiles only. */}
             <Text
               style={[textStyle(type.username), s.name]}
               numberOfLines={lines.username}
             >
               {item.owner.name}
             </Text>
-            {item.owner.featuredAchievement ? (
-              <View style={s.featureBadge} accessibilityLabel={`Featured achievement: ${item.owner.featuredAchievement.name}`}>
-                {item.owner.featuredAchievement.imageUrl ? (
-                  <Image
-                    source={{ uri: sizedImage(item.owner.featuredAchievement.imageUrl, "thumb") }}
-                    style={s.featureBadgeImage}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <Text style={s.featureBadgeText}>{item.owner.featuredAchievement.icon}</Text>
-                )}
-              </View>
-            ) : null}
+            {item.owner.premium ? <PremiumTag /> : null}
           </View>
 
           {meta ? (
@@ -735,21 +725,6 @@ const s = StyleSheet.create({
   ownerPressed: { opacity: 0.7 },
   ownerText: { flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: space.card.nameToBadge },
-  featureBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    // Clip an uploaded badge image to the circle; without this a square image
-    // would spill past the rounded border.
-    overflow: "hidden",
-  },
-  featureBadgeText: { fontSize: 10, lineHeight: 12 },
-  featureBadgeImage: { width: "100%", height: "100%", borderRadius: 4 },
   name: { flexShrink: 1, color: color.ink },
   meta: { marginTop: space.card.nameToMeta, color: color.inkMuted },
 
