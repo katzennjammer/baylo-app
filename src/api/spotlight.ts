@@ -39,6 +39,7 @@ export const SPOTLIGHT_KEY = ["spotlight"] as const;
 export function useShopSpotlight() {
   return useQuery({
     queryKey: SPOTLIGHT_KEY,
+    placeholderData: (previous) => previous,
     queryFn: () => apiV1<{ shops: SpotlightShop[] }>("/api/v1/organizations/spotlight"),
     select: (r) => r.data.shops,
   });

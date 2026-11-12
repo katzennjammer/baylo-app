@@ -72,9 +72,9 @@ import { Tappable } from "../Tappable";
 
 const POSES: Record<MascotPose, { source: number; ratio: number }> = {
   // ratio = width / height of the cut-out file, so the box never letterboxes.
-  wave: { source: require("../../../assets/mascot/mascot-wave.webp"), ratio: 492 / 640 },
-  point: { source: require("../../../assets/mascot/mascot-point.webp"), ratio: 561 / 640 },
-  cheer: { source: require("../../../assets/mascot/mascot-cheer.webp"), ratio: 665 / 640 },
+  wave: { source: require("../../../assets/mascots/Tour_duck_waving.webp"), ratio: 492 / 640 },
+  point: { source: require("../../../assets/mascots/Tour_duck_pointing.webp"), ratio: 561 / 640 },
+  cheer: { source: require("../../../assets/mascots/Tour_duck_cheering.webp"), ratio: 665 / 640 },
 };
 
 /** Mascot height beside a hole, and on the two centred cards. */

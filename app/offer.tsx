@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
 import {
@@ -41,6 +41,10 @@ import {
   SettlementSkeleton,
 } from "../src/components/offer/states";
 import { bracketLabel } from "../src/lib/brackets";
+import { CONDITIONS } from "../src/api/browse";
+import { TradeTickets } from "../src/components/offer/TradeTickets";
+import { Tappable } from "../src/components/Tappable";
+import { color } from "../src/theme/tokens";
 import { displayedBridgeFee, hasPremiumAccess, openPremium, premiumGateReason } from "../src/lib/premium";
 import { grouped, shelfMisses } from "../src/lib/gap";
 import { offerAllowed, type OfferTerms } from "../src/lib/trade-rules";
@@ -87,9 +91,36 @@ export default function OfferScreen() {
   const router = useRouter();
   const { itemId } = useLocalSearchParams<{ itemId?: string; title?: string }>();
 
-  const { context, isPending, isError, error, refetch } = useOfferContext(itemId);
+  const { context: liveContext, isPending, isError, error, refetch } = useOfferContext(itemId);
   const send = useSendOffer();
   const withdraw = useWithdrawOffer();
+
+  /* ── one send, and a screen that holds still while it leaves ──────────
+   *
+   * `inFlight` drops a second press that lands before the re-render that
+   * swaps the button for `SendingButton` — `mutate` does not dedupe, so two
+   * presses in one frame were two POSTs.
+   *
+   * `frozen` is the context as it stood when Send was pressed. The success
+   * path invalidates the item and live-offer queries this screen reads, and
+   * their answers land while the native-stack pop is still animating: the new
+   * pending offer flipped the tree to `PendingOfferState` (or, with the item
+   * now pending-offered, to the none-in-range panel) inside a screen Fabric
+   * was tearing down — `addViewAt: The specified child already has a parent`.
+   * Rendering from the snapshot keeps the tree identical until unmount; an
+   * error lets go of it. `sent` keeps the "Sending" chrome up for the same
+   * stretch, after `isPending` has gone false. */
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [frozen, setFrozen] = useState<typeof liveContext>(null);
+  const [sent, setSent] = useState(false);
+  const context = frozen ?? liveContext;
 
   /* ── the IME. See the note on `OfferScreenHost`. ────────────────────── */
   const { keyboardUp, imeHeight } = useKeyboardState();
@@ -159,14 +190,26 @@ export default function OfferScreen() {
       : null;
 
   const onSend = useCallback(() => {
-    if (!draft) return;
+    if (!draft || inFlight.current) return;
+    inFlight.current = true;
+    setFrozen(context);
     setFailed(null);
     send.mutate(draft, {
       onSuccess: () => {
+        // The latch stays set: this screen is leaving and must not send again.
+        setSent(true);
+        // The sheet is a `Modal` — its own Android window. Closing it and
+        // popping the screen in one commit is the other half of the crash, so
+        // the sheet goes first and the pop waits a frame.
         setConsentOpen(false);
-        router.back();
+        requestAnimationFrame(() => {
+          // Hardware back still works while sending; don't pop a second screen.
+          if (mounted.current) router.back();
+        });
       },
       onError: (e) => {
+        inFlight.current = false;
+        setFrozen(null);
         setConsentOpen(false);
         // The bracket gate refused (the lock was stale — a subscription lapsed,
         // or the value moved). Nothing was sent and nothing was held, so the
@@ -185,7 +228,7 @@ export default function OfferScreen() {
         setFailed(e instanceof Error && e.message ? e.message : null);
       },
     });
-  }, [draft, send, router, context?.targetBracket]);
+  }, [draft, send, router, context]);
 
   /** The bottom-bar press. A paying proposer goes through the sheet first. */
   const onPrimary = useCallback(() => {
@@ -249,10 +292,8 @@ export default function OfferScreen() {
         : copy.pending.termsFree;
     return (
       <OfferScreenHost imeInset={0}>
-        <OfferNav title={copy.chrome.navTitle} onBack={() => router.back()} />
+        <OfferNav title="Your offer" subtitle={`To ${context.item.owner.name}${existing ? ` · sent ${copy.sentAgo(existing.createdAt)}` : ""}`} onBack={() => router.back()} />
         <ScrollView>
-          <ListingHeader context={context} />
-          <Hairline />
           {failed ? (
             <Section pad={offerSpace.section.offering}>
               <Text style={[textStyle(offerType.errorText), { color: offerColor.warm }]}>
@@ -273,15 +314,35 @@ export default function OfferScreen() {
               }
               message={existing.message}
               hubName={context.hubs[0]?.name ?? null}
-              withdrawLabel={board.withdraw}
+              target={{ title: context.item.title, image: context.item.images[0] ?? null }}
               withdrawing={withdraw.isPending}
-              onWithdraw={() =>
+              onMessage={() =>
+                router.push({
+                  pathname: "/messages/thread",
+                  params: {
+                    partner: context.item.owner.id,
+                    partnerName: context.item.owner.name,
+                    partnerAvatar: context.item.owner.avatar ?? "",
+                  },
+                })
+              }
+              // Withdrawing frees the listing, and this same screen then
+              // shows the composer: that is "change offer".
+              onChange={() =>
                 withdraw.mutate(
                   { offerId: pendingId, postId: context.item.id },
                   { onError: (e) => setFailed(e instanceof ApiError ? e.message : null) },
                 )
               }
-              onLeaveIt={() => router.back()}
+              onWithdraw={() =>
+                withdraw.mutate(
+                  { offerId: pendingId, postId: context.item.id },
+                  {
+                    onSuccess: () => router.back(),
+                    onError: (e) => setFailed(e instanceof ApiError ? e.message : null),
+                  },
+                )
+              }
             />
           ) : (
             <Section pad={offerSpace.section.gap}>
@@ -443,66 +504,46 @@ export default function OfferScreen() {
 
   /* ═══ the offer screen at rest ═══════════════════════════════════════ */
 
-  const sending = send.isPending;
+  const sending = send.isPending || sent;
 
   return (
     <OfferScreenHost imeInset={0} dimmed={sending}>
       <OfferNav
         title={copy.chrome.navTitle}
+        subtitle={`To ${context.item.owner.name}${context.item.owner.rating > 0 ? ` · ★ ${context.item.owner.rating.toFixed(1)}` : ""}`}
         // "Sending": the back control is REMOVED, not disabled.
         onBack={sending ? null : () => router.back()}
       />
 
       <ScrollView scrollEnabled={!sending} keyboardShouldPersistTaps="handled">
-        <ListingHeader context={context} />
-        <Hairline />
-
-        {/* `You're offering` — the viewer's own item, value and bracket both. */}
+        {/* The trade as two equal tickets, the same picture the sent offer keeps. */}
         <Section pad={offerSpace.section.offering}>
-          <SectionLabel>{copy.label.offering}</SectionLabel>
-          <View style={{ marginTop: offerSpace.labelToContent }}>
-            <ItemRow
-              image={chosen.image}
-              title={chosen.title}
-              meta={copy.picker.rowMeta(yourBracket)}
-              trailing={sending ? undefined : <ChangeLink onPress={() => setPicker(true)} />}
-            />
-          </View>
-        </Section>
-        <Hairline />
+          <TradeTickets
+            give={{ title: chosen.title, image: chosen.image, meta: copy.picker.rowMeta(yourBracket) }}
+            get={{
+              title: context.item.title,
+              image: context.item.images[0] ?? null,
+              meta: [conditionText(context.item.condition), theirBracket !== null ? bracketLabel(theirBracket) : null]
+                .filter(Boolean)
+                .join(" · "),
+            }}
+            onChange={sending ? undefined : () => setPicker(true)}
+          />
 
-        {/* `The brackets` — the relationship, and what it costs whom. */}
-        <Section pad={offerSpace.section.gap}>
-          <SectionLabel>{copy.label.brackets}</SectionLabel>
-
-          <View style={{ marginTop: offerSpace.gapBlock.labelToFigure }}>
-            <Text style={[textStyle(offerType.gapWord), { color: terms.fee > 0 ? offerColor.deep : offerColor.ink }]}>
-              {copy.bracket.figure(terms.legality)}
-            </Text>
-            <Text
-              style={[
-                textStyle(offerType.rowSubtitle),
-                { color: offerColor.inkSecondary, marginTop: 6 },
-              ]}
-            >
-              {copy.bracket.suffix(yourBracket, theirBracket)}
+          {/* The rule in one line: green when it costs nothing, warm when a
+              bridging fee is involved. */}
+          <View style={[styles.rule, terms.fee > 0 ? styles.ruleFee : styles.ruleFree]}>
+            <Text style={[textStyle(offerType.body), { color: terms.fee > 0 ? offerColor.deep : color.forest }]}>
+              <Text style={{ fontWeight: "700" }}>{copy.bracket.figure(terms.legality)}. </Text>
+              {terms.legality === "same"
+                ? copy.bracket.same(owner)
+                : terms.legality === "bridgeUp"
+                  ? context.balance >= proposerFee
+                    ? copy.bracket.bridgeUp(proposerFee, context.balance, owner)
+                    : copy.bracket.short(proposerFee, context.balance)
+                  : copy.bracket.bridgeDown(owner)}
             </Text>
           </View>
-
-          <Text
-            style={[
-              textStyle(offerType.body),
-              { color: offerColor.inkSecondary, marginTop: offerSpace.gapBlock.legendToCopy },
-            ]}
-          >
-            {terms.legality === "same"
-              ? copy.bracket.same(owner)
-              : terms.legality === "bridgeUp"
-                ? context.balance >= proposerFee
-                  ? copy.bracket.bridgeUp(proposerFee, context.balance, owner)
-                  : copy.bracket.short(proposerFee, context.balance)
-                : copy.bracket.bridgeDown(owner)}
-          </Text>
         </Section>
 
         {/* The meet-up section. Always drawn when the listing names a hub. */}
@@ -536,6 +577,22 @@ export default function OfferScreen() {
             onFocus={() => setMessageFocused(true)}
             onBlur={() => setMessageFocused(false)}
           />
+          {/* One-tap starters. They add to what is typed, never replace it. */}
+          {!sending ? (
+            <View style={styles.starters}>
+              {MESSAGE_STARTERS.map((line) => (
+                <Tappable
+                  key={line}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add "${line}" to your message`}
+                  onPress={() => setMessage((m) => (m.trim() ? `${m.trim()} ${line}` : line).slice(0, MAX_OFFER_MESSAGE))}
+                  style={styles.starter}
+                >
+                  <Text style={[textStyle(offerType.helper), { color: offerColor.ink }]}>{line}</Text>
+                </Tappable>
+              ))}
+            </View>
+          ) : null}
         </Section>
       </ScrollView>
 
@@ -662,6 +719,28 @@ function Picker({
     </OfferSheet>
   );
 }
+
+const MESSAGE_STARTERS = ["Free this weekend", "Is it still available?"] as const;
+
+function conditionText(value: string | null | undefined): string | null {
+  return CONDITIONS.find((c) => c.value === value)?.label ?? null;
+}
+
+const styles = StyleSheet.create({
+  rule: { marginTop: 14, padding: 12, borderRadius: 14 },
+  ruleFree: { backgroundColor: color.greenWash },
+  ruleFee: { backgroundColor: color.urgentWash },
+  starters: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  starter: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
+    backgroundColor: color.searchSurface,
+    justifyContent: "center",
+  },
+});
 
 /* ─────────────────────── the listing header ─────────────────────────── */
 

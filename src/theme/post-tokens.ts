@@ -669,8 +669,6 @@ export const rules = {
   titleMin: 3,
   /** `MAX_WANTED` is 500 server-side; the counter says 300. */
   wantedMax: 300,
-  /** `MAX_IMAGE_BYTES` in the upload route. */
-  uploadMaxBytes: 10 * 1024 * 1024,
 } as const;
 
 /* ─────────────────── 6. KEYBOARD-UP AND 7. REFLOW ───────────────────── */

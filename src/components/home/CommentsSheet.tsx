@@ -7,21 +7,35 @@ import { Tappable } from "../Tappable";
 import { ApiError } from "../../api/client";
 import { useAddComment, useComments } from "../../api/social";
 import { relativeShort } from "../../lib/format";
-import { border, color, radius, size, space, textStyle, type } from "../../theme/tokens";
+import { border, color, font, radius, size, space, textStyle, type } from "../../theme/tokens";
+import { MascotEmptyState } from "../MascotEmptyState";
+import { Ionicons } from "@expo/vector-icons";
+import { Notifications } from "../../notifications/notifications-safe";
 import type { Item, ItemComment } from "../../api/types";
 import { showDialog } from "../dialog";
+import { sizedImage } from "../../media/image-url";
 
 const MAX_COMMENT = 2000;
 
 export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: () => void }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
-  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string; text: string } | null>(null);
   const { comments, isPending, isError, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useComments(item?.id ?? null, item !== null);
   const add = useAddComment(item?.id ?? null);
   const insets = useSafeAreaInsets();
   const { rootRef, onRootLayout, overlap } = useKeyboardOverlap(item !== null);
   useEffect(() => { setDraft(""); setReplyTo(null); }, [item?.id]);
+  // A push about THIS listing while the sheet is open (a new comment or
+  // reply): read the thread now rather than at the next 5-second poll.
+  useEffect(() => {
+    if (!item) return;
+    const sub = Notifications.addNotificationReceivedListener((n) => {
+      const data = (n.request.content.data ?? {}) as { entityType?: unknown; entityId?: unknown };
+      if (data.entityType === "item" && data.entityId === item.id) void refetch();
+    });
+    return () => sub.remove();
+  }, [item?.id, refetch]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!item) return null;
   const send = () => {
     const content = draft.trim();
@@ -36,12 +50,32 @@ export function CommentsSheet({ item, onClose }: { item: Item | null; onClose: (
           home indicator itself -- or, with the keyboard up, for the keyboard. */}
       <View style={[s.sheet, { paddingBottom: overlap > 0 ? overlap + KEYBOARD_GAP : space.sheet.bottom + insets.bottom }]}>
         <View style={s.handle} />
-        <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>{item.stats.comments === 1 ? "1 comment" : `${item.stats.comments} comments`}</Text>
-        <View style={s.list}>{isPending ? <View style={s.state}><ActivityIndicator color={color.green} /></View> : isError ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>{error instanceof ApiError && error.code === "NOT_FOUND" ? "This listing is no longer available." : "Could not load the comments."}</Text><Tappable onPress={() => refetch()} accessibilityRole="button" style={s.retry}><Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Try again</Text></Tappable></View> : comments.length === 0 ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>No comments yet. Ask the owner anything you need to know before offering.</Text></View> : <FlatList data={comments} keyExtractor={(comment) => comment.id} renderItem={({ item: comment }) => <CommentRow comment={comment} onReply={(id, name) => setReplyTo({ id, name })} onAuthor={(id) => router.push({ pathname: "/user", params: { id } })} />} onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage(); }} onEndReachedThreshold={0.5} keyboardShouldPersistTaps="handled" ListFooterComponent={isFetchingNextPage ? <View style={s.more}><ActivityIndicator color={color.green} /></View> : null} />}</View>
-        <View style={s.composer}>
-          {replyTo ? <View style={{ position: "absolute", left: space.sheet.x, right: space.sheet.x, top: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={[textStyle(type.metadata), { color: color.inkMuted, flex: 1 }]} numberOfLines={1}>Replying to {replyTo.name}</Text><Tappable onPress={() => setReplyTo(null)} accessibilityRole="button" accessibilityLabel="Cancel reply" style={{ padding: 6 }}><Text style={[textStyle(type.metadata), { color: color.green }]}>Cancel</Text></Tappable></View> : null}
-          <TextInput value={draft} onChangeText={setDraft} maxLength={MAX_COMMENT} placeholder={replyTo ? `Reply to ${replyTo.name}` : "Add a comment"} placeholderTextColor={color.inkMuted} accessibilityLabel="Write a comment" multiline style={[textStyle(type.detailBody), s.input]} />
-          <Tappable onPress={send} disabled={!draft.trim() || add.isPending} accessibilityRole="button" accessibilityLabel="Post comment" style={[s.send, (!draft.trim() || add.isPending) && s.sendDisabled]}><Text style={[textStyle(type.secondaryButton), { color: color.onGreen }]}>{add.isPending ? "..." : "Post"}</Text></Tappable>
+        <Text style={[textStyle(type.sheetTitle), s.title]} numberOfLines={1}>{(() => { const n = Math.max(item.stats.comments, comments.reduce((t, c) => t + 1 + (c.replies?.length ?? 0), 0)); return n === 1 ? "1 comment" : `${n} comments`; })()}</Text>
+        <View style={s.list}>{isPending ? <View style={s.state}><ActivityIndicator color={color.green} /></View> : isError ? <View style={s.state}><Text style={[textStyle(type.detailBody), s.stateText]}>{error instanceof ApiError && error.code === "NOT_FOUND" ? "This listing is no longer available." : "Could not load the comments."}</Text><Tappable onPress={() => refetch()} accessibilityRole="button" style={s.retry}><Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>Try again</Text></Tappable></View> : comments.length === 0 ? <View style={s.state}><MascotEmptyState pose="search" size={96} title="No questions yet" message="Ask the owner anything you need to know before you offer." /></View> : <FlatList data={comments} keyExtractor={(comment) => comment.id} renderItem={({ item: comment }) => <CommentRow comment={comment} ownerId={item.owner.id} onReply={(id, name, text, isReply) => {
+  setReplyTo({ id, name, text });
+  // Answering a reply: the answer joins the same thread (replies are one
+  // level deep), so it starts with @name to say who it is for.
+  if (isReply && !draft.trim()) setDraft(`@${name} `);
+}} onAuthor={(id) => router.push({ pathname: "/user", params: { id } })} />} onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage(); }} onEndReachedThreshold={0.5} keyboardShouldPersistTaps="handled" ListFooterComponent={isFetchingNextPage ? <View style={s.more}><ActivityIndicator color={color.green} /></View> : null} />}</View>
+        {replyTo ? (
+          <View style={s.replyBar}>
+            <View style={s.replyMark} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.replyLabel} numberOfLines={1}>
+                Replying to <Text style={s.replyName}>{replyTo.name}</Text>
+              </Text>
+              <Text style={s.replyQuote} numberOfLines={1}>{replyTo.text}</Text>
+            </View>
+            <Tappable onPress={() => setReplyTo(null)} accessibilityRole="button" accessibilityLabel="Cancel reply" hitSlop={10} style={s.replyClose}>
+              <Ionicons name="close" size={18} color={color.inkSecondary} />
+            </Tappable>
+          </View>
+        ) : null}
+        <View style={[s.composer, replyTo && { borderTopWidth: 0 }]}>
+          {/* Who you are answering, above the box (5 Nov 2026). The old hint
+              was drawn over the composer's top edge and was clipped. */}
+          <TextInput value={draft} onChangeText={setDraft} maxLength={MAX_COMMENT} placeholder={replyTo ? `Reply to ${replyTo.name}` : "Add a comment"} placeholderTextColor={color.inkMuted} accessibilityLabel="Write a comment" multiline {...({ rows: 1 } as object)} style={s.input} />
+          <Tappable onPress={send} disabled={!draft.trim() || add.isPending} accessibilityRole="button" accessibilityLabel="Post comment" style={[s.send, (!draft.trim() || add.isPending) && s.sendDisabled]}>{add.isPending ? <ActivityIndicator color={color.onGreen} /> : <Ionicons name="arrow-up" size={20} color={draft.trim() ? color.onGreen : color.inkMuted} />}</Tappable>
         </View>
       </View>
     </View>
@@ -101,11 +135,56 @@ function useKeyboardOverlap(active: boolean) {
   return { rootRef, onRootLayout: measure, overlap };
 }
 
-function CommentRow({ comment, onReply, onAuthor }: { comment: ItemComment; onReply: (id: string, name: string) => void; onAuthor: (id: string) => void }) {
-  return <View><View style={s.row}><AuthorButton user={comment.user} onPress={() => onAuthor(comment.user.id)} /><View style={s.rowText}><View style={s.rowHead}><Tappable onPress={() => onAuthor(comment.user.id)}><Text style={[textStyle(type.username), s.name]} numberOfLines={1}>{comment.user.name}</Text></Tappable><Text style={[textStyle(type.metadata), { color: color.inkMuted }]}>{relativeShort(comment.createdAt)}</Text></View><Text style={[textStyle(type.detailBody), s.body]}>{comment.content}</Text><Tappable onPress={() => onReply(comment.id, comment.user.name)} accessibilityRole="button"><Text style={[textStyle(type.metadata), { color: color.green }]}>Reply</Text></Tappable></View></View>{comment.replies?.map((reply) => <View key={reply.id} style={s.replyRow}><AuthorButton user={reply.user} onPress={() => onAuthor(reply.user.id)} /><View style={s.rowText}><Tappable onPress={() => onAuthor(reply.user.id)}><Text style={[textStyle(type.username), s.name]}>{reply.user.name}</Text></Tappable><Text style={[textStyle(type.detailBody), s.body]}>{reply.content}</Text></View></View>)}</View>;
+/**
+ * One comment as a bubble (name and text inside, time and Reply under it),
+ * the way people already read comments elsewhere. The listing's owner is
+ * marked, because "the owner answered" is what a buyer scans for. Replies
+ * sit under it, indented, as smaller bubbles.
+ */
+function CommentRow({ comment, ownerId, onReply, onAuthor }: { comment: ItemComment; ownerId: string; onReply: (id: string, name: string, text: string, isReply?: boolean) => void; onAuthor: (id: string) => void }) {
+  return (
+    <View style={s.thread}>
+      <Bubble c={comment} ownerId={ownerId} onAuthor={onAuthor} onReply={() => onReply(comment.id, comment.user.name, comment.content)} />
+      {comment.replies?.map((reply) => (
+        <View key={reply.id} style={s.replyWrap}>
+          <Bubble c={reply} ownerId={ownerId} onAuthor={onAuthor} small onReply={() => onReply(comment.id, reply.user.name, reply.content, true)} />
+        </View>
+      ))}
+    </View>
+  );
 }
-function AuthorButton({ user, onPress }: { user: ItemComment["user"]; onPress: () => void }) { return <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={`View ${user.name}'s profile`}>{user.avatar ? <Image source={{ uri: user.avatar }} contentFit="cover" style={s.avatar} /> : <View style={[s.avatar, s.avatarFallback]}><Text style={[textStyle(type.avatarInitials40), { color: color.forest }]}>{user.name.trim().charAt(0).toUpperCase() || "?"}</Text></View>}</Tappable>; }
+
+function Bubble({ c, ownerId, onAuthor, onReply, small = false }: { c: { id: string; content: string; createdAt: string; user: ItemComment["user"] }; ownerId: string; onAuthor: (id: string) => void; onReply: () => void; small?: boolean }) {
+  const isOwner = c.user.id === ownerId;
+  return (
+    <View style={s.row}>
+      <AuthorButton user={c.user} small={small} onPress={() => onAuthor(c.user.id)} />
+      <View style={s.rowText}>
+        <View style={s.bubble}>
+          <View style={s.rowHead}>
+            <Tappable onPress={() => onAuthor(c.user.id)} style={{ flexShrink: 1 }}>
+              <Text style={s.name} numberOfLines={1}>{c.user.name}</Text>
+            </Tappable>
+            {isOwner ? <View style={s.ownerTag}><Text style={s.ownerTagText}>Owner</Text></View> : null}
+          </View>
+          <Text style={s.body}>{c.content}</Text>
+        </View>
+        <View style={s.meta}>
+          <Text style={s.metaText}>{relativeShort(c.createdAt)}</Text>
+          <Tappable onPress={onReply} accessibilityRole="button" hitSlop={8}>
+            <Text style={[s.metaText, s.metaAction]}>Reply</Text>
+          </Tappable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function AuthorButton({ user, onPress, small = false }: { user: ItemComment["user"]; onPress: () => void; small?: boolean }) {
+  const st = small ? s.avatarSmall : s.avatar;
+  return <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={`View ${user.name}'s profile`}>{user.avatar ? <Image source={{ uri: sizedImage(user.avatar, "thumb") }} contentFit="cover" style={st} /> : <View style={[st, s.avatarFallback]}><Text style={{ fontFamily: font.sansBold, fontSize: small ? 11 : 14, color: color.forest }}>{user.name.trim().charAt(0).toUpperCase() || "?"}</Text></View>}</Tappable>;
+}
 
 const s = StyleSheet.create({
-  root: { flex: 1 }, scrim: { flex: 1, backgroundColor: color.captionFill }, sheet: { backgroundColor: color.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingTop: space.sheet.top, paddingBottom: space.sheet.bottom, height: "78%" }, handle: { alignSelf: "center", width: size.sheet.handleW, height: size.sheet.handleH, borderRadius: size.sheet.handleH / 2, backgroundColor: color.controlLineStrong }, title: { marginTop: space.sheet.top, paddingHorizontal: space.sheet.x, color: color.ink }, list: { flex: 1, marginTop: space.sheet.titleToBody, paddingHorizontal: space.sheet.x }, state: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sheet.actionGap }, stateText: { textAlign: "center", color: color.inkMuted }, retry: { padding: 12 }, more: { paddingVertical: 16 }, row: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: space.sheet.labelToOptions }, replyRow: { flexDirection: "row", gap: space.card.ownerGap, paddingVertical: 6, paddingLeft: 36 }, avatar: { width: size.avatar.owner, height: size.avatar.owner, borderRadius: radius.ownerAvatar, backgroundColor: color.greenWash }, avatarFallback: { alignItems: "center", justifyContent: "center" }, rowText: { flex: 1 }, rowHead: { flexDirection: "row", alignItems: "baseline", gap: space.card.nameToBadge }, name: { flexShrink: 1, color: color.ink }, body: { marginTop: space.card.nameToMeta, marginBottom: 5, color: color.inkSecondary }, composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sheet.actionGap, paddingHorizontal: space.sheet.x, paddingTop: space.sheet.labelToOptions, borderTopWidth: border.hairline, borderTopColor: color.divider }, input: { flex: 1, minHeight: size.sheet.rangeInput, maxHeight: 120, padding: 10, borderRadius: radius.rangeInput, borderWidth: border.chip, borderColor: color.controlLine, backgroundColor: color.control, color: color.ink }, send: { height: size.sheet.rangeInput, paddingHorizontal: 18, borderRadius: radius.rangeInput, backgroundColor: color.green, alignItems: "center", justifyContent: "center" }, sendDisabled: { opacity: 0.45 },
+  root: { flex: 1 }, scrim: { flex: 1, backgroundColor: color.captionFill }, sheet: { backgroundColor: color.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingTop: space.sheet.top, paddingBottom: space.sheet.bottom, height: "78%" }, handle: { alignSelf: "center", width: size.sheet.handleW, height: size.sheet.handleH, borderRadius: size.sheet.handleH / 2, backgroundColor: color.controlLineStrong }, title: { marginTop: space.sheet.top, paddingHorizontal: space.sheet.x, color: color.ink }, list: { flex: 1, marginTop: space.sheet.titleToBody, paddingHorizontal: space.sheet.x }, state: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sheet.actionGap }, stateText: { textAlign: "center", color: color.inkMuted }, retry: { padding: 12 }, more: { paddingVertical: 16 }, thread: { paddingVertical: 8, gap: 8 }, row: { flexDirection: "row", gap: 10, alignItems: "flex-start" }, replyWrap: { paddingLeft: 46 }, avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: color.greenWash }, avatarSmall: { width: 28, height: 28, borderRadius: 14, backgroundColor: color.greenWash }, avatarFallback: { alignItems: "center", justifyContent: "center" }, rowText: { flex: 1, minWidth: 0 }, bubble: { alignSelf: "flex-start", maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: color.control }, rowHead: { flexDirection: "row", alignItems: "center", gap: 6 }, name: { fontFamily: font.sansSemi, fontSize: 13, color: color.ink }, ownerTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: color.greenWash }, ownerTagText: { fontFamily: font.sansSemi, fontSize: 10, color: color.forest }, body: { marginTop: 2, fontFamily: font.sans, fontSize: 14, lineHeight: 20, color: color.ink }, meta: { flexDirection: "row", gap: 14, paddingLeft: 12, marginTop: 4 }, metaText: { fontFamily: font.sans, fontSize: 12, color: color.inkMuted }, metaAction: { fontFamily: font.sansSemi, color: color.inkSecondary }, replyBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: space.sheet.x, marginTop: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, backgroundColor: color.control, borderTopWidth: 0 }, replyMark: { width: 3, alignSelf: "stretch", borderRadius: 2, backgroundColor: color.green }, replyLabel: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary }, replyName: { fontFamily: font.sansSemi, color: color.ink }, replyQuote: { fontFamily: font.sans, fontSize: 13, color: color.inkMuted, marginTop: 1 }, replyClose: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" }, composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sheet.actionGap, paddingHorizontal: space.sheet.x, paddingTop: space.sheet.labelToOptions, borderTopWidth: border.hairline, borderTopColor: color.divider }, input: { flex: 1, minHeight: 38, maxHeight: 110, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8, fontSize: 15, lineHeight: 20, borderRadius: 19, textAlignVertical: "center", borderWidth: border.chip, borderColor: color.controlLine, backgroundColor: color.searchSurface, color: color.ink }, send: { width: 38, height: 38, borderRadius: 19, backgroundColor: color.green, alignItems: "center", justifyContent: "center" }, sendDisabled: { backgroundColor: color.control },
 });

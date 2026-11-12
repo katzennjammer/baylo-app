@@ -1,6 +1,7 @@
 import { usePathname, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -32,10 +33,10 @@ import {
   type,
 } from "../theme/tokens";
 import { useHome } from "../api/home";
+import { useQuests } from "../api/quests";
 import { subscribeToUserChannel } from "../api/pusher";
 import { useSession } from "../auth/session";
 import { showDialog } from "./dialog";
-import { tourTarget } from "../tutorial/store";
 
 /**
  * The header on every tab: wordmark, Leaves balance, notifications, messages
@@ -72,9 +73,10 @@ import { tourTarget } from "../tutorial/store";
  * Community, Marketplace — pass it, from their Tabs.Screen entries in
  * (app)/_layout.tsx; every other route gets the header without it. It sits
  * first in the icon group, before the bell, and opens the Quests screen
- * (today's five quests from /api/v1/quests). It carries no count: completion
- * is only computed when that screen fetches, so a badge here would be stale
- * by construction.
+ * (today's five quests from /api/v1/quests). Its badge is quests left today:
+ * the unfinished count, 5 → 0. Opening the screen does not clear it; only
+ * finishing quests does. It comes from the server per person, so every
+ * account shows its own number.
  */
 export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {}) {
   const insets = useSafeAreaInsets();
@@ -85,6 +87,31 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   const queryClient = useQueryClient();
   const { session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAt, setMenuAt] = useState({ top: 100, right: 16 });
+  const menuAnchor = useRef<View>(null);
+  const { width: windowWidth } = useWindowDimensions();
+
+  const quests = useQuests({ enabled: showQuests });
+  const questBadge = quests.data ? quests.data.quests.filter((q) => !q.completed).length : 0;
+  // Ride the bell's refreshes. The tabs stay mounted, so on its own this query
+  // only refetches on mount and app foreground; /home also refetches on focus
+  // and on every Pusher event, which is when the bell's count moves. Joins a
+  // fetch already in flight rather than starting a second one.
+  const refetchQuests = quests.refetch;
+  useEffect(() => {
+    if (showQuests && dataUpdatedAt) void refetchQuests({ cancelRefetch: false });
+  }, [showQuests, dataUpdatedAt, refetchQuests]);
+  const questsResetAt = quests.data?.resetsAt;
+  useEffect(() => {
+    if (!showQuests || !questsResetAt) return;
+
+    const resetDelay = Date.parse(questsResetAt) - Date.now();
+    const timeout = setTimeout(
+      () => void refetchQuests({ cancelRefetch: false }),
+      Math.max(0, resetDelay) + 1_000,
+    );
+    return () => clearTimeout(timeout);
+  }, [showQuests, questsResetAt, refetchQuests]);
 
   // The badges below count the acting shop's inbox while acting as it (see
   // `unread` on /api/v1/home), so the channel that refreshes them is the
@@ -118,7 +145,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   // Same query, same refreshes as the person's balance -- no second fetch.
   //
   // A SWITCH IS IMMEDIATE BECAUSE IT INVALIDATES THIS QUERY: every switch path
-  // (OrgSwitcher, Profile's shop picker and "Switch to Myself", the post
+  // (Profile's shop picker and "Switch to Myself", the post
   // flow's "Post as myself") calls invalidateQueries() straight after, so
   // /home refetches as the new identity. Until it lands, the cached answer
   // belongs to the OLD identity, so while it disagrees with this device's
@@ -128,7 +155,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   // then who a boost would charge.
   //
   // getActingOrgId() is read fresh, not held: the switch re-renders this via
-  // the query's fetching state. See OrgSwitcher on why the context is not state.
+  // the query's fetching state. See (app)/profile.tsx on why the context is not state.
   const answeredFor = acting?.organizationId ?? null;
   const pillStale = answeredFor !== getActingOrgId() && isFetching;
   const pillValue =
@@ -174,41 +201,35 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               { color: color.ink, flexShrink: 1 },
             ]}
             numberOfLines={1}
+            accessibilityLabel="Baylo"
           >
-            Baylo
+            Baylo<Text style={s.wordmarkDot}>.</Text>
           </Text>
 
           <View style={[s.actions, { gap: tight ? space.header.gapTight : space.header.gap }]}>
-            {/* The two wrappers are what the first-time tour measures (see
-                src/tutorial/store). They add no style: each holds one child
-                and takes its size, so the row lays out as it did. */}
-            <View ref={tourTarget("leaves")} collapsable={false}>
-              <LeavesPill
-                // A dash, not 0. Before the first response lands the balance is
-                // unknown, and 0 is a number someone might act on. The same dash
-                // covers the moment after a switch; see pillValue above.
-                value={pillValue}
-                owner={acting && !pillStale ? acting.name : undefined}
-                stale={offline}
-                tight={tight}
-              />
-            </View>
+            <LeavesPill
+              // A dash, not 0. Before the first response lands the balance is
+              // unknown, and 0 is a number someone might act on. The same dash
+              // covers the moment after a switch; see pillValue above.
+              value={pillValue}
+              owner={acting && !pillStale ? acting.name : undefined}
+              stale={offline}
+              tight={tight}
+            />
 
             {showQuests ? (
-              <View ref={tourTarget("quests")} collapsable={false}>
-                <HeaderIconButton
-                  label="Quests"
-                  count={0}
-                  tight={tight}
-                  onPress={() => router.push("/quests")}
-                >
-                  <QuestIcon
-                    size={icon.headerAction.size}
-                    stroke={icon.headerAction.stroke}
-                    color={color.ink}
-                  />
-                </HeaderIconButton>
-              </View>
+              <HeaderIconButton
+                label="Quests"
+                count={questBadge}
+                tight={tight}
+                onPress={() => router.push("/quests")}
+              >
+                <QuestIcon
+                  size={icon.headerAction.size}
+                  stroke={icon.headerAction.stroke}
+                  color={color.ink}
+                />
+              </HeaderIconButton>
             ) : null}
 
             <HeaderIconButton
@@ -241,20 +262,36 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
               />
             </HeaderIconButton>
             {pathname.endsWith("/profile") ? (
-              <View style={s.menuAnchor}>
+              <View style={s.menuAnchor} ref={menuAnchor} collapsable={false}>
                 <HeaderIconButton
                   label={menuOpen ? "Close account menu" : "Open account menu"}
                   count={0}
                   tight={tight}
-                  onPress={() => setMenuOpen((open) => !open)}
+                  onPress={() => {
+                    if (menuOpen) {
+                      setMenuOpen(false);
+                      return;
+                    }
+                    // Where the button is on screen, so the menu opens under
+                    // it inside a full-screen layer.
+                    menuAnchor.current?.measureInWindow((x, y, w, h) => {
+                      setMenuAt({ top: y + h + 4, right: Math.max(8, windowWidth - (x + w)) });
+                      setMenuOpen(true);
+                    });
+                  }}
                 >
                   <Ionicons name="menu" size={24} color={color.ink} />
                 </HeaderIconButton>
-                {menuOpen ? (
-                  <AccountMenu
-                    onClose={() => setMenuOpen(false)}
-                  />
-                ) : null}
+                {/*
+                  A transparent full-screen Modal, so a tap ANYWHERE outside the
+                  menu closes it (and Android back does too). Drawn inside the
+                  header before, it only covered the header: taps on the page
+                  below went to the page and the menu stayed open.
+                */}
+                <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)} statusBarTranslucent>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} accessibilityLabel="Close account menu" />
+                  <AccountMenu style={{ top: menuAt.top, right: menuAt.right }} onClose={() => setMenuOpen(false)} />
+                </Modal>
               </View>
             ) : null}
           </View>
@@ -273,7 +310,7 @@ export function AppHeader({ showQuests = false }: { showQuests?: boolean } = {})
   );
 }
 
-function AccountMenu({ onClose }: { onClose: () => void }) {
+function AccountMenu({ onClose, style }: { onClose: () => void; style?: object }) {
   const router = useRouter();
   const { signOut } = useSession();
   // No Quests item. It used to open a "coming soon" dialog from here; Quests
@@ -292,7 +329,7 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <View style={s.accountMenu} accessibilityRole="menu">
+    <View style={[s.accountMenu, style]} accessibilityRole="menu">
       <Pressable
         onPress={() => {
           onClose();
@@ -314,6 +351,17 @@ function AccountMenu({ onClose }: { onClose: () => void }) {
       >
         <Ionicons name="star-outline" size={19} color={color.ink} />
         <Text style={s.accountMenuText}>Premium</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          onClose();
+          router.push("/activity");
+        }}
+        accessibilityRole="menuitem"
+        style={s.accountMenuItem}
+      >
+        <Ionicons name="heart-outline" size={19} color={color.ink} />
+        <Text style={s.accountMenuText}>Your activity</Text>
       </Pressable>
       <Pressable
         onPress={() => {
@@ -489,9 +537,7 @@ const s = StyleSheet.create({
   menuAnchor: { position: "relative" },
   accountMenu: {
     position: "absolute",
-    top: size.control.headerIcon + 4,
-    right: 0,
-    minWidth: 166,
+    minWidth: 190,
     backgroundColor: color.surface,
     borderColor: color.divider,
     borderWidth: 1,
@@ -517,10 +563,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
+    backgroundColor: color.homeYellow,
+    borderWidth: 0,
+    borderColor: color.homeYellow,
   },
+  wordmarkDot: { color: color.homeYellow },
   badge: {
     position: "absolute",
     alignItems: "center",

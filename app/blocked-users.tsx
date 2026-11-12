@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { useRouter } from "expo-router";
 
 import { goBack } from "../src/lib/go-back";
@@ -10,6 +11,7 @@ import { BackHeader } from "../src/components/BackHeader";
 import { showDialog } from "../src/components/dialog";
 import { Tappable } from "../src/components/Tappable";
 import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
+import { sizedImage } from "../src/media/image-url";
 
 /**
  * Blocked users, with Unblock. Reached from Settings.
@@ -64,14 +66,14 @@ export default function BlockedUsersScreen() {
             </Tappable>
           </View>
         ) : data && data.length === 0 ? (
-          <Text style={[textStyle(type.emptyBody), s.muted, s.center]}>You have not blocked anyone.</Text>
+          <MascotEmptyState pose="leaf" size={96} title="No one blocked" message="People you block show here, and you can unblock them any time." />
         ) : data ? (
           data.map((block) => {
             const busy = unblock.isPending && unblock.variables === block.user.id;
             return (
               <View key={block.id} style={s.row}>
                 {block.user.avatar ? (
-                  <Image source={{ uri: block.user.avatar }} contentFit="cover" style={s.avatar} />
+                  <Image source={{ uri: sizedImage(block.user.avatar, "thumb") }} contentFit="cover" style={s.avatar} />
                 ) : (
                   <View style={[s.avatar, s.avatarFallback]}>
                     <Text style={[textStyle(type.avatarInitials40), s.initial]}>

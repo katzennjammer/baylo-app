@@ -1,3 +1,8 @@
+import * as SecureStore from "expo-secure-store";
+
+import { withTimeout } from "../api/timeout";
+import { readOpeningTier } from "./opening-tier-store";
+
 /**
  * "Has the intro already played in this process?"
  *
@@ -38,6 +43,50 @@
 
 let played = false;
 
+/* ── ONCE PER TIER, NOT EVERY COLD START (7 Nov 2026) ────────────────────────
+ * The film used to play on every cold start. Now it plays on the first launch
+ * after install, and once more whenever the opening tier changes (normal ->
+ * Premium, a shop approved): those films are the only place a person sees
+ * their upgrade celebrated. Every other launch goes straight in.
+ *
+ * The phone remembers the tier whose film it last played (SEEN_KEY). The
+ * decision is "seen tier != the tier cached for this launch". Both reads are
+ * one SecureStore call with a deadline. A read that fails answers "skip": a
+ * broken Keystore must never be the reason the film plays on every launch
+ * again, or the reason somebody cannot get in.
+ */
+const SEEN_KEY = "baylo.introSeenTier";
+const SEEN_READ_TIMEOUT_MS = 800;
+let decision: Promise<boolean> | null = null;
+let decided: boolean | null = null;
+
+/** Does this launch's tier still need its film? Memoised; never rejects. */
+export function introNeeded(): Promise<boolean> {
+  decision ??= Promise.all([
+    readOpeningTier(),
+    withTimeout(SecureStore.getItemAsync(SEEN_KEY), SEEN_READ_TIMEOUT_MS, "Reading the intro record"),
+  ])
+    .then(([tier, seen]) => seen !== tier)
+    .catch(() => false)
+    .then((needed) => {
+      decided = needed;
+      return needed;
+    });
+  return decision;
+}
+
+/** The answer once known, synchronously; null while the reads are in flight. */
+export function introNeededNow(): boolean | null {
+  return decided;
+}
+
+/** Remember that this launch's tier has had its film. */
+function rememberSeen(): void {
+  void readOpeningTier()
+    .then((tier) => SecureStore.setItemAsync(SEEN_KEY, tier))
+    .catch(() => undefined);
+}
+
 /** True until the intro screen has been mounted once in this process. */
 export function introPending(): boolean {
   return !played;
@@ -49,6 +98,7 @@ export function introPending(): boolean {
  * fork that routes here, so the flag must already be down by the time it runs.
  */
 export function markIntroPlayed(): void {
+  if (!played) rememberSeen();
   played = true;
 }
 
@@ -69,8 +119,18 @@ export function bootRoute(state: {
   videoAvailable: boolean;
   isLoading: boolean;
   signedIn: boolean;
+  /**
+   * Whether this tier's film is still unseen (see introNeeded). `null` while
+   * the reads are in flight: the splash holds for that instant. Omitted, it
+   * counts as needed -- the old every-cold-start behaviour, kept for callers
+   * and tests that predate it.
+   */
+  introNeeded?: boolean | null;
 }): BootRoute {
-  if (state.introPending && state.videoAvailable) return "/intro";
+  if (state.introPending && state.videoAvailable) {
+    if (state.introNeeded === null) return "splash";
+    if (state.introNeeded !== false) return "/intro";
+  }
   if (state.isLoading) return "splash";
   if (state.signedIn) return "/(app)/home";
   return "/(auth)/login";

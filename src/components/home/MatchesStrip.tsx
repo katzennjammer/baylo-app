@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Divider } from "../Divider";
 import { color, lines, radius, size, space, textStyle, type } from "../../theme/tokens";
 import type { MatchCandidate } from "../../api/types";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * "Matches for you" — the inset interstitial, the one tinted surface in the feed.
@@ -49,7 +50,7 @@ export function MatchesStrip({ matches }: { matches: MatchCandidate[] }) {
             style={s.card}
           >
             {m.avatar ? (
-              <Image source={{ uri: m.avatar }} contentFit="cover" style={s.thumb} />
+              <Image source={{ uri: sizedImage(m.avatar, "thumb") }} contentFit="cover" style={s.thumb} />
             ) : (
               <View style={[s.thumb, s.thumbFallback]}>
                 <Text style={[textStyle(type.avatarInitials62), { color: color.forest }]}>

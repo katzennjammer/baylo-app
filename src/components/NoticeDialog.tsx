@@ -1,7 +1,9 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { StyleSheet, Text, View } from "react-native";
 
-import { color, radius, size, textStyle, type } from "../theme/tokens";
-import { Tappable } from "./Tappable";
+import type { MascotPose } from "../media/mascots";
+import { border, color, popup, radius, space, textStyle, type } from "../theme/tokens";
+import { PopupActions, PopupButton, PopupSheet } from "./PopupSheet";
 
 export function NoticeDialog({
   visible,
@@ -9,88 +11,106 @@ export function NoticeDialog({
   body,
   icon,
   onDismiss,
+  pose,
+  hero,
+  buttonLabel = "OK",
+  listingPreview,
+  onViewListing,
 }: {
   visible: boolean;
   title: string;
   body: string;
   icon: React.ReactNode;
   onDismiss: () => void;
+  pose?: MascotPose;
+  hero?: React.ReactNode;
+  buttonLabel?: string;
+  listingPreview?: { title: string | null; photoUrl: string | null };
+  onViewListing?: () => void;
 }) {
   return (
-    <Modal
+    <PopupSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
+      title={title}
+      message={body}
+      icon={icon}
+      pose={pose}
+      hero={hero}
+      liveSticker={listingPreview !== undefined}
+      onDismiss={onDismiss}
+      dismissLabel="Close"
     >
-      <Pressable
-        style={s.scrim}
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-      >
-        <Pressable onPress={() => {}} style={s.card} accessible={false}>
-          <View style={s.badge}>{icon}</View>
+      {listingPreview ? (
+        <View style={s.preview}>
+          {listingPreview.photoUrl ? (
+            <Image
+              source={{ uri: listingPreview.photoUrl }}
+              contentFit="cover"
+              style={s.previewImage}
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          ) : null}
+          <View style={s.previewCopy}>
+            {listingPreview.title ? (
+              <Text style={[textStyle(type.itemTitle), s.previewTitle]} numberOfLines={1}>
+                {listingPreview.title}
+              </Text>
+            ) : null}
+            <Text style={[textStyle(type.metadata), s.previewStatus]}>
+              Live in the marketplace
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
-          <Text style={[textStyle(type.errorHeadline), s.title]} accessibilityRole="header">
-            {title}
-          </Text>
-          <Text style={[textStyle(type.emptyBody), s.body]}>{body}</Text>
-
-          <Tappable
+      {onViewListing ? (
+        <PopupActions layout="row">
+          <PopupButton
+            label="Later"
+            tone="secondary"
             onPress={onDismiss}
-            accessibilityRole="button"
-            style={s.ok}
-            pressedStyle={s.okPressed}
-          >
-            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>OK</Text>
-          </Tappable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            containerStyle={s.secondarySlot}
+          />
+          <PopupButton
+            label="See my listing"
+            tone="primary"
+            onPress={onViewListing}
+            containerStyle={s.primarySlot}
+          />
+        </PopupActions>
+      ) : (
+        <PopupActions layout="single">
+          <PopupButton label={buttonLabel} tone="primary" onPress={onDismiss} />
+        </PopupActions>
+      )}
+    </PopupSheet>
   );
 }
 
 const s = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: color.captionFill,
+  preview: {
+    minHeight: popup.previewThumbnail + popup.previewPadding * 2,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    gap: popup.previewPadding,
+    marginTop: space.sheet.groupGap,
+    padding: popup.previewPadding,
+    borderWidth: border.dashed,
+    borderColor: color.homeOutline,
+    borderStyle: "dashed",
+    borderRadius: popup.previewRadius,
+    backgroundColor: color.inset,
   },
-  card: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: color.surface,
-    borderRadius: radius.sheet,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
-    alignItems: "center",
+  previewImage: {
+    width: popup.previewThumbnail,
+    height: popup.previewThumbnail,
+    borderRadius: radius.dPhoto,
   },
-  badge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: color.greenWash,
-    borderWidth: 1,
-    borderColor: color.greenLine,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-  },
-  title: { color: color.ink, textAlign: "center" },
-  body: { color: color.inkSecondary, textAlign: "center", marginTop: 8 },
-  ok: {
-    alignSelf: "stretch",
-    height: size.control.primaryButton,
-    borderRadius: radius.primaryButton,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  okPressed: { opacity: 0.85 },
+  previewCopy: { flex: 1, minWidth: 0 },
+  previewTitle: { color: color.homeOutline },
+  previewStatus: { color: color.inkSecondary, marginTop: 2 },
+  secondarySlot: { flex: 35 },
+  primarySlot: { flex: 65 },
 });

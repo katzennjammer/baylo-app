@@ -3,11 +3,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../../src/api/client";
-import { useProfileMe } from "../../src/api/profile";
+import { PROFILE_ME_KEY, useProfileMe } from "../../src/api/profile";
 import { useReach } from "../../src/api/offer";
 import { firstName, premium as premiumCopy, vip as vipCopy } from "../../src/components/offer/copy";
 import { LockIcon } from "../../src/components/offer/icons";
@@ -16,11 +16,14 @@ import {
   shouldShowWhereYouStand,
 } from "../../src/components/offer/WhereYouStand";
 import { bracketLabel, bracketOf, bracketsWord } from "../../src/lib/brackets";
+import { RatingLine, TierChip } from "../../src/components/profile/PersonHeader";
+import { openHubOnMap } from "../../src/lib/open-hub-map";
 import { bracketsBeyondReach, shelfMisses } from "../../src/lib/gap";
 import { secondsLeft } from "../../src/lib/perishable";
 import { useLiveDerived } from "../../src/lib/live-clock";
+import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { Splash } from "../../src/components/Splash";
-import { useBlockUser, useItem, useReport } from "../../src/api/item";
+import { useBlockUser, useDeleteItem, useItem, useReport } from "../../src/api/item";
 import { useLike } from "../../src/api/social";
 import {
   ArrowUpRightIcon,
@@ -31,14 +34,18 @@ import {
   CommentIcon,
   FlagIcon,
   HeartIcon,
+  PersonIcon,
   KebabIcon,
   LeafIcon,
+  PencilIcon,
   ShareIcon,
+  TrashIcon,
   WarningIcon,
 } from "../../src/components/icons";
 import { CountdownPill } from "../../src/components/CountdownPill";
 import { SwapSeam } from "../../src/components/SwapSeam";
 import { unitLabel } from "../../src/post/state";
+import { startRelist } from "../../src/post/relist";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { ReportReasonRows } from "../../src/components/ReportSheet";
 import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
@@ -49,6 +56,7 @@ import { LISTING_PREVIEW_ZOOM_OUT } from "../../src/components/map/osm";
 import { HubTypeGlyph } from "../../src/components/map/MapLegend";
 import { openDirections } from "../../src/components/map/directions";
 import { BrowseError } from "../../src/components/marketplace/BrowseStates";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
 import { CommentsSheet } from "../../src/components/home/CommentsSheet";
 import { Tappable } from "../../src/components/Tappable";
@@ -70,6 +78,17 @@ import {
 } from "../../src/theme/tokens";
 import type { Item, OrgBadge, SafeZoneHub } from "../../src/api/types";
 import { showDialog } from "../../src/components/dialog";
+import { listingUrl, shareListing } from "../../src/lib/share";
+import * as Clipboard from "expo-clipboard";
+import { Ionicons } from "@expo/vector-icons";
+import { SendToChatSheet } from "../../src/components/messages/SendToChatSheet";
+import { sizedImage } from "../../src/media/image-url";
+import { useQueryClient } from "@tanstack/react-query";
+import { confirmRelist } from "../../src/api/relist";
+
+function normalizeListingText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
 
 /**
  * The listing screen. Every listing opens here, whatever its kind: a person's
@@ -130,7 +149,9 @@ export default function ItemDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id, comments } = useLocalSearchParams<{ id?: string; comments?: string }>();
-  const { data, isPending, isError, error, refetch } = useItem(id);
+  const { data, isPending, isError, error, refetch, isFetching } = useItem(id);
+  const qc = useQueryClient();
+  useRefetchOnFocus(refetch);
 
   /*
    * §7 of the offer spec, fetched HERE rather than below the early returns:
@@ -173,6 +194,7 @@ export default function ItemDetailScreen() {
 
   const report = useReport();
   const block = useBlockUser();
+  const remove = useDeleteItem();
   const [acted, setActed] = useState<"reported" | "blocked" | null>(null);
   const [reachDialogOpen, setReachDialogOpen] = useState(false);
   /**
@@ -182,6 +204,8 @@ export default function ItemDetailScreen() {
    * which on Android silently drops every button past the third.
    */
   const [menu, setMenu] = useState<null | "menu" | "report">(null);
+  const [copied, setCopied] = useState(false);
+  const [sendingToChat, setSendingToChat] = useState(false);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(comments === "1");
   const [barHeight, setBarHeight] = useState<number>(size.detail.actionButton + space.detail.actionBarY * 2);
@@ -247,7 +271,20 @@ export default function ItemDetailScreen() {
     return (
       <View style={s.screen}>
         <BackRow onPress={() => router.back()} />
-        <BrowseError
+        {apiError?.code === "NOT_FOUND" ? (
+          // Gone for good (traded, removed or taken down), so "Try again" was
+          // the wrong button: the way on is back. Reached from a review's
+          // traded item, too, once that item has changed hands.
+          <View style={{ flex: 1, justifyContent: "center", paddingBottom: 80 }}>
+            <MascotEmptyState
+              pose="worry"
+              size={120}
+              title="Listing unavailable"
+              message="This listing is no longer available. It may have been traded, removed by its owner, or taken down."
+              action={{ label: "Go back", onPress: () => router.back() }}
+            />
+          </View>
+        ) : <BrowseError
           headline={
             apiError?.code === "NOT_FOUND" ? "Listing unavailable" : "Could not open this listing"
           }
@@ -258,7 +295,7 @@ export default function ItemDetailScreen() {
                 "Check your mobile data or Wi-Fi and try again. Nothing you posted was lost.")
           }
           onRetry={refetch}
-        />
+        />}
       </View>
     );
   }
@@ -391,7 +428,12 @@ export default function ItemDetailScreen() {
     );
   };
 
-  const onShare = () => void Share.share({ message: item.title, title: item.title });
+  // The listing's public web link, not just its title: see src/lib/share.ts.
+  const onShare = () => {
+    void shareListing(item).then(({ ok }) => {
+      if (!ok) showDialog("Could not share", "This build has no Baylo web address set, so there is no link to send yet.");
+    });
+  };
 
   return (
     <View style={s.screen}>
@@ -405,7 +447,7 @@ export default function ItemDetailScreen() {
         scrollEventThrottle={16}
       >
         <View>
-          <PhotoCarousel images={item.images} title={item.title} counter={false} />
+          <PhotoCarousel images={item.images} title={item.title} counter={item.images.length > 1} counterAt="bottom" />
 
           {/* The top of the photo darkened, so the clock and the round
               buttons read on a white or busy photo. */}
@@ -422,9 +464,13 @@ export default function ItemDetailScreen() {
               <ChevronLeftIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
             </PhotoButton>
             <View style={s.photoButtonsRight} pointerEvents="box-none">
-              <PhotoButton label="Share" onPress={onShare}>
-                <ShareIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
-              </PhotoButton>
+              {/* Share lives in the ⋯ menu on someone else's listing. Your
+                  own listing has no menu, so it keeps the share button. */}
+              {own ? (
+                <PhotoButton label="Share" onPress={onShare}>
+                  <ShareIcon size={icon.photoOverlay.size} stroke={icon.photoOverlay.stroke} color={color.onScrim} />
+                </PhotoButton>
+              ) : null}
               {/* Report and Block act on someone else. On your own listing the
                   server refuses both, so there is no menu to open. */}
               {!own ? (
@@ -473,9 +519,17 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
+          {/* What it is first (4 Nov 2026): category and condition above the title. */}
+          <View style={[s.tags, { marginTop: 0, marginBottom: 8 }]}>
+            <Tag label={item.categoryLabel} />
+            <Tag label={item.conditionLabel} />
+            {amount ? <Tag label={amount} /> : null}
+          </View>
+
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
-          {item.description.trim() ? (
+          {item.description.trim() &&
+          normalizeListingText(item.description) !== normalizeListingText(item.title) ? (
             <Text style={[textStyle(type.detailBody), s.description]}>{item.description}</Text>
           ) : null}
 
@@ -496,31 +550,53 @@ export default function ItemDetailScreen() {
                     : `, ${bracketsWord(beyond)} above your reach`)
               }
             >
-              <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.forest} />
-              <Text style={[textStyle(type.detailLeaves), { color: color.forest }]}>
-                {bracketLabel(listingBracket)}
-              </Text>
-              {reachLine ? (
-                <Text style={[textStyle(type.detailBody), s.reachLine]}>· {reachLine}</Text>
+              <View style={s.bracketPill}>
+                <LeafIcon size={icon.detailLeaf.size} stroke={icon.detailLeaf.stroke} color={color.surface} />
+                <Text style={[textStyle(type.detailLeaves), { color: color.surface }]}>
+                  {/* Your own item: the exact figure as well (7 Nov 2026). The
+                      bracket-only rule protects OTHER people's values. */}
+                  {own && item.valueLeaves !== null
+                    ? `${item.valueLeaves.toLocaleString("en-US")} Leaves · ${bracketLabel(listingBracket)}`
+                    : bracketLabel(listingBracket)}
+                </Text>
+              </View>
+              {reachLine && beyond !== 0 ? (
+                <Text style={[textStyle(type.detailBody), s.reachLine]}>{reachLine}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {/* Both labels arrive resolved from the server — never the raw enum.
-              The quantity replaced the old "Perishable: 1 KG" section. */}
-          <View style={s.tags}>
-            <Tag label={item.conditionLabel} />
-            <Tag label={item.categoryLabel} />
-            {amount ? <Tag label={amount} /> : null}
-          </View>
+          {/* Yours from a trade, not on the market: why Relist is the only button. */}
+          {own && item.status === "OWNED" ? (
+            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary, marginTop: 12 }]}>
+              You got this in a trade. Relist it to put it back on the marketplace.
+            </Text>
+          ) : null}
 
           {/* §7.3 of the offer spec — `Where you stand`, whenever this listing
               is beyond the viewer's reach. Unchanged; only its place moved. */}
           {!own ? reachInsert : null}
 
-          {wanted ? <SwapTicket title={item.title} wanted={wanted} lookingFor={lookingFor} /> : null}
+          {/* What the owner wants back, as chips. */}
+          {item.lookingForLabels.length > 0 || wanted ? (
+            <View style={s.lookingFor}>
+              <Text style={s.lookingForTitle}>LOOKING FOR</Text>
+              {item.lookingForLabels.length > 0 ? (
+                <View style={s.lookingForChips}>
+                  {item.lookingForLabels.map((label) => (
+                    <View key={label} style={s.lookingForChip}>
+                      <Text style={s.lookingForChipText}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {wanted ? <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>{wanted}</Text> : null}
+            </View>
+          ) : null}
 
-          {/* Sections below are separated by hairlines, not boxes. */}
+          {/* The person, with the trust signals next to the name, and the
+              question row in the same card. */}
+          <View style={s.sellerCard}>
           <SellerRow
             owner={item.owner}
             onPress={() => router.push({ pathname: "/user", params: { id: item.owner.id } })}
@@ -529,7 +605,7 @@ export default function ItemDetailScreen() {
           <Tappable
             onPress={() => setCommentsOpen(true)}
             accessibilityRole="button"
-            style={s.askRow}
+            style={[s.askRow, s.askInCard]}
             pressedStyle={s.pressed}
           >
             <CommentIcon size={icon.danger.size} stroke={icon.danger.stroke} color={color.forest} />
@@ -541,10 +617,11 @@ export default function ItemDetailScreen() {
                   : `Ask ${firstName(item.owner.name)} a question`}
             </Text>
           </Tappable>
+          </View>
 
           {!own && hubs.length > 0 ? (
             <View style={s.section}>
-              <Text style={[textStyle(type.gridMeta), s.meetAt]}>Meet at</Text>
+              <Text style={s.lookingForTitle}>MEET AT A SAFE-ZONE HUB</Text>
               {hubs.map((h, i) => (
                 <HubBlock key={h.id} hub={h}>
                   {/* The map once, under the first hub. The whole preview is
@@ -552,7 +629,8 @@ export default function ItemDetailScreen() {
                       touches, so this Tappable receives them. */}
                   {i === 0 ? (
                     <Tappable
-                      onPress={() => router.push({ pathname: "/hubs", params: { itemId: item.id } })}
+                      // Straight to the map, on the hub the trader chose (the first one).
+                      onPress={() => openHubOnMap(router, hubs[0]!.id)}
                       accessibilityRole="button"
                       accessibilityLabel={
                         `Open the map. ${hubs.length} safe ${hubs.length === 1 ? "hub" : "hubs"} ` +
@@ -581,43 +659,111 @@ export default function ItemDetailScreen() {
       </Animated.ScrollView>
 
       {/* Behind the status bar once the photo has scrolled away. */}
+      {/* Scrolled (4 Nov 2026): the photo is gone, so a solid bar carries
+          back, the title and share. Taps go through it while it is faded. */}
       <Animated.View
-        pointerEvents="none"
-        style={[s.statusBackdrop, { height: insets.top, opacity: backdropOpacity }]}
-      />
-
-      <View
-        style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
-        onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+        pointerEvents={overPhoto ? "none" : "box-none"}
+        style={[s.statusBackdrop, { height: insets.top + 52, paddingTop: insets.top, opacity: backdropOpacity }]}
       >
-        <BottomBar
-          own={own}
-          action={viewer.action}
-          existingOfferId={viewer.existingOfferId}
-          ended={ended}
-          lock={
-            locked && item.valueLeaves !== null
-              ? {
-                  kind: viewer.offerLock ?? "premium",
-                  bracket: bracketOf(item.valueLeaves),
-                  owner: firstName(item.owner.name),
-                  onPress: () =>
-                    openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
-                }
-              : null
-          }
-          liked={item.stats.liked}
-          onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
-          onEdit={() => setEditing(true)}
-          onOffer={() => {
-            if (cannotOffer) {
-              setReachDialogOpen(true);
-              return;
+        <View style={s.scrolledBar}>
+          <Tappable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" style={s.scrolledButton}>
+            <ChevronLeftIcon size={22} stroke={1.8} color={color.ink} />
+          </Tappable>
+          <Text style={s.scrolledTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          {own ? (
+            <Tappable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share" style={s.scrolledButton}>
+              <ShareIcon size={20} stroke={1.9} color={color.ink} />
+            </Tappable>
+          ) : (
+            <Tappable onPress={() => setMenu("menu")} accessibilityRole="button" accessibilityLabel="More options" style={s.scrolledButton}>
+              <View style={s.horizontal}>
+                <KebabIcon size={20} color={color.ink} />
+              </View>
+            </Tappable>
+          )}
+        </View>
+      </Animated.View>
+
+      {!editing ? (
+        <View
+          style={[s.bar, { paddingBottom: space.detail.actionBarY + insets.bottom }]}
+          onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+        >
+          <BottomBar
+            own={own}
+            available={item.status === "AVAILABLE" && !item.hiddenByModerator}
+            status={item.status}
+            action={viewer.action}
+            canOffer={viewer.canOffer}
+            checkingAvailability={isFetching}
+            existingOfferId={viewer.existingOfferId}
+            ended={ended}
+            lock={
+              locked && item.valueLeaves !== null
+                ? {
+                    kind: viewer.offerLock ?? "premium",
+                    bracket: bracketOf(item.valueLeaves),
+                    owner: firstName(item.owner.name),
+                    onPress: () =>
+                      openPremium(router, viewer.offerLock ?? "premium", bracketOf(item.valueLeaves!)),
+                  }
+                : null
             }
-            router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
-          }}
-        />
-      </View>
+            liked={item.stats.liked}
+            onLike={() => like({ itemId: item.id, next: !item.stats.liked })}
+            onEdit={() => setEditing(true)}
+            onRelist={() => void startRelist(item, () => router.push("/post-item"))}
+            onRelistOwned={() =>
+              confirmRelist(item, () => {
+                void refetch();
+                void qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
+              })
+            }
+            deleting={remove.isPending}
+            onDelete={() =>
+              showDialog("Delete this listing?", "It is removed from your profile for good.", [
+                { text: "Keep it", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: () =>
+                    remove.mutate(item.id, {
+                      onSuccess: () => router.back(),
+                      onError: () => showDialog("Could not delete that", "Check your connection and try again."),
+                    }),
+                },
+              ])
+            }
+            onSeeOffers={() => router.push(`/listing-offers?id=${encodeURIComponent(item.id)}`)}
+            onOffer={() => {
+              // NOTHING POSTED YET. An offer is a swap of one of your own
+              // items, so with none the real answer is "post one first" -- not
+              // "this item is too far above your items", which is what the
+              // reach check said to someone who had no items at all.
+              if (me && shelfValues.length === 0) {
+                showDialog(
+                  "Post an item first",
+                  "An offer swaps one of your items for this one, and you haven't posted anything yet. " +
+                    "Post an item, then come back and send your offer.",
+                  [
+                    { text: "Not now", style: "cancel" },
+                    { text: "Post an item", onPress: () => router.push("/post-item") },
+                  ],
+                  { pose: "box" },
+                );
+                return;
+              }
+              if (cannotOffer) {
+                setReachDialogOpen(true);
+                return;
+              }
+              router.push({ pathname: "/offer", params: { itemId: item.id, title: item.title } });
+            }}
+          />
+        </View>
+      ) : null}
 
       {/*
         THE ONE-BRACKET RULE, STATED THE RIGHT WAY ROUND.
@@ -648,12 +794,17 @@ export default function ItemDetailScreen() {
                 `Trade for items closer to what you own to move your reach higher.`
         }
         icon={<WarningIcon size={24} stroke={2} color={color.forest} />}
+        // The worried duck, centred above the title, like the app's other
+        // refusals. The warning icon stays as the no-mascot fallback.
+        pose="worry"
         onDismiss={() => setReachDialogOpen(false)}
       />
 
       {menu ? (
         <SheetShell
-          title={menu === "report" ? "Why are you reporting this listing?" : item.title}
+          // No title on the menu itself: the listing's row at the top already
+          // says what these options are about.
+          title={menu === "report" ? "Why are you reporting this listing?" : undefined}
           onBack={menu === "report" ? () => setMenu("menu") : undefined}
           onClose={() => setMenu(null)}
           busy={report.isPending || block.isPending}
@@ -661,7 +812,65 @@ export default function ItemDetailScreen() {
           {menu === "report" ? (
             <ReportReasonRows onPick={onPickReason} disabled={report.isPending} />
           ) : (
+            <>
+            {/* The listing this menu is about. */}
+            <View style={s.menuHead}>
+              <View style={s.menuThumb}>
+                {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.menuTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={s.menuSub} numberOfLines={1}>
+                  {[firstName(item.owner.name), item.valueLeaves !== null ? bracketLabel(bracketOf(item.valueLeaves)) : null].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+            </View>
+            {/* One-tap actions first: share and save. Safety rows below. */}
+            <View style={s.menuActions}>
+              <MenuAction
+                label="Share"
+                onPress={() => {
+                  setMenu(null);
+                  onShare();
+                }}
+              >
+                <ShareIcon size={22} stroke={1.9} color={color.ink} />
+              </MenuAction>
+              <MenuAction
+                label={copied ? "Copied" : "Copy link"}
+                onPress={() => {
+                  const url = listingUrl(item.id);
+                  if (!url) {
+                    showDialog("No link yet", "This build has no Baylo web address set, so there is no link to copy.");
+                    return;
+                  }
+                  void Clipboard.setStringAsync(url).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+              >
+                <Ionicons name={copied ? "checkmark" : "link"} size={22} color={color.ink} />
+              </MenuAction>
+              <MenuAction label="Send in chat" onPress={() => { setMenu(null); setSendingToChat(true); }}>
+                <Ionicons name="chatbubble-outline" size={21} color={color.ink} />
+              </MenuAction>
+              <MenuAction
+                label={item.stats.liked ? "Saved" : "Save"}
+                onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
+              >
+                <HeartIcon liked={item.stats.liked} size={22} stroke={1.9} color={item.stats.liked ? color.like : color.ink} />
+              </MenuAction>
+            </View>
             <SheetRows>
+              <SheetRow
+                glyph={<PersonIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
+                label={`View ${firstName(item.owner.name)}'s profile`}
+                onPress={() => {
+                  setMenu(null);
+                  router.push({ pathname: "/user", params: { id: item.owner.id } });
+                }}
+              />
               <SheetRow
                 glyph={<FlagIcon size={icon.menuRow.size} stroke={icon.menuRow.stroke} color={color.inkSecondary} />}
                 label={acted === "reported" ? "Reported — a moderator will review it" : "Report this listing"}
@@ -676,10 +885,19 @@ export default function ItemDetailScreen() {
                 onPress={onBlock}
               />
             </SheetRows>
+            </>
           )}
         </SheetShell>
       ) : null}
-      <EditListingSheet item={editing ? item : null} onClose={() => setEditing(false)} />
+      {sendingToChat ? <SendToChatSheet item={item} onClose={() => setSendingToChat(false)} /> : null}
+      <EditListingSheet
+        item={editing ? item : null}
+        onClose={() => setEditing(false)}
+        onEditHubs={(listing) => {
+          setEditing(false);
+          router.push({ pathname: "/edit-hubs", params: { itemId: listing.id } });
+        }}
+      />
       <CommentsSheet item={commentsOpen ? item : null} onClose={() => setCommentsOpen(false)} />
     </View>
   );
@@ -706,6 +924,16 @@ function BackRow({ onPress }: { onPress: () => void }) {
 }
 
 /** A round button over the photo: the scrim and ink the photo badges use. */
+/** A round action in the listing menu: icon in a soft circle, label under it. */
+function MenuAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
+  return (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={s.menuAction}>
+      <View style={s.menuActionCircle}>{children}</View>
+      <Text style={[textStyle(type.gridMeta), s.menuActionLabel]}>{label}</Text>
+    </Tappable>
+  );
+}
+
 function PhotoButton({
   label,
   onPress,
@@ -772,9 +1000,8 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
         .filter(Boolean)
         .join(" · ")
     : [
-        tier,
-        owner.location?.trim() || null,
         `${owner.totalTrades} ${owner.totalTrades === 1 ? "trade" : "trades"}`,
+        owner.location?.trim() || null,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -788,7 +1015,7 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
       pressedStyle={s.pressed}
     >
       {photo ? (
-        <Image source={{ uri: photo }} contentFit="cover" style={[s.avatar, org && s.avatarSquare]} />
+        <Image source={{ uri: sizedImage(photo, "thumb") }} contentFit="cover" style={[s.avatar, org && s.avatarSquare]} />
       ) : (
         <View style={[s.avatar, s.monogram, org && s.avatarSquare]}>
           <Text style={[textStyle(type.avatarInitials40), { color: categoryTone.sand.ink }]}>
@@ -806,6 +1033,14 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
             <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           ) : null}
         </View>
+        {/* A person: the profile header's tier chip and gold-star rating,
+            not the old "RISING" caps tag and a grey star. */}
+        {!org ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <TierChip tier={tier} palette={{ ink: color.ink, control: color.control }} />
+            <RatingLine rating={owner.rating} reviews={null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={14} />
+          </View>
+        ) : null}
         <Text style={[textStyle(type.metadata), s.sellerMeta]} numberOfLines={2}>
           {meta}
         </Text>
@@ -830,17 +1065,32 @@ function initials(name: string): string {
  * by a dashed line with the swap mark in a small forest circle. Surface fill,
  * no tint. Drawn only when the owner wrote what they want; the categories
  * they named ride along as the small line under it.
+ *
+ * On the owner's own listing it reads from their side — "You're offering" /
+ * "You want" — since "You'd get" their own item was a sentence about nobody.
  */
-function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: string; lookingFor: string }) {
+function SwapTicket({
+  title,
+  wanted,
+  lookingFor,
+  own,
+}: {
+  title: string;
+  wanted: string;
+  lookingFor: string;
+  own: boolean;
+}) {
+  const give = own ? "You're offering" : "You'd get";
+  const want = own ? "You want" : "They want";
   return (
     <View
       style={s.ticket}
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`You'd get ${title}. They want ${wanted}${lookingFor ? `, ${lookingFor}` : ""}.`}
+      accessibilityLabel={`${give} ${title}. ${want} ${wanted}${lookingFor ? `, ${lookingFor}` : ""}.`}
     >
       <View style={s.ticketHalf}>
-        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>You'd get</Text>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>{give}</Text>
         <Text style={[textStyle(type.hubName), { color: color.ink }]} numberOfLines={3}>
           {title}
         </Text>
@@ -849,7 +1099,7 @@ function SwapTicket({ title, wanted, lookingFor }: { title: string; wanted: stri
       <SwapSeam />
 
       <View style={s.ticketHalf}>
-        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>They want</Text>
+        <Text style={[textStyle(type.gridMeta), s.ticketLabel]}>{want}</Text>
         <Text style={[textStyle(type.hubName), { color: color.forest }]}>{wanted}</Text>
         {lookingFor ? (
           <Text style={[textStyle(type.gridMeta), s.ticketSub]}>{lookingFor}</Text>
@@ -917,7 +1167,14 @@ function HubBlock({ hub, children }: { hub: SafeZoneHub; children?: React.ReactN
  */
 async function directionsTo(hub: SafeZoneHub) {
   const outcome = await openDirections({ latitude: hub.latitude, longitude: hub.longitude, name: hub.name });
-  if (outcome === "failed") showDialog("Could not open maps", "No maps app or browser is available on this phone.");
+  if (outcome === "failed") {
+    showDialog(
+      "Could not open maps",
+      "No maps app or browser is available on this phone.",
+      [{ text: "Got it" }],
+      { pose: "worry" },
+    );
+  }
 }
 
 /**
@@ -936,23 +1193,45 @@ async function directionsTo(hub: SafeZoneHub) {
  */
 function BottomBar({
   own,
+  available,
+  status,
   action,
+  canOffer,
+  checkingAvailability,
   existingOfferId,
   ended,
   lock,
   liked,
   onLike,
   onEdit,
+  onRelist,
+  onRelistOwned,
+  onDelete,
+  deleting,
+  onSeeOffers,
   onOffer,
 }: {
   own: boolean;
-  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
+  available: boolean;
+  status: string;
+  action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE" | "RELIST";
+  canOffer: boolean;
+  checkingAvailability: boolean;
   existingOfferId: string | null;
   ended: boolean;
   lock: { kind: PremiumReason; bracket: number; owner: string; onPress: () => void } | null;
   liked: boolean;
   onLike: () => void;
   onEdit: () => void;
+  /** An ended perishable: start a NEW listing from it. */
+  onRelist: () => void;
+  /** An item you got in a trade (OWNED): put it back on the marketplace. */
+  onRelistOwned: () => void;
+  /** An ended perishable: remove it for good. */
+  onDelete: () => void;
+  deleting: boolean;
+  /** Your own listing: the offers inbox for it. */
+  onSeeOffers: () => void;
   onOffer: () => void;
 }) {
   const inert = (label: string) => (
@@ -964,18 +1243,77 @@ function BottomBar({
   );
 
   if (own) {
-    if (action === "IN_TRADE" || action === "TRADED") {
+    // Got it in a trade and not listed: it is yours, not a listing, so there is
+    // nothing to edit and no offers to see. One thing to do with it: relist.
+    // `status` covers a server that still sends "EDIT" for every owner.
+    if (action === "RELIST" || status === "OWNED") {
+      return (
+        <View style={s.barRow}>
+          <Tappable
+            onPress={onRelistOwned}
+            accessibilityRole="button"
+            accessibilityLabel="Relist this item on the marketplace"
+            style={s.action}
+            pressedStyle={s.pressed}
+          >
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>Relist</Text>
+          </Tappable>
+        </View>
+      );
+    }
+    if (action === "IN_TRADE" || action === "TRADED" || status === "IN_TRADE") {
       return <View style={s.barRow}>{inert(action === "IN_TRADE" ? "In trade" : "Traded")}</View>;
+    }
+    if (ended) {
+      // An expired perishable cannot be traded, so editing it changes a
+      // listing nobody can offer on. "Edit and relist" opens the post flow
+      // filled in from it (a fresh listing with a fresh window); the square
+      // beside it deletes it for good, after a confirm.
+      return (
+        <View style={s.barRow}>
+          <Tappable
+            onPress={onRelist}
+            accessibilityRole="button"
+            accessibilityLabel="Ended. Edit and relist as a new listing"
+            style={[s.action, s.actionRow]}
+            pressedStyle={s.pressed}
+          >
+            <PencilIcon size={18} stroke={2} color={color.onGreen} />
+            <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>Edit and relist</Text>
+          </Tappable>
+          <Tappable
+            onPress={deleting ? undefined : onDelete}
+            accessibilityRole="button"
+            accessibilityLabel="Delete listing"
+            accessibilityState={{ disabled: deleting }}
+            style={[s.deleteSquare, deleting && { opacity: 0.5 }]}
+            pressedStyle={{ backgroundColor: color.urgentWash }}
+          >
+            <TrashIcon size={22} stroke={1.9} color={color.urgent} />
+          </Tappable>
+        </View>
+      );
     }
     return (
       <View style={s.barRow}>
+        {/* Your own listing: a plain Edit beside the thing you came back
+            for, the offers on it. */}
         <Tappable
           onPress={onEdit}
           accessibilityRole="button"
-          style={[s.action, s.actionOutline]}
+          accessibilityLabel="Edit listing"
+          style={[s.action, s.actionPlain]}
           pressedStyle={s.pressed}
         >
-          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.forest }]}>Edit listing</Text>
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.ink }]}>Edit</Text>
+        </Tappable>
+        <Tappable
+          onPress={onSeeOffers}
+          accessibilityRole="button"
+          style={s.action}
+          pressedStyle={s.pressed}
+        >
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]}>See offers</Text>
         </Tappable>
       </View>
     );
@@ -994,11 +1332,35 @@ function BottomBar({
     </Tappable>
   );
 
-  if (action === "IN_TRADE" || action === "TRADED") {
+  if (!available) {
+    const message =
+      status === "IN_TRADE"
+        ? "This item is in a trade"
+        : status === "TRADED" || status === "SWAPPED"
+          ? "This item has been traded"
+          : "This item is no longer available";
     return (
       <View style={s.barRow}>
         {heart}
-        {inert(action === "IN_TRADE" ? "In trade" : "Traded")}
+        {inert(message)}
+      </View>
+    );
+  }
+
+  if (checkingAvailability && action === "SEND_OFFER") {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("Checking availability…")}
+      </View>
+    );
+  }
+
+  if (!canOffer || action === "UNAVAILABLE") {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("Not available")}
       </View>
     );
   }
@@ -1165,15 +1527,12 @@ const s = StyleSheet.create({
   ticketLabel: { color: color.inkSecondary },
   ticketSub: { color: color.inkSecondary, marginTop: 1 },
 
+  // Inside the seller card (4 Nov 2026): no hairlines of its own.
   seller: {
-    marginTop: space.detail.sectionY,
     flexDirection: "row",
     alignItems: "center",
     gap: space.card.ownerGap,
-    paddingVertical: space.detail.ownerY,
-    borderTopWidth: border.hairline,
-    borderBottomWidth: border.hairline,
-    borderColor: color.divider,
+    padding: 14,
   },
   avatar: {
     width: size.avatar.owner,
@@ -1201,14 +1560,58 @@ const s = StyleSheet.create({
   },
 
   // A hairline above, not a box around.
-  section: {
-    marginTop: space.detail.hubGap,
-    paddingTop: space.detail.sectionY - 4,
-    borderTopWidth: border.hairline,
-    borderTopColor: color.divider,
-  },
+  // Where you'd meet, compact (4 Nov 2026): each hub one white card.
+  section: { marginTop: 20, gap: 10 },
   meetAt: { color: color.inkSecondary },
-  hubBlock: { paddingBottom: space.detail.hubGap },
+  hubBlock: {
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+  },
+  bracketPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: color.ink,
+  },
+  lookingFor: { marginTop: 16, gap: 8 },
+  lookingForTitle: { fontFamily: font.sansBold, fontSize: 13, letterSpacing: 0.4, color: color.inkSecondary },
+  lookingForChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  lookingForChip: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: color.controlLineStrong, justifyContent: "center" },
+  lookingForChipText: { fontFamily: font.sansMedium, fontSize: 13, color: color.ink },
+  sellerCard: { marginTop: 16, borderRadius: 18, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface, overflow: "hidden" },
+  askInCard: { alignSelf: "stretch", borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: 14 },
+  tierPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: color.control },
+  tierPillText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: color.ink },
+  reachCard: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: color.greenWash,
+  },
+  menuHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.sheet.x, paddingTop: 12, paddingBottom: 18 },
+  menuThumb: { width: 48, height: 48, borderRadius: 12, overflow: "hidden", backgroundColor: color.control },
+  menuTitle: { fontFamily: font.sansBold, fontSize: 15, color: color.ink },
+  menuSub: { fontFamily: font.sans, fontSize: 12, color: color.inkSecondary },
+  menuActions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.sheet.x, paddingBottom: 18, marginBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
+  menuAction: { alignItems: "center", gap: 6, minWidth: 60 },
+  menuActionCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: color.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuActionLabel: { color: color.ink, fontWeight: "600" },
   hubName: { marginTop: space.detail.hubNameToLandmark },
   hubNote: { marginTop: space.detail.hubNameToLandmark, color: color.inkSecondary },
   struck: { textDecorationLine: "line-through" },
@@ -1246,6 +1649,9 @@ const s = StyleSheet.create({
   },
 
   photoScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  scrolledBar: { height: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: 6, gap: 4 },
+  scrolledButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  scrolledTitle: { flex: 1, fontFamily: font.displaySemi, fontSize: 17, color: color.ink },
   statusBackdrop: {
     position: "absolute",
     top: 0,
@@ -1269,30 +1675,41 @@ const s = StyleSheet.create({
     borderTopColor: color.divider,
   },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  // 54 square, bordered, white (4 Nov 2026), beside a 54-high Send offer.
   heart: {
-    width: size.detail.actionButton,
-    height: size.detail.actionButton,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLineStrong,
+    backgroundColor: color.searchSurface,
     alignItems: "center",
     justifyContent: "center",
   },
   action: {
     flex: 1,
-    minHeight: size.detail.actionButton,
+    minHeight: 54,
     paddingHorizontal: 12,
-    borderRadius: radius.primaryButton,
+    borderRadius: 16,
     backgroundColor: color.green,
     alignItems: "center",
     justifyContent: "center",
   },
-  actionOutline: {
-    backgroundColor: color.greenWash,
-    borderWidth: border.chip,
-    borderColor: color.forest,
-  },
+  actionPlain: { backgroundColor: color.searchSurface, borderWidth: 1, borderColor: color.controlLineStrong },
   actionInert: { backgroundColor: color.control },
+  actionRow: { flexDirection: "row", gap: 8 },
+  // Same 54 square as the heart, in the warm colour that only ever means
+  // "this goes away".
+  deleteSquare: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.urgentLine,
+    backgroundColor: color.searchSurface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionLocked: { flexDirection: "row", gap: 8 },
   // Wraps to a second line at large text sizes rather than truncating beside
   // the heart; the bar measures itself, so the scroll padding follows.

@@ -27,6 +27,7 @@ import {
   textStyle,
   type OfferBoard,
 } from "../../theme/offer-tokens";
+import { StarText } from "../StarText";
 
 /**
  * The chrome the offer flow wears, and the geometry §3.2's running y produces.
@@ -135,10 +136,13 @@ export function OfferScreenHost({
  */
 export function OfferNav({
   title,
+  subtitle,
   onBack,
   trailing,
 }: {
   title: string;
+  /** A second line under the title: "To John S. · ★ 4.5". */
+  subtitle?: string | null;
   onBack: (() => void) | null;
   trailing?: React.ReactNode;
 }) {
@@ -179,12 +183,16 @@ export function OfferNav({
         <View style={{ width: offerSize.tapTarget - offerSpace.navX + 4 }} />
       )}
 
-      <Text
-        style={[textStyle(offerType.navTitle), { color: offerColor.ink, flex: 1, marginLeft: 4 }]}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
+      <View style={{ flex: 1, marginLeft: 4 }}>
+        <Text style={[textStyle(offerType.navTitle), { color: offerColor.ink }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <StarText style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </StarText>
+        ) : null}
+      </View>
 
       {trailing}
     </View>

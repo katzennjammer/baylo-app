@@ -7,6 +7,7 @@ import {
   type IdentifyResult,
   type MatchedListing,
   type PhashStatus,
+  type AiValuationResult,
   type ValuationPayload,
 } from "../api/post";
 import { rules } from "../theme/post-tokens";
@@ -71,6 +72,13 @@ export interface Photo {
   match: MatchedListing | null;
   /** Set when a photo was rejected for size or type before any request went out. */
   rejected: "too-large" | "unsupported" | null;
+  /**
+   * True when the duplicate check was refused with a 429. The photo stays
+   * `running` — a rate limit is not a verdict — and this is what tells the
+   * screens to offer "Check again" instead of a check that is not happening.
+   * Optional so drafts and relists written before it read as false.
+   */
+  checkPaused?: boolean;
 }
 
 /**
@@ -121,6 +129,31 @@ export const isPostable = (p: Photo): boolean =>
 export const isChecking = (p: Photo): boolean =>
   isVisible(p) && !dupSettled(p);
 
+/** Still on its way: uploading, or uploaded and waiting on its verdict. */
+export const isPending = (p: Photo): boolean =>
+  !p.rejected && (p.upload === "uploading" || isChecking(p));
+
+/**
+ * Why a photo can never be posted as it stands, or null. Each one needs the
+ * owner to act — retry or remove — so none of them may simply be left out.
+ */
+export type PhotoProblem = "rejected" | "failed" | "blocked";
+
+export const photoProblem = (p: Photo): PhotoProblem | null =>
+  p.rejected ? "rejected" : p.upload === "failed" ? "failed" : p.dup === "failed" ? "blocked" : null;
+
+/**
+ * EVERY PHOTO IS POSTABLE — the gate on the final Post.
+ *
+ * It used to post `photos.filter(isPostable)` with no gate, so a photo still
+ * uploading, still being checked, failed or blocked was dropped without a word
+ * and the listing went up one photo short. Now Post waits for the stragglers
+ * and refuses until each problem photo is retried or removed. Step 0's Next
+ * stays lenient on purpose: uploads carry on while the other steps are filled.
+ */
+export const photosReady = (photos: readonly Photo[]): boolean =>
+  photos.length > 0 && photos.every(isPostable);
+
 /* ────────────────────────── step 2, detection ───────────────────────── */
 
 /**
@@ -164,6 +197,7 @@ export interface PostState {
 
   category: Category | null;
   title: string;
+  titleEdited: boolean;
   condition: Condition;
   /** True until the user touches step 3 — drives "We filled this in…". */
   conditionPrefilled: boolean;
@@ -183,6 +217,22 @@ export interface PostState {
   ownValue: boolean;
   /** True once the one re-valuation is gone. Locks the slider flat. */
   revaluationSpent: boolean;
+  /**
+   * The AI-assisted suggestion for one exact (title, category, condition).
+   *
+   * Kept beside `valuation` rather than written over it: `valuation` is
+   * Baylo's standard estimate, which is both the range the AI answer had to
+   * fall inside and the fallback when there is no AI answer. Read the two
+   * together through `activeValuation()`, never directly.
+   *
+   * `key` is what the AI was asked about (see `aiKeyOf`). The server's ticket
+   * is only valid for those inputs, so a title, category or condition change
+   * clears this (see `reduce`) rather than leaving a suggestion — and a
+   * ticket — for a different item on screen.
+   */
+  aiValuation: AiValuationState | null;
+  /** Why the last AI ticket was refused at post time; shown on the value step. */
+  aiNotice: string | null;
 
   wanted: string;
   /**
@@ -219,6 +269,8 @@ export interface PostState {
   /** Null is legitimate on a perishable — "a basket of calamansi" has no number. */
   quantity: string;
   quantityUnit: QuantityUnit;
+  /** Perishable and its amount were preselected from the photo (not chosen). */
+  perishablePrefilled?: boolean;
   /** 6 or 24. Only meaningful while `isPerishable`. */
   tradeWithinHours: TradeWithinHours;
 
@@ -235,7 +287,7 @@ export interface PostState {
    * which is the spec's rule and the difference between a rate limit and an
    * outage.
    */
-  rateLimit: { action: "detect" | "duplicate" | "post"; until: number } | null;
+  rateLimit: { action: RateLimitedAction; until: number } | null;
 }
 
 export function initialState(): PostState {
@@ -246,6 +298,7 @@ export function initialState(): PostState {
     detection: { phase: "idle", original: null, slow: false },
     category: null,
     title: "",
+    titleEdited: false,
     // GOOD, not null. Step 3 is prefilled by design and its Next is always
     // enabled; a null here would make "always" a lie on the one path where
     // detection failed and the user skipped straight past.
@@ -256,14 +309,16 @@ export function initialState(): PostState {
     valueLeaves: null,
     ownValue: false,
     revaluationSpent: false,
+    aiValuation: null,
+    aiNotice: null,
     wanted: "",
     returnCategories: [],
     isPerishable: false,
-    // KG and 24 are the defaults a perishable takes the moment the toggle is
+    // Pieces and 24 are the defaults a perishable takes the moment the toggle is
     // flipped, so the step never renders with an empty unit or an unchosen
     // window. Inert while `isPerishable` is false; see the note above.
     quantity: "",
-    quantityUnit: "KG",
+    quantityUnit: "PCS",
     tradeWithinHours: 24,
     hubIds: [],
     hubsSkipped: false,
@@ -274,6 +329,9 @@ export function initialState(): PostState {
 }
 
 /* ──────────────────────────── the actions ───────────────────────────── */
+
+/** Which request a 429 came from; each step disables only that control. */
+export type RateLimitedAction = "upload" | "detect" | "duplicate" | "post";
 
 export type PostAction =
   | { type: "goto"; step: number }
@@ -288,6 +346,9 @@ export type PostAction =
   | { type: "detect/done"; result: IdentifyResult }
   | { type: "detect/fail" }
   | { type: "detect/correct"; category: Category; title: string }
+  | { type: "detect/reset" }
+  /** "Add to title": detection's brand added to detection's name -- still not typed. */
+  | { type: "detect/brand-title"; value: string }
   | { type: "detect/undo" }
   | { type: "field/title"; value: string }
   | { type: "field/category"; value: Category }
@@ -306,6 +367,12 @@ export type PostAction =
   | { type: "valuation/done"; payload: ValuationPayload }
   | { type: "valuation/spent" }
   | { type: "valuation/failed" }
+  | { type: "ai/pending"; key: string }
+  | { type: "ai/done"; key: string; result: AiValuationResult }
+  /** Thrown request (offline, 429, 503): the standard estimate stands, labelled. */
+  | { type: "ai/failed"; key: string; message: string }
+  /** The server refused the ticket at post time. Ask again on the value step. */
+  | { type: "ai/reset"; notice: string }
   | { type: "value/set"; leaves: number }
   /** "Set my own value": the typed field takes over from the slider. */
   | { type: "value/own" }
@@ -320,13 +387,40 @@ export type PostAction =
   | { type: "post/start" }
   | { type: "post/done" }
   | { type: "post/fail"; message: string }
-  | { type: "rate-limit"; action: "detect" | "duplicate" | "post"; seconds: number }
+  | { type: "rate-limit"; action: RateLimitedAction; seconds: number }
   | { type: "rate-limit/clear" }
   | { type: "restore"; state: PostState };
 
 export const LAST_STEP = 6;
 
+/**
+ * Every transition, plus one rule applied after it: an AI suggestion whose
+ * inputs no longer match the listing is dropped. Done here once rather than in
+ * each action that can move the title, category or condition (typing,
+ * detection, a restored draft), so none of them can forget it.
+ */
 export function reduce(s: PostState, a: PostAction): PostState {
+  const next = step(s, a);
+  const ai = next.aiValuation ?? null;
+  if (ai && ai.key !== aiKeyOf(next)) {
+    // An untouched value followed the AI number; let it follow the standard
+    // one again. A value the owner typed is theirs and stays.
+    return { ...next, aiValuation: null, valueLeaves: next.ownValue ? next.valueLeaves : null };
+  }
+  return next;
+}
+
+/**
+ * Whether the title is the person's own: typed, not written by detection.
+ * Drafts saved before the titleEdited flag existed have it undefined, and for
+ * those any title is treated as typed, as before.
+ */
+function keepsTitle(s: PostState): boolean {
+  if (s.titleEdited === undefined) return s.title.trim().length > 0;
+  return s.titleEdited;
+}
+
+function step(s: PostState, a: PostAction): PostState {
   switch (a.type) {
     case "goto":
       return { ...s, step: Math.max(0, Math.min(LAST_STEP, a.step)) };
@@ -357,6 +451,18 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // Clamp rather than reset: removing the third of four should leave the
       // hero on a neighbour, not jump back to the first.
       const selected = Math.max(0, Math.min(photos.length - 1, s.selectedPhoto));
+      if (photos.length === 0 && s.detection.original) {
+        // The last photo is gone, and with it what detection said about it.
+        // A title only detection wrote goes too, so the next photo does not
+        // inherit the old item's name.
+        return {
+          ...s,
+          photos,
+          selectedPhoto: 0,
+          detection: { phase: "idle", original: null, slow: false },
+          title: keepsTitle(s) ? s.title : "",
+        };
+      }
       return { ...s, photos, selectedPhoto: selected };
     }
 
@@ -364,6 +470,19 @@ export function reduce(s: PostState, a: PostAction): PostState {
       return { ...s, selectedPhoto: Math.max(0, Math.min(s.photos.length - 1, a.index)) };
 
     /* ── detection ── */
+
+    case "detect/brand-title":
+      return { ...s, title: a.value.slice(0, rules.titleMax) };
+
+    case "detect/reset":
+      // The photo detection answered about is gone. Forget the answer and any
+      // title only it wrote; a typed title stays.
+      return {
+        ...s,
+        detection: { phase: "idle", original: null, slow: false },
+        title: keepsTitle(s) ? s.title : "",
+        conditionPrefilled: false,
+      };
 
     case "detect/start":
       return { ...s, detection: { phase: "detecting", original: null, slow: false } };
@@ -388,9 +507,23 @@ export function reduce(s: PostState, a: PostAction): PostState {
         // back anything from "Denim jacket" to "DENIM JACKET". The field is what
         // the user will edit, so it is normalised once here rather than at every
         // place that renders it.
-        title: s.title.trim() ? s.title : sentenceCase(a.result.name),
+        // Older persisted drafts may have a title but no titleEdited flag.
+        // A title the last detection wrote (never typed over) follows the new
+        // photo: pick a Jollibee meal, remove it, pick a bag, and the name is
+        // the bag's. A typed title is the person's and stays.
+        title: keepsTitle(s) ? s.title : sentenceCase(a.result.name),
         condition,
         conditionPrefilled: true,
+        // Perishable is preselected from the photo, with the amount it could
+        // count, unless the person already set the item type themselves.
+        ...(a.result.perishable && !s.perishablePrefilled && !s.isPerishable && s.quantity === ""
+          ? {
+              isPerishable: true,
+              perishablePrefilled: true,
+              quantity: a.result.quantity != null ? String(a.result.quantity) : "",
+              quantityUnit: a.result.unit ?? (a.result.quantity != null ? "PCS" : s.quantityUnit),
+            }
+          : {}),
       };
     }
 
@@ -424,7 +557,7 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // Clamped at the boundary rather than validated after. The server's cap is
       // 200 and the design's is 70; the tighter one is the one a user can see,
       // so it is the one enforced.
-      return { ...s, title: a.value.slice(0, rules.titleMax) };
+      return { ...s, title: a.value.slice(0, rules.titleMax), titleEdited: true };
 
     case "field/category":
       // A category change invalidates the valuation — the suggestion is a
@@ -450,9 +583,10 @@ export function reduce(s: PostState, a: PostAction): PostState {
       // Turning it ON does NOT reset them, so flipping off and back on inside
       // one session keeps what was typed. The clear is about what LEAVES the
       // device, not about being tidy.
+      // The person chose, so the photo's suggestion no longer stands.
       return a.perishable
-        ? { ...s, isPerishable: true }
-        : { ...s, isPerishable: false, quantity: "", quantityUnit: "KG", tradeWithinHours: 24 };
+        ? { ...s, isPerishable: true, perishablePrefilled: false }
+        : { ...s, isPerishable: false, perishablePrefilled: false, quantity: "", quantityUnit: "PCS", tradeWithinHours: 24 };
 
     case "field/quantity":
       // Held as the raw STRING the user typed, not as a number. "1." and "0."
@@ -503,8 +637,40 @@ export function reduce(s: PostState, a: PostAction): PostState {
     case "valuation/failed":
       return { ...s, valuationPending: false };
 
+    /* ── AI-assisted valuation ── */
+
+    case "ai/pending":
+      return { ...s, aiValuation: { key: a.key, status: "loading" }, aiNotice: null };
+
+    case "ai/done": {
+      // A late answer for inputs that have since changed is ignored.
+      if (a.key !== aiKeyOf(s)) return s;
+      if (a.result.status === "fallback") {
+        return { ...s, aiValuation: { key: a.key, status: "fallback", message: a.result.message } };
+      }
+      const ai: AiValuationState = { key: a.key, status: "ai", result: a.result };
+      // The slider is not shown while the AI is looking, so a slider value
+      // here is valuation/done's copy of the STANDARD suggestion, not a choice
+      // the owner made. It re-seats on the AI suggestion. A typed value is the
+      // owner's own and stays.
+      if (s.ownValue) return { ...s, aiValuation: ai };
+      return { ...s, aiValuation: ai, valueLeaves: null };
+    }
+
+    case "ai/failed":
+      if (a.key !== aiKeyOf(s)) return s;
+      return { ...s, aiValuation: { key: a.key, status: "fallback", message: a.message } };
+
+    case "ai/reset":
+      return {
+        ...s,
+        aiValuation: null,
+        aiNotice: a.notice,
+        valueLeaves: s.ownValue ? s.valueLeaves : null,
+      };
+
     case "value/set": {
-      const v = s.valuation;
+      const v = activeValuation(s);
       if (!v || s.revaluationSpent) return s;
       // Clamped HERE as well as at the gesture, so no path — a restored draft,
       // a re-valuation, a keyboard entry added later — can seat the value
@@ -584,7 +750,9 @@ export function reduce(s: PostState, a: PostAction): PostState {
       return { ...s, rateLimit: null };
 
     case "restore":
-      return a.state;
+      // A draft saved before AI valuation existed has neither field; absent
+      // must read as "not asked yet", not as something else.
+      return { ...a.state, aiValuation: a.state.aiValuation ?? null, aiNotice: a.state.aiNotice ?? null };
 
     default:
       return s;
@@ -613,7 +781,7 @@ function sentenceCase(s: string): string {
  *
  * Three of the seven are ALWAYS enabled, and that is a decision rather than an
  * oversight: condition is prefilled, "in return" is wholly optional and hubs
- * have "Skip for now" as a real route. Value is enabled on the suggestion and
+ * have "Skip for now" as a real route. Post waits on every photo. Value is enabled on the suggestion and
  * gated only on an EMPTY typed field. The other two gates are the two where
  * continuing would produce a listing that cannot exist — no photo, or no
  * category and no title.
@@ -632,7 +800,13 @@ export function canAdvance(s: PostState): boolean {
       // number in it — an empty own-value field is not "use the suggestion",
       // it is nothing, and posting nothing would post the suggestion under a
       // heading that said the owner set it.
-      return !s.ownValue || (s.valueLeaves !== null && s.valueLeaves >= 1);
+      if (s.ownValue) return s.valueLeaves !== null && s.valueLeaves >= 1;
+      // Not while the AI is still looking: the number on screen would change
+      // under the person after they had moved on. A typed value does not wait.
+      return s.revaluationSpent || (s.aiValuation != null && s.aiValuation.status !== "loading");
+    case LAST_STEP:
+      // Post waits for every photo. See `photosReady`.
+      return photosReady(s.photos);
     default:
       return true;
   }
@@ -650,7 +824,58 @@ export function titleError(s: PostState): string | null {
 
 /** The value that will actually be posted. The suggestion until it is moved. */
 export function effectiveValue(s: PostState): number | null {
-  return s.valueLeaves ?? s.valuation?.suggestedLeaves ?? null;
+  return s.valueLeaves ?? activeValuation(s)?.suggestedLeaves ?? null;
+}
+
+/* ─────────────────────── AI-assisted valuation ─────────────────────── */
+
+export type AiValuationState =
+  | { key: string; status: "loading" }
+  | { key: string; status: "ai"; result: Extract<AiValuationResult, { status: "ai" }> }
+  | { key: string; status: "fallback"; message: string };
+
+/**
+ * What an AI valuation is FOR. Case and spacing are ignored, as the server's
+ * ticket check ignores them, so retyping "iPhone 13" as "iphone 13" does not
+ * throw away a good estimate.
+ */
+export function aiKeyOf(s: Pick<PostState, "title" | "category" | "condition">): string {
+  return JSON.stringify([
+    s.title.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase(),
+    s.category,
+    s.condition,
+  ]);
+}
+
+/** The AI suggestion, if there is one for exactly the current inputs. */
+export function currentAi(s: PostState) {
+  const ai = s.aiValuation ?? null;
+  return ai && ai.status === "ai" && ai.key === aiKeyOf(s) ? ai.result : null;
+}
+
+/**
+ * The valuation the step shows and the slider is bounded by: the AI one when
+ * there is a current one, Baylo's standard estimate otherwise. The standard
+ * estimate's comparables and basis are kept for reference; the number, its
+ * band and its source are the AI's.
+ */
+export function activeValuation(s: PostState): ValuationPayload | null {
+  const v = s.valuation;
+  if (!v) return null;
+  const ai = currentAi(s);
+  if (!ai) return v;
+  return {
+    ...v,
+    suggestedLeaves: ai.valuation.suggestedLeaves,
+    allowed: ai.valuation.allowed,
+    valuationSource: "ai_market",
+    basis: `${ai.level.name} for ${ai.level.categoryLabel.toLowerCase()} · from online prices`,
+  };
+}
+
+/** The ticket to post with, or undefined: only ever for the current inputs. */
+export function valuationTicket(s: PostState): string | undefined {
+  return currentAi(s)?.ticket;
 }
 
 /**
@@ -670,6 +895,27 @@ export function parseQuantity(raw: string): number | null {
 /** How many steps of seven are filled in — the draft row's meta line. */
 export function draftProgress(s: PostState): number {
   return Math.min(LAST_STEP + 1, s.step + 1);
+}
+
+/**
+ * ONE upload figure for the whole post, 0…1 — not the selected photo's.
+ *
+ * Every photo that is part of the post counts equally: a landed one is 1, one
+ * in flight is its own request's fraction. Failed and rejected photos are left
+ * out, because neither is uploading and either would hold the figure short of
+ * the end forever. The equal weight is deliberate: a photo's byte total is only
+ * known once its request reports, so a byte-weighted sum would jump whenever a
+ * late photo's size arrived.
+ *
+ * It cannot reach 1 while anything is still uploading — an in-flight photo
+ * reports at most 0.99 until the server answers (see uploadPhotoWithProgress).
+ * Null when nothing is uploading, which is when there is nothing to show.
+ */
+export function uploadProgress(photos: readonly Photo[]): number | null {
+  const counted = photos.filter((p) => p.upload === "uploading" || p.upload === "done");
+  if (!counted.some((p) => p.upload === "uploading")) return null;
+  const sum = counted.reduce((acc, p) => acc + (p.upload === "done" ? 1 : p.progress), 0);
+  return sum / counted.length;
 }
 
 /* ─────────────────────────── the context ────────────────────────────── */

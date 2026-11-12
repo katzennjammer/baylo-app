@@ -4,6 +4,8 @@
 // toolchain. Nothing that runs under it may depend on those packages working.
 const Module = require("module");
 
+globalThis.__DEV__ = true;
+
 const STUB = /^(react|react\/.*|react-native(\/.*)?|react-native-.*|@react-native.*|expo|expo-.*|@expo\/.*|@tanstack\/.*|@react-navigation\/.*|pusher-js)$/;
 
 const inert = () =>

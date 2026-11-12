@@ -22,17 +22,33 @@ export const NOTIFICATIONS_KEY = ["notifications"] as const;
 const NOTIFICATIONS_STALE_MS = 30_000;
 
 /**
+ * A plain chat message ("sent you a message"). Those live in the Messages
+ * tab, so the list leaves them out -- and ONLY those, the same rule the
+ * server's bell count uses (excludeDirectMessageNotifications). Hiding every
+ * NEW_MESSAGE row also hid "commented on your listing" and "made you an
+ * offer", which the bell still counted: a badge of 1 and nothing new in the
+ * list.
+ */
+export function isMessageNotification(notification: NotificationItem): boolean {
+  return notification.type === "NEW_MESSAGE" && notification.message === "sent you a message";
+}
+
+/**
  * GET /api/v1/notifications — newest first, one page of 50.
  *
  * Acting as a shop the server answers with the SHOP's rows (X-Baylo-Org), so
  * the acting org is part of the key: one identity's bell never renders under
- * the other. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
+ * the other. Message notifications open in the conversation list, not this
+ * activity list. Invalidating NOTIFICATIONS_KEY still reaches both, as a prefix.
  */
 export function useNotifications() {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, getActingOrgId() ?? "self"],
     queryFn: () => apiV1<NotificationsPayload>("/api/v1/notifications?limit=50"),
-    select: (r) => r.data,
+    select: (r) => ({
+      ...r.data,
+      notifications: r.data.notifications.filter((notification) => !isMessageNotification(notification)),
+    }),
     staleTime: NOTIFICATIONS_STALE_MS,
   });
 }
@@ -130,9 +146,12 @@ export function notificationTarget(n: NotificationItem): string | null {
       if (n.type === "TRADE_COMPLETED") {
         return id ? `/rate-trade?id=${encodeURIComponent(id)}` : "/trades-history";
       }
-      // `handoff=1` opens the trade screen on its code panel, which is what
-      // the old /trade-code landing did — issuing the codes included.
-      return id ? `/trade?id=${encodeURIComponent(id)}&handoff=1` : "/(app)/trades";
+      // The trade screen, on whatever step the trade is at. NOT `handoff=1`
+      // (7 Nov 2026): opening the code panel is what ISSUES the two
+      // 15-minute codes, so tapping "accepted your offer" started the
+      // handover before anyone had picked a hub. Codes are opened from the
+      // trade screen, at the hub, behind an "Are you there?" check.
+      return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
     case "meetup":
       // The trade screen's hub step, where "Agree" lives since Round 2.
       return id ? `/trade?id=${encodeURIComponent(id)}` : "/(app)/trades";
@@ -158,13 +177,15 @@ export function notificationTarget(n: NotificationItem): string | null {
         ? `/item?id=${encodeURIComponent(id)}`
         : `/item?id=${encodeURIComponent(id)}&comments=1`;
     /*
-     * A business-document decision. The id is the Organization's, and there is
-     * no org screen in the app yet -- so this lands on the person's own profile
-     * and settings, where the organisation they now own or were refused is
-     * reachable. Better than null, which renders an untappable row.
+     * A business-document decision ("Mckayeat is now a verified organisation.
+     * The badge is on your profile ..."). The id is the Organization's. It
+     * opened Settings, for the "Posting as" card; that card was deleted on
+     * 20 Oct 2026, and the shop -- its badge, its "Get verified" step, the
+     * switch to act as it -- is on the Profile tab now, which is also where
+     * the message says to look.
      */
     case "organization":
-      return "/settings";
+      return "/(app)/profile";
     case "follow_request":
       return n.actor ? `/user?id=${encodeURIComponent(n.actor.id)}` : null;
     case "review":
@@ -223,14 +244,27 @@ export function useMarkAllNotificationsRead() {
       if (!res.ok) return legacyFailure(res, "We could not mark those as read.");
       return (await res.json()) as unknown;
     },
-    /*
-     * `home` as well as the list. The bell's count comes from /api/v1/home's
-     * `unread.notifications`, so a list that cleared itself without invalidating
-     * home would leave a 24 sitting on an icon whose screen is demonstrably
-     * empty — the same disagreement between a badge and its contents that this
-     * whole screen exists to end.
-     */
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+      // Loaded lazily: the badge module pulls in the native notifications
+      // library, which this API module must not need just to be imported.
+      void import("../notifications/badge").then((m) => m.syncAppBadge()).catch(() => undefined);
+    },
+  });
+}
+
+/**
+ * Marks the visible activity rows without touching hidden message notifications.
+ * The legacy API has only an all-unread PATCH or a per-notification PATCH.
+ */
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) =>
+      Promise.all(ids.map((id) => patchNotificationRead(id))),
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
     },
@@ -240,26 +274,27 @@ export function useMarkAllNotificationsRead() {
 /**
  * PATCH /api/notifications/[id] — one row.
  *
- * Not used by the list, which clears everything on open. It exists for the
- * arrival this client cannot make yet: a push notification opened straight into
- * its target, where exactly one row has been seen and marking the other
- * twenty-three read would be a lie. Kept small and unused rather than written
- * later under time pressure.
+ * Shared by the visible-row batch above and direct notification arrivals.
  */
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await request(`/api/notifications/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-      });
-      if (!res.ok) return legacyFailure(res, "We could not mark that as read.");
-      return (await res.json()) as unknown;
-    },
+    mutationFn: patchNotificationRead,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
       void qc.invalidateQueries({ queryKey: ["home"] });
+      // Loaded lazily: the badge module pulls in the native notifications
+      // library, which this API module must not need just to be imported.
+      void import("../notifications/badge").then((m) => m.syncAppBadge()).catch(() => undefined);
     },
   });
+}
+
+async function patchNotificationRead(id: string): Promise<unknown> {
+  const res = await request(`/api/notifications/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+  });
+  if (!res.ok) return legacyFailure(res, "We could not mark that as read.");
+  return (await res.json()) as unknown;
 }

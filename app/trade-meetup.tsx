@@ -48,6 +48,7 @@ import {
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { offerBorder } from "../src/theme/offer-tokens";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 
 /**
  * The hub picker: "Plan your meetup with Aj" (three-step layout, Oct 2026).
@@ -142,13 +143,23 @@ export default function TradeMeetupScreen() {
   const partner = firstName(trade?.counterparty.name ?? "them");
 
   const shared = useMemo(() => new Set(options.data?.sharedHubIds ?? []), [options.data]);
-  const theirs = useMemo(() => new Set(options.data?.theirHubIds ?? []), [options.data]);
   const hubs = options.data?.hubs ?? [];
   const kmTo = useMemo(
     () => (location ? (h: SafeZoneHub) => distanceKm(location.latitude, location.longitude, h) : null),
     [location],
   );
-  const chosenHub = hubs.find((h) => h.id === chosenHubId) ?? null;
+  // A HUB YOU BOTH LISTED IS CHOSEN FOR YOU (7 Nov 2026), so only the time is
+  // left to pick. Nearest first when the phone already knows where it is.
+  // Still "Tap to change"; never overrides a plan already on the table or a
+  // hub picked here.
+  const defaultHubId = useMemo(() => {
+    const candidates = hubs.filter((h) => shared.has(h.id));
+    if (candidates.length === 0) return null;
+    if (!kmTo) return candidates[0]!.id;
+    return [...candidates].sort((a, b) => kmTo(a) - kmTo(b))[0]!.id;
+  }, [hubs, shared, kmTo]);
+  const effectiveHubId = chosenHubId ?? defaultHubId;
+  const chosenHub = hubs.find((h) => h.id === effectiveHubId) ?? null;
 
   const apiError = active.error instanceof ApiError ? active.error : null;
   if (apiError?.code === "UNAUTHENTICATED") return <Splash waitingOn="Signing you back in" />;
@@ -245,7 +256,7 @@ export default function TradeMeetupScreen() {
     return (
       <OfferScreenHost imeInset={0}>
         <TradesBackTitle title={title} onBack={() => router.back()} />
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}>
           <Gutter style={{ paddingTop: space.home.tileBody }}>
             <SuggestionCard
               tradeId={id}
@@ -260,6 +271,15 @@ export default function TradeMeetupScreen() {
               }}
             />
           </Gutter>
+          {/* The duck in the space below the card (7 Nov 2026), centred. */}
+          <View style={{ flex: 1, justifyContent: "center", paddingTop: 24 }}>
+            <MascotEmptyState
+              pose="search"
+              size={120}
+              title={`${partner} picked a place`}
+              message="Agree to lock it in, or suggest another place."
+            />
+          </View>
         </ScrollView>
       </OfferScreenHost>
     );
@@ -402,13 +422,6 @@ export default function TradeMeetupScreen() {
           selectedId={chosenHub?.id ?? null}
           kmTo={kmTo}
           showNoShared={shared.size === 0}
-          onAddHub={() => {
-            setSheet(null);
-            router.push({
-              pathname: "/edit-hubs",
-              params: { itemId: options.data?.yourItemId ?? "", suggest: [...theirs].join(",") },
-            });
-          }}
           onPick={(picked) => {
             setFailure(null);
             setHubId(picked);

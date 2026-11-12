@@ -53,6 +53,9 @@ export function useTradeRealtime(userId: string | undefined) {
         void qc.invalidateQueries({ queryKey: TRADES_HISTORY_KEY });
         void qc.invalidateQueries({ queryKey: LIVE_OFFERS_KEY });
         void qc.invalidateQueries({ queryKey: confirmStatusKey(event.tradeId) });
+        for (const itemId of event.itemIds ?? []) {
+          void qc.invalidateQueries({ queryKey: ["item", itemId] });
+        }
       }
     };
 

@@ -72,6 +72,10 @@ function serialisable(state: PostState): PostState {
       match: null,
     })),
     valuationPending: false,
+    // An in-flight AI request does not survive the app closing; a finished one
+    // does, and its ticket is checked (and refused if expired) at post time.
+    aiValuation: state.aiValuation?.status === "loading" ? null : (state.aiValuation ?? null),
+    aiNotice: null,
     posting: false,
     postError: null,
     rateLimit: null,

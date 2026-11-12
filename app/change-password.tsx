@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { MIN_PASSWORD_LENGTH, changePassword } from "../src/api/account";
 import { ApiError } from "../src/api/client";
 import { showDialog } from "../src/components/dialog";
+import { PasswordStrengthMeter } from "../src/components/PasswordStrengthMeter";
 import { color, font } from "../src/theme/tokens";
 
 /**
@@ -68,6 +69,7 @@ export default function ChangePasswordScreen() {
           value={next}
           onChangeText={setNext}
           autoComplete="new-password"
+          below={tooShort ? null : <PasswordStrengthMeter password={next} />}
         />
         <PasswordField
           label="Confirm new password"
@@ -105,6 +107,7 @@ function PasswordField({
   value,
   onChangeText,
   autoComplete,
+  below,
 }: {
   label: string;
   hint?: string;
@@ -112,6 +115,8 @@ function PasswordField({
   value: string;
   onChangeText: (value: string) => void;
   autoComplete: "current-password" | "new-password";
+  /** Drawn under the hint: the new password's strength meter. */
+  below?: React.ReactNode;
 }) {
   return (
     <View style={s.field}>
@@ -129,6 +134,7 @@ function PasswordField({
         accessibilityLabel={label}
       />
       {hint ? <Text style={[s.hint, hintIsError && s.hintError]}>{hint}</Text> : null}
+      {below}
     </View>
   );
 }

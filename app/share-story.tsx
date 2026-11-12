@@ -1,9 +1,11 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   StyleSheet,
   Text,
@@ -16,13 +18,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckIcon, CloseIcon } from "../src/components/icons";
 import { Divider } from "../src/components/Divider";
 import { Tappable } from "../src/components/Tappable";
-import { GridTile } from "../src/components/marketplace/GridTile";
+import { sizedImage } from "../src/media/image-url";
 import { showDialog } from "../src/components/dialog";
 import { ApiError } from "../src/api/client";
 import { getActingOrgId } from "../src/api/org-context";
 import { useProfileMe } from "../src/api/profile";
 import { STORY_CAPTION_MAX, useCreateStory, useStories } from "../src/api/stories";
 import { clockTime } from "../src/lib/format";
+import { bracketLabel, bracketOf } from "../src/lib/brackets";
 import type { Item } from "../src/api/types";
 import { border, color, radius, size, space, textStyle, type } from "../src/theme/tokens";
 
@@ -63,11 +66,15 @@ export default function ShareStoryScreen() {
     [me.data],
   );
 
-  const tileWidth = Math.floor((width - space.browse.gridX * 2 - space.browse.gridGap) / 2);
+  // Three across (4 Nov 2026): more listings in view.
+  const tileWidth = Math.floor((width - space.browse.gridX * 2 - space.browse.gridGap * 2) / 3);
+  // Step 1 only picks; the caption and preview come next, in the editor.
+  const [step, setStep] = useState<"pick" | "edit">("pick");
   const close = () => {
     if (router.canGoBack()) router.back();
   };
 
+  const chosen = listings.find((i) => i.id === selected) ?? null;
   const share = () => {
     if (!selected || create.isPending) return;
     create.mutate(
@@ -87,13 +94,23 @@ export default function ShareStoryScreen() {
           } else if (code === "PERSONAL_ONLY") {
             showDialog("Stories are personal", "Switch to your own account to share a story.");
           } else if (e instanceof ApiError && e.status === 404) {
-            showDialog("Can't share this listing", "It's no longer available. Pick another one.");
+            showDialog(
+              "Can't share this listing",
+              "It's no longer available. Pick another one.",
+              [{ text: "Got it" }],
+              { pose: "worry" },
+            );
             setSelected(null);
             void me.refetch();
           } else if (e instanceof ApiError && e.status === 429) {
             showDialog("Slow down a little", "You're sharing too fast. Try again in a few minutes.");
           } else {
-            showDialog("Couldn't share", "Check your connection and try again.");
+            showDialog(
+              "Couldn't share",
+              "Check your connection and try again.",
+              [{ text: "Got it" }],
+              { pose: "worry" },
+            );
           }
         },
       },
@@ -111,7 +128,12 @@ export default function ShareStoryScreen() {
       >
         <CloseIcon size={22} stroke={2} color={color.ink} />
       </Tappable>
-      <Text style={[textStyle(type.sheetTitle), { color: color.ink }]}>Share a listing</Text>
+      <View>
+        <Text style={[textStyle(type.sheetTitle), { color: color.ink }]}>Create a story</Text>
+        <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>
+          {step === "pick" ? "Step 1 of 2 · Pick a listing" : "Step 2 of 2 · Add a caption"}
+        </Text>
+      </View>
     </View>
   );
 
@@ -162,10 +184,7 @@ export default function ShareStoryScreen() {
     const on = selected === item.id;
     return (
       <View style={{ width: tileWidth, opacity: taken ? 0.45 : 1 }}>
-        <GridTile
-          item={item}
-          width={tileWidth}
-          viewerId={item.owner.id}
+        <Tappable
           onPress={() => {
             if (taken) {
               showDialog("Already in your story", "This listing is already in your story.");
@@ -173,7 +192,18 @@ export default function ShareStoryScreen() {
             }
             setSelected(on ? null : item.id);
           }}
-        />
+          accessibilityRole="button"
+          accessibilityState={{ selected: on }}
+          accessibilityLabel={item.title}
+        >
+          <View style={[s.pickPhoto, { width: tileWidth, height: tileWidth }]}>
+            {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "thumb") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+          </View>
+          <Text style={[textStyle(type.gridMeta), { color: color.ink, marginTop: 4 }]} numberOfLines={1}>{item.title}</Text>
+          {item.valueLeaves !== null ? (
+            <Text style={[textStyle(type.gridMeta), { color: color.forest }]}>{bracketLabel(bracketOf(item.valueLeaves))}</Text>
+          ) : null}
+        </Tappable>
         {on ? (
           <View style={s.selectedRing} pointerEvents="none">
             <View style={s.check}>
@@ -193,50 +223,98 @@ export default function ShareStoryScreen() {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {header}
-      <Text style={[textStyle(type.sectionSubcopy), s.subcopy]}>
-        Pick one of your listings. It stays in your story for 24 hours.
-      </Text>
-      <FlatList
-        data={listings}
-        keyExtractor={(i) => i.id}
-        renderItem={renderTile}
-        numColumns={2}
-        columnWrapperStyle={{ gap: space.browse.gridGap }}
-        contentContainerStyle={s.grid}
-        keyboardShouldPersistTaps="handled"
-      />
-
-      <Divider />
-      <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <TextInput
-          value={caption}
-          onChangeText={setCaption}
-          placeholder="Add a caption (optional)"
-          placeholderTextColor={color.inkMuted}
-          maxLength={STORY_CAPTION_MAX}
-          multiline
-          style={[textStyle(type.searchInput), s.input]}
-          accessibilityLabel="Caption, optional"
-        />
-        <Text style={[textStyle(type.gridMeta), s.counter]}>
-          {caption.length}/{STORY_CAPTION_MAX}
-        </Text>
-        <Tappable
-          onPress={share}
-          disabled={!selected || create.isPending}
-          accessibilityRole="button"
-          accessibilityLabel="Share to story"
-          accessibilityState={{ disabled: !selected || create.isPending }}
-          style={[s.shareButton, (!selected || create.isPending) && s.shareDisabled]}
-          pressedStyle={s.pressedFade}
-        >
-          {create.isPending ? (
-            <ActivityIndicator color={color.onGreen} />
-          ) : (
-            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>Share to story</Text>
-          )}
-        </Tappable>
-      </View>
+      {step === "pick" ? (
+        <>
+          <Text style={[textStyle(type.sectionSubcopy), s.subcopy]}>
+            Pick one of your listings. It stays in your story for 24 hours.
+          </Text>
+          <FlatList
+            data={listings}
+            keyExtractor={(i) => i.id}
+            renderItem={renderTile}
+            numColumns={3}
+            columnWrapperStyle={{ gap: space.browse.gridGap }}
+            contentContainerStyle={s.grid}
+          />
+          <Divider />
+          <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
+            {chosen ? (
+              <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]} numberOfLines={1}>
+                {chosen.title}
+              </Text>
+            ) : null}
+            <Tappable
+              onPress={() => setStep("edit")}
+              disabled={!selected}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !selected }}
+              style={[s.shareButton, !selected && s.shareDisabled]}
+              pressedStyle={s.pressedFade}
+            >
+              <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>Next</Text>
+            </Tappable>
+          </View>
+        </>
+      ) : (
+        <>
+          {/* The story as others will see it, in a rounded preview. */}
+          <ScrollView contentContainerStyle={s.editBody} keyboardShouldPersistTaps="handled">
+            <View style={s.preview}>
+              {chosen?.images[0] ? <Image source={{ uri: sizedImage(chosen.images[0], "full") }} contentFit="cover" style={StyleSheet.absoluteFill} /> : null}
+              {caption.trim() ? (
+                <View style={s.previewCaption}>
+                  <Text style={[textStyle(type.detailBody), { color: "#FFFFFF" }]}>{caption}</Text>
+                </View>
+              ) : null}
+              {chosen ? (
+                <View style={s.previewCard}>
+                  <Text style={[textStyle(type.itemTitle), { color: color.ink }]} numberOfLines={1}>{chosen.title}</Text>
+                  <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>
+                    {chosen.valueLeaves !== null ? `${bracketLabel(bracketOf(chosen.valueLeaves))} · ` : ""}{chosen.conditionLabel}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={s.captionHead}>
+              <Text style={[textStyle(type.sheetLabel), { color: color.ink }]}>Caption</Text>
+              <Tappable onPress={() => setStep("pick")} accessibilityRole="button" accessibilityLabel="Change the listing">
+                <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Change listing</Text>
+              </Tappable>
+            </View>
+            <TextInput
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="Add a caption (optional)"
+              placeholderTextColor={color.inkMuted}
+              maxLength={STORY_CAPTION_MAX}
+              multiline
+              style={[textStyle(type.searchInput), s.input]}
+              accessibilityLabel="Caption, optional"
+            />
+            <Text style={[textStyle(type.gridMeta), s.counter]}>
+              {caption.length} / {STORY_CAPTION_MAX}
+            </Text>
+          </ScrollView>
+          <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
+            <Text style={[textStyle(type.gridMeta), { color: color.inkSecondary }]}>Your followers can see it for 24 hours.</Text>
+            <Tappable
+              onPress={share}
+              disabled={!selected || create.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Share to story"
+              accessibilityState={{ disabled: !selected || create.isPending }}
+              style={[s.shareButton, (!selected || create.isPending) && s.shareDisabled]}
+              pressedStyle={s.pressedFade}
+            >
+              {create.isPending ? (
+                <ActivityIndicator color={color.onGreen} />
+              ) : (
+                <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>Share</Text>
+              )}
+            </Tappable>
+          </View>
+        </>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -264,6 +342,12 @@ function Message({
 }
 
 const s = StyleSheet.create({
+  pickPhoto: { borderRadius: 12, overflow: "hidden", backgroundColor: color.control },
+  editBody: { padding: 16, gap: 10 },
+  preview: { height: 380, borderRadius: 20, overflow: "hidden", backgroundColor: color.ink, justifyContent: "flex-end" },
+  previewCaption: { marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 12, backgroundColor: "rgba(20,20,15,0.55)" },
+  previewCard: { margin: 12, marginTop: 0, padding: 12, borderRadius: 14, backgroundColor: color.searchSurface },
+  captionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
   root: { flex: 1, backgroundColor: color.surface },
   header: {
     flexDirection: "row",

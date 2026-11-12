@@ -7,6 +7,7 @@ import { ApiError } from "../src/api/client";
 import { APPEAL_MESSAGE_MAX, useAppealListing, useDeleteItem, useItem, useUpdateItem } from "../src/api/item";
 import type { Item, ListingReview } from "../src/api/types";
 import { Splash } from "../src/components/Splash";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { Hairline, OfferScreenHost, PrimaryButton, SecondaryButton, Section, SectionLabel } from "../src/components/offer/chrome";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
@@ -16,6 +17,10 @@ import { valueRejectionSentence } from "../src/lib/value-rejection";
 import { offerBorder, offerColor, offerRadius, offerSpace, offerType, textStyle } from "../src/theme/offer-tokens";
 import { showDialog } from "../src/components/dialog";
 import { startRelist } from "../src/post/relist";
+import { sizedImage } from "../src/media/image-url";
+import { PencilIcon, TrashIcon } from "../src/components/icons";
+import { color } from "../src/theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
  * /listing-review?id=<itemId> — what happened to your listing, and what you
@@ -73,6 +78,25 @@ export default function ListingReviewScreen() {
         <TradesSkeleton />
       ) : detail.data.viewer.isOwner && item.status === "EXPIRED" ? (
         <ExpiredBody item={item} />
+      ) : detail.data.viewer.isOwner && (item.status === "IN_TRADE" || item.status === "TRADED") ? (
+        // The profile's "In trade" / "Traded" tiles open here. Say what the
+        // label means and where the trade is, rather than "nothing waiting".
+        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 60 }}>
+          <MascotEmptyState
+            pose={item.status === "TRADED" ? "celebrate" : "search"}
+            size={120}
+            title={item.status === "TRADED" ? "This item has been traded" : "This item is in a trade"}
+            message={
+              item.status === "TRADED"
+                ? "The trade is done, so it is off the marketplace for good."
+                : "You accepted an offer for it. It is off the marketplace while you meet up, and comes back if the trade is cancelled."
+            }
+            action={{ label: "Go to my trades", onPress: () => router.navigate("/(app)/trades") }}
+          />
+          <Gutter style={{ paddingTop: 8 }}>
+            <SecondaryButton label="Open the listing" onPress={() => router.replace({ pathname: "/item", params: { id: item.id } })} />
+          </Gutter>
+        </View>
       ) : !detail.data.viewer.isOwner || review === null ? (
         /*
          * Reached with a stale notification — the listing has since been
@@ -110,14 +134,33 @@ export default function ListingReviewScreen() {
  * status, the clock -- is decided afresh. This listing stays as it is.
  */
 function ExpiredBody({ item }: { item: Item }) {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const remove = useDeleteItem();
   const image = item.images[0] ?? null;
+  const confirmDelete = () =>
+    showDialog("Delete this listing?", "It is removed from your profile for good.", [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          remove.mutate(item.id, {
+            onSuccess: () => router.back(),
+            onError: () => showDialog("Could not delete that", "Check your connection and try again."),
+          }),
+      },
+    ]);
+  // The message is centred in the space and the two buttons are pinned to
+  // the bottom, like the item page and the rest of the app (7 Nov 2026).
+  // They used to sit right under the text, high on the screen.
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+    <View style={{ flex: 1 }}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       <Section pad={{ top: 14, bottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
-            {image ? <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
+            {image ? <Image source={{ uri: sizedImage(image, "thumb") }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]} numberOfLines={2}>{item.title}</Text>
@@ -129,17 +172,68 @@ function ExpiredBody({ item }: { item: Item }) {
       </Section>
       <Hairline />
 
-      <Section pad={{ top: 18, bottom: 14 }}>
-        <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink }]}>Expired unsold</Text>
-        <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary, marginTop: 8 }]}>
-          Its trade window closed before anyone traded for it, so it is off the feed and only you can see it. Relist to post it again as a new listing with the same photo and details and a fresh window.
-        </Text>
-      </Section>
+      <View style={{ flex: 1, justifyContent: "center", paddingVertical: 20 }}>
+        <MascotEmptyState
+          pose="worry"
+          size={120}
+          title="Expired unsold"
+          message="Its trade window closed before anyone traded for it, so only you can see it now. Edit and relist it with a fresh window, or delete it."
+        />
+      </View>
 
-      <Gutter style={{ paddingTop: 8, gap: 12 }}>
-        <PrimaryButton label="Relist" onPress={() => void startRelist(item, () => router.replace("/post-item"))} />
-      </Gutter>
     </ScrollView>
+      <Gutter
+        style={{
+          paddingTop: 14,
+          paddingBottom: Math.max(insets.bottom, 16),
+          flexDirection: "row",
+          gap: 10,
+          borderTopWidth: 1,
+          borderTopColor: color.divider,
+          backgroundColor: color.surface,
+        }}
+      >
+        <Tappable
+          onPress={() => void startRelist(item, () => router.replace("/post-item"))}
+          accessibilityRole="button"
+          accessibilityLabel="Edit and relist as a new listing"
+          style={{
+            flex: 1,
+            height: 54,
+            borderRadius: 16,
+            backgroundColor: color.green,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+          pressedStyle={{ opacity: 0.88 }}
+        >
+          <PencilIcon size={18} stroke={2} color={color.onGreen} />
+          <Text style={[textStyle(offerType.buttonPrimary), { color: color.onGreen }]}>Edit and relist</Text>
+        </Tappable>
+        <Tappable
+          onPress={remove.isPending ? undefined : confirmDelete}
+          accessibilityRole="button"
+          accessibilityLabel="Delete listing"
+          accessibilityState={{ disabled: remove.isPending }}
+          style={{
+            width: 54,
+            height: 54,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: color.urgentLine,
+            backgroundColor: "#FFFFFF",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: remove.isPending ? 0.5 : 1,
+          }}
+          pressedStyle={{ backgroundColor: color.urgentWash }}
+        >
+          <TrashIcon size={22} stroke={1.9} color={color.urgent} />
+        </Tappable>
+      </Gutter>
+    </View>
   );
 }
 
@@ -173,7 +267,12 @@ function ReviewBody({
   const typedOk = Number.isFinite(typed) && typed > 0 && (cap === null || bracketOf(typed) <= cap);
 
   const fail = (heading: string, e: unknown) =>
-    showDialog(heading, e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
+    showDialog(
+      heading,
+      e instanceof ApiError ? e.message : "Something went wrong. Please try again.",
+      [{ text: "Got it" }],
+      { pose: "worry" },
+    );
 
   /** PATCH the value; say what the server decided. */
   const setValue = (valueLeaves: number, what: string) =>
@@ -188,7 +287,9 @@ function ReviewBody({
             );
             return;
           }
-          showDialog("Listed", `${what}. Your listing is live.`, [{ text: "OK", onPress: onGone }]);
+          showDialog("Listed", `${what}. Your listing is live.`, [{ text: "Nice", onPress: onGone }], {
+            pose: "box",
+          });
         },
         onError: (e) => fail("Could not change the value", e),
       },
@@ -244,7 +345,7 @@ function ReviewBody({
       <Section pad={{ top: 14, bottom: 14 }}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 56, height: 56, borderRadius: offerRadius.button, overflow: "hidden", backgroundColor: offerColor.photoPlaceholder }}>
-            {image ? <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
+            {image ? <Image source={{ uri: sizedImage(image, "thumb") }} contentFit="cover" style={{ width: "100%", height: "100%" }} /> : null}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[textStyle(offerType.itemTitleRow), { color: offerColor.ink }]} numberOfLines={2}>{title}</Text>

@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ApiError, apiV1 } from "../src/api/client";
 import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
-  useMarkAllNotificationsRead,
+  useMarkNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
 import type { ItemDetailPayload, NotificationItem } from "../src/api/types";
@@ -19,8 +19,10 @@ import { PersonIcon, StoreIcon } from "../src/components/icons";
 import { orgLogoUrl } from "../src/api/organizations";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import { RowChevron, Thumb } from "../src/components/trades/rows";
-import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
+import { TradesErrorPanel } from "../src/components/trades/states";
 import { Tappable } from "../src/components/Tappable";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
+import { color } from "../src/theme/tokens";
 import { relativeShort } from "../src/lib/format";
 import {
   offerColor,
@@ -57,11 +59,12 @@ import {
  * shop is what the row is about, and the owner is usually photo-less, which
  * drew a blank grey tile. No logo draws the store glyph, never a blank.
  *
- * ══ EVERY ROW IS READ ON OPEN. THE DOTS STAY ANYWAY. ═══════════════════════
+ * ══ VISIBLE ROWS ARE READ ON OPEN. THE DOTS STAY ANYWAY. ══════════════════
  *
- * Opening the list marks the whole thing read — see `useMarkAllNotificationsRead`
- * for why that, and not per-row. But the unread DOT is drawn from a snapshot
- * taken on the first render and does not move while the screen is up.
+ * Opening the list marks its visible activity rows read. Message notifications
+ * are excluded here and are marked read by fetching their conversation thread.
+ * The unread DOT is drawn from a snapshot taken on the first render and does
+ * not move while the screen is up.
  *
  * If it cleared live, the screen would blank its own dots a beat after opening
  * and the reader would never learn which rows were the new ones — the single
@@ -72,12 +75,13 @@ import {
  */
 export default function NotificationsScreen() {
   const router = useRouter();
+  const [filter, setFilter] = useState<Filter>("all");
   const list = useNotifications();
-  const markAll = useMarkAllNotificationsRead();
+  const markVisible = useMarkNotificationsRead();
 
   /*
    * The snapshot behind the dots. Captured the first time rows arrive and never
-   * rewritten — `markAll` invalidates the query a moment later and the refetched
+   * rewritten — `markVisible` invalidates the query a moment later and the refetched
    * rows all come back `read: true`, which is correct data and the wrong thing
    * to render. See the note above.
    */
@@ -89,28 +93,36 @@ export default function NotificationsScreen() {
   }
 
   /*
-   * Fire once, and only when there is something to clear.
+   * Fire once, and only for visible unread activity rows.
    *
-   * `markAll.mutate` is deliberately NOT in the dependency array: the mutation
+   * `markVisible.mutate` is deliberately NOT in the dependency array: the mutation
    * object is a new reference on every render, and depending on it would fire
-   * this effect on each one — a PATCH per render for as long as the screen is
-   * open. The ref guard is what makes "once" true rather than merely likely.
+   * this effect on each one. The ref guard is what makes "once" true rather
+   * than merely likely.
    */
   const cleared = useRef(false);
-  const unreadCount = list.data?.unreadCount ?? 0;
+  const visibleUnreadIds = list.data?.notifications.filter((n) => !n.read).map((n) => n.id) ?? [];
   useEffect(() => {
-    if (cleared.current || unreadCount === 0) return;
+    if (cleared.current || visibleUnreadIds.length === 0) return;
     cleared.current = true;
-    markAll.mutate();
+    markVisible.mutate(visibleUnreadIds, {
+      onError: (error: unknown) =>
+        showDialog(
+          "Could not mark those as read",
+          error instanceof ApiError ? error.message : "Something went wrong. Try again.",
+        ),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unreadCount]);
+  }, [visibleUnreadIds]);
 
   const apiError = list.error instanceof ApiError ? list.error : null;
   if (apiError?.code === "UNAUTHENTICATED") {
     return <Splash waitingOn="Signing you back in" />;
   }
 
-  const rows = list.data?.notifications ?? [];
+  const all = list.data?.notifications ?? [];
+  const rows = filter === "all" ? all : all.filter((n) => filterOf(n.type) === filter);
+  const groups = groupByAge(rows);
 
   return (
     <OfferScreenHost imeInset={0}>
@@ -119,29 +131,182 @@ export default function NotificationsScreen() {
       {list.isError ? (
         <TradesErrorPanel onRetry={() => void list.refetch()} />
       ) : list.isPending ? (
-        <TradesSkeleton />
-      ) : rows.length === 0 ? (
-        <Gutter style={{ paddingTop: 18 }}>
-          <Text style={[textStyle(offerType.body), { color: offerColor.inkSecondary }]}>
-            Nothing yet. Offers, trades and messages you need to know about land here.
-          </Text>
-        </Gutter>
+        <NotificationSkeleton />
+      ) : all.length === 0 ? (
+        // The duck, what is missing, what will appear, and the next step.
+        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 60 }}>
+          <MascotEmptyState
+            pose="search"
+            title="No notifications yet"
+            message="Offers on your items, accepted trades, meetup reminders and reviews will show up here."
+            action={{ label: "Browse the marketplace", onPress: () => router.push("/marketplace") }}
+          />
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-          <Hairline />
-          {rows.map((n) => (
-            <View key={n.id}>
-              <NotificationRow
-                item={n}
-                wasUnread={unreadOnEntry.current?.has(n.id) ?? false}
-                onOpen={(path) => router.push(path as never)}
+          {/* Filter chips: what kind of update. */}
+          <View style={chipStyles.row}>
+            {FILTERS.map((f) => (
+              <Tappable
+                key={f.key}
+                onPress={() => setFilter(f.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filter === f.key }}
+                style={[chipStyles.chip, filter === f.key && chipStyles.chipOn]}
+              >
+                <Text style={[chipStyles.text, filter === f.key && chipStyles.textOn]}>{f.label}</Text>
+              </Tappable>
+            ))}
+          </View>
+          {rows.length === 0 ? (
+            <View style={{ paddingTop: 40 }}>
+              <MascotEmptyState
+                pose="search"
+                size={110}
+                title={filter === "all" ? "You're all caught up" : "Nothing here yet"}
+                message={filter === "all" ? "Offers, trades and new followers show up here." : "Notifications of this kind will show up here."}
               />
+            </View>
+          ) : null}
+          {groups.map((g) => (
+            <View key={g.label}>
+              <Text style={chipStyles.section}>{g.label}</Text>
               <Hairline />
+              {g.items.map((n) => (
+                <View key={n.id}>
+                  <NotificationRow
+                    item={n}
+                    wasUnread={unreadOnEntry.current?.has(n.id) ?? false}
+                    onOpen={(path) => router.push(path as never)}
+                  />
+                  <Hairline />
+                </View>
+              ))}
             </View>
           ))}
         </ScrollView>
       )}
     </OfferScreenHost>
+  );
+}
+
+type Filter = "all" | "offers" | "trades" | "people";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "offers", label: "Offers" },
+  { key: "trades", label: "Trades" },
+  { key: "people", label: "People" },
+];
+
+/** Which chip a notification type belongs to. Unknown types show under All only. */
+function filterOf(type: string): Filter | null {
+  if (type === "TRADE_REQUEST" || type.startsWith("OFFER_")) return "offers";
+  if (type.startsWith("TRADE_") || type.startsWith("MEETUP_")) return "trades";
+  if (type.startsWith("FOLLOW_") || type === "NEW_REVIEW") return "people";
+  return null;
+}
+
+/** Today / This week / Earlier, newest first within each, in the server's order. */
+function groupByAge<T extends { createdAt: string }>(rows: T[]): { label: string; items: T[] }[] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const today = startOfToday.getTime();
+  const week = today - 6 * 86_400_000;
+  const buckets: { label: string; items: T[] }[] = [
+    { label: "TODAY", items: [] },
+    { label: "THIS WEEK", items: [] },
+    { label: "EARLIER", items: [] },
+  ];
+  for (const r of rows) {
+    const t = Date.parse(r.createdAt);
+    buckets[t >= today ? 0 : t >= week ? 1 : 2].items.push(r);
+  }
+  return buckets.filter((b) => b.items.length > 0);
+}
+
+const chipStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 6, paddingHorizontal: offerSpace.screenX, paddingTop: 8, paddingBottom: 4 },
+  chip: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: color.controlLine,
+    backgroundColor: color.searchSurface,
+    justifyContent: "center",
+  },
+  chipOn: { backgroundColor: color.ink, borderColor: color.ink },
+  text: { fontSize: 13, fontWeight: "500", color: color.ink },
+  textOn: { color: "#FFFFFF", fontWeight: "600" },
+  section: {
+    paddingHorizontal: offerSpace.screenX,
+    paddingTop: 16,
+    paddingBottom: 6,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    color: color.inkSecondary,
+  },
+});
+
+function NotificationSkeleton() {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 30 }}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Hairline />
+      {Array.from({ length: 5 }, (_, index) => (
+        <View key={index}>
+          <View
+            style={{
+              minHeight: 82,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              paddingHorizontal: offerSpace.screenX,
+              paddingVertical: 14,
+            }}
+          >
+            <View
+              style={{
+                width: offerSize.tradeRow.thumb,
+                height: offerSize.tradeRow.thumb,
+                borderRadius: offerSize.tradeRow.thumb / 2,
+                backgroundColor: offerColor.sunk,
+              }}
+            />
+            <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+              <SkeletonLine width="88%" height={14} />
+              <SkeletonLine width="64%" height={14} />
+              <SkeletonLine width="24%" height={10} />
+            </View>
+            <View style={{ width: 8 }} />
+          </View>
+          <Hairline />
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function SkeletonLine({
+  width,
+  height,
+}: {
+  width: `${number}%`;
+  height: number;
+}) {
+  return (
+    <View
+      style={{
+        width,
+        height,
+        borderRadius: height / 2,
+        backgroundColor: offerColor.sunk,
+      }}
+    />
   );
 }
 
@@ -167,8 +332,11 @@ function NotificationRow({
   const name = item.actor?.name?.trim() || null;
 
   // The actor's name is the sentence's subject; the server's `message` is its
-  // predicate. A system row is already whole and gets no prefix.
-  const line = name ? `${name} ${item.message}` : item.message;
+  // predicate. A system row is already whole and gets no prefix -- and so does
+  // a message that already names them (TRADE_CANCELLED: "Aj cancelled the
+  // trade for ..."), which read "Aj Aj cancelled ..." until 20 Oct 2026. The
+  // push uses the same rule (baylo-api @/lib/push).
+  const line = name && !item.message.startsWith(name) ? `${name} ${item.message}` : item.message;
 
   const body = (
     <View
@@ -223,7 +391,12 @@ function NotificationRow({
 
   if (!target) {
     return (
-      <View accessible accessibilityRole="text" accessibilityLabel={line}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={line}
+        style={wasUnread ? { backgroundColor: color.greenWash } : undefined}
+      >
         {body}
       </View>
     );
@@ -234,6 +407,8 @@ function NotificationRow({
       onPress={() => onOpen(target)}
       accessibilityRole="button"
       accessibilityLabel={wasUnread ? `Unread. ${line}` : line}
+      // Unread rows get a soft tint as well as the dot (4 Nov 2026).
+      style={wasUnread ? { backgroundColor: color.greenWash } : undefined}
       pressedStyle={{ backgroundColor: offerColor.quiet }}
     >
       {body}
@@ -276,6 +451,8 @@ function RelistButton({ itemId }: { itemId: string }) {
         e instanceof ApiError && e.status === 404
           ? "This listing no longer exists."
           : "Something went wrong. Please try again.",
+        [{ text: "Got it" }],
+        { pose: "worry" },
       );
     } finally {
       setBusy(false);

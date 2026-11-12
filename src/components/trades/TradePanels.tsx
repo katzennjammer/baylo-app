@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import {
@@ -26,6 +26,7 @@ import { TradeButton } from "./trade-ui";
 import { consent as consentCopy, replyBy } from "../offer/copy";
 import { color, radius, space, textStyle, type } from "../../theme/tokens";
 import { offerBorder } from "../../theme/offer-tokens";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * The trade screen's step panels (Round 2, 1 Oct 2026). Each one is the
@@ -65,13 +66,9 @@ function Body({ children, tone = "secondary" }: { children: ReactNode; tone?: "i
   );
 }
 
+/** A failure on a trade panel: a popup with the worried duck, not red text. */
 export function Failure({ children }: { children: string | null }) {
-  if (!children) return null;
-  return (
-    <Text accessibilityLiveRegion="polite" style={[textStyle(type.detailBody), { color: color.urgent }]}>
-      {children}
-    </Text>
-  );
+  return <FailurePopup message={children} />;
 }
 
 /** Decline (outlined) · Accept (solid forest), equal widths. */
@@ -106,6 +103,7 @@ export function OfferPanel({
     decline: () => void;
     decided: { action: "accept" | "decline"; result: OfferDecided } | null;
     failure: string | null;
+    unavailable?: boolean;
     receiverPays: boolean;
     fee: number;
     balance: number | null;
@@ -152,6 +150,12 @@ export function OfferPanel({
               onPress={() => onOpenTrade(flow.decided!.result.tradeId!)}
             />
           ) : null}
+        </View>
+      ) : flow.unavailable ? (
+        // The item went away: say so, and leave Decline as the only action.
+        <View style={{ gap: space.browse.searchGap }}>
+          <Body tone="muted">This item isn't available any more, so the offer can't go ahead.</Body>
+          <TradeButton label={copy.waiting.decline} tone="outline" onPress={flow.decline} />
         </View>
       ) : (
         <>
@@ -233,6 +237,14 @@ export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
     );
   }
 
+  // AGREED ALREADY: the …/meetup read is fresher than the trade list the
+  // parent chose this panel from (a push tapped after a background agree).
+  // Say so, and refetch the list so the parent moves on to the handover step,
+  // instead of falling through to "Choose a hub" for a settled plan.
+  if (state === "agreed" && plan) {
+    return <AgreedRefresh tradeId={trade.id} line={copy.meetup.where(plan.hub.name, meetupWhen(new Date(plan.at)))} />;
+  }
+
   if (state === "yours-to-answer" && plan) {
     return (
       <SuggestionCard
@@ -252,6 +264,32 @@ export function HubStepPanel({ trade }: { trade: ActiveTrade }) {
       <TradeButton label={copy.tradeScreen.chooseHub} onPress={openPicker} />
     </View>
   );
+}
+
+/** The completed-trade summary's names for each reward line. */
+const REWARD_LABEL: Record<string, string> = {
+  TRADE: "Trade reward",
+  SAFEZONE_MEETUP: "Safe hub reward",
+  FIRST_TRADE: "First trade bonus",
+  VERIFIED_SWAP: "Verified swap",
+};
+/**
+ * A 0-Leaf line is a denial the server recorded. Its reasons, from
+ * awardTask() in the API: the same partner within 30 days, or the weekly
+ * task limit. The ledger does not say which, so both are named.
+ */
+const REWARD_NOT_PAID: Record<string, string> = {
+  SAFEZONE_MEETUP: "Not paid: same partner within 30 days, or weekly limit reached",
+  FIRST_TRADE: "Not paid: weekly limit reached",
+};
+
+function AgreedRefresh({ tradeId, line }: { tradeId: string; line: string }) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: TRADES_ACTIVE_KEY });
+    void qc.invalidateQueries({ queryKey: meetupKey(tradeId) });
+  }, [qc, tradeId]);
+  return <WaitingPanel line={copy.meetup.agreed} detail={line} />;
 }
 
 /**
@@ -385,11 +423,37 @@ export function DonePanel({ trade }: { trade: ActiveTrade }) {
       <Body tone="ink">{headline}</Body>
       {trade.status === "COMPLETED" ? (
         <View style={s.details}>
-          <Detail label="Meetup hub" value={trade.safeZoneHub?.name ?? "No hub recorded"} />
-          <Detail
-            label="Leaves reward earned"
-            value={trade.rewardLeaves === null ? "None" : `+${trade.rewardLeaves} Leaves`}
-          />
+          {/* The hub that counted for the reward, else the one you agreed on
+              (7 Nov 2026): a hub on neither listing still was the meetup,
+              it just doesn't earn the Safe hub reward. */}
+          <Detail label="Meetup hub" value={trade.safeZoneHub?.name ?? trade.meetup?.hub.name ?? "No hub recorded"} />
+          {!trade.safeZoneHub && trade.meetup && !(trade.rewards ?? []).some((r) => r.kind === "SAFEZONE_MEETUP") ? (
+            <Detail label="Safe hub reward" value="Not eligible: this hub wasn't on both listings" />
+          ) : null}
+          {/* Each reward on its own line (7 Nov 2026). Only the trade reward
+              was read before, so a paid Safe-hub bonus showed as "None". */}
+          {trade.rewards && trade.rewards.length > 0 ? (
+            trade.rewards.map((r, i) => (
+              <Detail
+                key={`${r.kind}-${i}`}
+                label={REWARD_LABEL[r.kind] ?? "Leaves reward"}
+                value={
+                  r.leaves > 0
+                    ? `+${r.leaves} Leaves`
+                    : r.reason === "repeat_partner"
+                      ? `Not paid: you traded with ${partner} in the last 30 days`
+                      : r.reason === "weekly_cap"
+                        ? "Not paid: weekly reward limit reached"
+                        : REWARD_NOT_PAID[r.kind] ?? "Not paid"
+                }
+              />
+            ))
+          ) : (
+            <Detail
+              label="Leaves reward earned"
+              value={trade.rewardLeaves === null ? "None" : `+${trade.rewardLeaves} Leaves`}
+            />
+          )}
           <Detail label="Rating I gave" value={trade.myReview ? `${trade.myReview.rating}/5` : "Not rated yet"} />
           <Detail
             label="Rating I received"

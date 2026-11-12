@@ -1,10 +1,13 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { memo, useState } from "react";
+import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { BoltIcon, ImageIcon, LeafIcon, VerifiedOrgIcon } from "../icons";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import {
   border,
   color,
@@ -62,8 +65,8 @@ export const ExclusiveTile = memo(function ExclusiveTile({
   /** This listing's own window, e.g. "~4h left". Shown on the meta line. */
   expiryLabel?: string;
 }) {
-  const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const photo = usePhotoRetry(cover);
   const own = viewerId !== null && item.owner.id === viewerId;
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
   const perishable = showPerishableBadge ?? item.perishable != null;
@@ -89,17 +92,19 @@ export const ExclusiveTile = memo(function ExclusiveTile({
       style={[s.tile, { width, height: width / size.home.exclusiveTileAspect }]}
       pressedStyle={s.tilePressed}
     >
-      {cover && !failed ? (
+      {cover && !photo.failed ? (
         <Image
-          source={{ uri: cover }}
+          key={photo.key}
+          source={{ uri: sizedImage(cover, "card") }}
           contentFit="cover"
           style={StyleSheet.absoluteFill}
           transition={120}
-          onError={() => setFailed(true)}
+          onError={photo.onError}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, s.photoFailed]}>
           <ImageIcon size={icon.failedPhoto.size} stroke={icon.failedPhoto.stroke} color={dark.muted} />
+          {cover ? <ReloadPhotoButton onPress={photo.retry} /> : null}
         </View>
       )}
 
@@ -157,7 +162,7 @@ const s = StyleSheet.create({
     justifyContent: "flex-end",
   },
   tilePressed: { opacity: 0.85 },
-  photoFailed: { alignItems: "center", justifyContent: "center", backgroundColor: dark.control },
+  photoFailed: { alignItems: "center", justifyContent: "center", gap: space.card.failedGap, backgroundColor: dark.control },
   badges: {
     position: "absolute",
     top: space.home.tileBadgeInset,

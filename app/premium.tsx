@@ -1,14 +1,16 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { Path, Rect } from "react-native-svg";
+import { Image } from "expo-image";
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
 import { useProfileMe } from "../src/api/profile";
-import { PrimaryButton, SecondaryButton, SectionLabel } from "../src/components/offer/chrome";
 import { LockIcon } from "../src/components/offer/icons";
 import { OfferSheet } from "../src/components/offer/OfferSheet";
 import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
-import { bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
+import { Tappable } from "../src/components/Tappable";
+import { BRACKET_COUNT, bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
+import { MASCOT } from "../src/media/mascots";
 import {
   hasPremiumAccess,
   PREMIUM_BETA_NOTE,
@@ -48,12 +50,14 @@ import {
  * first-run prompt this one is dismissible: a scrim tap, the back gesture, a
  * drag down on the handle, or `Done`, all of which pop the route.
  *
- * Same tokens, same rhythm: `offerSpace.prompt`'s 20 gutter, a 700 Bricolage
- * heading, then titled paragraphs — a 15/600 `reachHeading` over a 14/21
- * `bodyDense` in inkSecondary, 3 apart, 16 between — and one green primary
- * button pinned at the bottom. Where that sheet numbers its rules `01`–`04`
- * in mono, the perks here lead with an icon on a green-wash tile, because a
- * perk is a thing you get rather than a step you follow.
+ * ── THE LAYOUT ───────────────────────────────────────────────────────────────
+ *
+ * A storefront paywall, top to bottom: a green-wash hero with a cloud-shaped
+ * top, sparkles and Baylo's leaf-holding duck; a large
+ * two-line Bricolage headline with its payoff in forest green; one plan card
+ * (term, a BETA tag, the price, the beta note); `What's included for you`; and
+ * a dark pill button pinned at the bottom with one centred line under it.
+ * There is one plan, so there is no `Show more plans`.
  *
  * ── WHAT THIS SCREEN MUST NOT DO ─────────────────────────────────────────────
  *
@@ -65,7 +69,8 @@ import {
  *
  * Every number is imported, not typed: the bracket floors from brackets.ts,
  * the standard fee from the trade-rules mirror, the Premium rate from
- * premium.ts's mirror of the server's PREMIUM_BRIDGE_FEE_PER_BRACKET.
+ * premium.ts's mirror of the server's PREMIUM_BRIDGE_FEE_PER_BRACKET, and the
+ * price and term from premium.ts.
  */
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -80,6 +85,15 @@ const DISCOUNT_PERCENT = Math.round(
   ((BRIDGE_FEE_PER_BRACKET - PREMIUM_BRIDGE_FEE_PER_BRACKET) / BRIDGE_FEE_PER_BRACKET) * 100,
 );
 
+/** `one-time · lifetime` → the price's suffix and the card's title word. */
+const [TERM_PAYMENT, TERM_LENGTH = ""] = PREMIUM_TERM_LABEL.split(" · ");
+const TERM_TITLE = TERM_LENGTH ? TERM_LENGTH[0].toUpperCase() + TERM_LENGTH.slice(1) : "Premium";
+
+const HERO_HEIGHT = 236;
+/** The top of the hero wash: a step deeper than `trackGreen`, so white sparkles and the sticker edge read on it. */
+const HERO_WASH = "#C9E8D0";
+const NOT_CHARGED = "Payments open in a future update. You will not be charged today.";
+
 /**
  * The perks, each one something a live subscription actually changes on the
  * server today. The search assistant (Premium-gated POST /api/v1/assistant) is
@@ -91,9 +105,9 @@ const PERKS: readonly { key: string; Icon: (p: IconProps) => React.JSX.Element; 
     key: "brackets",
     Icon: UnlockIcon,
     title: `Trade in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above`,
-    body:
-      `Propose on and accept items in Brackets ${PREMIUM_MIN_BRACKET} and ${VIP_MIN_BRACKET - 1}. ` +
-      `Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which comes later.`,
+    // Every bracket from PREMIUM_MIN_BRACKET up since 22 Oct 2026, when the
+    // server dropped the VIP-only bracket (9+), a tier nobody could buy.
+    body: `Propose on and accept items in Bracket ${PREMIUM_MIN_BRACKET} and every bracket above it.`,
   },
   {
     key: "bridge",
@@ -132,8 +146,8 @@ export default function PremiumScreen() {
     if (rep) noteOpeningReputation({ premium: rep.premium, vip: rep.vip });
   }, [rep?.premium, rep?.vip]); // eslint-disable-line react-hooks/exhaustive-deps
   const p = offerSpace.prompt;
-  // `How trading works`'s sizing: its height, clamped to the window; the body scrolls.
-  const height = Math.min(p.height, Math.round(windowHeight * 0.88));
+  // Taller than `How trading works`: the hero takes the top of the sheet.
+  const height = Math.round(windowHeight * 0.92);
   const close = () => router.back();
 
   if (isLoading) {
@@ -150,84 +164,55 @@ export default function PremiumScreen() {
     <OfferSheet dismissible swipeToDismiss onDismiss={close} height={height}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: p.x, paddingTop: p.handleToHeading, paddingBottom: p.listToButton }}
+        contentContainerStyle={{ paddingBottom: p.listToButton }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero ─────────────────────────────────────────────────────── */}
-        <View style={{ alignItems: "center" }}>
-          <View
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              backgroundColor: offerColor.green,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <StarIcon size={34} stroke={2} color={offerColor.onGreen} />
-          </View>
+        <Hero />
+
+        <View style={{ paddingHorizontal: p.x }}>
+          {/* ── Headline ──────────────────────────────────────────────── */}
           <Text
             style={[
               textStyle(offerType.screenHeading),
-              { color: offerColor.ink, marginTop: p.handleToHeading, textAlign: "center" },
+              { color: offerColor.ink, fontSize: 30, lineHeight: 36, letterSpacing: -0.4, textAlign: "center" },
             ]}
             accessibilityRole="header"
           >
-            {active ? "You're a Premium member" : "Unlock Premium"}
+            {active ? "You're a\n" : "Trade bigger.\nBridge "}
+            <Text style={{ color: offerColor.deep }}>{active ? "Premium member" : `${DISCOUNT_PERCENT}% cheaper`}</Text>
+            {active ? "" : "."}
           </Text>
-          <Text
-            style={[
-              textStyle(offerType.body),
-              { color: offerColor.inkSecondary, marginTop: 6, textAlign: "center" },
-            ]}
-          >
-            {active
-              ? "Here's everything your membership includes."
-              : "Trade for bigger things, pay less to bridge, and show it on your profile."}
+          {rep ? (
+            <View style={{ alignItems: "center" }}>
+              <StatusPill active={active} rep={rep} />
+            </View>
+          ) : null}
+
+          {/* ── Why you're here, when a gate sent you ────────────────── */}
+          {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
+          {reason === "vip" && active ? <BlockedNote reason="vip" bracket={bracket} /> : null}
+
+          {/* ── The plan ──────────────────────────────────────────────── */}
+          {!active ? <PlanCard /> : null}
+
+          {/* ── Perks ─────────────────────────────────────────────────── */}
+          <Text style={[textStyle(offerType.sheetHeading), { color: offerColor.ink, fontSize: 19, marginTop: 28 }]}>
+            {active ? "What's included" : "What's included for you"}
           </Text>
-          {rep ? <StatusPill active={active} rep={rep} /> : null}
-        </View>
-
-        {/* ── Why you're here, when a gate sent you ────────────────────── */}
-        {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
-        {reason === "vip" && active ? <BlockedNote reason="vip" bracket={bracket} /> : null}
-
-        {/* ── Perks ───────────────────────────────────────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <SectionLabel>What you get</SectionLabel>
-          <View
-            style={{
-              marginTop: offerSpace.labelToContent,
-              borderRadius: offerRadius.sheet,
-              borderWidth: offerBorder.hairline,
-              borderColor: offerColor.hairline,
-              backgroundColor: offerColor.paper,
-              paddingHorizontal: 16,
-            }}
-          >
-            {PERKS.map(({ key, Icon, title, body }, i) => (
-              <View
-                key={key}
-                style={{
-                  flexDirection: "row",
-                  gap: 14,
-                  paddingVertical: p.sectionGap,
-                  borderTopWidth: i === 0 ? 0 : offerBorder.hairline,
-                  borderTopColor: offerColor.hairline,
-                }}
-              >
+          <View style={{ marginTop: 6 }}>
+            {PERKS.map(({ key, Icon, title, body }) => (
+              <View key={key} style={{ flexDirection: "row", gap: 14, paddingVertical: 12 }}>
                 <View
                   style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
                     backgroundColor: offerColor.trackGreen,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Icon size={20} stroke={1.8} color={offerColor.deep} />
+                  <Icon size={18} stroke={1.8} color={offerColor.deep} />
                 </View>
                 <View style={{ flex: 1, gap: p.titleToBody }}>
                   <Text style={[textStyle(offerType.reachHeading), { color: offerColor.ink }]}>{title}</Text>
@@ -237,72 +222,194 @@ export default function PremiumScreen() {
             ))}
           </View>
         </View>
-
-        {/* ── Price ───────────────────────────────────────────────────── */}
-        {!active ? (
-          <View
-            style={{
-              marginTop: 20,
-              borderRadius: offerRadius.sheet,
-              borderWidth: offerBorder.selected,
-              borderColor: offerColor.green,
-              backgroundColor: offerColor.tintGreen,
-              paddingVertical: 18,
-              paddingHorizontal: 20,
-              alignItems: "center",
-            }}
-            accessibilityLabel={`Premium costs ${PREMIUM_PRICE}, ${PREMIUM_TERM_LABEL.replace(" · ", ", ")}. ${PREMIUM_BETA_NOTE}`}
-          >
-            <SectionLabel>Beta price</SectionLabel>
-            <Text
-              style={[
-                textStyle(offerType.detailTitle),
-                { color: offerColor.ink, fontSize: 36, lineHeight: 42, marginTop: 8 },
-              ]}
-            >
-              {PREMIUM_PRICE}
-            </Text>
-            <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginTop: 2 }]}>
-              {PREMIUM_TERM_LABEL}
-            </Text>
-            <Text
-              style={[
-                textStyle(offerType.helper),
-                { color: offerColor.inkTertiary, marginTop: 8, textAlign: "center" },
-              ]}
-            >
-              {PREMIUM_BETA_NOTE}
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
 
       {/* Pinned under the scroll, as `Got it` is. The sheet already pads for
           the home indicator, so this is not `OfferBottomBar`, which would pad
           for it a second time. */}
-      <View style={{ paddingHorizontal: p.x }}>
+      <View style={{ paddingHorizontal: p.x, paddingTop: 10 }}>
         {active ? (
-          <SecondaryButton label="Done" onPress={close} />
+          <PillButton label="Done" onPress={close} />
         ) : (
           <>
-            <PrimaryButton
-              label={`Get Premium · ${PREMIUM_PRICE} one-time`}
-              onPress={() => {}}
-              disabled
-              disabledHint="Payments open in a future update. You will not be charged today."
-            />
+            <PillButton label={`Get Premium for ${PREMIUM_PRICE}`} onPress={() => {}} disabled disabledHint={NOT_CHARGED} />
             <Text
               style={[
                 textStyle(offerType.helper),
-                { color: offerColor.inkTertiary, marginTop: offerSpace.bottomBar.buttonToFootnote },
+                {
+                  color: offerColor.inkTertiary,
+                  marginTop: offerSpace.bottomBar.buttonToFootnote,
+                  textAlign: "center",
+                },
               ]}
             >
-              Payments open in a future update. You will not be charged today.
+              {NOT_CHARGED}
             </Text>
           </>
         )}
       </View>
     </OfferSheet>
+  );
+}
+
+/**
+ * The top of the sheet: a green wash with a scalloped, cloud-like top edge
+ * that fades into paper, a smiling cloud, a scatter of sparkles, and the
+ * leaf-holding duck standing in the middle.
+ */
+function Hero() {
+  return (
+    <View style={{ height: HERO_HEIGHT, marginTop: 6 }} accessible={false} importantForAccessibility="no-hide-descendants">
+      <Svg width="100%" height={HERO_HEIGHT} viewBox={`0 0 360 ${HERO_HEIGHT}`} preserveAspectRatio="none" style={{ position: "absolute" }}>
+        <Defs>
+          <LinearGradient id="wash" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={HERO_WASH} />
+            <Stop offset="0.65" stopColor={offerColor.trackGreen} />
+            <Stop offset="1" stopColor={offerColor.paper} />
+          </LinearGradient>
+        </Defs>
+        <Path
+          d={`M0 78 C0 52 22 40 46 44 C58 16 100 6 130 24 C150 2 206 0 226 24 C254 6 300 12 314 42 C340 40 360 56 360 80 V${HERO_HEIGHT} H0 Z`}
+          fill="url(#wash)"
+        />
+      </Svg>
+
+      {/* The cloud, top left. */}
+      <View style={{ position: "absolute", left: 30, top: 34 }}>
+        <Svg width={64} height={40} viewBox="0 0 64 40">
+          <Path
+            d="M14 38 C5 38 2 30 6 25 C2 18 9 10 17 13 C19 4 31 1 37 8 C43 2 55 5 55 15 C62 16 64 25 59 30 C59 36 54 38 49 38 Z"
+            fill="#FFFFFF"
+          />
+          <Circle cx={26} cy={24} r={1.8} fill={offerColor.ink} />
+          <Circle cx={38} cy={24} r={1.8} fill={offerColor.ink} />
+          <Path d="M29 29 Q32 32 35 29" stroke={offerColor.ink} strokeWidth={1.4} fill="none" strokeLinecap="round" />
+          <Ellipse cx={21} cy={28} rx={3} ry={1.8} fill={offerColor.warm} opacity={0.3} />
+          <Ellipse cx={43} cy={28} rx={3} ry={1.8} fill={offerColor.warm} opacity={0.3} />
+        </Svg>
+      </View>
+
+      <Sparkle size={22} style={{ left: "20%", top: 108 }} />
+      <Sparkle size={26} style={{ right: "22%", top: 38 }} />
+      <Sparkle size={14} style={{ right: "10%", top: 76 }} />
+      <Sparkle size={18} style={{ right: "14%", top: 150 }} />
+
+      <View style={{ position: "absolute", left: 0, right: 0, top: 40, alignItems: "center" }}>
+        <Mascot size={180} />
+      </View>
+    </View>
+  );
+}
+
+/** A white four-point sparkle, absolutely placed. */
+function Sparkle({ size, style }: { size: number; style: { left?: `${number}%`; right?: `${number}%`; top: number } }) {
+  return (
+    <View style={[{ position: "absolute" }, style]}>
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0 Z" fill="#FFFFFF" />
+      </Svg>
+    </View>
+  );
+}
+
+function Mascot({ size }: { size: number }) {
+  const duckHeight = size;
+  const duckWidth = (duckHeight * 240) / 346;
+  return (
+    <Image
+      source={MASCOT.leaf}
+      contentFit="contain"
+      style={{ width: duckWidth, height: duckHeight }}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+}
+
+/**
+ * The one plan: its term, a BETA tag where a discount tag would sit, the
+ * price, and the beta note — so nobody reads the beta price as the final figure.
+ */
+function PlanCard() {
+  return (
+    <View
+      style={{
+        marginTop: 24,
+        borderRadius: offerRadius.sheet,
+        borderWidth: offerBorder.selected,
+        borderColor: offerColor.green,
+        backgroundColor: offerColor.tintGreen,
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+      }}
+      accessible
+      accessibilityLabel={`Premium costs ${PREMIUM_PRICE}, ${PREMIUM_TERM_LABEL.replace(" · ", ", ")}. ${PREMIUM_BETA_NOTE}`}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={[textStyle(offerType.reachHeading), { color: offerColor.ink }]}>
+          <Text style={{ color: offerColor.deep }}>{TERM_TITLE}</Text> access
+        </Text>
+        <View
+          style={{
+            paddingHorizontal: 10,
+            height: 24,
+            borderRadius: 12,
+            justifyContent: "center",
+            backgroundColor: offerColor.green,
+          }}
+        >
+          <Text style={[textStyle(offerType.chip), { color: offerColor.onGreen, fontSize: 11, letterSpacing: 0.5 }]}>
+            BETA PRICE
+          </Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", marginTop: 8 }}>
+        <Text style={[textStyle(offerType.detailTitle), { color: offerColor.ink, fontSize: 30, lineHeight: 36 }]}>
+          {PREMIUM_PRICE}
+        </Text>
+        <Text style={[textStyle(offerType.rowSubtitle), { color: offerColor.inkSecondary, marginLeft: 4, marginBottom: 6 }]}>
+          / {TERM_PAYMENT}
+        </Text>
+      </View>
+      <Text style={[textStyle(offerType.helper), { color: offerColor.inkTertiary, marginTop: 4 }]}>
+        {PREMIUM_BETA_NOTE}
+      </Text>
+    </View>
+  );
+}
+
+/** The paywall's dark pill. Disabled, it fades and says why through its hint. */
+function PillButton({
+  label,
+  onPress,
+  disabled,
+  disabledHint,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  disabledHint?: string;
+}) {
+  return (
+    <Tappable
+      onPress={disabled ? undefined : onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      accessibilityHint={disabled ? disabledHint : undefined}
+      style={{
+        height: 54,
+        borderRadius: 27,
+        backgroundColor: offerColor.ink,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.55 : 1,
+      }}
+      pressedStyle={disabled ? undefined : { opacity: 0.85 }}
+    >
+      <Text style={[textStyle(offerType.buttonPrimary), { color: offerColor.onDark }]}>{label}</Text>
+    </Tappable>
   );
 }
 
@@ -354,7 +461,7 @@ function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: numb
   const where = Number.isFinite(bracket) ? `That listing is in ${bracketLabel(bracket)}. ` : "";
   const text =
     reason === "vip"
-      ? `${where}Brackets ${VIP_MIN_BRACKET} and 10 need VIP, which isn't part of Premium and isn't available yet.`
+      ? `${where}Brackets ${VIP_MIN_BRACKET} and ${BRACKET_COUNT} need VIP, which isn't part of Premium and isn't available yet.`
       : `${where}Trading at ${bracketLabel(PREMIUM_MIN_BRACKET)} and above opens with Premium.`;
 
   return (

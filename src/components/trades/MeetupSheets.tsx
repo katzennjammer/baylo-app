@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MascotEmptyState } from "../MascotEmptyState";
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { getActingOrgId } from "../../api/org-context";
@@ -11,7 +12,6 @@ import { LeafIcon } from "../icons";
 import { SearchField } from "../marketplace/BrowseControls";
 import { OfferSheet } from "../offer/OfferSheet";
 import { InfoIcon } from "../post/post-icons";
-import { CardLink } from "./TradeCard";
 import { TradesSectionLabel } from "./chrome";
 import * as copy from "./copy";
 import { NoticeRow, TradeButton } from "./trade-ui";
@@ -194,7 +194,6 @@ export function HubPickerSheet({
   selectedId,
   kmTo,
   showNoShared,
-  onAddHub,
   onPick,
   onReward,
   onClose,
@@ -207,7 +206,6 @@ export function HubPickerSheet({
   /** Null when the phone does not already know where it is. */
   kmTo: ((hub: SafeZoneHub) => number) | null;
   showNoShared: boolean;
-  onAddHub: () => void;
   onPick: (hubId: string) => void;
   onReward: () => void;
   onClose: () => void;
@@ -246,18 +244,15 @@ export function HubPickerSheet({
           keyboardShouldPersistTaps="handled"
         >
           {showNoShared && !query ? (
-            <NoticeRow
-              icon={<InfoIcon size={16} stroke={1.7} color={color.inkSecondary} />}
-              link={<CardLink label={copy.picker.addHub} onPress={onAddHub} />}
-            >
+            // A note, not a button (7 Nov 2026): the link out to Edit hubs
+            // closed this sheet only to come back to it, which read as a loop.
+            <NoticeRow icon={<InfoIcon size={16} stroke={1.7} color={color.inkSecondary} />}>
               {copy.picker.noShared}
             </NoticeRow>
           ) : null}
 
           {groups.length === 0 ? (
-            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary, paddingTop: 4 }]}>
-              {copy.picker.noMatch(query.trim())}
-            </Text>
+            <MascotEmptyState pose="search" size={80} title="No matches" message={copy.picker.noMatch(query.trim())} />
           ) : null}
 
           {groups.map((g) => (

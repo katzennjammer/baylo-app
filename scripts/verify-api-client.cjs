@@ -27,6 +27,8 @@ const http = require("http");
 const assert = require("assert");
 const Module = require("module");
 
+globalThis.__DEV__ = true;
+
 // ── expo-secure-store stub ───────────────────────────────────────────────────
 
 const secureStore = new Map();

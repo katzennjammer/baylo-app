@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -21,7 +22,7 @@ import {
   isIdGateError,
   type IdVerificationPayload,
 } from "../src/api/id-verification";
-import { useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
+import { isValuationTicketInvalid, useCreateItem, type Category, type Condition, type CreatedItem } from "../src/api/post";
 import { getActingOrgId } from "../src/api/org-context";
 import { isOrgContextRequired, isOrgPostingRefusal, switchToOrganization, useOrganizations, type ActingOrg } from "../src/api/organizations";
 import { useKeyboardState } from "../src/components/auth-sheet";
@@ -48,6 +49,7 @@ import { signedUpAsOrganization } from "../src/auth/signup-kind";
 import { useDetection } from "../src/post/detection";
 import { discardDraft, saveDraft, useAutosave, useStoredDraft } from "../src/post/draft";
 import { announcePosted } from "../src/post/posted-notice";
+import { MASCOT } from "../src/media/mascots";
 import { PhotoPipelineProvider, usePhotos } from "../src/post/photos";
 import { useValuation } from "../src/post/valuation";
 import { mergeLookingFor } from "../src/post/wanted-keywords";
@@ -55,11 +57,15 @@ import {
   canAdvance,
   effectiveValue,
   isChecking,
+  isPending,
   isPostable,
   LAST_STEP,
   parseQuantity,
+  photoProblem,
+  photosReady,
   PostStateProvider,
   usePost,
+  valuationTicket,
 } from "../src/post/state";
 import {
   chrome,
@@ -371,7 +377,7 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           // status the app might have forgotten. The CTA opens /verify-id,
           // whose pending branch has no form on it.
           body: `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. As soon as it is approved you can post.`,
-          cta: "See where it is up to",
+          cta: "Got it",
         }
       : state.status === "exhausted"
         ? {
@@ -407,15 +413,26 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
         </Tappable>
       </View>
 
-      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
-        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink }]}>
+      <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: "center", alignItems: "center" }}>
+        {/* The duck holding an ID says what is being asked before a word is
+            read. Out of attempts is not a cheerful moment, so that state gets
+            the worried duck instead. Decorative: hidden from screen readers. */}
+        <Image
+          source={state.status === "exhausted" ? MASCOT.worry : MASCOT.idCard}
+          contentFit="contain"
+          style={{ width: 120, height: 190, marginBottom: 16 }}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+        <Text style={[textStyle(postType.stepHeading), { color: postColor.ink, textAlign: "center" }]}>
           {copy.title}
         </Text>
 
         <Text
           style={[
             textStyle(postType.stepSub),
-            { color: postColor.inkSecondary, marginTop: 12, lineHeight: 22 },
+            { color: postColor.inkSecondary, marginTop: 10, lineHeight: 22, textAlign: "center" },
           ]}
         >
           {copy.body}
@@ -427,20 +444,18 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           the truthful answer is that almost nothing is affected — including,
           deliberately, accepting a trade somebody offers them.
         */}
-        <Text
-          style={[
-            textStyle(postType.stepSub),
-            { color: postColor.inkSecondary, marginTop: 16, lineHeight: 22 },
-          ]}
-        >
-          Everything else stays open: browsing, searching, messaging, liking, commenting, and
-          accepting a trade someone offers you.
-        </Text>
+        <View style={gateStyles.openBox}>
+          <Text style={gateStyles.openTitle}>Still open without an ID</Text>
+          <Text style={gateStyles.openBody}>
+            Browsing, searching, messaging, liking, commenting, and accepting a trade someone offers you.
+          </Text>
+        </View>
 
         <PrimaryButton
           label={copy.cta}
-          onPress={() => router.push("/verify-id")}
-          style={{ marginTop: 28 }}
+          // Being reviewed: nothing to do but wait, so the button just closes.
+          onPress={() => (state.status === "pending" ? router.back() : router.push("/verify-id"))}
+          style={{ marginTop: 24, alignSelf: "stretch" }}
         />
 
         {/* An MSME verifies with business documents, never this screen. The
@@ -458,6 +473,12 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
     </View>
   );
 }
+
+const gateStyles = {
+  openBox: { alignSelf: "stretch", marginTop: 20, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: postColor.greenWash, gap: 2 },
+  openTitle: { fontFamily: "PublicSans-SemiBold", fontSize: 13, color: postColor.forest },
+  openBody: { fontFamily: "PublicSans-Regular", fontSize: 13, lineHeight: 18, color: postColor.inkSecondary },
+} as const;
 
 /* ────────────────────────────── the wizard ──────────────────────────── */
 
@@ -563,6 +584,9 @@ function Wizard() {
   );
 
   const post = useCallback(async () => {
+    // Every photo, or no post: the button is disabled until then, and this is
+    // the same rule again so no path can post a listing a photo short.
+    if (!photosReady(state.photos)) return;
     const photos = state.photos.filter(isPostable);
     const value = effectiveValue(state);
     if (!state.category || photos.length === 0 || value === null) return;
@@ -579,6 +603,11 @@ function Wizard() {
         category: state.category as Category,
         condition: state.condition as Condition,
         valueLeaves: value,
+        // Present only when step 4 showed an AI suggestion for exactly this
+        // title, category and condition; the server then creates the listing
+        // against that number. Absent, it uses its standard estimate — which
+        // is what step 4 showed in that case.
+        valuationTicket: valuationTicket(state),
         images: photos.map((p) => p.url!).slice(0, rules.maxPhotos),
         wantedItems: state.wanted.trim() || null,
         // EVERY postable photo's hash, positionally aligned with `images`
@@ -639,6 +668,16 @@ function Wizard() {
       // The shop's review, refusing at the last step: the context was switched
       // or the shop's status changed after the check above. Same treatment as
       // the ID gate below: keep the draft, show the server's own sentence.
+      // The AI estimate expired (two hours) or no longer matches the listing.
+      // Nothing was created. Back to step 4, which asks again, with the
+      // server's reason on screen there.
+      if (isValuationTicketInvalid(e)) {
+        await saveDraft(state);
+        dispatch({ type: "ai/reset", notice: e instanceof ApiError ? e.message : "Please re-check the value." });
+        dispatch({ type: "goto", step: 3 });
+        dispatch({ type: "post/fail", message: "The value needs a fresh check before posting. Your draft is safe." });
+        return;
+      }
       if (isOrgPostingRefusal(e)) {
         await saveDraft(state);
         dispatch({ type: "post/fail", message: `${e.message} Your draft is safe.` });
@@ -696,12 +735,16 @@ function Wizard() {
     // Back to wherever the FAB was pressed, and the popup over it. The
     // mutation's onSuccess has already marked the marketplace, the feed and
     // profile/me stale, so the screen underneath is refetching by now and the
-    // listing is in it before the card says so. Nothing here navigates TO the
-    // item: a success screen was a page for one sentence. Outside the try on
-    // purpose — the item exists, and a navigation hiccup must not be reported
-    // as "we could not post this".
+    // listing is in it before the card says so. This returns to the prior
+    // screen; the separate "See my listing" action on the posted notice opens
+    // the item. Outside the try on purpose — the item exists, and a navigation
+    // hiccup must not be reported as "we could not post this".
     router.back();
-    announcePosted(created.id, created.valueReview?.pending ? created.valueReview.notice : null);
+    announcePosted(
+      created.id,
+      created.valueReview?.pending ? created.valueReview.notice : null,
+      { title: created.title, photoUrl: photos[0]?.url },
+    );
   }, [createItem, dispatch, router, state]);
 
   /* ── the footer ── */
@@ -718,11 +761,24 @@ function Wizard() {
   const checkingPhotos =
     step === 0 && !state.photos.some(isPostable) && state.photos.some(isChecking);
 
+  /**
+   * The last step, while Post waits on photos. A problem photo (failed,
+   * rejected, blocked) needs the owner; a pending one only needs time, and the
+   * count says how much is left. The review lists each one under the photos.
+   */
+  const photoProblems = step === LAST_STEP ? state.photos.filter((p) => photoProblem(p) !== null).length : 0;
+  const waitingPhotos =
+    step === LAST_STEP && photoProblems === 0 && state.photos.some(isPending);
+
   const footerLabel =
     step === LAST_STEP
       ? state.posting
         ? "Posting…"
-        : "Post this item"
+        : photoProblems > 0
+          ? "Fix photos to post"
+          : waitingPhotos
+            ? `Waiting for photos… ${state.photos.filter(isPostable).length} of ${state.photos.length}`
+            : "Post this item"
       : checkingPhotos
           ? "Checking your photo…"
           : "Next";
@@ -867,7 +923,7 @@ function Wizard() {
               // whole reason the button is disabled, so it is the one thing that
               // must not be swapped out for a spinner.
               icon={
-                checkingPhotos ? (
+                checkingPhotos || waitingPhotos ? (
                   <ActivityIndicator size="small" color={postColor.inkDisabled} />
                 ) : undefined
               }

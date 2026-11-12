@@ -40,6 +40,7 @@ import { MIN_AGE, isAdult, isoDate, type DateParts } from "../../src/lib/dob";
 import { openMailApp } from "../../src/lib/open-mail";
 import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
 import { OrgDetailsStep } from "../../src/components/auth-org-details";
+import { PasswordStrengthMeter } from "../../src/components/PasswordStrengthMeter";
 import { rememberSignedUpAsOrganization } from "../../src/auth/signup-kind";
 
 /**
@@ -154,6 +155,21 @@ export default function RegisterScreen() {
   const [refused, setRefused] = useState<DateParts | null>(null);
   const [stage, setStage] = useState<SignupStage>({ kind: "account-type" });
   const [accountType, setAccountType] = useState<AccountType | null>(null);
+  /**
+   * Which kind of signup the form's contents were typed for. Back from the
+   * form keeps them for the same kind, but switching between a trader and a
+   * business starts a clean form: an owner's details are not a trader's, and
+   * carrying a name, email, password and date of birth across read as the app
+   * remembering someone else's answers.
+   */
+  const filledFor = useRef<"individual" | "organization">("individual");
+  const openForm = (kind: "individual" | "organization") => {
+    if (filledFor.current !== kind) {
+      setForm(EMPTY_FORM);
+      filledFor.current = kind;
+    }
+    setStage({ kind: "form" });
+  };
 
   if (refused) {
     return (
@@ -172,13 +188,13 @@ export default function RegisterScreen() {
         <AccountTypeStep
           value={accountType}
           onChange={setAccountType}
-          onContinue={() => setStage({ kind: "form" })}
+          onContinue={() => openForm(accountType === "organization" ? "organization" : "individual")}
           // "Decide later" is the individual form without the person having to
           // claim to be one. Any card tapped on the way is dropped, so the form
           // does not ask for an owner nobody confirmed.
           onSkip={() => {
             setAccountType(null);
-            setStage({ kind: "form" });
+            openForm("individual");
           }}
           onBack={() => router.back()}
         />
@@ -342,6 +358,7 @@ function RegisterForm({
   }, [onBack]);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -455,7 +472,14 @@ function RegisterForm({
     }
   }
 
-  const reveal = { visible: showPassword, onToggle: () => setShowPassword((v) => !v) };
+  const passwordReveal = {
+    visible: showPassword,
+    onToggle: () => setShowPassword((visible) => !visible),
+  };
+  const confirmPasswordReveal = {
+    visible: showConfirmPassword,
+    onToggle: () => setShowConfirmPassword((visible) => !visible),
+  };
 
   const fields = (
     <>
@@ -508,8 +532,10 @@ function RegisterForm({
         returnKeyType="next"
         onSubmitEditing={() => confirmRef.current?.focus()}
         submitBehavior="submit"
-        reveal={reveal}
+        reveal={passwordReveal}
       />
+      {/* Advice only; the field's own error (under 8) takes its place. */}
+      {fieldErrors.password ? null : <PasswordStrengthMeter password={form.password} />}
 
       <View style={{ height: gap.betweenInputs }} />
       <Field
@@ -519,7 +545,7 @@ function RegisterForm({
         onChangeText={edit("confirm", "confirm")}
         onFocus={() => setFocusedField(4)}
         error={fieldErrors.confirm}
-        secureTextEntry={!showPassword}
+        secureTextEntry={!showConfirmPassword}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="new-password"
@@ -529,7 +555,7 @@ function RegisterForm({
         // The check replaces "Show" once the two agree, per the spec — a state
         // the eye can read without tapping anything.
         matched={form.confirm.length > 0 && form.confirm === form.password}
-        reveal={reveal}
+        reveal={confirmPasswordReveal}
       />
 
       <View style={{ height: gap.betweenInputs }} />

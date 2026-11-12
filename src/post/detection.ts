@@ -64,9 +64,19 @@ export function useDetection() {
 
   useEffect(() => {
     if (!url || ranFor.current === url) return;
-    // A user who has already answered the question is not asked it again by a
-    // second photo finishing its upload.
-    if (state.detection.phase === "corrected" || state.detection.phase === "detected") return;
+    // The photo the last answer was about has been removed: that answer, and
+    // the title it wrote, belong to an item that is no longer in the listing.
+    // Start over on the new lead photo. (Pick a Jollibee meal, delete it, pick
+    // a bag: the bag gets asked about, and the title stops saying Jollibee.)
+    const previousGone =
+      ranFor.current !== null && !state.photos.some((p) => p.url === ranFor.current);
+    if (previousGone) {
+      dispatch({ type: "detect/reset" });
+    } else if (state.detection.phase === "corrected" || state.detection.phase === "detected") {
+      // A user who has already answered the question is not asked it again by
+      // a second photo finishing its upload.
+      return;
+    }
 
     ranFor.current = url;
     dispatch({ type: "detect/start" });

@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
@@ -20,6 +20,7 @@ import { useStories } from "../../src/api/stories";
 import { useLike } from "../../src/api/social";
 import { usePullToRefresh } from "../../src/lib/pull-to-refresh";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
+import { useTabReselect } from "../../src/lib/tab-reselect";
 import { shareListing } from "../../src/lib/share";
 import type { Item } from "../../src/api/types";
 
@@ -144,6 +145,9 @@ export default function HomeScreen() {
   );
   useRefetchOnFocus(refetchAll);
   const { refreshing, onRefresh } = usePullToRefresh(refetchAll);
+  // Tapping Community while on it: back to the top, or refresh when already there.
+  const list = useRef<FlatList<Row>>(null);
+  const onScroll = useTabReselect(() => list.current?.scrollToOffset({ offset: 0, animated: true }), onRefresh);
 
   const rows = useMemo<Row[]>(() => feed.map((item) => ({ kind: "item", item })), [feed]);
 
@@ -213,6 +217,7 @@ export default function HomeScreen() {
             item={row.item}
             viewerId={viewer?.id ?? null}
             onOffer={openItem}
+            onOpen={openItem}
             onLike={onLike}
             onComment={openComments}
             onShare={onShare}
@@ -275,6 +280,9 @@ export default function HomeScreen() {
   return (
     <>
       <FlatList
+        ref={list}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         style={{ flex: 1, backgroundColor: color.surface }}
         data={rows}
         keyExtractor={keyOf}
@@ -336,7 +344,14 @@ export default function HomeScreen() {
         }}
       />
 
-      <EditListingSheet item={editingItem} onClose={() => setEditingId(null)} />
+      <EditListingSheet
+        item={editingItem}
+        onClose={() => setEditingId(null)}
+        onEditHubs={(item) => {
+          setEditingId(null);
+          router.push({ pathname: "/edit-hubs", params: { itemId: item.id } });
+        }}
+      />
 
       <CommentsSheet item={commentsItem} onClose={() => setCommentsId(null)} />
     </>

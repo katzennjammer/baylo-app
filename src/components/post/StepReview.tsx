@@ -5,7 +5,7 @@ import { useHubs } from "../../api/hubs";
 import { categoryLabel, conditionLabel } from "../../api/post";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
 import { classifyValue } from "../../lib/trade-rules";
-import { effectiveValue, isPostable, parseQuantity, unitLabel, usePost, type PostState } from "../../post/state";
+import { activeValuation, effectiveValue, isPostable, parseQuantity, unitLabel, usePost, type PostState } from "../../post/state";
 import {
   postColor,
   postLines,
@@ -16,6 +16,7 @@ import {
   type Board,
 } from "../../theme/post-tokens";
 import { MarkerBadge } from "./CameraMarker";
+import { PhotoIssues } from "./PhotoIssues";
 import { Divider, LeavesChip, SectionLabel, SmallTextButton, Tag } from "./ui";
 
 /**
@@ -61,6 +62,15 @@ export function StepReview({ board }: { board: Board }) {
       <View style={{ height: postSpace.review.headingBelow }} />
 
       <PhotoRail photos={photos} board={board} />
+      {/* The photos that are not on the rail yet, and why. Post is disabled
+          until this is empty, so the reason sits right under the photos. */}
+      <PhotoIssues
+        style={{ paddingHorizontal: board.reviewX, marginTop: postSpace.review.railBelow }}
+        onShowPhoto={(index) => {
+          dispatch({ type: "goto", step: 0 });
+          dispatch({ type: "photo/select", index });
+        }}
+      />
       <View style={{ height: postSpace.review.railBelow }} />
 
       <Divider />
@@ -335,11 +345,13 @@ function PhotoRail({
  */
 function reviewLine(state: PostState): string {
   const value = effectiveValue(state);
-  const v = state.valuation;
+  const v = activeValuation(state);
   const source =
-    v?.valuationSource === "comparables"
-      ? `From ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
-      : "Category estimate";
+    v?.valuationSource === "ai_market"
+      ? "From online prices"
+      : v?.valuationSource === "comparables"
+        ? `Standard estimate from ${v.sampleSize} similar trade${v.sampleSize === 1 ? "" : "s"}`
+        : "Standard estimate";
   if (value === null) return source;
   const bracket = bracketLabel(bracketOf(value));
   if (!state.ownValue || !v) return `${source} · ${bracket}`;

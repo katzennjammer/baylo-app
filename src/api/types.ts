@@ -83,6 +83,18 @@ export interface OrgBadge {
   verified: boolean;
 }
 
+export interface UserSearchResult {
+  id: string;
+  name: string;
+  avatar: string | null;
+  location: string | null;
+  rating: number;
+  reviewCount: number;
+  totalTrades: number;
+  trustTier: TrustTier | null;
+  org: OrgBadge | null;
+}
+
 /** A curated public meetup point. Coordinates here are public and precise. */
 export interface SafeZoneHub {
   id: string;
@@ -240,7 +252,7 @@ export interface BrowsePayload {
   /** Absent from a server older than 25 Sep 2026. */
   organizations?: BrowseOrgMatch[];
   facets: {
-    categories: { category: string; label: string; count: number }[];
+    categories: { category: string; label: string; count: number; /** Newest listing photo; top six categories, first page only. */ coverImage?: string | null }[];
     /** Only filled while `orgsOnly` is on. Absent from an older server. */
     businessCategories?: BusinessCategoryFacet[];
   };
@@ -286,7 +298,7 @@ export interface ItemDetailPayload {
   viewer: {
     isOwner: boolean;
     state: string;
-    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED";
+    action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE" | "RELIST";
     /** False for your own listing and for anything that has left AVAILABLE. */
     canOffer: boolean;
     /**
@@ -526,6 +538,8 @@ export interface PublicProfilePayload {
   user: Omit<ProfileMePayload["user"], "email" | "leaves" | "rank"> & {
     rank: { label: string };
     trustTier: string | null;
+    /** Government ID approved. Optional: a server older than 6 Nov 2026 omits it. */
+    idVerified?: boolean;
     /**
      * Set when this profile is an organisation. Null for a person, which is
      * almost every profile.
@@ -604,7 +618,22 @@ export interface LiveOffer {
   offeredItems: { id: string; title: string; image: string | null; valueLeaves: number | null }[];
   offeredLeaves: number | null;
   message: string | null;
-  counterparty: { id: string; name: string; avatar: string | null };
+  /**
+   * `rating` and `trustTier` arrived in Nov 2026 for the offer inbox; an older
+   * server omits them, so both are optional and the card simply leaves the
+   * badge off.
+   */
+  counterparty: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    rating?: number;
+    /** Reviews behind `rating`. Optional: a server older than 6 Nov 2026 omits it. */
+    reviewCount?: number;
+    trustTier?: TrustTier | null;
+    /** Government ID approved. Optional, and absent reads as not verified. */
+    idVerified?: boolean;
+  };
   /**
    * THE BRIDGE, as this screen needs it. Both brackets as they stood when the
    * offer was made; `bridgeFeeLeaves` is the QUOTE either way and
@@ -676,6 +705,18 @@ export interface ActiveTrade {
   myReview: { rating: number } | null;
   receivedReview: { rating: number } | null;
   rewardLeaves: number | null;
+  /**
+   * Every reward line this trade earned the viewer: the trade reward and the
+   * task rewards filed under it (Safe-Zone meetup, First trade). A 0-Leaf line
+   * is a recorded denial. Optional: a server older than 7 Nov 2026 omits it.
+   */
+  rewards?: { kind: string; leaves: number; note: string | null; reason?: "repeat_partner" | "weekly_cap" | null }[];
+  /**
+   * Who has tapped "I'm here" at the hub in the last two hours. The codes are
+   * issued only once both have. Optional: a server older than 7 Nov 2026
+   * omits it, and the screen then behaves as before.
+   */
+  arrival?: { me: boolean; partner: boolean };
   codesMatchedAt: string | null;
   /** NULL on a `leaves` trade — see the note above. */
   offeredItem: TradeItemBrief | null;

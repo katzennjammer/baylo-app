@@ -40,7 +40,7 @@ export function firstName(full: string): string {
 /* ───────────────────── §10.1 offer flow — the chrome ────────────────── */
 
 export const chrome = {
-  navTitle: "Offer trade",
+  navTitle: "Send an offer",
   sheetHeading: "Which item are you offering",
   sheetFootnote:
     "You can offer an item in the same bracket, one below, or one above. " +
@@ -362,12 +362,12 @@ export const vip = {
  * `How trading works` — the explainer.
  *
  * Shown once on the first marketplace visit that has a faded tile, and again
- * whenever it is opened from Settings. One scrollable sheet, four rules, and
+ * whenever it is opened from Settings. One scrollable sheet, three rules, and
  * the faded-tile explanation folded into the rules it follows from rather than
  * given its own heading. The numbers are the live ones: `REACH_BRACKETS_ABOVE_BEST`
- * in `src/lib/gap.ts`, the server's `TIER_MAX_ITEM_BRACKET` ladder (New Trader
- * → bracket 3) and `T.risingMinTrades` (3) in `src/lib/trust.ts`. If any of
- * those move, the sentence that quotes them moves too.
+ * in `src/lib/gap.ts`. The trust tier no longer caps which items a user may
+ * trade for (Nov 2026), so no rule here mentions it. If that number moves, the
+ * sentence that quotes it moves too.
  */
 export const prompt = {
   heading: "How trading works",
@@ -390,20 +390,14 @@ export const prompt = {
         "When the two items are one bracket apart, the trade includes a bridging fee in Leaves. " +
         "Whoever ends up with the higher-bracket item pays it.",
     },
-    {
-      title: "Your trust tier sets a ceiling",
-      body:
-        "Each tier caps how high a bracket you can trade for. A new account trades up to " +
-        "Bracket 3 and moves up after three completed trades.",
-    },
   ],
-  /** The faded-tile rule sits under the four; it is a consequence of rules 2 and 4. */
+  /** The faded-tile rule sits under the three; it is a consequence of rule 2. */
   faded: {
     title: "Why some listings look faded",
     body:
-      "A listing is faded when it is more than one bracket above your best item, or above your " +
-      "tier's ceiling. Faded ones still open like any other listing, but you cannot offer on them " +
-      "yet. The line moves as you post, trade and move up a tier.",
+      "A listing is faded when it is more than one bracket above your best item. Faded ones " +
+      "still open like any other listing, but you cannot offer on them yet. The line moves " +
+      "as you post and trade.",
     exampleNear: "within reach",
     exampleFar: "faded",
   },

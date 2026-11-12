@@ -6,10 +6,12 @@ import { ApiError } from "../src/api/client";
 import {
   meetupState,
   useActiveTrades,
+  useListingOffers,
+  useArrive,
   useTradeDecision,
   useTradeHistory,
 } from "../src/api/trades";
-import type { ActiveTrade, LiveOffer } from "../src/api/types";
+import type { ActiveTrade, LiveOffer, SafeZoneHub } from "../src/api/types";
 import { useKeyboardState } from "../src/components/auth-sheet";
 import { Splash } from "../src/components/Splash";
 import { Tappable } from "../src/components/Tappable";
@@ -43,11 +45,17 @@ import * as present from "../src/components/trades/present";
 import { TradesErrorPanel, TradesSkeleton } from "../src/components/trades/states";
 import { TradeButton } from "../src/components/trades/trade-ui";
 import { useOfferDecisionFlow } from "../src/components/trades/useOfferDecisionFlow";
+import { CompareOffer } from "../src/components/trades/CompareOffer";
 import { useWithdraw } from "../src/components/trades/useWithdraw";
 import { meetupWhen } from "../src/lib/gap";
 import { openPremium, premiumGateReason } from "../src/lib/premium";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
+import { FailurePopup } from "../src/components/FailurePopup";
+import { distanceKm, formatDistanceKm } from "../src/lib/hub-distance";
+import { ensureLocation } from "../src/lib/location-ask";
+import { showDialog } from "../src/components/dialog";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 
 /**
  * ONE SCREEN PER TRADE (Round 2, 1 Oct 2026).
@@ -87,12 +95,23 @@ import { color, icon, size, space, textStyle, type } from "../src/theme/tokens";
  */
 export default function TradeScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; offer?: string; handoff?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    offer?: string;
+    handoff?: string;
+    /** Set when opened from a listing's offer inbox: that listing's id. */
+    listing?: string;
+    /** And the inbox's order, comma-separated offer ids, for "Next offer". */
+    order?: string;
+  }>();
   const tradeId = params.id;
   const offerId = params.offer;
 
   const active = useActiveTrades();
   const history = useTradeHistory(!!tradeId);
+  // A listing's own offers: an offer past the main feed's 50-row cap is still
+  // found when it was opened from that listing's inbox.
+  const listingOffers = useListingOffers(params.listing || undefined);
   const { keyboardUp, imeHeight } = useKeyboardState();
   const entry = useCodeEntry();
 
@@ -113,7 +132,11 @@ export default function TradeScreen() {
       ? (active.data?.trades.find((t) => t.id === tradeId) ??
         history.data?.trades.find((t) => t.id === tradeId))
       : null) ?? null;
-  const liveOffer = (offerId ? active.data?.offers.find((o) => o.id === offerId) : null) ?? null;
+  const liveOffer =
+    (offerId
+      ? (active.data?.offers.find((o) => o.id === offerId) ??
+        listingOffers.data?.find((o) => o.id === offerId))
+      : null) ?? null;
   const [heldTrade, setHeldTrade] = useState<ActiveTrade | null>(null);
   const [heldOffer, setHeldOffer] = useState<LiveOffer | null>(null);
   useEffect(() => {
@@ -125,11 +148,27 @@ export default function TradeScreen() {
 
   const offerFlow = useOfferDecisionFlow(liveOffer ?? heldOffer);
   const decideTrade = useTradeDecision();
+  const arrive = useArrive(tradeId);
+  /** "Show code" is reading the location: the button says so instead of looking stuck. */
+  const [locating, setLocating] = useState(false);
   const [requestFailure, setRequestFailure] = useState<string | null>(null);
   const withdraw = useWithdraw(() => router.back());
 
   const refreshing = active.isFetching || history.isFetching;
   const trade = liveTrade ?? (refreshing ? heldTrade : null);
+
+  // AN ID THE CACHED LISTS DO NOT HAVE IS ASKED FOR ONCE BEFORE IT IS CALLED
+  // GONE. A push opens this screen on lists cached before the event it is
+  // about: an offer accepted a moment ago is still under offers[] there, so
+  // the brand-new trade looked "not open any more" until the next refetch.
+  const refetchedFor = useRef<string | null>(null);
+  const missing = (tradeId && !liveTrade) || (offerId && !liveOffer) ? (tradeId ?? offerId) : null;
+  useEffect(() => {
+    if (!missing || refreshing || refetchedFor.current === missing) return;
+    refetchedFor.current = missing;
+    void active.refetch();
+    if (tradeId) void history.refetch();
+  }, [missing, refreshing, active, history, tradeId]);
   // An offer this screen decided stays on screen with its outcome.
   const offer = liveOffer ?? (offerFlow.decided || refreshing ? heldOffer : null);
 
@@ -139,7 +178,9 @@ export default function TradeScreen() {
   const goBack = () => router.back();
 
   if (!trade && !offer) {
-    const loading = active.isPending || (!!tradeId && history.isPending);
+    // Still loading while that one refetch is in flight, or about to start.
+    const loading =
+      active.isPending || (!!tradeId && history.isPending) || refreshing || (missing !== null && refetchedFor.current !== missing);
     return (
       <OfferScreenHost imeInset={0}>
         <TradesBackTitle title="" onBack={goBack} />
@@ -155,6 +196,41 @@ export default function TradeScreen() {
           </Gutter>
         )}
       </OfferScreenHost>
+    );
+  }
+
+  /* ── An offer someone made you: the compare view (Nov 2026). ── */
+  if (offer && !trade && offer.direction === "received") {
+    const order = (params.order ?? "").split(",").filter(Boolean);
+    const index = order.indexOf(offer.id);
+    const siblings =
+      listingOffers.data ??
+      (active.data?.offers ?? []).filter((o) => o.direction === "received" && o.post.id === offer.post.id);
+    const others = siblings.filter((o) => o.id !== offer.id).length;
+    const nextId = index >= 0 && order.length > 1 ? order[(index + 1) % order.length] : null;
+    return (
+      <>
+        <CompareOffer
+          offer={offer}
+          flow={offerFlow}
+          position={index >= 0 ? { index, total: order.length } : null}
+          others={others}
+          onBack={goBack}
+          onNext={
+            nextId
+              ? () =>
+                  router.replace(
+                    `/trade?offer=${encodeURIComponent(nextId)}&listing=${encodeURIComponent(params.listing ?? "")}&order=${encodeURIComponent(params.order ?? "")}`,
+                  )
+              : null
+          }
+          onChat={() =>
+            router.push(`/(app)/messages?partner=${encodeURIComponent(offer.counterparty.id)}`)
+          }
+          onOpenTrade={(id) => router.replace(present.tradeHref(id) as never)}
+        />
+        {offerFlow.sheet}
+      </>
     );
   }
 
@@ -177,7 +253,63 @@ export default function TradeScreen() {
   const handoff =
     !!trade &&
     (trade.status === "CONFIRMING" ||
-      (trade.status === "ACCEPTED" && ((agreedNow && arrivedAgreed.current) || forceHandoff)));
+      // Only on an explicit "I'm here" (7 Nov 2026). Arriving on an agreed trade
+      // used to open the codes on its own, so tapping a "meetup agreed" push
+      // days early minted the two 15-minute codes. See confirmAtHub().
+      // and, since the arrival handshake (7 Nov 2026), only once BOTH traders
+      // have said they are at the hub: then either phone opens the codes.
+      (trade.status === "ACCEPTED" && (forceHandoff || (!!trade.arrival?.me && !!trade.arrival?.partner))));
+
+  /**
+   * "Show code" asks first. Opening the code panel ISSUES both codes and they
+   * last 15 minutes, so opening them on the way (or days early) wastes them.
+   * Location, when the phone already allows it, adds how far away it thinks
+   * you are -- a hint, never a block: indoor GPS at a mall is often hundreds
+   * of metres off, and refusing a real meetup would be worse than a nudge.
+   */
+  const confirmAtHub = async (hub: SafeZoneHub) => {
+    // Asked here, with the reason on screen, never on launch. See ensureLocation.
+    if (locating) return;
+    setLocating(true);
+    const here = await ensureLocation("Baylo checks you're at the hub before showing the codes, so they aren't used up on the way.").finally(() =>
+      setLocating(false),
+    );
+    const km = here ? distanceKm(here.latitude, here.longitude, hub) : null;
+    const far = km !== null && km > 0.3 ? ` Your phone puts you about ${formatDistanceKm(km)} away.` : "";
+    showDialog(
+      `Are you at ${hub.name} now?`,
+      `Your codes last 15 minutes, so open them when you're both there.${far}`,
+      [
+        { text: "Not yet", style: "cancel" },
+        { text: "I'm here", onPress: imHere },
+      ],
+      { pose: "box" },
+    );
+  };
+
+  /**
+   * "I'm here": tell the server, then show the codes only if the partner is
+   * there too. Otherwise the panel below waits for them, and they get a push.
+   * A server without the arrival route (404) falls back to the old behaviour.
+   */
+  const imHere = () =>
+    arrive.mutate(undefined, {
+      onSuccess: (a) => {
+        if (a.partner) setForceHandoff(true);
+      },
+      onError: (e) => {
+        if (e instanceof ApiError && e.status === 404) {
+          setForceHandoff(true);
+          return;
+        }
+        showDialog(
+          "Could not tell them you're here",
+          e instanceof ApiError && e.status < 500 ? e.message : "Check your connection and try again.",
+          [{ text: "Got it" }],
+          { pose: "worry" },
+        );
+      },
+    });
 
   const onTradeError = (e: unknown) => {
     const gated = premiumGateReason(e);
@@ -250,15 +382,36 @@ export default function TradeScreen() {
         onSomethingWrong={() => setHelpOpen(true)}
       />
     );
+  } else if (agreedNow && trade!.meetup && trade!.arrival?.me && !trade!.arrival.partner) {
+    // You said you're here; your partner hasn't yet. The codes wait for both.
+    panel = (
+      <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+        <MascotEmptyState
+          pose="box"
+          size={120}
+          title={`You're at ${trade!.meetup.hub.name}`}
+          message={
+            arrive.isPending
+              ? `Telling ${partner} you're here…`
+              : `Waiting for ${partner}. We've told them you're here. Your codes start when you're both at the hub.`
+          }
+        />
+      </View>
+    );
   } else if (agreedNow && trade!.meetup) {
     panel = (
       <WaitingPanel
         line={`${copy.meetup.agreed} · ${copy.meetup.where(trade!.meetup.hub.name, meetupWhen(new Date(trade!.meetup.at)))}`}
-        detail={copy.tradeCard.showCodeAt(partner, trade!.meetup.hub.name)}
+        detail={
+          trade!.arrival?.partner
+            ? `${partner} is at ${trade!.meetup.hub.name} now. Tap Show code when you get there.`
+            : copy.tradeCard.showCodeAt(partner, trade!.meetup.hub.name)
+        }
         links={
           <TradeButton
-            label={copy.tradeCard.action.showCode}
-            onPress={() => setForceHandoff(true)}
+            label={locating ? "Checking where you are…" : copy.tradeCard.action.showCode}
+            disabled={locating}
+            onPress={() => void confirmAtHub(trade!.meetup!.hub)}
             style={{ flex: 1 }}
           />
         }
@@ -322,7 +475,7 @@ export default function TradeScreen() {
       key="profile"
       glyph={rowIcon(PersonIcon)}
       label={copy.tradeScreen.viewProfile(partner)}
-      onPress={close(() => router.push(`/user?id=${encodeURIComponent(counterparty.id)}`))}
+      onPress={close(() => router.push(`/view-profile?id=${encodeURIComponent(counterparty.id)}`))}
     />,
   );
   if (offer && !trade && offer.direction === "sent") {
@@ -402,16 +555,12 @@ export default function TradeScreen() {
           </Gutter>
         )}
 
-        {withdraw.failure ? (
-          <Gutter style={{ paddingTop: space.home.tileBody }}>
-            <Text style={[textStyle(type.detailBody), { color: color.urgent }]}>{withdraw.failure}</Text>
-          </Gutter>
-        ) : null}
+        <FailurePopup message={withdraw.failure} />
 
         {/* A finished trade's way back to the person, as on the old summary. */}
         {trade && !live && trade.status !== "PENDING" && !keyboardUp ? (
           <Tappable
-            onPress={() => router.push(`/user?id=${encodeURIComponent(counterparty.id)}`)}
+            onPress={() => router.push(`/view-profile?id=${encodeURIComponent(counterparty.id)}`)}
             accessibilityRole="button"
             accessibilityLabel={copy.tradeScreen.viewProfile(partner)}
             style={s.profileRow}

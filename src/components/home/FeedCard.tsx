@@ -5,6 +5,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { HeartIcon, CommentIcon, ImageIcon, KebabIcon, LeafIcon, RefreshIcon, ShareIcon, SwapIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { CountdownPill } from "../CountdownPill";
+import { PhotoCarousel } from "../marketplace/PhotoCarousel";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { clampAspect, relativeShort } from "../../lib/format";
 import { listingArea } from "../../lib/listing-area";
 import { ORG_BADGE_LABEL, ownerBadge } from "../../lib/org";
@@ -22,6 +25,8 @@ import {
   type,
 } from "../../theme/tokens";
 import { bracketLabel, bracketOf } from "../../lib/brackets";
+import { bracketsBeyondReach } from "../../lib/gap";
+import { useReach } from "../../api/offer";
 import type { Item } from "../../api/types";
 
 /**
@@ -121,10 +126,13 @@ export const FeedCard = memo(function FeedCard({
   onShare,
   onMenu,
   onOwnerPress,
+  onOpen,
   offerLayout = OFFER_LAYOUT,
   viewerId = null,
 }: {
   item: Item;
+  /** A tap on the photo opens the listing. A sideways swipe does not. */
+  onOpen?: (item: Item) => void;
   onOffer?: (item: Item) => void;
   /** `next` is the state being asked for, never "toggle" — see useLike(). */
   onLike?: (item: Item, next: boolean) => void;
@@ -151,7 +159,13 @@ export const FeedCard = memo(function FeedCard({
   const wanted = item.wanted?.trim();
   const perishable = item.perishable ?? null;
   const isOwnListing = viewerId !== null && item.owner.id === viewerId;
-  const offerAction = isOwnListing ? undefined : () => onOffer?.(item);
+  const { gridReach } = useReach();
+  const inReach =
+    !isOwnListing && gridReach != null && item.valueLeaves !== null && bracketsBeyondReach(item.valueLeaves, gridReach) === 0;
+  const offerAction =
+    isOwnListing || item.status !== "AVAILABLE" || item.hiddenByModerator
+      ? undefined
+      : () => onOffer?.(item);
 
   return (
     <View style={s.card}>
@@ -172,7 +186,7 @@ export const FeedCard = memo(function FeedCard({
               <View style={s.featureBadge} accessibilityLabel={`Featured achievement: ${item.owner.featuredAchievement.name}`}>
                 {item.owner.featuredAchievement.imageUrl ? (
                   <Image
-                    source={{ uri: item.owner.featuredAchievement.imageUrl }}
+                    source={{ uri: sizedImage(item.owner.featuredAchievement.imageUrl, "thumb") }}
                     style={s.featureBadgeImage}
                     contentFit="cover"
                   />
@@ -197,29 +211,46 @@ export const FeedCard = memo(function FeedCard({
         <KebabButton owner={item.owner.name} onPress={onMenu && (() => onMenu(item))} />
       </View>
 
-      {/* ── photo ── */}
-      <Photo images={item.images} title={item.title} perishable={perishable} />
+      {/* ── photo ── Inset with rounded corners (4 Nov 2026), and a
+          "Within your reach" chip when you can offer on it. */}
+      <View style={s.photoFrame}>
+        <Photo
+          images={item.images}
+          title={item.title}
+          perishable={perishable}
+          onOpen={onOpen && (() => onOpen(item))}
+        />
+      </View>
 
-      {/* ── title + value ── */}
+      {/* ── title ── */}
       <View style={s.titleRow}>
         <Text style={[textStyle(type.itemTitle), s.title]} numberOfLines={lines.itemTitle}>
           {item.title}
         </Text>
-
-        {/*
-          Null for listings made before the valuation model. The chip is omitted
-          rather than shown as "0" or "—": an unvalued item is not an item worth
-          nothing, and the artboard has no state for the difference.
-        */}
-        {item.valueLeaves !== null ? (
-          <LeavesChip value={item.valueLeaves} own={isOwnListing} />
-        ) : null}
       </View>
 
-      {/* ── condition · category ── */}
-      <Text style={[textStyle(type.metadata), s.facts]} numberOfLines={1}>
-        {`${item.conditionLabel} · ${item.categoryLabel}`}
-      </Text>
+      {/*
+        ── one line of facts: bracket, condition, category, and whether you
+        can offer. The bracket leads because it is the trading fact; it is
+        text with the leaf, not a pill, and nothing sits on the photo.
+        Unvalued listings (made before the valuation model) skip the bracket
+        rather than show "0".
+      */}
+      <View style={s.factsRow} accessible accessibilityRole="text">
+        {item.valueLeaves !== null ? (
+          <>
+            <LeafIcon size={14} stroke={2.2} color={color.forest} />
+            <Text style={[textStyle(type.metadata), s.factBracket]}>
+              {bracketLabel(bracketOf(item.valueLeaves))}
+            </Text>
+            <Text style={[textStyle(type.metadata), s.factSep]}>·</Text>
+          </>
+        ) : null}
+        <Text style={[textStyle(type.metadata), s.facts]} numberOfLines={1}>
+          {`${item.conditionLabel} · ${item.categoryLabel}`}
+          {inReach && !isOwnListing ? <Text style={s.factReach}>{"  ·  You can offer"}</Text> : null}
+        </Text>
+      </View>
 
       {/* ── what the owner will take; absent when they did not say ── */}
       {wanted ? (
@@ -263,24 +294,29 @@ export const FeedCard = memo(function FeedCard({
  * held (square, if it never got far enough to report one), so a 404 in the
  * middle of the feed does not shorten the card and jerk the scroll position of
  * everything below it. That is the spec's stated reason for the state existing.
+ *
+ * MORE THAN ONE PHOTO SWIPES (18 Oct 2026). It used to render `images[0]` and
+ * nothing else. Two or more go through PhotoCarousel with dots; the box keeps
+ * the COVER's clamped ratio for every page, so a swipe never changes the card's
+ * height under the feed. Only the visible page and its neighbours are mounted.
+ * One photo keeps the path below, with its retry.
  */
 function Photo({
   images,
   title,
   perishable,
+  onOpen,
 }: {
   images: string[];
   title: string;
   perishable: Item["perishable"];
+  onOpen?: () => void;
 }) {
   const [aspect, setAspect] = useState(size.photo.aspectDefault);
-  const [failed, setFailed] = useState(false);
-  // Bumped to retry. It is the Image's key, so incrementing it remounts the
-  // component — expo-image has no "try that URL again" call, and re-rendering
-  // with an identical source is a no-op it correctly ignores.
-  const [attempt, setAttempt] = useState(0);
-
   const cover = images[0];
+  // One automatic retry, then "Tap to reload"; a new cover starts clean. The
+  // attempt is the Image's key -- see usePhotoRetry.
+  const photo = usePhotoRetry(cover);
 
   const onLoad = useCallback((e: ImageLoadEventData) => {
     setAspect(clampAspect(e.source.width, e.source.height));
@@ -294,12 +330,26 @@ function Photo({
     </View>
   ) : null;
 
-  const retry = useCallback(() => {
-    setFailed(false);
-    setAttempt((n) => n + 1);
-  }, []);
+  const onCoverLoad = useCallback((w: number, h: number) => setAspect(clampAspect(w, h)), []);
 
-  if (!cover || failed) {
+  if (images.length > 1) {
+    return (
+      <PhotoCarousel
+        images={images}
+        title={title}
+        counter={false}
+        aspectRatio={aspect}
+        hairline={false}
+        window={1}
+        onPressPhoto={onOpen}
+        onCoverLoad={onCoverLoad}
+      >
+        {countdown}
+      </PhotoCarousel>
+    );
+  }
+
+  if (!cover || photo.failed) {
     return (
       <View style={[s.photoFailed, { aspectRatio: aspect }]}>
         <ImageIcon
@@ -309,7 +359,7 @@ function Photo({
         />
         {cover ? (
           <Tappable
-            onPress={retry}
+            onPress={photo.retry}
             accessibilityRole="button"
             accessibilityLabel="Reload photo"
             style={s.reload}
@@ -333,14 +383,20 @@ function Photo({
   }
 
   return (
-    <View style={{ aspectRatio: aspect, backgroundColor: color.control }}>
+    <Pressable
+      onPress={onOpen}
+      disabled={!onOpen}
+      accessibilityRole={onOpen ? "button" : undefined}
+      accessibilityLabel={onOpen ? `Open ${title}` : undefined}
+      style={{ aspectRatio: aspect, backgroundColor: color.control }}
+    >
       <Image
-        key={attempt}
-        source={{ uri: cover }}
+        key={photo.key}
+        source={{ uri: sizedImage(cover, "full") }}
         contentFit="cover"
         transition={motion.photoFadeMs}
         onLoad={onLoad}
-        onError={() => setFailed(true)}
+        onError={photo.onError}
         accessibilityLabel={title}
         style={s.photo}
       />
@@ -350,7 +406,7 @@ function Photo({
         the full frame is one tap away on the listing screen.
       */}
       {countdown}
-    </View>
+    </Pressable>
   );
 }
 
@@ -374,29 +430,6 @@ function ownerStanding(owner: Item["owner"]): string | null {
   return badge.tier.charAt(0) + badge.tier.slice(1).toLowerCase();
 }
 
-/**
- * The item's worth. Never shrinks — the title is the flexible half of that row.
- *
- * THE EXACT NUMBER ONLY ON YOUR OWN LISTING. Everyone else's shows its bracket
- * — see `src/lib/brackets.ts` for the reasoning — and `own` is the same
- * `isOwnListing` that already decides whether the card gets an offer button,
- * so the two cannot disagree about whose listing this is. The accessibility
- * label follows the same rule: a reader announcing the exact figure would
- * defeat the bracket.
- */
-function LeavesChip({ value, own }: { value: number; own: boolean }) {
-  const shown = own ? String(value) : bracketLabel(bracketOf(value));
-  return (
-    <View
-      style={s.leavesChip}
-      accessibilityRole="text"
-      accessibilityLabel={own ? `Your listing, valued at ${value} Leaves` : shown}
-    >
-      <LeafIcon size={icon.cardLeaf.size} stroke={icon.cardLeaf.stroke} color={color.forest} />
-      <Text style={[textStyle(type.leavesCard), { color: color.forest }]}>{shown}</Text>
-    </View>
-  );
-}
 
 /**
  * How a card ends: the social actions, and the action the card exists for.
@@ -627,8 +660,8 @@ function OfferButton({
       style={inline ? s.offerInline : s.offerPill}
       pressedStyle={s.offerPressed}
     >
-      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.forest} />
-      <Text style={[textStyle(type.primaryButton), { color: color.forest }]} numberOfLines={1}>
+      <SwapIcon size={icon.offer.size} stroke={icon.offer.stroke} color={color.onGreen} />
+      <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]} numberOfLines={1}>
         Offer trade
       </Text>
     </Tappable>
@@ -668,7 +701,7 @@ function KebabButton({ owner, onPress }: { owner: string; onPress?: () => void }
 
 function Avatar({ uri, name }: { uri: string | null; name: string }) {
   if (uri) {
-    return <Image source={{ uri }} contentFit="cover" style={s.avatar} />;
+    return <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.avatar} />;
   }
   return (
     <View style={[s.avatar, s.avatarFallback]}>
@@ -769,25 +802,18 @@ const s = StyleSheet.create({
   },
   title: { flex: 1, color: color.ink },
 
-  leavesChip: {
-    flexShrink: 0,
+
+  factsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: size.leaves.gap,
-    height: size.leaves.cardChip,
-    paddingLeft: size.leaves.cardChipLeft,
-    paddingRight: size.leaves.cardChipRight,
-    borderRadius: radius.leavesChipCard,
-    borderWidth: border.chip,
-    borderColor: color.greenLine,
-    backgroundColor: color.greenWash,
-  },
-
-  facts: {
+    gap: 5,
     paddingHorizontal: space.screenX,
     marginTop: space.card.titleToChips,
-    color: color.inkSecondary,
   },
+  factBracket: { color: color.ink, fontFamily: font.sansSemi },
+  factSep: { color: color.inkMuted },
+  facts: { flexShrink: 1, color: color.inkSecondary },
+  factReach: { color: color.forest, fontFamily: font.sansSemi },
   wantsRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -838,8 +864,8 @@ const s = StyleSheet.create({
     minHeight: size.control.offerInline,
     paddingHorizontal: size.control.offerInlineX,
     borderRadius: radius.offerInline,
-    borderWidth: border.chip,
-    borderColor: color.forest,
+    // Filled green (4 Nov 2026): the one action on the card.
+    backgroundColor: color.green,
   },
 
   offerWrap: { paddingHorizontal: space.screenX, marginTop: space.card.socialToButton },
@@ -853,11 +879,13 @@ const s = StyleSheet.create({
     minHeight: size.control.offerPill,
     paddingHorizontal: size.control.offerPillX,
     borderRadius: radius.offerPill,
-    borderWidth: border.chip,
-    borderColor: color.forest,
+    backgroundColor: color.green,
   },
 
   // The outline fills with the green wash while held, the same pressed state
   // the app's other outlined chips use.
-  offerPressed: { backgroundColor: color.greenWash },
+  offerPressed: { opacity: 0.85 },
+  photoFrame: { marginHorizontal: 12, borderRadius: 16, overflow: "hidden" },
+  reachChip: { position: "absolute", left: 10, bottom: 10, height: 26, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, borderRadius: 13, backgroundColor: "rgba(250,250,247,0.94)" },
+  reachChipText: { fontSize: 12, fontWeight: "700", color: color.forest },
 });

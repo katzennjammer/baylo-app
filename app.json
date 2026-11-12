@@ -18,13 +18,16 @@
     "android": {
       "package": "com.baylo.app",
       "adaptiveIcon": {
-        "backgroundColor": "#032206",
+        "backgroundColor": "#1B4D2B",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,7 +41,22 @@
         }
       ],
       "expo-secure-store",
-      "expo-build-properties",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1B4D2B"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
+        }
+      ],
       "expo-image",
       "expo-video",
       "@react-native-community/datetimepicker",
@@ -52,7 +70,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Baylo needs your photo library so you can choose pictures of the item you are listing."
+          "photosPermission": "Baylo needs your photo library so you can choose pictures of the item you are listing.",
+          "microphonePermission": false
         }
       ],
       [

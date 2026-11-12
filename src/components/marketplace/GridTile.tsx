@@ -1,9 +1,13 @@
 import { Image } from "expo-image";
-import { memo, useState } from "react";
+import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { ImageIcon, LeafIcon, LockIcon } from "../icons";
+import { HeartIcon, ImageIcon, LeafIcon, LockIcon } from "../icons";
+import { useLike } from "../../api/social";
+import { ReloadPhotoButton } from "../ReloadPhotoButton";
 import { Tappable } from "../Tappable";
+import { sizedImage } from "../../media/image-url";
+import { usePhotoRetry } from "../../media/usePhotoRetry";
 import { CountdownPill } from "../CountdownPill";
 import { useCountdownA11y } from "../../lib/live-clock";
 import { listingArea } from "../../lib/listing-area";
@@ -119,9 +123,10 @@ export const GridTile = memo(function GridTile({
    */
   showPlace?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
   const cover = item.images[0];
+  const photo = usePhotoRetry(cover);
   const own = viewerId !== null && item.owner.id === viewerId;
+  const { mutate: like } = useLike();
   const bracket = item.valueLeaves === null ? null : bracketOf(item.valueLeaves);
 
   // Strictly greater — a listing IN the reach bracket is in reach. An unvalued
@@ -147,6 +152,7 @@ export const GridTile = memo(function GridTile({
       // tile as a unit; the visual hierarchy inside it is not audible.
       accessibilityLabel={
         `${item.title}. ${item.conditionLabel}, ${item.categoryLabel}.` +
+        (item.images.length > 1 ? ` ${item.images.length} photos.` : "") +
         (area ? ` In ${area}.` : "") +
         (item.owner.org
           ? ` From ${item.owner.org.name}, ${businessCategoryLabel(item.owner.org.businessCategory)}` +
@@ -166,13 +172,14 @@ export const GridTile = memo(function GridTile({
       pressedStyle={s.tilePressed}
     >
       <View style={s.photoBox}>
-        {cover && !failed ? (
+        {cover && !photo.failed ? (
           <Image
-            source={{ uri: cover }}
+            key={photo.key}
+            source={{ uri: sizedImage(cover, "card") }}
             contentFit="cover"
             style={s.photo}
             transition={120}
-            onError={() => setFailed(true)}
+            onError={photo.onError}
           />
         ) : (
           <View style={s.photoFailed}>
@@ -181,22 +188,68 @@ export const GridTile = memo(function GridTile({
               stroke={icon.failedPhoto.stroke}
               color={color.failedIcon}
             />
+            {cover ? (
+              <ReloadPhotoButton onPress={photo.retry} />
+            ) : (
+              <Text style={[textStyle(type.gridMeta), { color: color.inkMuted }]}>No photo yet</Text>
+            )}
           </View>
         )}
 
-        {/* Out of reach: the bracket, on a scrim so it reads on any photo. The
-            screen reader already hears it in the tile's label above. */}
-        {beyond !== null ? (
-          <View style={s.lockBadge} pointerEvents="none" importantForAccessibility="no-hide-descendants">
-            <LockIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.onScrim} />
+        {/* More than one photo: "1/3", top-left. The grid shows the cover only —
+            a 2-up tile is too small to swipe and is a tap target already — so
+            this says there is more on the listing. Same pill as the lock. */}
+        {item.images.length > 1 ? (
+          <View style={s.countBadge} pointerEvents="none" importantForAccessibility="no-hide-descendants">
             <Text
               style={[textStyle(type.storefrontOverlay), { color: color.onScrim }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={size.home.overlayMaxFontScale}
+            >
+              {`1/${item.images.length}`}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Out of reach: the bracket, on a scrim so it reads on any photo. The
+            screen reader already hears it in the tile's label above. */}
+        {/* The bracket rides on the photo (4 Nov 2026): green when you can
+            offer on it, dark with a lock when it is beyond your reach. */}
+        {bracket !== null && item.valueLeaves !== null && !own ? (
+          <View
+            style={[s.lockBadge, beyond === null && (reach != null ? s.reachBadge : s.neutralBadge)]}
+            pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+          >
+            {beyond !== null ? (
+              <LockIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.onScrim} />
+            ) : (
+              <LeafIcon size={icon.tileBadge.size} stroke={icon.tileBadge.stroke} color={color.forest} />
+            )}
+            <Text
+              style={[textStyle(type.storefrontOverlay), { color: beyond === null ? color.forest : color.onScrim }]}
               numberOfLines={1}
               maxFontSizeMultiplier={size.home.overlayMaxFontScale}
             >
               {bracketLabel(bracket as number)}
             </Text>
           </View>
+        ) : null}
+
+        {/* Save from the card (4 Nov 2026): the same like as the listing's heart.
+            Not on your own listings, and not on a perishable, whose countdown
+            owns the photo's bottom edge. */}
+        {!own && !perishable && viewerId !== null ? (
+          <Tappable
+            onPress={() => like({ itemId: item.id, next: !item.stats.liked })}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item.stats.liked }}
+            accessibilityLabel={item.stats.liked ? `Saved. Unsave ${item.title}` : `Save ${item.title}`}
+            hitSlop={6}
+            style={s.heart}
+          >
+            <HeartIcon liked={item.stats.liked} size={16} stroke={2} color={item.stats.liked ? color.like : color.ink} />
+          </Tappable>
         ) : null}
 
         {perishable ? (
@@ -245,18 +298,27 @@ export const GridTile = memo(function GridTile({
           >
             {`${bracketsWord(beyond)} above you`}
           </Text>
-        ) : (
+        ) : own ? (
           <View style={s.leaves}>
             <LeafIcon
               size={icon.cardLeaf.size}
               stroke={icon.cardLeaf.stroke}
               color={color.forest}
             />
-            <Text style={[textStyle(type.gridLeaves), { color: color.forest }]}>
-              {own ? item.valueLeaves : bracketLabel(bracket as number)}
-            </Text>
+            <Text style={[textStyle(type.gridLeaves), { color: color.forest }]}>{item.valueLeaves}</Text>
           </View>
-        )}
+        ) : reach != null ? (
+          // Only said once the reach is KNOWN: an unknown reach is not a yes.
+          <Text
+            style={[
+              textStyle(offerType.tileValueLine),
+              { color: color.forest, marginTop: space.browse.tileMetaToLeaves },
+            ]}
+            numberOfLines={1}
+          >
+            You can offer
+          </Text>
+        ) : null}
       </View>
     </Tappable>
   );
@@ -278,7 +340,7 @@ const s = StyleSheet.create({
     backgroundColor: color.control,
   },
   photo: { width: "100%", height: "100%" },
-  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center" },
+  photoFailed: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.card.failedGap },
   // Both overlays share the Home tiles' badge inset and pill height, so a
   // badge on a Marketplace tile and one on a Home card are the same object.
   lockBadge: {
@@ -290,6 +352,29 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: size.leaves.gap,
+    borderRadius: radius.countdownPill,
+    backgroundColor: color.captionFill,
+  },
+  reachBadge: { backgroundColor: color.greenWash },
+  heart: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  neutralBadge: { backgroundColor: color.searchSurface },
+  countBadge: {
+    position: "absolute",
+    top: space.home.tileBadgeInset,
+    left: space.home.tileBadgeInset,
+    height: size.home.countdownPill,
+    paddingHorizontal: size.home.countdownPillX - 2,
+    justifyContent: "center",
     borderRadius: radius.countdownPill,
     backgroundColor: color.captionFill,
   },

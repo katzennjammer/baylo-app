@@ -22,6 +22,7 @@ import * as copy from "./copy";
 import { StepHeading, TradeButton } from "./trade-ui";
 import { color, size, space, textStyle, type } from "../../theme/tokens";
 import { offerType, textStyle as offerTextStyle } from "../../theme/offer-tokens";
+import { FailurePopup } from "../FailurePopup";
 
 /**
  * The handoff step: read your code, type theirs. `app/trade-code.tsx`'s
@@ -131,6 +132,11 @@ export function HandoffPanel({
   };
 
   const burned = rejection?.locked === true;
+  // Codes live 15 minutes. Before, a code that ran out left nothing to press:
+  // the email's code had expired too, and submit answered "click the button
+  // again" with no button. confirm/start re-issues once they have expired.
+  const expiresAt = status.data?.expiresAt ? Date.parse(status.data.expiresAt) : null;
+  const expired = !!status.data?.started && expiresAt !== null && expiresAt < Date.now() && !sides.iSubmitted;
   const hubAgreed = !!trade.meetup?.agreedAt || !!trade.safeZoneHub;
 
   /*
@@ -228,18 +234,18 @@ export function HandoffPanel({
           </>
         )}
 
-        {failure ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[textStyle(type.detailBody), { color: color.urgent }]}
-          >
-            {failure}
-          </Text>
+        <FailurePopup message={failure} />
+
+        {expired && !burned ? (
+          <>
+            <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>{copy.handoff.expired}</Text>
+            <TradeButton label={copy.handoff.newCodes} tone="outline" onPress={reissue} disabled={start.isPending} />
+          </>
         ) : null}
 
         {burned ? (
           <TradeButton label={copy.code.readItAgainButton(partner)} tone="outline" onPress={reissue} />
-        ) : sides.iSubmitted ? null : (
+        ) : sides.iSubmitted || expired ? null : (
           <TradeButton
             label={copy.code.typeTheirs}
             onPress={send}

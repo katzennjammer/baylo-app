@@ -4,17 +4,16 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { CheckIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import {
-  border,
-  color,
+  dColor,
+  font,
   icon,
-  radius,
-  size,
-  space,
+  marketplaceUi,
   textStyle,
   type,
 } from "../../theme/tokens";
 import { CONDITIONS, MAX_CATEGORIES, type BrowseFilters } from "../../api/browse";
 import { BRACKET_COUNT, bracketOf, bracketRange, type Bracket } from "../../lib/brackets";
+import { Button } from "../ui/Button";
 
 /**
  * Category, condition and value bracket, in a sheet.
@@ -64,12 +63,14 @@ export function FilterSheet({
   /** Lowest and highest bracket, or null for "no bound on that side". */
   const [minBracket, setMinBracket] = useState<Bracket | null>(null);
   const [maxBracket, setMaxBracket] = useState<Bracket | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   // Reseed on each open. Without the `visible` dependency the draft would keep
   // whatever the last session left in it, so reopening after a Cancel would
   // show the discarded edits as though they had been applied.
   useEffect(() => {
     if (!visible) return;
+    setShowAllCategories(false);
     setCategories([...(filters.categories ?? [])]);
     setCondition(filters.condition ?? null);
     setMinBracket(filters.minLeaves != null ? bracketOf(filters.minLeaves) : null);
@@ -144,20 +145,30 @@ export function FilterSheet({
       <View style={s.sheet}>
         <View style={s.handle} />
 
-        <Text style={[textStyle(type.sheetTitle), s.title]}>Filters</Text>
+        <View style={s.header}>
+          <Text style={s.title}>Filters</Text>
+          <Tappable
+            onPress={clearAll}
+            accessibilityRole="button"
+            style={s.clearAll}
+            pressedStyle={s.clearAllPressed}
+          >
+            <Text style={s.clearAllLabel}>Clear all</Text>
+          </Tappable>
+        </View>
 
         <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
           {/* ── category ── */}
           <View style={s.group}>
             <Text style={[textStyle(type.sheetLabel), s.label]}>
               Category
-              <Text style={[textStyle(type.gridMeta), { color: color.inkMuted }]}>
+              <Text style={[textStyle(type.gridMeta), { color: dColor.mutedText }]}>
                 {`   up to ${MAX_CATEGORIES}`}
               </Text>
             </Text>
 
             <View style={s.options}>
-              {facets.map((f) => {
+              {(showAllCategories ? facets : facets.slice(0, marketplaceUi.size.initialCategories)).map((f) => {
                 const on = categories.includes(f.category);
                 const blockedChip = !on && categories.length >= MAX_CATEGORIES;
                 return (
@@ -166,27 +177,52 @@ export function FilterSheet({
                     label={f.label}
                     selected={on}
                     disabled={blockedChip}
+                    showCheck
                     onPress={() => toggleCategory(f.category)}
                   />
                 );
               })}
             </View>
+            {facets.length > marketplaceUi.size.initialCategories ? (
+              <Tappable
+                onPress={() => setShowAllCategories((previous) => !previous)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showAllCategories ? "Show fewer categories" : `Show all ${facets.length} categories`
+                }
+                style={s.showAll}
+              >
+                <Text style={s.showAllLabel}>
+                  {showAllCategories ? "Show fewer" : `Show all ${facets.length}`}
+                </Text>
+              </Tappable>
+            ) : null}
           </View>
 
           {/* ── condition ── */}
           <View style={s.group}>
             <Text style={[textStyle(type.sheetLabel), s.label]}>Condition</Text>
-            <View style={s.options}>
+            <View style={s.conditionSegments}>
               {CONDITIONS.map((c) => (
-                <Option
+                <Tappable
                   key={c.value}
-                  label={c.label}
-                  selected={condition === c.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: condition === c.value }}
+                  accessibilityLabel={c.label}
+                  style={[s.conditionSegment, condition === c.value && s.conditionSegmentOn]}
                   // Tapping the selected one clears it. The server takes a
                   // single condition, so there is no "all" value to send —
                   // absence IS all, and that is what null means here.
                   onPress={() => setCondition((prev) => (prev === c.value ? null : c.value))}
-                />
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={[s.conditionLabel, condition === c.value && s.conditionLabelOn]}
+                  >
+                    {c.label}
+                  </Text>
+                </Tappable>
               ))}
             </View>
           </View>
@@ -195,34 +231,24 @@ export function FilterSheet({
           <View style={s.group}>
             <Text style={[textStyle(type.sheetLabel), s.label]}>
               Lowest bracket
-              <Text style={[textStyle(type.gridMeta), { color: color.inkMuted }]}>
+              <Text style={[textStyle(type.gridMeta), { color: dColor.mutedText }]}>
                 {"   1 is the smallest"}
               </Text>
             </Text>
-            <View style={s.options}>
-              {BRACKETS.map((b) => (
-                <Option
-                  key={`min-${b}`}
-                  label={String(b)}
-                  selected={minBracket === b}
-                  onPress={() => pickMin(b)}
-                />
-              ))}
-            </View>
+            <BracketRail
+              prefix="min"
+              selected={minBracket}
+              onPick={pickMin}
+            />
           </View>
 
           <View style={s.group}>
             <Text style={[textStyle(type.sheetLabel), s.label]}>Highest bracket</Text>
-            <View style={s.options}>
-              {BRACKETS.map((b) => (
-                <Option
-                  key={`max-${b}`}
-                  label={String(b)}
-                  selected={maxBracket === b}
-                  onPress={() => pickMax(b)}
-                />
-              ))}
-            </View>
+            <BracketRail
+              prefix="max"
+              selected={maxBracket}
+              onPick={pickMax}
+            />
 
             {/*
               Said plainly because the server's behaviour is not guessable: a
@@ -236,27 +262,7 @@ export function FilterSheet({
         </ScrollView>
 
         <View style={s.actions}>
-          <Tappable
-            onPress={clearAll}
-            accessibilityRole="button"
-            style={s.secondary}
-            pressedStyle={s.secondaryPressed}
-          >
-            <Text style={[textStyle(type.secondaryButton), { color: color.inkSecondary }]}>
-              Clear all
-            </Text>
-          </Tappable>
-
-          <Tappable
-            onPress={apply}
-            accessibilityRole="button"
-            style={s.primary}
-            pressedStyle={s.primaryPressed}
-          >
-            <Text style={[textStyle(type.primaryButton), { color: color.onGreen }]}>
-              Show results
-            </Text>
-          </Tappable>
+          <Button label="Show results" onPress={apply} style={s.primary} />
         </View>
       </View>
     </Modal>
@@ -267,11 +273,13 @@ function Option({
   label,
   selected,
   disabled = false,
+  showCheck = false,
   onPress,
 }: {
   label: string;
   selected: boolean;
   disabled?: boolean;
+  showCheck?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -283,13 +291,13 @@ function Option({
       style={[s.option, selected && s.optionOn, disabled && s.optionBlocked]}
       pressedStyle={s.optionPressed}
     >
-      {selected ? (
-        <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
+      {showCheck && selected ? (
+        <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={dColor.primaryText} />
       ) : null}
       <Text
         style={[
           textStyle(type.chip),
-          { color: selected ? color.forest : disabled ? color.inkStale : color.inkSecondary },
+          { color: selected ? dColor.primaryText : disabled ? dColor.mutedText : dColor.text },
         ]}
       >
         {label}
@@ -298,85 +306,159 @@ function Option({
   );
 }
 
+function BracketRail({
+  prefix,
+  selected,
+  onPick,
+}: {
+  prefix: string;
+  selected: Bracket | null;
+  onPick: (bracket: Bracket) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.bracketRail}
+      accessibilityLabel={`${prefix === "min" ? "Lowest" : "Highest"} value brackets`}
+    >
+      {BRACKETS.map((bracket) => (
+        <Tappable
+          key={`${prefix}-${bracket}`}
+          onPress={() => onPick(bracket)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: selected === bracket }}
+          accessibilityLabel={`Bracket ${bracket}`}
+          style={[s.bracket, selected === bracket && s.bracketOn]}
+          pressedStyle={s.optionPressed}
+        >
+          <Text style={[s.bracketLabel, selected === bracket && s.bracketLabelOn]}>
+            {bracket}
+          </Text>
+        </Tappable>
+      ))}
+    </ScrollView>
+  );
+}
+
 /** 1..BRACKET_COUNT, once. */
 const BRACKETS: readonly Bracket[] = Array.from({ length: BRACKET_COUNT }, (_, i) => i + 1);
 
 const s = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: color.captionFill },
+  scrim: { flex: 1, backgroundColor: dColor.captionFill },
   sheet: {
-    backgroundColor: color.surface,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    paddingTop: space.sheet.top,
-    paddingBottom: space.sheet.bottom,
+    backgroundColor: dColor.surface,
+    borderTopLeftRadius: marketplaceUi.radius.sheet,
+    borderTopRightRadius: marketplaceUi.radius.sheet,
+    paddingTop: marketplaceUi.space.sheetTop,
     maxHeight: "85%",
   },
   handle: {
     alignSelf: "center",
-    width: size.sheet.handleW,
-    height: size.sheet.handleH,
-    borderRadius: size.sheet.handleH / 2,
-    backgroundColor: color.controlLineStrong,
+    width: marketplaceUi.size.sheetHandleWidth,
+    height: marketplaceUi.size.sheetHandleHeight,
+    borderRadius: marketplaceUi.size.sheetHandleHeight / 2,
+    backgroundColor: dColor.border,
+  },
+  header: {
+    marginTop: marketplaceUi.space.sheetTop,
+    paddingHorizontal: marketplaceUi.space.sheetX,
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   title: {
-    marginTop: space.sheet.top,
-    paddingHorizontal: space.sheet.x,
-    color: color.ink,
+    fontFamily: font.figtreeBold,
+    fontSize: marketplaceUi.type.sheetTitle,
+    lineHeight: 26,
+    color: dColor.text,
+  },
+  clearAll: { minHeight: 36, justifyContent: "center", paddingHorizontal: 4 },
+  clearAllPressed: { opacity: 0.7 },
+  clearAllLabel: {
+    fontFamily: font.figtreeMedium,
+    fontSize: 14,
+    color: dColor.primary,
   },
 
-  body: { marginTop: space.sheet.titleToBody },
-  bodyContent: { paddingHorizontal: space.sheet.x, paddingBottom: space.sheet.actionsTop },
+  body: { flexShrink: 1, marginTop: marketplaceUi.space.titleToBody },
+  bodyContent: { paddingHorizontal: marketplaceUi.space.sheetX, paddingBottom: marketplaceUi.space.groupGap },
 
-  group: { marginBottom: space.sheet.groupGap },
-  label: { color: color.ink },
+  group: { marginBottom: marketplaceUi.space.groupGap },
+  label: { color: dColor.text },
   options: {
-    marginTop: space.sheet.labelToOptions,
+    marginTop: marketplaceUi.space.labelToOptions,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: space.sheet.optionGap,
+    gap: marketplaceUi.space.optionGap,
   },
   option: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    height: size.sheet.option,
-    paddingHorizontal: size.sheet.optionX,
-    borderRadius: radius.sheetOption,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    backgroundColor: color.control,
+    minHeight: marketplaceUi.size.chipHeight,
+    paddingHorizontal: marketplaceUi.space.chipX,
+    borderRadius: marketplaceUi.radius.chip,
+    borderWidth: 1,
+    borderColor: dColor.border,
+    backgroundColor: dColor.surface,
   },
-  optionOn: { backgroundColor: color.greenWash, borderColor: color.greenLine },
+  optionOn: { backgroundColor: dColor.primary, borderColor: dColor.primary },
   optionBlocked: { opacity: 0.5 },
   optionPressed: { opacity: 0.75 },
 
-  note: { marginTop: 8, color: color.inkMuted },
+  showAll: { alignSelf: "flex-start", marginTop: marketplaceUi.space.labelToOptions, minHeight: 32, justifyContent: "center" },
+  showAllLabel: { fontFamily: font.figtreeMedium, color: dColor.primary, fontSize: 14 },
+  conditionSegments: {
+    marginTop: marketplaceUi.space.labelToOptions,
+    minHeight: marketplaceUi.size.conditionHeight,
+    flexDirection: "row",
+    borderRadius: marketplaceUi.radius.control,
+    borderWidth: 1,
+    borderColor: dColor.border,
+    overflow: "hidden",
+  },
+  conditionSegment: {
+    flex: 1,
+    minWidth: 0,
+    height: marketplaceUi.size.conditionHeight,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  conditionSegmentOn: { backgroundColor: dColor.primary },
+  conditionLabel: {
+    fontFamily: font.figtreeMedium,
+    fontSize: marketplaceUi.type.conditionLabel,
+    color: dColor.mutedText,
+  },
+  conditionLabelOn: { color: dColor.primaryText },
+  bracketRail: {
+    marginTop: marketplaceUi.space.labelToOptions,
+    gap: marketplaceUi.space.bracketGap,
+  },
+  bracket: {
+    width: marketplaceUi.size.bracketSize,
+    height: marketplaceUi.size.bracketSize,
+    borderRadius: marketplaceUi.radius.bracket,
+    borderWidth: 1,
+    borderColor: dColor.border,
+    backgroundColor: dColor.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bracketOn: { backgroundColor: dColor.primary, borderColor: dColor.primary },
+  bracketLabel: { fontFamily: font.figtreeMedium, fontSize: 13, color: dColor.text },
+  bracketLabelOn: { color: dColor.primaryText },
+  note: { marginTop: 8, color: dColor.mutedText },
 
   actions: {
-    flexDirection: "row",
-    gap: space.sheet.actionGap,
-    paddingHorizontal: space.sheet.x,
-    paddingTop: space.sheet.actionsTop,
-    borderTopWidth: border.hairline,
-    borderTopColor: color.divider,
+    paddingHorizontal: marketplaceUi.space.sheetX,
+    paddingTop: marketplaceUi.space.footerTop,
+    paddingBottom: marketplaceUi.space.footerBottom,
+    borderTopWidth: 1,
+    borderTopColor: dColor.border,
   },
-  secondary: {
-    height: size.sheet.action,
-    paddingHorizontal: 18,
-    borderRadius: radius.primaryButton,
-    borderWidth: border.chip,
-    borderColor: color.controlLine,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryPressed: { backgroundColor: color.control },
-  primary: {
-    flex: 1,
-    height: size.sheet.action,
-    borderRadius: radius.primaryButton,
-    backgroundColor: color.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryPressed: { opacity: 0.85 },
+  primary: { height: marketplaceUi.size.sheetFooterButton, minHeight: marketplaceUi.size.sheetFooterButton },
 });

@@ -31,6 +31,7 @@ import {
 import { listingArea } from "../src/lib/listing-area";
 import { relativeShort } from "../src/lib/format";
 import { border, color, icon, radius, size, space, textStyle, type } from "../src/theme/tokens";
+import { sizedImage } from "../src/media/image-url";
 
 /**
  * The full-screen story viewer (2 Oct 2026). Opened from the stories row with
@@ -266,9 +267,12 @@ export default function StoryViewer() {
             deleteStory(story.id, {
               onSuccess: close,
               onError: () => {
-                showDialog("Couldn't delete the story", "Check your connection and try again.", [
-                  { text: "OK", onPress: resume },
-                ]);
+                showDialog(
+                  "Couldn't delete the story",
+                  "Check your connection and try again.",
+                  [{ text: "Got it", onPress: resume }],
+                  { pose: "worry" },
+                );
               },
             }),
         },
@@ -328,7 +332,16 @@ export default function StoryViewer() {
       <Animated.View style={[s.stage, { opacity, transform: [{ translateY: dragY }] }]}>
         {/* ── the photo, and the gesture layer over it ── */}
         {cover ? (
-          <Image source={{ uri: cover }} contentFit="contain" style={StyleSheet.absoluteFill} transition={120} />
+          // The whole photo, sharp, over a blurred copy of itself that fills
+          // the screen. Filling the screen with the photo itself ("cover")
+          // cropped a landscape shot and blew it up about three times on a
+          // tall phone, which is what made stories look blurry. The blurred
+          // copy keeps the no-black-bands look.
+          <>
+            <Image source={{ uri: sizedImage(cover, "thumb") }} contentFit="cover" blurRadius={40} style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.25)" }]} />
+            <Image source={{ uri: sizedImage(cover, "full") }} contentFit="contain" style={StyleSheet.absoluteFill} transition={120} />
+          </>
         ) : (
           <View style={[StyleSheet.absoluteFill, s.noPhoto]}>
             <ImageIcon size={icon.failedPhoto.size} stroke={icon.failedPhoto.stroke} color={color.failedIcon} />
@@ -406,11 +419,20 @@ export default function StoryViewer() {
             </View>
           ) : null}
 
+          {/* Your own story: who has seen it. */}
+          {author.isOwn && typeof story.seenBy === "number" ? (
+            <View style={s.seenBy} pointerEvents="none">
+              <Text style={[textStyle(type.metadata), s.onDark]}>
+                {story.seenBy === 0 ? "No views yet" : `Seen by ${story.seenBy}`}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={s.card}>
             <View style={s.cardRow}>
               <View style={s.thumbBox}>
                 {cover ? (
-                  <Image source={{ uri: cover }} contentFit="cover" style={s.thumb} />
+                  <Image source={{ uri: sizedImage(cover, "thumb") }} contentFit="cover" style={s.thumb} />
                 ) : (
                   <View style={[s.thumb, s.noPhoto]} />
                 )}
@@ -442,7 +464,7 @@ export default function StoryViewer() {
                   View listing
                 </Text>
               </Tappable>
-              {author.isOwn ? null : (
+              {author.isOwn || item.status !== "AVAILABLE" || item.hiddenByModerator ? null : (
                 <Tappable
                   onPress={openListing}
                   accessibilityRole="button"
@@ -485,7 +507,7 @@ function firstUnseen(author: StoryAuthor | undefined): number {
 }
 
 function Avatar({ uri, name }: { uri: string | null; name: string }) {
-  if (uri) return <Image source={{ uri }} contentFit="cover" style={s.avatar} />;
+  if (uri) return <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.avatar} />;
   return (
     <View style={[s.avatar, s.avatarFallback]}>
       <Text style={[textStyle(type.avatarInitials40), { color: color.forest }]}>
@@ -498,6 +520,7 @@ function Avatar({ uri, name }: { uri: string | null; name: string }) {
 const AVATAR = 32;
 
 const s = StyleSheet.create({
+  seenBy: { alignSelf: "flex-start", marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: "rgba(20,20,15,0.55)" },
   root: { flex: 1, backgroundColor: color.ink },
   stage: { flex: 1 },
   noPhoto: { alignItems: "center", justifyContent: "center", backgroundColor: color.ink },

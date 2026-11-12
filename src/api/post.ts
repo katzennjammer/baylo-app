@@ -2,22 +2,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, legacyFailure, malformedResponse, readJson, request } from "./client";
 import { getApiBase } from "./config";
+import { prepareImage, type PreparedImage } from "../media/prepare-image";
 import type { SafeZoneHub } from "./types";
 
 /**
- * The five endpoints the listing wizard talks to.
+ * The endpoints the listing wizard talks to.
  *
  * They do not share a response shape, and this module does not pretend they do.
- * Three of them predate /api/v1 and answer bare JSON; two are v1 and come
- * wrapped in the `{ data, error, meta }` envelope that `apiV1` unwraps. What
- * IS unified here is the failure type — everything below throws `ApiError`, so
- * a screen branches on `.status` and `.retryAfter` rather than on which
- * generation of the API it happened to be talking to.
+ * Legacy routes answer bare JSON; v1 routes use the `{ data, error, meta }`
+ * envelope that `apiV1` unwraps. What IS unified here is the failure type —
+ * everything below throws `ApiError`, so a screen branches on `.status` and
+ * `.retryAfter` rather than on which generation of the API it happened to be
+ * talking to.
  *
  *   POST /api/upload           multipart, images only, 10 MB, 30/hour
  *   POST /api/ai/identify      category + condition + tags from the photo, 20/hour
  *   POST /api/ai/phash         duplicate detection, FAILS CLOSED, 20/hour
- *   GET  /api/v1/valuation     the suggestion and the ±25% band
+ *   GET  /api/v1/valuation     Baylo's standard Leaves estimate and its range
+ *   POST /api/ai/valuation     the AI-assisted Leaves suggestion, cited, 10/hour
  *   GET  /api/v1/hubs          the 22 seeded Safe-Zone Hubs
  *   POST /api/items            creates the listing
  *
@@ -147,20 +149,28 @@ export interface UploadResult {
  * serialise one. See sendMultipart() in ./client. Until that routing existed
  * this function was quietly broken, which nobody noticed because the only
  * caller is the 401 fallback below.
+ *
+ * The photo is shrunk to a JPEG first (see prepareImage()), so what is sent is
+ * never the original file and always fits under Vercel's 4.5 MB request limit.
  */
 export async function uploadPhoto(
   uri: string,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
-  const form = new FormData();
-  const name = uri.split("/").pop() || "photo.jpg";
-  const ext = name.split(".").pop()?.toLowerCase();
-  const type =
-    ext === "png" ? "image/png" : ext === "heic" || ext === "heif" ? "image/heic" : "image/jpeg";
+  return sendPhoto(await prepareImage(uri, "photo"), signal);
+}
 
+/** Throws the cancellation an abort during the resize would otherwise skip. */
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new ApiError(0, "ABORTED", "Upload cancelled.");
+}
+
+async function sendPhoto(image: PreparedImage, signal?: AbortSignal): Promise<UploadResult> {
+  throwIfAborted(signal);
+  const form = new FormData();
   // The cast is React Native's file descriptor, which the DOM FormData types do
   // not describe. The runtime accepts it; TypeScript's lib.dom does not know it.
-  form.append("file", { uri, name, type } as unknown as Blob);
+  form.append("file", { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
 
   const res = await request("/api/upload", { method: "POST", body: form, signal });
   if (!res.ok) return legacyFailure(res, "Upload failed");
@@ -187,7 +197,7 @@ export async function uploadPhoto(
  * The Bearer token here is read straight from the session mirror, so this path
  * does NOT have `request()`'s refresh-on-401. Rather than reimplement the
  * refresh — two copies of that logic is how a token family ends up killed by a
- * replay — a 401 falls through to `uploadPhoto()`, which is the fetch path and
+ * replay — a 401 falls through to `sendPhoto()`, which is the fetch path and
  * does refresh. The bar stops moving for that one retry. That is honest: the
  * upload genuinely restarted.
  *
@@ -196,26 +206,29 @@ export async function uploadPhoto(
  * cookie ever entering the jar. See the note at the top of `client.ts` for what
  * a stray cookie would do to `resolveSession()`.
  */
-export function uploadPhotoWithProgress(
+/** The most a request's sent bytes may claim. The server's reply is the last 1%. */
+const SENT_CEILING = 0.99;
+
+export async function uploadPhotoWithProgress(
   uri: string,
   onProgress: (fraction: number) => void,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
+  // Resized before the bar starts: the percentage is of the bytes actually sent.
+  const image = await prepareImage(uri, "photo");
+  throwIfAborted(signal);
+
   const base = getApiBase();
   const token = currentSession()?.accessToken ?? null;
 
   // No base or no token: there is nothing this path can do that the fetch path
   // cannot do better, including producing the CONFIG_ERROR with the gear in it.
-  if (!base || !token) return uploadPhoto(uri, signal);
+  if (!base || !token) return sendPhoto(image, signal);
 
   return new Promise<UploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const form = new FormData();
-    const name = uri.split("/").pop() || "photo.jpg";
-    const ext = name.split(".").pop()?.toLowerCase();
-    const type =
-      ext === "png" ? "image/png" : ext === "heic" || ext === "heif" ? "image/heic" : "image/jpeg";
-    form.append("file", { uri, name, type } as unknown as Blob);
+    form.append("file", { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
 
     const abort = () => xhr.abort();
     signal?.addEventListener("abort", abort);
@@ -229,15 +242,34 @@ export function uploadPhotoWithProgress(
     // generated; overwriting it with a boundary-less header makes the server's
     // formData() parse fail on every single upload.
 
+    // ── THE NATIVE COUNTER IS NOT BOUNDED BY THE TOTAL ──
+    //
+    // `loaded` can run past `total`: when the native stack sends the body a
+    // second time on one request (a transparent resend on a fresh connection),
+    // the byte counter keeps climbing while `total` stays the size of ONE copy.
+    // Passing `loaded / total` through is how the caption read 200%. Bytes past
+    // the total are the resend, so they count as progress through the current
+    // copy; an Android-style retry that restarts the counter at 0 is covered by
+    // never moving backwards.
+    //
+    // And the last byte leaving the phone is not the upload finishing — the
+    // server still has to store the photo and answer. Sent bytes therefore stop
+    // at SENT_CEILING; only the caller's `progress: 1` after a 2xx means done.
+    let reported = 0;
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+      if (!e.lengthComputable || e.total <= 0) return;
+      const sent = e.loaded > e.total ? e.loaded % e.total : e.loaded;
+      const fraction = Math.min(SENT_CEILING, sent / e.total);
+      if (fraction <= reported) return;
+      reported = fraction;
+      onProgress(fraction);
     };
 
     xhr.onload = () => {
       done();
       if (xhr.status === 401) {
         // The token aged out mid-upload. Hand it to the path that can refresh.
-        uploadPhoto(uri, signal).then(resolve, reject);
+        sendPhoto(image, signal).then(resolve, reject);
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300) {
@@ -288,6 +320,13 @@ export interface IdentifyResult {
   category: Category;
   condition: Condition;
   tags: string[];
+  brand?: string | null;
+  brandEvidence?: string | null;
+  /** The photo looks perishable (food, drinks, produce, flowers). A suggestion. */
+  perishable?: boolean;
+  /** For a perishable: how many / how much the photo shows, when it can tell. */
+  quantity?: number | null;
+  unit?: "PCS" | "KG" | "LITERS" | null;
 }
 
 /**
@@ -437,7 +476,11 @@ export interface ValuationPayload {
   max: number;
   /** The bounds the final value must fall inside. THE SLIDER'S STOPS. */
   allowed: { min: number; max: number };
-  valuationSource: "comparables" | "category_band";
+  /**
+   * "ai_market" never comes from /api/v1/valuation; it is set on the copy the
+   * wizard builds from an AI result (see `activeValuation` in post/state).
+   */
+  valuationSource: "comparables" | "category_band" | "ai_market";
   /** How many settled trades fed the comparables path. 0 on the band path. */
   sampleSize: number;
   category: string;
@@ -447,6 +490,86 @@ export interface ValuationPayload {
   comparables: { label: string; sublabel: string; leaves: string }[];
   basis: string;
 }
+
+/**
+ * POST /api/ai/valuation.
+ *
+ * Claude finds online listings and their peso asking prices for the title,
+ * category and condition (never the photo). The SERVER takes the median price,
+ * finds its price level for the category (Low / Typical / High / Premium), and
+ * gives that level's fixed point in the range /api/v1/valuation gives. Same
+ * price, same Leaves. The bracket and review rules run on the server as before.
+ *
+ *   "ai"        use `valuation.suggestedLeaves` and `allowed`, show the
+ *               explanation and sources, and send `ticket` with createItem so
+ *               the listing is created with exactly this number.
+ *   "fallback"  no AI number. The wizard keeps the standard estimate and must
+ *               label it as such, never as an AI result.
+ *
+ * A thrown ApiError (503 AI_UNAVAILABLE, 429, offline) is treated exactly like
+ * "fallback" by the caller.
+ */
+export type AiValuationResult =
+  | {
+      status: "ai";
+      valuation: {
+        suggestedLeaves: number;
+        min: number;
+        max: number;
+        allowed: { min: number; max: number };
+        valuationSource: "ai_market";
+      };
+      /** The online asking prices. `typicalPhp` (the median) picks the level. */
+      market: { typicalPhp: number; lowPhp: number; highPhp: number; listingCount: number };
+      level: {
+        index: 0 | 1 | 2 | 3;
+        name: "Low" | "Typical" | "High" | "Premium";
+        categoryLabel: string;
+        /** [Low→Typical, Typical→High, High→Premium], pesos. */
+        cutoffsPhp: [number, number, number];
+        /** All four levels and their Leaves for this category and condition. */
+        levels: { name: string; leaves: number }[];
+      };
+      note: string;
+      sources: { title: string; url: string; pricePhp: number }[];
+      checkedAt: string;
+      ticket: string;
+      expiresAt: string;
+    }
+  | {
+      status: "fallback";
+      reason: "INSUFFICIENT_SOURCES" | "INVALID_AI_RESPONSE" | "AI_UNAVAILABLE";
+      message: string;
+    };
+
+export async function fetchAiValuation(input: {
+  title: string;
+  category: Category;
+  condition: Condition;
+}): Promise<AiValuationResult> {
+  const path = "/api/ai/valuation";
+  // Up to a minute: the price check opens shop pages, which takes longer
+  // than the app's usual 30 seconds. The server gives up at 50.
+  const res = await request(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    { timeoutMs: 60_000 },
+  );
+  if (!res.ok) await legacyFailure(res, "AI valuation is unavailable right now");
+  return readJson<AiValuationResult>(res, path);
+}
+
+/**
+ * A 409 from createItem whose ticket did not verify: expired, or the title,
+ * category or condition changed after the estimate. Nothing was created; the
+ * wizard re-values and the person posts again.
+ */
+export const isValuationTicketInvalid = (e: unknown): boolean =>
+  e instanceof ApiError && e.status === 409 && e.code === "VALUATION_TICKET_INVALID";
 
 /**
  * The suggested value, and the band around it the server will accept.
@@ -507,6 +630,12 @@ export interface CreateItemInput {
   category: Category;
   condition: Condition;
   valueLeaves: number;
+  /**
+   * The ticket from fetchAiValuation, when the value step showed an AI
+   * suggestion for exactly this title, category and condition. Omitted, the
+   * server judges the value against its standard estimate.
+   */
+  valuationTicket?: string;
   images: string[];
   /** "What are you hoping to get?" — free text, optional. */
   wantedItems: string | null;

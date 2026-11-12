@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -10,18 +10,23 @@ import { useProfileReviews, type ProfileReview } from "../../src/api/reviews";
 import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
-import { bracketLabel } from "../../src/lib/brackets";
-import { color, font } from "../../src/theme/tokens";
+import { bracketLabel, bracketOf as bracketOfValue } from "../../src/lib/brackets";
+import { color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
-import { StoreIcon } from "../../src/components/icons";
-import { OrgStorefrontHeader, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
+import { LeafIcon, StoreIcon } from "../../src/components/icons";
+import { OrgStorefrontHeader, ShopAbout, StorefrontEmpty, useStorefrontKeyboard } from "../../src/components/OrgStorefrontHeader";
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
 import { getApiBase } from "../../src/api/config";
-import { fetchAchievements } from "../../src/api/achievements";
+import { DEFAULT_MAX_PROFILE_BADGES, fetchAchievements } from "../../src/api/achievements";
+import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
+import { Tappable } from "../../src/components/Tappable";
+import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
+import { sizedImage } from "../../src/media/image-url";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -39,9 +44,9 @@ import { NoticeDialog } from "../../src/components/NoticeDialog";
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { data: profile, refetch, isRefetching: profileRefetching, isLoading: profileLoading } = useProfileMe();
+  const { data: profile, refetch, isError: profileError, isRefetching: profileRefetching, isPending: profileLoading } = useProfileMe();
   const dark = useColorScheme() === "dark";
-  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const [tab, setTab] = useState<ShelfTab>("posts");
 
   // Badge art, the shelf and the counts are written by other screens and by the
   // admin panel, and this tab stays mounted behind them. Without this the shelf
@@ -58,6 +63,7 @@ export default function ProfileScreen() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isLoadingError: reviewsLoadError,
     isRefetching: reviewsRefetching,
   } = useProfileReviews(user?.id, tab === "reviews");
 
@@ -70,7 +76,10 @@ export default function ProfileScreen() {
   }, [profile?.user.name, user?.id, user?.name]);
 
   // The shop this device is ACTING AS, if any. getActingOrgId() is read per
-  // render, not mirrored: see OrgSwitcher.
+  // render, not mirrored into state: it is a module variable the request layer
+  // reads synchronously on every call, so it is the one source of truth, and a
+  // state copy would disagree the moment anything else cleared it -- which the
+  // 403 handler does on a revoked membership.
   //
   // WHILE ACTING AS A SHOP, THIS TAB IS THE SHOP -- for everybody, not just
   // shop-only accounts. Until 25 Sep 2026 somebody with a personal history
@@ -109,8 +118,14 @@ export default function ProfileScreen() {
 
   // Viewing a shop here also ACTS AS it. Otherwise the Post button would list
   // things on a personal shelf this person has never used, and the first one
-  // would quietly bring back the personal profile. Same steps as OrgSwitcher:
-  // switch, drop every cache fetched as the previous identity, re-render.
+  // would quietly bring back the personal profile. Switch, then drop EVERY
+  // cache: each list was fetched as somebody, and serving the previous
+  // identity's shelf, offers or trades under the new one is how an owner sees
+  // the shop's listings labelled as their own. invalidateQueries() with no key
+  // is heavy-handed and correct for a rare action -- anything cheaper means
+  // auditing every query key for identity-dependence forever. Then re-render.
+  // (Settings' "Posting as" card was removed on 20 Oct 2026; this tab and the
+  // post flow's "Post as myself" are where an owner switches now.)
   const selectShop = useCallback(async (organizationId: string | null) => {
     setPickingShop(false);
     if (organizationId !== getActingOrgId()) {
@@ -142,10 +157,24 @@ export default function ProfileScreen() {
     void selectShop(adoptShopId);
   }, [adoptShopId, selectShop]);
 
+  // Two shelves (5 Nov 2026). Listings: what is on the marketplace or on its
+  // way (live, in a trade, waiting for review), so the tab's number and its
+  // grid agree. Traded: your history, both what you gave away (TRADED) and
+  // what you received (OWNED, which can be relisted). Received items used to
+  // sit unlabelled among the listings and read as listings.
   const items = profile?.items ?? [];
+  const isHistory = (i: Item) => i.status === "TRADED" || i.status === "OWNED";
+  // An expired perishable is not a listing any more: it stays on the shelf,
+  // last and labelled, so it can be relisted or deleted, but it is not counted.
+  const isExpired = (i: Item) => i.status === "EXPIRED";
+  const listingItems = [...items.filter((i) => !isHistory(i) && !isExpired(i)), ...items.filter(isExpired)];
+  const listingCount = listingItems.filter((i) => !isExpired(i)).length;
+  const tradedItems = items.filter(isHistory);
   const rows: ProfileListRow[] = tab === "posts"
-    ? chunkItems(items).map((postItems) => ({ kind: "posts", items: postItems }))
-    : reviews.map((review) => ({ kind: "review", review }));
+    ? chunkItems(listingItems).map((postItems) => ({ kind: "posts", items: postItems }))
+    : tab === "traded"
+      ? chunkItems(tradedItems).map((postItems) => ({ kind: "posts", items: postItems }))
+      : reviews.map((review) => ({ kind: "review", review }));
   const onRefresh = useCallback(() => {
     if (tab === "reviews") void refetchReviews();
     else void refetch();
@@ -157,7 +186,11 @@ export default function ProfileScreen() {
   // see its empty personal profile flash first. `isLoading` is false while a
   // query is paused offline, so with no signal this still falls through to the
   // personal layout drawn from the stored session, as the header promises.
-  if (profileLoading || orgsLoading) {
+  if (profileLoading) {
+    return <ProfileSkeleton dark={dark} />;
+  }
+
+  if (orgsLoading) {
     return <View style={[s.screen, s.centred]}><ActivityIndicator color={dark ? darkColors.green : color.green} /></View>;
   }
 
@@ -189,18 +222,77 @@ export default function ProfileScreen() {
     );
   }
 
+  if (profileError && !profile) {
+    return (
+      <View style={[s.screen, s.centred]}>
+        <MascotEmptyState
+          pose="worry"
+          title="Couldn't load your profile"
+          message="Check your connection and try again."
+          action={{ label: "Try again", onPress: () => void refetch() }}
+        />
+      </View>
+    );
+  }
+
   return (
     <FlatList<ProfileListRow>
       style={s.screen}
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
-        <ProfileHeader dark={dark} name={profile?.user.name ?? user?.name ?? "Signed in"} avatar={profile?.user.avatar ?? user?.image ?? null} bio={profile?.user.bio} tier={profile?.reputation.tier} followers={profile?.counts.followers ?? 0} following={profile?.counts.following ?? 0} posts={profile?.counts.listed ?? items.length} achievements={profile?.displayedAchievements ?? []} onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })} onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })} onEdit={() => router.push("/edit-profile")} onShare={() => void shareProfile()} onMoreAchievements={() => router.push("/achievements")} />
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-        {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} /> : null}
+        <PersonHeader
+          userId={profile?.user.id}
+          avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
+          user={{
+            bio: profile?.user.bio ?? null,
+            location: profile?.user.location ?? null,
+            createdAt: profile?.user.createdAt ?? "",
+            rating: profile?.user.rating ?? 0,
+            trustTier: profile?.reputation.tier ?? null,
+            idVerified: profile?.idVerification?.verified ?? false,
+          }}
+          counts={{
+            listed: profile?.counts.listed ?? items.length,
+            completedTrades: profile?.counts.completedTrades ?? 0,
+            reviews: profile?.counts.reviews ?? 0,
+            followers: profile?.counts.followers ?? 0,
+            following: profile?.counts.following ?? 0,
+          }}
+          palette={dark ? { ink: darkColors.ink, secondary: darkColors.muted, control: darkColors.surface } : { ink: color.ink, secondary: color.inkSecondary, control: color.control }}
+          locationSlot={
+            <Tappable onPress={() => router.push("/edit-profile")} accessibilityRole="button">
+              <Text style={{ fontSize: 13, fontWeight: "600", color: color.forest }}>+ Add your location</Text>
+            </Tappable>
+          }
+          onFollowers={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "followers" } })}
+          onFollowing={() => router.push({ pathname: "/connections", params: { userId: user?.id ?? "", kind: "following" } })}
+        >
+          <HeaderButtons
+            palette={dark ? { ink: darkColors.ink, control: darkColors.surface, border: darkColors.border } : { ink: color.ink, control: color.control, border: color.controlLine }}
+            primary={{ label: "Edit profile", onPress: () => router.push("/edit-profile"), filled: false }}
+            secondary={{ label: "Share profile", onPress: () => void shareProfile() }}
+          />
+          <View style={s.badgeHead}>
+            <Text style={[s.badgeHeadText, { color: dark ? darkColors.muted : color.inkSecondary }]}>
+              Badges · {profile?.displayedAchievements.length ?? 0} of {DEFAULT_MAX_PROFILE_BADGES} shown
+            </Text>
+            <Tappable onPress={() => router.push("/achievements")} accessibilityRole="button" accessibilityLabel="Edit badges">
+              <Text style={s.badgeEdit}>Edit</Text>
+            </Tappable>
+          </View>
+          <Badges dark={dark} achievements={profile?.displayedAchievements ?? []} onMore={() => router.push("/achievements")} />
+          {profile ? <FinishProfile profile={profile} dark={dark} /> : null}
+        </PersonHeader>
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} counts={{ posts: listingCount, traded: tradedItems.length, reviews: profile?.counts.reviews ?? 0 }} />
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={summary} loadError={reviewsLoadError} onRetry={() => void refetchReviews()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
-        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
+        <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item}
+          // An item got in a trade opens its item page, where Relist lives (7 Nov
+          // 2026); the tile no longer carries its own Relist link.
+          onPress={() => router.push({ pathname: shelfLabel(item) && item.status !== "OWNED" ? "/listing-review" : "/item", params: { id: item.id } })}
+        />)}</View>
       ) : (
         <ReviewRow dark={dark} review={row.review} onReviewer={() => router.push({ pathname: "/user", params: { id: row.review.reviewer.id } })} onItem={() => { const reviewItem = row.review.item; if (reviewItem) router.push({ pathname: "/item", params: { id: reviewItem.id } }); }} />
       )}
@@ -208,9 +300,121 @@ export default function ProfileScreen() {
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "posts" ? profileRefetching : reviewsRefetching} onRefresh={onRefresh} tintColor={dark ? darkColors.green : color.green} />}
       ListFooterComponent={tab === "reviews" && isFetchingNextPage ? <ActivityIndicator color={dark ? darkColors.green : color.green} style={s.footer} /> : null}
-      ListEmptyComponent={<Text style={[s.empty, { color: dark ? darkColors.muted : color.inkMuted }]}>{tab === "reviews" ? "No reviews yet." : "Your listings will appear here."}</Text>}
+      ListEmptyComponent={tab === "reviews" && reviewsLoadError ? (
+        <ReviewLoadError dark={dark} onRetry={() => void refetchReviews()} />
+      ) : tab === "reviews" ? (
+        <MascotEmptyState pose="search" size={96} title="No reviews yet" message="Reviews appear here after your first completed trade." />
+      ) : tab === "traded" ? (
+        <MascotEmptyState pose="leaf" size={96} title="No trades yet" message="Items you trade away and items you get show here." />
+      ) : (
+        <MascotEmptyState
+          pose="box"
+          size={96}
+          title="Your listings show here"
+          message="Post something you don't use any more."
+          action={{ label: "Post", onPress: () => router.push("/post-item") }}
+        />
+      )}
     />
   );
+}
+
+export function ProfileSkeleton({ dark }: { dark: boolean }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
+
+    pulse.setValue(0);
+    const half = motion.skeletonPulseMs / 2;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: half,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: half,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion]);
+
+  const opacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [motion.skeletonFrom, motion.skeletonTo],
+  });
+
+  return (
+    <View
+      style={[s.screen, { backgroundColor: dark ? darkColors.surface : color.surface }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View style={s.skeletonHeader}>
+        <SkeletonBlock opacity={opacity} style={s.skeletonAvatar} />
+        <View style={s.skeletonStats}>
+          {[0, 1, 2].map((index) => (
+            <View key={index} style={s.skeletonStat}>
+              <SkeletonBlock opacity={opacity} style={s.skeletonStatValue} />
+              <SkeletonBlock opacity={opacity} style={s.skeletonStatLabel} soft />
+            </View>
+          ))}
+        </View>
+        <SkeletonBlock opacity={opacity} style={s.skeletonName} />
+        <View style={s.skeletonActions}>
+          <SkeletonBlock opacity={opacity} style={s.skeletonButton} />
+          <SkeletonBlock opacity={opacity} style={s.skeletonButton} />
+        </View>
+      </View>
+      <View style={s.skeletonTabs}>
+        <SkeletonBlock opacity={opacity} style={s.skeletonTab} />
+        <SkeletonBlock opacity={opacity} style={s.skeletonTab} />
+      </View>
+      {[0, 1].map((row) => (
+        <View key={row} style={s.gridRow}>
+          {[0, 1, 2].map((column) => (
+            <SkeletonBlock key={column} opacity={opacity} style={s.skeletonTile} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SkeletonBlock({
+  opacity,
+  style,
+  soft = false,
+}: {
+  opacity: Animated.AnimatedInterpolation<number>;
+  style: ViewStyle;
+  soft?: boolean;
+}) {
+  return <Animated.View style={[s.skeletonBlock, style, { backgroundColor: soft ? color.skeletonSoft : color.skeleton, opacity }]} />;
 }
 
 /**
@@ -222,7 +426,7 @@ function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: {
   const logo = orgLogoUrl(logoUrl);
   return (
     <Pressable onPress={onPress} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Acting as ${name}. ${actionLabel}`}>
-      {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+      {logo ? <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
       <View style={s.shopText}>
         <Text style={[s.shopEyebrow, { color: palette.muted }]}>Acting as</Text>
         <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{name}</Text>
@@ -268,7 +472,7 @@ function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: A
         const active = shop.id === activeId;
         return (
           <Pressable key={shop.id} onPress={() => onPick(shop.id)} style={[s.shopCard, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`Open ${shop.name}`}>
-            {logo ? <Image source={{ uri: logo }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
+            {logo ? <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.shopLogo} /> : <View style={[s.shopLogo, s.shopLogoFallback]}><StoreIcon size={20} stroke={1.6} color={color.forest} /></View>}
             <View style={s.shopText}>
               <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
               <Text style={[s.shopEyebrow, { color: palette.muted }]}>{"Owner"}{active ? " · Acting as" : ""}</Text>
@@ -291,7 +495,7 @@ function ShopPicker({ dark, shops, activeId, onPick }: { dark: boolean; shops: A
  */
 function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUserId: string; viewerId: string | null; topSlot: React.ReactNode }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"posts" | "reviews">("posts");
+  const [tab, setTab] = useState<ShelfTab>("posts");
   const { data, isPending, isError, refetch, isRefetching } = usePublicProfile(orgUserId);
   const reviewQuery = useProfileReviews(orgUserId, tab === "reviews");
   const palette = dark ? darkColors : lightColors;
@@ -314,7 +518,9 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
 
   const rows: ProfileListRow[] = tab === "posts"
     ? chunkItems(data.items).map((postItems) => ({ kind: "posts", items: postItems }))
-    : reviewQuery.reviews.map((review) => ({ kind: "review", review }));
+    : tab === "reviews"
+      ? reviewQuery.reviews.map((review) => ({ kind: "review", review }))
+      : [];
   const inert = () => undefined;
 
   return (
@@ -336,9 +542,11 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
           onEdit={() => router.push({ pathname: "/edit-org", params: { id: org.id, userId: data.user.id } })}
           onShare={() => void Share.share({ message: `${org.name} on Baylo\n${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`, title: "Share shop" })}
           onPost={getActingOrgId() === org.id ? () => router.push("/post-item") : undefined}
+          location={data.user.location}
+          listingValues={data.items.filter((item) => item.status === "AVAILABLE").map((item) => item.valueLeaves)}
         />
-        <ProfileTabs dark={dark} active={tab} onChange={setTab} />
-        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier /> : null}
+        <ProfileTabs dark={dark} active={tab} onChange={setTab} about />
+        {tab === "reviews" ? <ReviewSummary dark={dark} summary={reviewQuery.summary} hideTier loadError={reviewQuery.isLoadingError} onRetry={() => void reviewQuery.refetch()} /> : null}
       </>}
       renderItem={({ item: row }) => row.kind === "posts" ? (
         <View style={s.gridRow}>{row.items.map((item) => <ProfileTile key={item.id} dark={dark} item={item} onPress={() => router.push({ pathname: shelfLabel(item) ? "/listing-review" : "/item", params: { id: item.id } })} />)}</View>
@@ -349,9 +557,13 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
       onEndReachedThreshold={0.6}
       refreshControl={<RefreshControl refreshing={tab === "reviews" ? reviewQuery.isRefetching : isRefetching} onRefresh={() => { if (tab === "reviews") void reviewQuery.refetch(); else void refetch(); }} tintColor={palette.green} />}
       ListFooterComponent={tab === "reviews" && reviewQuery.isFetchingNextPage ? <ActivityIndicator color={palette.green} style={s.footer} /> : null}
-      ListEmptyComponent={tab === "reviews"
-        ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." />
-        : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." />}
+      ListEmptyComponent={tab === "reviews" && reviewQuery.isLoadingError
+        ? <ReviewLoadError dark={dark} onRetry={() => void reviewQuery.refetch()} />
+        : tab === "about"
+          ? <ShopAbout dark={dark} org={org} location={data.user.location} completedTrades={org.completedTrades ?? data.counts.completedTrades} />
+          : tab === "reviews"
+          ? <StorefrontEmpty dark={dark} title="No reviews yet" body="Reviews appear here after your first completed trade." pose="search" />
+          : <StorefrontEmpty dark={dark} title="No listings yet" body="Tap Post to add your first item." pose="box" />}
     />
   );
 }
@@ -364,7 +576,8 @@ type ProfileListRow =
 
 function chunkItems(items: Item[]): Item[][] {
   const rows: Item[][] = [];
-  for (let index = 0; index < items.length; index += 3) rows.push(items.slice(index, index + 3));
+  // Two across (4 Nov 2026): a photo with its title and value under it.
+  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
   return rows;
 }
 
@@ -373,18 +586,29 @@ function ProfileHeader({ dark, name, avatar, bio, tier, posts, followers, follow
   return <View style={s.header}><View style={s.identityRow}><Avatar uri={avatar} name={name} /><View style={s.stats}><Stat dark={dark} label="Posts" value={posts} /><Pressable onPress={onFollowers} style={s.stat} accessibilityRole="button" accessibilityLabel={`${followers} followers`}><Text style={[s.statValue, { color: palette.ink }]}>{followers}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Followers</Text></Pressable><Pressable onPress={onFollowing} style={s.stat} accessibilityRole="button" accessibilityLabel={`${following} following`}><Text style={[s.statValue, { color: palette.ink }]}>{following}</Text><Text style={[s.statLabel, { color: palette.muted }]}>Following</Text></Pressable></View></View><View style={s.nameRow}><Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{name}</Text>{tier ? <View style={[s.tier, { backgroundColor: dark ? "#244A31" : color.greenWash }]}><Text style={[s.tierText, { color: dark ? "#BFE8C7" : color.forest }]}>{TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}</Text></View> : null}</View>{bio ? <Text style={[s.bio, { color: palette.secondary }]} numberOfLines={3}>{bio}</Text> : null}<View style={s.actions}><Pressable onPress={onEdit} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Edit profile</Text></Pressable><Pressable onPress={onShare} style={[s.actionButton, { backgroundColor: palette.control }]} accessibilityRole="button"><Text style={[s.actionText, { color: palette.ink }]}>Share profile</Text></Pressable></View><Badges dark={dark} achievements={achievements} onMore={onMoreAchievements} /></View>;
 }
 
-export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active: "posts" | "reviews"; onChange: (tab: "posts" | "reviews") => void }) {
+export type ShelfTab = "posts" | "traded" | "reviews" | "about";
+
+/** Your own profile passes `counts.traded` and gets a third tab, Traded. */
+export function ProfileTabs({ dark, active, onChange, counts, about = false }: { dark: boolean; active: ShelfTab; onChange: (tab: ShelfTab) => void; counts?: { posts: number; reviews: number; traded?: number }; /** A shop's "About" tab. */ about?: boolean }) {
   const palette = dark ? darkColors : lightColors;
+  // Words with counts (4 Nov 2026): "Listings 5   Reviews 2", underlined.
+  const tab = (key: ShelfTab, label: string, count: number | undefined) => {
+    const on = active === key;
+    return (
+      <Pressable onPress={() => onChange(key)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }} style={[s.tab, { borderBottomColor: on ? palette.ink : "transparent" }]}>
+        <Text style={[s.tabText, { color: on ? palette.ink : palette.secondary, fontFamily: on ? font.sansBold : font.sansMedium }]}>
+          {label}
+          {count !== undefined ? <Text style={[s.tabCount, { color: palette.muted }]}>{`  ${count}`}</Text> : null}
+        </Text>
+      </Pressable>
+    );
+  };
   return (
-    <View style={[s.tabs, { borderTopColor: palette.divider, borderBottomColor: palette.divider }]}>
-      <Pressable onPress={() => onChange("posts")} accessibilityRole="tab" accessibilityLabel="Posts" accessibilityState={{ selected: active === "posts" }} style={s.tab}>
-        <GridIcon size={20} stroke={1.7} color={active === "posts" ? palette.green : palette.muted} />
-        <View style={[s.tabUnderline, { backgroundColor: active === "posts" ? palette.green : "transparent" }]} />
-      </Pressable>
-      <Pressable onPress={() => onChange("reviews")} accessibilityRole="tab" accessibilityLabel="Reviews" accessibilityState={{ selected: active === "reviews" }} style={s.tab}>
-        <Ionicons name="star-outline" size={21} color={active === "reviews" ? palette.green : palette.muted} />
-        <View style={[s.tabUnderline, { backgroundColor: active === "reviews" ? palette.green : "transparent" }]} />
-      </Pressable>
+    <View style={[s.tabs, { borderBottomColor: palette.border }]}>
+      {tab("posts", "Listings", counts?.posts)}
+      {counts?.traded !== undefined ? tab("traded", "Traded", counts.traded) : null}
+      {tab("reviews", "Reviews", counts?.reviews)}
+      {about ? tab("about", "About", undefined) : null}
     </View>
   );
 }
@@ -394,31 +618,63 @@ export function ProfileTabs({ dark, active, onChange }: { dark: boolean; active:
  * ladder, so the server's trustTier is null for one, and the fallback below
  * would label a sari-sari store "New Trader".
  */
-export function ReviewSummary({ dark, summary, hideTier = false }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean }) {
+export function ReviewSummary({ dark, summary, hideTier = false, loadError = false, onRetry }: { dark: boolean; summary: { averageRating: number; totalReviews: number; trustTier: string | null } | null; hideTier?: boolean; loadError?: boolean; onRetry?: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  if (loadError) return <ReviewLoadError dark={dark} onRetry={onRetry} />;
   if (!summary) return <View style={s.summaryLoading}><ActivityIndicator color={palette.green} /></View>;
+  const tier = summary.trustTier ?? "New Trader";
   return (
-    <View style={[s.summary, { backgroundColor: palette.surface }]}>
-      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "-"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>average rating</Text></View>
-      <View><Text style={[s.summaryValue, { color: palette.ink }]}>{summary.totalReviews}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>reviews</Text></View>
-      {hideTier ? null : <View style={s.summaryTier}><Text style={[s.summaryTierText, { color: palette.green }]} numberOfLines={1}>{summary.trustTier ?? "New Trader"}</Text><Text style={[s.summaryLabel, { color: palette.muted }]}>trust tier</Text></View>}
+    <View style={[s.summary, { backgroundColor: palette.control }]}>
+      <Text style={[s.summaryValue, { color: palette.ink }]}>{summary.averageRating > 0 ? summary.averageRating.toFixed(1) : "–"}</Text>
+      <View style={s.summaryText}>
+        <RatingStars dark={dark} rating={Math.round(summary.averageRating)} size={16} />
+        <Text style={[s.summaryLabel, { color: palette.secondary }]}>
+          {summary.totalReviews} {summary.totalReviews === 1 ? "review" : "reviews"}
+          {hideTier ? "" : ` · ${tier.toLowerCase().replace(/^./, (c) => c.toUpperCase())}`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+export function ReviewLoadError({ dark, onRetry }: { dark: boolean; onRetry?: () => void }) {
+  const palette = dark ? darkColors : lightColors;
+  return (
+    <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 8 }}>
+      <Text style={[s.empty, { color: palette.secondary }]}>Could not load reviews.</Text>
+      {onRetry ? (
+        <Pressable onPress={onRetry} accessibilityRole="button">
+          <Text style={[s.shopLink, { color: palette.green }]}>Try again</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean; review: import("../../src/api/reviews").ProfileReview; onReviewer: () => void; onItem: () => void }) {
   const palette = dark ? darkColors : lightColors;
+  const date = new Date(review.createdAt);
+  const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" });
   return (
-    <View style={[s.reviewRow, { borderBottomColor: palette.divider }]}>
+    <View style={[s.reviewRow, { borderColor: palette.divider, backgroundColor: palette.surface }]}>
       <Pressable onPress={onReviewer} style={s.reviewIdentity} accessibilityRole="button" accessibilityLabel={`View ${review.reviewer.name}'s profile`}>
         <ReviewAvatar uri={review.reviewer.avatar} name={review.reviewer.name} dark={dark} />
-        <View style={s.reviewIdentityText}><Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text><RatingStars dark={dark} rating={review.rating} /></View>
-        <Text style={[s.reviewDate, { color: palette.muted }]}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+        <View style={s.reviewIdentityText}>
+          <Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text>
+          <View style={s.reviewMetaRow}>
+            <RatingStars dark={dark} rating={review.rating} />
+            {when ? <Text style={[s.reviewDate, { color: palette.muted }]}>{when}</Text> : null}
+          </View>
+        </View>
       </Pressable>
-      {review.comment ? <Text style={[s.reviewComment, { color: palette.secondary }]}>{review.comment}</Text> : null}
+      {review.comment ? <Text style={[s.reviewComment, { color: palette.ink }]}>{review.comment}</Text> : null}
       {review.item ? <Pressable onPress={onItem} style={[s.reviewItem, { backgroundColor: palette.control }]} accessibilityRole="button" accessibilityLabel={`Open ${review.item.title}`}>
-        {review.item.image ? <Image source={{ uri: review.item.image }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={18} color={palette.muted} /></View>}
-        <View style={s.reviewItemText}><Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text><Text style={[s.reviewItemMeta, { color: palette.muted }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text></View>
+        {review.item.image ? <Image source={{ uri: sizedImage(review.item.image, "thumb") }} contentFit="cover" style={s.reviewItemImage} /> : <View style={[s.reviewItemImage, s.noImage]}><Ionicons name="image-outline" size={16} color={palette.muted} /></View>}
+        <View style={s.reviewItemText}>
+          <Text style={[s.reviewItemMeta, { color: palette.muted }]}>Traded</Text>
+          <Text style={[s.reviewItemTitle, { color: palette.ink }]} numberOfLines={1}>{review.item.title}</Text>
+        </View>
+        <Text style={[s.reviewItemMeta, { color: palette.secondary, marginRight: 10 }]}>{review.item.bracket === null ? "Unvalued" : bracketLabel(review.item.bracket)}</Text>
       </Pressable> : null}
     </View>
   );
@@ -427,13 +683,13 @@ export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean;
 function ReviewAvatar({ uri, name, dark }: { uri: string | null; name: string; dark: boolean }) {
   const palette = dark ? darkColors : lightColors;
   return uri
-    ? <Image source={{ uri }} contentFit="cover" style={s.reviewAvatar} />
+    ? <Image source={{ uri: sizedImage(uri, "thumb") }} contentFit="cover" style={s.reviewAvatar} />
     : <View style={[s.reviewAvatar, s.reviewAvatarFallback, { backgroundColor: palette.control }]}><Text style={[s.reviewAvatarText, { color: palette.green }]}>{name.trim().charAt(0).toUpperCase() || "?"}</Text></View>;
 }
 
-function RatingStars({ dark, rating }: { dark: boolean; rating: number }) {
+function RatingStars({ dark, rating, size = 13 }: { dark: boolean; rating: number; size?: number }) {
   const palette = dark ? darkColors : lightColors;
-  return <View style={s.stars}>{[1, 2, 3, 4, 5].map((star) => <Ionicons key={star} name={star <= rating ? "star" : "star-outline"} size={14} color={star <= rating ? "#C58A24" : palette.muted} />)}</View>;
+  return <View style={s.stars}>{[1, 2, 3, 4, 5].map((star) => <Ionicons key={star} name="star" size={size} color={star <= rating ? "#E0A526" : palette.divider} />)}</View>;
 }
 
 function Stat({ dark, label, value }: { dark: boolean; label: string; value: number }) { const palette = dark ? darkColors : lightColors; return <View style={s.stat}><Text style={[s.statValue, { color: palette.ink }]}>{value}</Text><Text style={[s.statLabel, { color: palette.muted }]}>{label}</Text></View>; }
@@ -450,17 +706,44 @@ export function shelfLabel(item: Item): string | null {
   if (item.status === "PENDING_REVIEW") return "Waiting for review";
   if (item.status === "VALUE_REJECTED") return "Value not approved";
   if (item.status === "IN_TRADE") return "In trade";
-  if (item.status === "TRADED") return "Traded";
+  if (item.status === "EXPIRED") return "Expired";
+  if (item.status === "TRADED") return "Traded away";
+  if (item.status === "OWNED") return "Got in a trade";
   return null;
 }
 
 /** One shelf tile. (The owner's Boost pill and Featured pill went with Featured boosts in schema v2.) */
-export function ProfileTile({ dark, item, onPress }: { dark: boolean; item: Item; onPress: () => void }) {
+/**
+ * `own` (default true: your own shelf) decides the value line. The exact Leaf
+ * figure is the OWNER's; everyone else sees the bracket only, the same rule
+ * GridTile and the item page follow. Someone else's profile and your Liked
+ * list pass `own={false}` (7 Nov 2026: they showed "200 · Bracket 2").
+ */
+export function ProfileTile({ dark, item, onPress, footer, own = true }: { dark: boolean; item: Item; onPress: () => void; footer?: React.ReactNode; own?: boolean }) {
   const palette = dark ? darkColors : lightColors;
   const label = shelfLabel(item);
-  return <Pressable onPress={onPress} style={[s.tile, { backgroundColor: palette.control }, label !== null && s.dimmed]} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
-    {item.images[0] ? <Image source={{ uri: item.images[0] }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
-    {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
+  const inTrade = item.status === "IN_TRADE";
+  const bracket = item.valueLeaves !== null ? bracketLabel(bracketOfValue(item.valueLeaves)) : null;
+  return <Pressable onPress={onPress} style={s.tile} accessibilityRole="button" accessibilityLabel={label ? `${item.title} — ${label}` : `Open ${item.title}`}>
+    <View style={[s.tilePhoto, { backgroundColor: palette.control }, inTrade && s.dimmed]}>
+      {item.images[0] ? <Image source={{ uri: sizedImage(item.images[0], "card") }} contentFit="cover" style={s.tileImage} /> : <View style={s.noImage}><Ionicons name="image-outline" size={24} color={palette.muted} /></View>}
+      {label ? <View style={s.statusPill}><Text style={s.statusText} numberOfLines={1}>{label}</Text></View> : null}
+    </View>
+    <Text style={[s.tileTitle, { color: palette.ink }]} numberOfLines={1}>{item.title}</Text>
+    {item.valueLeaves !== null ? (
+      <View style={s.tileValueRow} accessibilityLabel={own ? `${item.valueLeaves} Leaves, ${bracket}` : `${bracket}`}>
+        <LeafIcon size={13} stroke={2} color={palette.green} />
+        {own ? (
+          <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>
+            {item.valueLeaves}
+            <Text style={{ color: palette.secondary }}>{`  ·  ${bracket}`}</Text>
+          </Text>
+        ) : (
+          <Text style={[s.tileValue, { color: palette.ink }]} numberOfLines={1}>{bracket}</Text>
+        )}
+      </View>
+    ) : null}
+    {footer}
   </Pressable>;
 }
 
@@ -545,8 +828,14 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
             accessibilityLabel={item.more ? "More achievements" : `${item.label}, view details`}
             style={s.badgeItem}
           >
-            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : (dark ? darkColors.border : color.controlLine) }, item.more && s.moreBadge]}>
-              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={item.more ? palette.muted : palette.green} />}
+            <View style={[s.badgeCircle, { backgroundColor: palette.surface, borderColor: item.more ? palette.muted : palette.green }, item.more && s.moreBadge]}>
+              {item.more ? (
+                <Ionicons name={item.icon} size={24} color={palette.muted} />
+              ) : (
+                <View style={[s.badgeInner, { backgroundColor: palette.surface }]}>
+                  {item.imageUrl ? <Image source={{ uri: sizedImage(item.imageUrl, "thumb") }} contentFit="cover" style={s.badgeArt} /> : <Ionicons name={item.icon} size={24} color={palette.green} />}
+                </View>
+              )}
             </View>
             <Text style={[s.badgeLabel, { color: palette.muted }]} numberOfLines={2} ellipsizeMode="tail">{shortBadgeLabel(item.label)}</Text>
           </Pressable>
@@ -559,14 +848,72 @@ export function Badges({ dark, achievements, showMore = true, own = true, onMore
           body={dialogBody}
           icon={
             dialogBadge.imageUrl ? (
-              <Image source={{ uri: dialogBadge.imageUrl }} contentFit="cover" style={s.badgeDialogArt} />
+              <Image source={{ uri: sizedImage(dialogBadge.imageUrl, "thumb") }} contentFit="cover" style={s.badgeDialogArt} />
             ) : (
               <Ionicons name={badgeIcons[dialogBadge.icon] ?? "trophy-outline"} size={24} color={color.green} />
             )
           }
+          // The badge itself is the hero, never the duck (owner's call, 4 Nov
+          // 2026). The celebrate pose stays only for its entrance bounce.
+          hero={
+            dialogBadge.imageUrl ? (
+              <Image source={{ uri: sizedImage(dialogBadge.imageUrl, "card") }} contentFit="cover" style={StyleSheet.absoluteFill} />
+            ) : undefined
+          }
+          pose={own && !!selected?.unlockedAt ? "celebrate" : undefined}
           onDismiss={() => setSelectedId(null)}
         />
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * New accounts: a short checklist instead of empty space. Each row opens the
+ * place to do it; the whole card goes away when all four are done.
+ */
+function FinishProfile({ profile, dark }: { profile: ProfileMePayload; dark: boolean }) {
+  const router = useRouter();
+  const steps = [
+    { key: "photo", label: "Add a photo", done: !!profile.user.avatar, go: "/edit-profile" },
+    { key: "bio", label: "Write a short bio", done: !!profile.user.bio?.trim(), go: "/edit-profile" },
+    { key: "city", label: "Add your city", done: !!profile.user.location?.trim(), go: "/edit-profile" },
+    {
+      key: "id",
+      label: "Verify your ID",
+      sub: "Needed before you can post",
+      done: profile.idVerification.verified,
+      go: "/verify-id",
+    },
+  ];
+  const done = steps.filter((x) => x.done).length;
+  if (done === steps.length) return null;
+  const ink = dark ? darkColors.ink : color.ink;
+  return (
+    <View style={[s.finish, { backgroundColor: dark ? darkColors.surface : color.searchSurface, borderColor: dark ? darkColors.border : color.controlLine }]}>
+      <View style={s.finishHead}>
+        <Text style={[s.finishTitle, { color: ink }]}>Finish your profile</Text>
+        <Text style={s.finishCount}>{done} of {steps.length}</Text>
+      </View>
+      {steps.map((x) => (
+        <Tappable
+          key={x.key}
+          onPress={x.done ? undefined : () => router.push(x.go as never)}
+          disabled={x.done}
+          accessibilityRole="button"
+          accessibilityState={{ checked: x.done }}
+          style={s.finishRow}
+        >
+          <View style={[s.finishMark, x.done && s.finishMarkDone]}>
+            {x.done ? <CheckIcon size={12} stroke={3} color={color.surface} /> : null}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.finishLabel, { color: x.done ? color.inkMuted : ink }, x.done && { textDecorationLine: "line-through" }]}>{x.label}</Text>
+            {x.sub && !x.done ? <Text style={s.finishSub}>{x.sub}</Text> : null}
+          </View>
+          {!x.done ? <ChevronRightIcon size={16} stroke={2} color={color.inkMuted} /> : null}
+        </Tappable>
+      ))}
     </View>
   );
 }
@@ -580,7 +927,7 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
   if (uri) {
     return (
       <Image
-        source={{ uri }}
+        source={{ uri: sizedImage(uri, "thumb") }}
         contentFit="cover"
         style={s.avatar}
       />
@@ -597,6 +944,19 @@ export function Avatar({ uri, name }: { uri: string | null; name: string }) {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
+  skeletonHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+  skeletonAvatar: { width: 76, height: 76, borderRadius: 38 },
+  skeletonStats: { position: "absolute", left: 112, right: 12, top: 20, flexDirection: "row", justifyContent: "space-evenly" },
+  skeletonStat: { alignItems: "center" },
+  skeletonStatValue: { width: 28, height: 18, borderRadius: 4 },
+  skeletonStatLabel: { width: 42, height: 10, borderRadius: 4, marginTop: 6 },
+  skeletonName: { width: 140, height: 16, borderRadius: 4, marginTop: 10 },
+  skeletonActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  skeletonButton: { flex: 1, height: 44, borderRadius: 8 },
+  skeletonTabs: { height: 45, flexDirection: "row", alignItems: "center", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.divider },
+  skeletonTab: { flex: 1, height: 20, marginHorizontal: 48, borderRadius: 4 },
+  skeletonTile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
+  skeletonBlock: { backgroundColor: color.skeleton },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   centred: { alignItems: "center", justifyContent: "center" },
   retry: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 16 },
@@ -616,6 +976,18 @@ const s = StyleSheet.create({
   shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 76, height: 76, borderRadius: 38 },
+  badgeHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: -4 },
+  badgeHeadText: { fontSize: 13, fontWeight: "600" },
+  badgeEdit: { fontSize: 14, fontWeight: "600", color: color.forest },
+  finish: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 6 },
+  finishHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingBottom: 4 },
+  finishTitle: { fontSize: 15, fontWeight: "700" },
+  finishCount: { fontSize: 13, fontWeight: "600", color: color.forest },
+  finishRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
+  finishMark: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.dashed, alignItems: "center", justifyContent: "center" },
+  finishMarkDone: { backgroundColor: color.forest, borderColor: color.forest },
+  finishLabel: { fontSize: 14, fontWeight: "500" },
+  finishSub: { fontSize: 12, color: color.inkSecondary },
   avatarFallback: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: color.green },
   avatarText: { color: color.onGreen, fontFamily: font.sansBold, fontSize: 26 },
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 },
@@ -633,43 +1005,55 @@ const s = StyleSheet.create({
   badges: { marginTop: 8, marginHorizontal: -16 },
   badgesContent: { paddingHorizontal: 16, gap: 18 },
   badgeItem: { width: 76, alignItems: "center" },
-  badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  badgeCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, padding: 3, alignItems: "center", justifyContent: "center" },
+  badgeInner: { width: "100%", height: "100%", borderRadius: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   badgeArt: { width: "100%", height: "100%" },
   badgeDialogArt: { width: "100%", height: "100%", borderRadius: 24 },
-  moreBadge: { borderStyle: "dashed" },
+  moreBadge: { borderStyle: "dashed", borderWidth: 1, padding: 0 },
   badgeLabel: { width: 76, fontFamily: font.sans, fontSize: 11, lineHeight: 14, marginTop: 4, textAlign: "center" },
-  tabs: { height: 45, flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", position: "relative" },
+  tabs: { marginTop: 14, paddingHorizontal: 20, flexDirection: "row", gap: 22, borderBottomWidth: 1 },
+  tab: { height: 42, justifyContent: "center", borderBottomWidth: 2, marginBottom: -1 },
+  tabText: { fontSize: 15 },
+  tabCount: { fontFamily: font.sansSemi, fontSize: 15 },
   tabUnderline: { position: "absolute", bottom: -StyleSheet.hairlineWidth, width: 24, height: 2 },
-  summary: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 16, paddingHorizontal: 16 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 14, marginHorizontal: 16, marginTop: 14, marginBottom: 6, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16 },
   summaryLoading: { height: 64, alignItems: "center", justifyContent: "center" },
-  summaryValue: { fontFamily: font.displaySemi, fontSize: 20, textAlign: "center" },
-  summaryLabel: { fontFamily: font.sans, fontSize: 11, marginTop: 3, textAlign: "center" },
-  summaryTier: { maxWidth: 130, alignItems: "center" },
-  summaryTierText: { fontFamily: font.sansSemi, fontSize: 13, textAlign: "center" },
-  reviewRow: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  reviewIdentity: { minHeight: 44, flexDirection: "row", alignItems: "center" },
-  reviewAvatar: { width: 40, height: 40, borderRadius: 20 },
+  summaryValue: { fontFamily: font.displayBold, fontSize: 34, lineHeight: 38 },
+  summaryLabel: { fontFamily: font.sans, fontSize: 13 },
+  summaryText: { flex: 1, minWidth: 0, gap: 4 },
+  reviewRow: { marginHorizontal: 16, marginTop: 10, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  reviewIdentity: { flexDirection: "row", alignItems: "center" },
+  reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { alignItems: "center", justifyContent: "center" },
   reviewAvatarText: { fontFamily: font.sansBold, fontSize: 15 },
+  reviewMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
   reviewIdentityText: { flex: 1, minWidth: 0, marginLeft: 10 },
   reviewName: { fontFamily: font.sansSemi, fontSize: 14 },
   stars: { flexDirection: "row", gap: 2, marginTop: 3 },
-  reviewDate: { fontFamily: font.sans, fontSize: 11, marginLeft: 8 },
+  reviewDate: { fontFamily: font.sans, fontSize: 12 },
   reviewComment: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 10 },
-  reviewItem: { minHeight: 52, flexDirection: "row", alignItems: "center", marginTop: 12, borderRadius: 6, overflow: "hidden" },
-  reviewItemImage: { width: 52, height: 52 },
-  reviewItemText: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  reviewItem: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12, borderRadius: 12, overflow: "hidden" },
+  reviewItemImage: { width: 44, height: 44 },
+  reviewItemText: { flex: 1, minWidth: 0 },
   reviewItemTitle: { fontFamily: font.sansSemi, fontSize: 13 },
-  reviewItemMeta: { fontFamily: font.sans, fontSize: 11, marginTop: 3 },
+  reviewItemMeta: { fontFamily: font.sans, fontSize: 11 },
   footer: { paddingVertical: 18 },
-  gridRow: { width: "100%", flexDirection: "row", gap: 2, marginBottom: 2 },
-  tile: { flexGrow: 1, flexBasis: 0, minWidth: 0, aspectRatio: 1 },
+  gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 },
+  tile: { flexGrow: 0, flexBasis: "48%", width: "48%", minWidth: 0, gap: 6 },
+  tilePhoto: { aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
+  tileTitle: { fontFamily: font.sansSemi, fontSize: 14 },
+  relist: { alignSelf: "flex-start", marginTop: 2, height: 32, paddingHorizontal: 16, borderRadius: 16, backgroundColor: color.green, justifyContent: "center" },
+  relistText: { fontFamily: font.sansBold, fontSize: 13, color: color.onGreen },
+  tileValueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
+  tileValue: { flexShrink: 1, fontFamily: font.sansSemi, fontSize: 12 },
+  tileContent: { flex: 1 },
   tileImage: { width: "100%", height: "100%" },
   noImage: { flex: 1, alignItems: "center", justifyContent: "center" },
-  dimmed: { opacity: 0.6 },
+  dimmed: { opacity: 0.55 },
   statusPill: { position: "absolute", top: 6, left: 6, maxWidth: "88%", backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
   statusText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 11 },
+  leavesPill: { position: "absolute", bottom: 6, left: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3 },
+  leavesText: { color: "#FFFFFF", fontFamily: font.sansSemi, fontSize: 10 },
   empty: { color: color.inkMuted, fontFamily: font.sans, fontSize: 14, textAlign: "center", paddingVertical: 48 },
 });
 

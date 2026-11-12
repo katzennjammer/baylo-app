@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { MascotEmptyState } from "../src/components/MascotEmptyState";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -112,9 +113,7 @@ export default function ActiveSessionsScreen() {
             ))}
 
             {others.length === 0 ? (
-              <Text style={[textStyle(type.emptyBody), s.muted, s.center]}>
-                Only this device is signed in.
-              </Text>
+              <MascotEmptyState pose="leaf" size={96} title="Just this phone" message="Only this device is signed in to your account." />
             ) : (
               <View style={s.footer}>
                 <TradeButton

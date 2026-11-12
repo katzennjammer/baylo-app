@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Linking, Text, View } from "react-native";
 
 import { getApiBase } from "../../api/config";
@@ -85,6 +85,13 @@ export function BridgeConsentSheet({
   onDismiss: () => void;
 }) {
   const [agreed, setAgreed] = useState(false);
+  // `busy` hides the primary, but only from the next render on — a second
+  // press inside that frame would still reach `onConfirm`. One press per
+  // request; a request that ends with the sheet still open frees it again.
+  const confirmed = useRef(false);
+  useEffect(() => {
+    if (!busy) confirmed.current = false;
+  }, [busy]);
   const enough = balance >= fee;
   const after = balance - fee;
   const p = offerSpace.prompt;
@@ -190,7 +197,11 @@ export function BridgeConsentSheet({
             agreed && !busy ? (
               <PrimaryButton
                 label={side === "send" ? copy.button.propose : copy.button.accept}
-                onPress={onConfirm}
+                onPress={() => {
+                  if (confirmed.current) return;
+                  confirmed.current = true;
+                  onConfirm();
+                }}
               />
             ) : (
               <View

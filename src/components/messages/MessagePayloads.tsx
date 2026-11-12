@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Tappable } from "../Tappable";
 import type { ActiveTrade, LiveOffer } from "../../api/types";
 import * as copy from "../trades/copy";
@@ -9,6 +9,14 @@ import { giveGet } from "../../lib/trade-sides";
 import { ChatOfferCard } from "./ChatOfferCard";
 
 import { color, font, radius, textStyle, type } from "../../theme/tokens";
+import { sizedImage } from "../../media/image-url";
+import {
+  cacheMeasuredChatImageSize,
+  chatImageFrame,
+  getMeasuredChatImageSize,
+  validChatImageDimensions,
+  type ChatImageDimensions,
+} from "./chat-image-sizing";
 
 export type MessagePayload = Record<string, unknown> & {
   type?: string;
@@ -97,6 +105,7 @@ export function renderMessageBody({
   onImagePress,
   onOfferPress,
   onRatePress,
+  onSharedPostPress,
   offerDetails,
   tradeDetails,
   partnerName = "them",
@@ -104,12 +113,16 @@ export function renderMessageBody({
   offerTrade = null,
   onOpenTrade,
   contentMax = Number.POSITIVE_INFINITY,
+  screenWidth = Number.POSITIVE_INFINITY,
+  onImageSizeChange,
 }: {
   content: string;
   mine: boolean;
   onImagePress?: (url: string) => void;
   onOfferPress?: (offerId: string) => void;
   onRatePress?: (tradeId: string) => void;
+  /** A shared listing card opens the listing. */
+  onSharedPostPress?: (itemId: string) => void;
   offerDetails?: LiveOffer;
   tradeDetails?: ActiveTrade;
   /** The other person in the thread — the offer card's "from" when it is theirs. */
@@ -125,6 +138,8 @@ export function renderMessageBody({
    * letting it overflow. Omitted, the fixed widths apply unchanged.
    */
   contentMax?: number;
+  screenWidth?: number;
+  onImageSizeChange?: () => void;
 }) {
   const parsed = asJsonObject(content);
 
@@ -204,12 +219,19 @@ export function renderMessageBody({
       const postUser = typeof parsed.postUser === "string" ? parsed.postUser : "Baylo";
       // A definite width, so the photo is sized in px from it, never as a % of a content-sized card.
       const sharedWidth = Math.min(MEDIA.shared, contentMax);
+      const postId = typeof parsed.postId === "string" ? parsed.postId : null;
 
       return (
-        <View style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}>
+        <Pressable
+          onPress={postId && onSharedPostPress ? () => onSharedPostPress(postId) : undefined}
+          disabled={!postId || !onSharedPostPress}
+          accessibilityRole={postId ? "link" : undefined}
+          accessibilityLabel={postId ? `Open listing: ${postItem}` : undefined}
+          style={[styles.sharedCard, { width: sharedWidth }, mine ? styles.mineCard : styles.theirCard]}
+        >
           {imageUrl ? (
             <Image
-              source={{ uri: imageUrl }}
+              source={{ uri: sizedImage(imageUrl, "card") }}
               style={[styles.sharedImage, { width: sharedWidth - 2 * MEDIA_BORDER }]}
               resizeMode="cover"
             />
@@ -220,7 +242,7 @@ export function renderMessageBody({
               by {postUser}
             </Text>
           </View>
-        </View>
+        </Pressable>
       );
     }
     case "image": {
@@ -228,30 +250,23 @@ export function renderMessageBody({
         ? parsed.url
         : typeof parsed.imageUrl === "string" ? parsed.imageUrl : undefined;
       const caption = typeof parsed.caption === "string" ? parsed.caption : null;
-      // The photo keeps its 4:3 frame as it shrinks; the wrap's border is inside the cap.
-      const imageWidth = Math.min(MEDIA.image, contentMax - 2 * MEDIA_BORDER);
-      const imageHeight = Math.round((imageWidth * MEDIA.imageHeight) / MEDIA.image);
-
-      return (
-        <View style={[styles.imageWrap, { maxWidth: Math.min(MEDIA.imageWrap, contentMax) }, mine ? styles.mineCard : styles.theirCard]}>
-          {imageUrl ? (
-            <Tappable
-              onPress={() => onImagePress?.(imageUrl)}
-              disabled={!onImagePress}
-              accessibilityRole="button"
-              accessibilityLabel="View image full screen"
-            >
-              <Image
-                source={{ uri: imageUrl }}
-                style={[styles.messageImage, { width: imageWidth, height: imageHeight }]}
-                contentFit="cover"
-                onLoad={() => console.log("[messages/thread] image loaded", { url: imageUrl })}
-                onError={(event) => console.log("[messages/thread] image load failed", { url: imageUrl, error: event.error })}
-              />
-            </Tappable>
-          ) : (
-            <Text style={[styles.caption, mine ? styles.mineText : styles.theirText]}>Image unavailable</Text>
-          )}
+      const payloadDimensions = validChatImageDimensions(
+        typeof parsed.width === "number" ? parsed.width : parsed.imageWidth,
+        typeof parsed.height === "number" ? parsed.height : parsed.imageHeight,
+      );
+      return imageUrl ? (
+        <ChatImage
+          url={imageUrl}
+          dimensions={payloadDimensions}
+          maxWidth={Math.min(contentMax - 2 * MEDIA_BORDER, screenWidth * 0.7)}
+          caption={caption}
+          mine={mine}
+          onPress={onImagePress}
+          onSizeChange={onImageSizeChange}
+        />
+      ) : (
+        <View style={[styles.imageWrap, mine ? styles.mineCard : styles.theirCard]}>
+          <Text style={[styles.caption, mine ? styles.mineText : styles.theirText]}>Image unavailable</Text>
           {caption ? <Text style={styles.caption}>{caption}</Text> : null}
         </View>
       );
@@ -280,8 +295,77 @@ export function renderMessageBody({
   }
 }
 
+function ChatImage({
+  url,
+  dimensions,
+  maxWidth,
+  caption,
+  mine,
+  onPress,
+  onSizeChange,
+}: {
+  url: string;
+  dimensions: ChatImageDimensions | null;
+  maxWidth: number;
+  caption: string | null;
+  mine: boolean;
+  onPress?: (url: string) => void;
+  onSizeChange?: () => void;
+}) {
+  const [measuredDimensions, setMeasuredDimensions] = useState<ChatImageDimensions | null>(
+    () => dimensions ?? getMeasuredChatImageSize(url),
+  );
+  const [loaded, setLoaded] = useState(false);
+  const knownDimensions = dimensions ?? measuredDimensions;
+  const frame = chatImageFrame(knownDimensions, maxWidth);
+
+  useEffect(() => {
+    const cached = dimensions ?? getMeasuredChatImageSize(url);
+    setMeasuredDimensions(cached);
+    setLoaded(false);
+    if (dimensions) cacheMeasuredChatImageSize(url, dimensions.width, dimensions.height);
+  }, [dimensions?.height, dimensions?.width, url]);
+
+  return (
+    // No frame colour around a photo: the bubble's green (or grey) and its
+    // border used to show as a dark rim where the rounded image did not quite
+    // meet the rounded box. The photo is the bubble.
+    <View style={[styles.imageWrap, { maxWidth: frame.width }]}>
+      <Tappable
+        onPress={() => onPress?.(url)}
+        disabled={!onPress}
+        accessibilityRole="button"
+        accessibilityLabel="View image full screen"
+      >
+        <View style={[styles.imageFrame, { width: frame.width, height: frame.height }]}>
+          {!loaded ? <View style={styles.imagePlaceholder} /> : null}
+          <Image
+            source={{ uri: sizedImage(url, "card") }}
+            style={[styles.messageImage, { width: frame.width, height: frame.height }]}
+            // The frame already has the photo's own shape, so cover fills it
+            // exactly; "contain" left hairline bands from rounding.
+            contentFit="cover"
+            onLoad={(event) => {
+              setLoaded(true);
+              if (!dimensions && !measuredDimensions) {
+                const measured = cacheMeasuredChatImageSize(url, event.source.width, event.source.height);
+                if (measured) {
+                  onSizeChange?.();
+                  setMeasuredDimensions(measured);
+                }
+              }
+            }}
+            onError={(event) => console.log("[messages/thread] image load failed", { url, error: event.error })}
+          />
+        </View>
+      </Tappable>
+      {caption ? <Text style={styles.caption}>{caption}</Text> : null}
+    </View>
+  );
+}
+
 /** Media's own widths, in px: the CEILINGS. A narrow bubble's `contentMax` wins. */
-const MEDIA = { shared: 260, imageWrap: 260, image: 240, imageHeight: 180, voice: 180, voiceMin: 120 } as const;
+const MEDIA = { shared: 260, imageWrap: 260, voice: 180, voiceMin: 120 } as const;
 const MEDIA_BORDER = 1;
 
 function formatDuration(seconds: number) {
@@ -294,8 +378,8 @@ function formatDuration(seconds: number) {
 const styles = StyleSheet.create({
   text: {
     fontFamily: font.sans,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 21,
   },
   mineText: {
     color: color.surface,
@@ -357,12 +441,18 @@ const styles = StyleSheet.create({
   imageWrap: {
     borderRadius: radius.card,
     overflow: "hidden",
-    borderWidth: MEDIA_BORDER,
   },
-  messageImage: {
-    borderRadius: radius.card,
+  imageFrame: {
+    position: "relative",
+    backgroundColor: color.control,
   },
+  imagePlaceholder: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: color.control,
+  },
+  messageImage: {},
   caption: {
+    backgroundColor: color.control,
     fontFamily: font.sans,
     fontSize: 12,
     padding: 8,

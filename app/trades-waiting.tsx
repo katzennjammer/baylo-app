@@ -1,25 +1,18 @@
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 
-import {
-  buildTradesModel,
-  meetupState,
-  useActiveTrades,
-  type WaitingItem,
-} from "../src/api/trades";
-import type { ActiveTrade } from "../src/api/types";
+import { buildTradesModel, useActiveTrades } from "../src/api/trades";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { OfferScreenHost } from "../src/components/offer/chrome";
 import { Gutter, TradesBackTitle } from "../src/components/trades/chrome";
 import * as copy from "../src/components/trades/copy";
-import * as present from "../src/components/trades/present";
 import { TradesErrorPanel } from "../src/components/trades/states";
-import { CardLink, TradeCard } from "../src/components/trades/TradeCard";
+import { CardLink } from "../src/components/trades/TradeCard";
+import { WaitingList } from "../src/components/trades/WaitingContent";
 import { useWithdraw } from "../src/components/trades/useWithdraw";
 import { useTradeLiveness } from "../src/lib/trade-liveness";
 import { color, space, textStyle as baseTextStyle, type } from "../src/theme/tokens";
-import { offerColor, offerType, textStyle } from "../src/theme/offer-tokens";
 
 /**
  * "Waiting on them", in full (1 Oct 2026 redesign).
@@ -85,27 +78,11 @@ export default function TradesWaitingScreen() {
 
         {active.isError ? <TradesErrorPanel onRetry={() => void active.refetch()} /> : null}
 
-        {withdraw.failure ? <FailureLine>{withdraw.failure}</FailureLine> : null}
-
-        <View style={s.cards}>
-          {waiting.map((item) => (
-            <WaitingCard
-              key={item.key}
-              item={item}
-              onWithdraw={() =>
-                item.kind === "sent-offer" ? withdraw.offer(item.offer) : withdraw.request(item.trade)
-              }
-            />
-          ))}
-        </View>
-
-        {waiting.length === 0 && active.data && !active.isError ? (
-          <Gutter>
-            <Text style={[baseTextStyle(type.emptyBody), { color: color.inkSecondary }]}>
-              {copy.tradeCard.waitingEmpty}
-            </Text>
-          </Gutter>
-        ) : null}
+        <WaitingList
+          waiting={waiting}
+          withdraw={withdraw}
+          loaded={!!active.data && !active.isError}
+        />
 
         {needYou > 0 ? (
           <Gutter style={s.needYou}>
@@ -123,76 +100,7 @@ export default function TradesWaitingScreen() {
   );
 }
 
-/**
- * One waiting trade as a card. The card opens the trade screen; the links
- * under it are the acts still open today:
- *
- *   Change suggestion   an ACCEPTED trade whose standing hub suggestion is the
- *                       viewer's own and still unanswered.
- *   Withdraw offer      a PENDING offer the viewer sent. Sender only.
- *   Withdraw            a PENDING swap request the viewer sent (calls it off).
- *
- * A CONFIRMING trade has neither: the viewer's half is done and there is
- * nothing left to take back.
- */
-function WaitingCard({ item, onWithdraw }: { item: WaitingItem; onWithdraw: () => void }) {
-  const router = useRouter();
-  const words = present.waitingScreenCard(item);
-  const trade: ActiveTrade | null = item.kind === "trade" ? item.trade : null;
-
-  const canChange = !!trade && trade.status === "ACCEPTED" && meetupState(trade) === "waiting-on-them";
-  const canWithdraw = item.kind === "sent-offer" || trade?.status === "PENDING";
-
-  return (
-    <TradeCard words={words}>
-      {trade && canChange ? (
-        <CardLink
-          label={copy.tradeCard.changeSuggestion}
-          onPress={() => router.push(`/trade-meetup?id=${encodeURIComponent(trade.id)}`)}
-          accessibilityLabel={`Change your suggestion to ${words.partner}`}
-        />
-      ) : null}
-      {canWithdraw ? (
-        <CardLink
-          label={
-            item.kind === "sent-offer" ? copy.tradeCard.withdrawOffer : copy.tradeCard.withdraw
-          }
-          tone="secondary"
-          onPress={onWithdraw}
-          accessibilityLabel={
-            item.kind === "sent-offer"
-              ? `Withdraw your offer to ${words.partner}`
-              : `Withdraw your swap request to ${words.partner}`
-          }
-        />
-      ) : null}
-    </TradeCard>
-  );
-}
-
-/**
- * A failed accept, decline or withdrawal.
- *
- * The SERVER'S OWN SENTENCE, not a generic one. Every refusal on these routes
- * carries the numbers — "the sender now has only 260 Leaves available but this
- * offer requires 310" — and replacing that with "something went wrong" throws
- * away the only part the reader can act on.
- */
-function FailureLine({ children }: { children: string }) {
-  return (
-    <Gutter style={{ paddingTop: 12 }}>
-      <Text
-        accessibilityLiveRegion="polite"
-        style={[textStyle(offerType.errorText), { color: offerColor.warm }]}
-      >
-        {children}
-      </Text>
-    </Gutter>
-  );
-}
-
 const s = StyleSheet.create({
-  cards: { gap: 10 },
   needYou: {
     flexDirection: "row",
     flexWrap: "wrap",

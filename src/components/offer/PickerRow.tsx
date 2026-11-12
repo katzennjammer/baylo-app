@@ -13,6 +13,7 @@ import {
   offerType,
   textStyle,
 } from "../../theme/offer-tokens";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * §4's item picker row: a 60px photo, a 12 gap, a text stack and a 22px radio,
@@ -93,7 +94,7 @@ export function PickerRow({
       >
         {image ? (
           <Image
-            source={{ uri: image }}
+            source={{ uri: sizedImage(image, "thumb") }}
             contentFit="cover"
             style={{ width: "100%", height: "100%" }}
             transition={120}

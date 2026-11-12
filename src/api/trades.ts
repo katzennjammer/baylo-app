@@ -108,12 +108,37 @@ export const TRADES_HISTORY_KEY = ["trades", "history"] as const;
  */
 const LIST_STALE_MS = 30_000;
 
-export function useActiveTrades() {
+export function useActiveTrades(enabled = true) {
   return useQuery({
     queryKey: TRADES_ACTIVE_KEY,
+    placeholderData: (previous) => previous,
     queryFn: () => apiV1<TradesPayload>("/api/v1/trades?tab=active&limit=50"),
     select: (r) => r.data,
     staleTime: LIST_STALE_MS,
+    enabled,
+  });
+}
+
+/**
+ * One listing's incoming offers, for its offer inbox.
+ *
+ * `offersFor` makes the server return only PENDING offers this viewer received
+ * on that item, so a busy listing is not cut short by the 50-row cap the main
+ * feed shares across every listing. The key sits under TRADES_ACTIVE_KEY, so
+ * every mutation that invalidates the feed (accept, decline, withdraw)
+ * refreshes this too.
+ */
+export function useListingOffers(itemId: string | undefined) {
+  return useQuery({
+    queryKey: [...TRADES_ACTIVE_KEY, "for", itemId],
+    placeholderData: (previous) => previous,
+    queryFn: () =>
+      apiV1<TradesPayload>(
+        `/api/v1/trades?tab=active&limit=50&offersFor=${encodeURIComponent(itemId!)}`,
+      ),
+    select: (r) => r.data.offers.filter((o) => o.direction === "received"),
+    staleTime: LIST_STALE_MS,
+    enabled: !!itemId,
   });
 }
 
@@ -1100,4 +1125,62 @@ function bracketed(item: { title: string; valueLeaves: number | null }): string 
   return item.valueLeaves === null
     ? item.title
     : `${item.title} · ${bracketLabel(bracketOf(item.valueLeaves))}`;
+}
+
+/**
+ * "I'm here" at the meetup hub: POST /api/v1/trades/:id/arrived.
+ *
+ * The codes are issued only once BOTH traders have said so (7 Nov 2026), so
+ * one person arriving early no longer starts the other's 15-minute window.
+ * Answers who is there; the trade list refetches so the screen can show the
+ * codes (both here) or "Waiting for <partner>".
+ */
+export function useArrive(tradeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiV1<{ arrival: { me: boolean; partner: boolean } }>(
+        `/api/v1/trades/${encodeURIComponent(tradeId!)}/arrived`,
+        { method: "POST" },
+      );
+      return data.arrival;
+    },
+    // INSTANT (7 Nov 2026): the trade is marked "you're here" in the cached
+    // list the moment the button is tapped, so the waiting panel shows at once
+    // instead of after the request and a whole-list refetch. The server's
+    // answer then sets the partner side; a failure puts the old state back.
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: TRADES_ACTIVE_KEY });
+      const before = qc.getQueryData(TRADES_ACTIVE_KEY);
+      patchArrival(qc, tradeId, (a) => ({ me: true, partner: a?.partner ?? false }));
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before !== undefined) qc.setQueryData(TRADES_ACTIVE_KEY, ctx.before);
+    },
+    onSuccess: (arrival) => {
+      patchArrival(qc, tradeId, () => arrival);
+      invalidateTrades(qc);
+    },
+  });
+}
+
+/** Rewrite one trade's `arrival` in the cached active list (shape: { data: TradesPayload }). */
+function patchArrival(
+  qc: ReturnType<typeof useQueryClient>,
+  tradeId: string | undefined,
+  next: (current: { me: boolean; partner: boolean } | undefined) => { me: boolean; partner: boolean },
+) {
+  if (!tradeId) return;
+  qc.setQueryData(TRADES_ACTIVE_KEY, (old: unknown) => {
+    const box = old as { data?: TradesPayload } | undefined;
+    if (!box?.data) return old;
+    return {
+      ...box,
+      data: {
+        ...box.data,
+        trades: box.data.trades.map((t) => (t.id === tradeId ? { ...t, arrival: next(t.arrival) } : t)),
+      },
+    };
+  });
 }

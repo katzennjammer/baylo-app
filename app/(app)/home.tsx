@@ -2,6 +2,8 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Keyboard,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,21 +11,30 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { LinearGradient } from "expo-linear-gradient";
 
-import { useBrowse } from "../../src/api/browse";
+import { ApiError } from "../../src/api/client";
+import { useBrowse, useBrowseSuggestions } from "../../src/api/browse";
+import { useHome } from "../../src/api/home";
 import { useShopSpotlight, type SpotlightShop } from "../../src/api/spotlight";
 import { useRecommended } from "../../src/api/recommended";
+import { useActiveTrades } from "../../src/api/trades";
+import { useUserSearchSuggestions, userSearchErrorPresentation } from "../../src/api/users";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
-import { tourTarget, useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
+import { useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
 import { Tappable } from "../../src/components/Tappable";
-import { FilterButton, SearchField } from "../../src/components/marketplace/BrowseControls";
+import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
+import { useTabReselect } from "../../src/lib/tab-reselect";
 import { CategoryCircles } from "../../src/components/home-redesign/CategoryCircles";
 import { ExclusiveCard } from "../../src/components/home-redesign/ExclusiveCard";
 import { SectionHeader } from "../../src/components/home-redesign/SectionHeader";
-import { HeroBanner } from "../../src/components/home-redesign/HeroBanner";
+import { HomePinnedHeader, HomeTopSection } from "../../src/components/home-redesign/HomeTopSection";
 import { ShopSpotlightCard } from "../../src/components/home-redesign/ShopSpotlightCard";
+import { TraderSearchSuggestions } from "../../src/components/home-redesign/TraderSearchSuggestions";
+import { ItemSearchSuggestions } from "../../src/components/marketplace/ItemSearchSuggestions";
 import { SEARCH_HELPER_CLEARANCE, SearchHelper } from "../../src/components/search-helper/SearchHelper";
 import {
   categoryTone,
@@ -40,7 +51,7 @@ import {
  * Browse-first, top to bottom (30 Sep 2026):
  *
  *   Search row   → Marketplace, carrying what was typed.
- *   Hero         → the newest listing with a photo; opens its category.
+ *   Hero         → a contextual mascot greeting with shortcuts to Trades and Food.
  *   Categories   → SHORTCUTS: a circle opens Marketplace on that category.
  *                  They no longer switch a section on this screen.
  *   Exclusive    → perishables, every category, soonest to expire first, as a
@@ -75,21 +86,8 @@ import {
  * NO LISTING IS ON SCREEN TWICE: Recommended excludes perishables on the
  * server, and Exclusive is perishables only.
  *
- * THE LEAVES BALANCE IS NOT ON THIS SCREEN. It is in AppHeader, once, as it is
- * on every other tab. It was briefly in the search row as well, which put the
- * same number twice on one screen about 60px apart — two figures that are read
- * as two facts, and the moment one of them lagged a refetch they would have
- * been.
- *
- * THE SEARCH ROW IS THE SECOND ROW, NOT THE FIRST. `AppHeader` — wordmark,
- * Leaves, bell, messages — renders above this screen exactly as it does on
- * every other tab, and the search row sits under it. The reference this screen
- * follows has no wordmark to place, which is the only reason it starts with a
- * search field; dropping ours would have cost Home the app's chrome and the two
- * unread counts that live in it.
- *
- * So no safe-area padding is taken here: AppHeader paints behind the status bar
- * and insets its own contents. `space.home.top` is the gap under it.
+ * Home owns its pinned header and scrollable top section. AppHeader remains
+ * unchanged on every other route.
  */
 type PerishableItem = Item & { perishable: NonNullable<Item["perishable"]> };
 
@@ -124,33 +122,56 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { session } = useSession();
   const viewerId = session?.user.id ?? null;
+  const homeData = useHome();
+  const activeTrades = useActiveTrades();
 
   const [draftQuery, setDraftQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const trimmedSearchQuery = draftQuery.trim();
+  const isTraderSearch = trimmedSearchQuery.startsWith("@");
+  const traderSearchQuery = isTraderSearch ? trimmedSearchQuery.replace(/^@+/, "").trim() : "";
+  const suggestionQuery = isTraderSearch ? traderSearchQuery : trimmedSearchQuery;
+  const showSearchSuggestions = suggestionQuery.length >= 2;
 
-  // Unfiltered: the category circles (facets) and the hero come from it.
-  //
-  // TODO(home-redesign): the hero is still the first listing with a photo.
-  const browse = useBrowse({ categories: [] });
-  const { items, facets, isPending, isError, isRefetching } = browse;
-  const hero = useMemo(() => items.find((i) => i.images.length > 0) ?? null, [items]);
-
-  // The first-time tour starts here, once per account, after the first load
-  // has settled either way — content, empty or error — so the hole is cut
-  // over a screen that has stopped moving. See src/tutorial/store.
-  useTutorialAutoStart(viewerId, !isPending);
-  // A replay from Settings can find this screen scrolled down, with the search
-  // row the tour points at out of view. Back to the top as it starts.
-  const scroll = useRef<ScrollView>(null);
-  const tourActive = useTourState().active;
   useEffect(() => {
-    if (tourActive) scroll.current?.scrollTo({ y: 0, animated: false });
-  }, [tourActive]);
+    if (!showSearchSuggestions) {
+      setDebouncedSearchQuery("");
+      return;
+    }
+
+    const timer = setTimeout(() => setDebouncedSearchQuery(suggestionQuery), 350);
+    return () => clearTimeout(timer);
+  }, [showSearchSuggestions, suggestionQuery]);
+
+  const isSearchDebouncing =
+    showSearchSuggestions && suggestionQuery !== debouncedSearchQuery;
+  const itemSuggestions = useBrowseSuggestions(
+    { q: debouncedSearchQuery },
+    showSearchSuggestions && !isTraderSearch && !isSearchDebouncing,
+  );
+  const traderSuggestions = useUserSearchSuggestions(
+    debouncedSearchQuery,
+    showSearchSuggestions && isTraderSearch && !isSearchDebouncing,
+  );
+  const traderSearchError = traderSuggestions.isError
+    ? userSearchErrorPresentation(traderSuggestions.error)
+    : null;
+
+  // Unfiltered: the category circles (facets) come from it.
+  const browse = useBrowse({ categories: [] });
+  const { items, facets, isError, isRefetching } = browse;
+  const isInitialBrowseLoad = browse.isPending && browse.data === undefined;
+  const pendingTradeCount = activeTrades.data
+    ? activeTrades.data.offers.filter((offer) => offer.direction === "received").length +
+      activeTrades.data.trades.filter((trade) => trade.status === "PENDING" && trade.direction === "received").length
+    : null;
 
   // Server-ordered by expiry. The client-side filter stays as a guard: an
   // item can lapse between the server's sweep and this render, and a server
   // without the perishables work omits `perishable` entirely -- `!= null`,
   // not `!== null`, so undefined never reaches `.expired`.
   const exclusiveQuery = useBrowse({ perishable: true, sort: "expiring" });
+  const isInitialExclusiveLoad = exclusiveQuery.isPending && exclusiveQuery.data === undefined;
   const exclusive = useMemo(
     () =>
       exclusiveQuery.items.filter(
@@ -173,12 +194,40 @@ export default function HomeScreen() {
   const { refetch: refetchExclusive } = exclusiveQuery;
   const { refetch: refetchSpotlight } = spotlightQuery;
   const { refetch: refetchRecommended } = recommendedQuery;
+  const { refetch: refetchHome } = homeData;
+  const { refetch: refetchTrades } = activeTrades;
   const refetch = useCallback(() => {
     void refetchBrowse();
     void refetchExclusive();
     void refetchSpotlight();
     void refetchRecommended();
-  }, [refetchBrowse, refetchExclusive, refetchSpotlight, refetchRecommended]);
+    void refetchHome();
+    void refetchTrades();
+  }, [refetchBrowse, refetchExclusive, refetchHome, refetchRecommended, refetchSpotlight, refetchTrades]);
+
+  // Tapping Home while on it: back to the top, or refresh when already there.
+  const scroller = useRef<ScrollView>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const onScroll = useTabReselect(() => scroller.current?.scrollTo({ y: 0, animated: true }), refetch);
+  const handleScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: onScroll,
+      }),
+    [onScroll, scrollY],
+  );
+
+  // The first-time tour starts here, once per account, after the first load
+  // has settled either way — content, empty or error — so the hole is cut
+  // over a screen that has stopped moving. See src/tutorial/store.
+  useTutorialAutoStart(viewerId, !isInitialBrowseLoad);
+  // A replay from Settings can find this screen scrolled down, with the search
+  // bar the tour points at out of view. Back to the top as it starts.
+  const tourActive = useTourState().active;
+  useEffect(() => {
+    if (tourActive) scroller.current?.scrollTo({ y: 0, animated: false });
+  }, [tourActive]);
 
   // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
   // to "Ended" at zero and the card stays put; refetching here would pull it
@@ -216,11 +265,73 @@ export default function HomeScreen() {
     [router],
   );
   const openMarketplace = useCallback(() => router.push("/(app)/marketplace"), [router]);
+  const openFilters = useCallback(
+    () => router.push({ pathname: "/(app)/marketplace", params: { openFilters: "1", applyAt: String(Date.now()) } }),
+    [router],
+  );
+  const openTrades = useCallback(() => router.navigate("/(app)/trades"), [router]);
   // A shop's storefront is its backing account's profile.
   const openShop = useCallback(
     (shop: SpotlightShop) => router.push({ pathname: "/user", params: { id: shop.orgUserId } }),
     [router],
   );
+  const submitSearch = useCallback(
+    (query = draftQuery) => {
+      const value = query.trim();
+      setDraftQuery("");
+      Keyboard.dismiss();
+      if (value) {
+        router.push({
+          pathname: "/(app)/marketplace",
+          params: { q: value, applyAt: String(Date.now()) },
+        });
+      } else {
+        openMarketplace();
+      }
+    },
+    [draftQuery, openMarketplace, router],
+  );
+
+  const searchSuggestions = showSearchSuggestions ? (
+    isTraderSearch ? (
+      <TraderSearchSuggestions
+        query={traderSearchQuery}
+        users={isSearchDebouncing ? [] : traderSuggestions.data ?? []}
+        loading={isSearchDebouncing || traderSuggestions.isPending}
+        compact
+        error={!isSearchDebouncing ? traderSearchError?.message ?? null : null}
+        canRetry={traderSearchError?.canRetry ?? true}
+        onSearch={() => submitSearch(`@${traderSearchQuery}`)}
+        onOpen={(user) => {
+          setDraftQuery("");
+          Keyboard.dismiss();
+          router.push({ pathname: "/user", params: { id: user.id } });
+        }}
+        onRetry={() => void traderSuggestions.refetch()}
+      />
+    ) : (
+      <ItemSearchSuggestions
+        query={trimmedSearchQuery}
+        items={isSearchDebouncing ? [] : (itemSuggestions.data ?? []).slice(0, 3)}
+        loading={isSearchDebouncing || itemSuggestions.isPending}
+        compact
+        error={
+          !isSearchDebouncing && itemSuggestions.isError
+            ? itemSuggestions.error instanceof ApiError
+              ? itemSuggestions.error.message
+              : "Could not load item suggestions."
+            : null
+        }
+        onSearch={() => submitSearch()}
+        onOpen={(item) => {
+          setDraftQuery("");
+          Keyboard.dismiss();
+          openItem(item);
+        }}
+        onRetry={() => void itemSuggestions.refetch()}
+      />
+    )
+  ) : null;
 
   /**
    * Marketplace, with its category chips set to `forCategory` — or cleared,
@@ -239,16 +350,30 @@ export default function HomeScreen() {
 
   return (
     <View style={s.screen}>
-      <ScrollView
-        ref={scroll}
-        style={s.screen}
+      <StatusBar style="light" />
+      <LinearGradient
+        colors={[color.homeTop, color.homeMiddle, color.homeBottom]}
+        locations={[0, 0.58, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.homeGradient}
+        pointerEvents="none"
+      />
+      <HomePinnedHeader scrollY={scrollY} />
+      <Animated.ScrollView
+        ref={scroller}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        style={s.scrollView}
         // The extra bottom room keeps the last row of tiles clear of the search
         // helper button, which floats over this corner.
-        contentContainerStyle={{ paddingTop: space.home.top, paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
+        contentContainerStyle={{ paddingBottom: space.home.bottom + SEARCH_HELPER_CLEARANCE }}
         refreshControl={
           <RefreshControl
             refreshing={
               isRefetching ||
+              homeData.isRefetching ||
+              activeTrades.isRefetching ||
               exclusiveQuery.isRefetching ||
               spotlightQuery.isRefetching ||
               recommendedQuery.isRefetching
@@ -259,46 +384,33 @@ export default function HomeScreen() {
         }
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Search + filter, BELOW AppHeader's wordmark row. */}
-        <View ref={tourTarget("search")} collapsable={false} style={s.searchRow}>
-          <SearchField
-            value={draftQuery}
-            onChange={setDraftQuery}
-            // Carried over as `q`, with the same nonce the category links use,
-            // so Marketplace searches it (shop names included) rather than
-            // opening blank. An empty box just opens Marketplace.
-            onSubmit={() =>
-              draftQuery.trim()
-                ? router.push({
-                    pathname: "/(app)/marketplace",
-                    params: { q: draftQuery.trim(), applyAt: String(Date.now()) },
-                  })
-                : openMarketplace()
-            }
-          />
-          <FilterButton count={0} onPress={openMarketplace} />
-        </View>
+        <HomeTopSection
+          searchValue={draftQuery}
+          onSearchChange={setDraftQuery}
+          onSearchSubmit={() => submitSearch()}
+          searchSuggestions={searchSuggestions}
+          onFilterPress={openFilters}
+          pendingTradeCount={pendingTradeCount}
+          leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
+          firstName={homeData.viewer?.name ?? session?.user.name}
+          onViewTrades={openTrades}
+          onExploreFood={() => browseInMarketplace("FOOD")}
+        />
 
-        {isPending && items.length === 0 ? (
-          <ActivityIndicator color={color.green} style={s.loading} />
-        ) : isError && items.length === 0 ? (
-          <View style={s.stateBox}>
-            <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
-              Could not load listings.
-            </Text>
-            <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
-              <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
-            </Tappable>
-          </View>
-        ) : (
-          <>
-            {/* 2. Hero */}
-            {hero ? (
-              <View style={{ marginTop: space.home.headerToHero }}>
-                <HeroBanner item={hero} onPress={() => browseInMarketplace(hero.category)} />
-              </View>
-            ) : null}
-
+        <View style={s.contentSurface}>
+          {isInitialBrowseLoad && items.length === 0 ? (
+            <ActivityIndicator color={color.green} style={s.loading} />
+          ) : isError && items.length === 0 ? (
+            <View style={s.stateBox}>
+              <Text style={[textStyle(type.emptyBody), { color: color.inkSecondary }]}>
+                Could not load listings.
+              </Text>
+              <Tappable onPress={refetch} accessibilityRole="button" style={s.retry}>
+                <Text style={[textStyle(type.homeSeeAll), { color: color.forest }]}>Try again</Text>
+              </Tappable>
+            </View>
+          ) : (
+            <>
             {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}
@@ -336,14 +448,19 @@ export default function HomeScreen() {
                   />
                 ))}
               </ScrollView>
-            ) : exclusiveQuery.isPending ? (
+            ) : isInitialExclusiveLoad ? (
               <ActivityIndicator color={color.green} style={s.sectionLoading} />
             ) : exclusiveQuery.isError ? (
               <Text style={[textStyle(type.emptyBody), s.empty]}>
                 Could not load perishables. Pull down to try again.
               </Text>
             ) : (
-              <Text style={[textStyle(type.emptyBody), s.empty]}>No perishable listings right now.</Text>
+              <MascotEmptyState
+                pose="search"
+                title="No perishable listings right now."
+                message="Check back soon for fresh finds."
+                size={150}
+              />
             )}
 
             {/* 5. Shop Spotlights. Left out when there are none; an error
@@ -404,9 +521,10 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-          </>
-        )}
-      </ScrollView>
+            </>
+          )}
+        </View>
+      </Animated.ScrollView>
 
       {/* The free search helper. Over the scroll view, not in it, so it stays put. */}
       <SearchHelper />
@@ -416,12 +534,15 @@ export default function HomeScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.surface },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.home.searchGap,
-    paddingHorizontal: space.screenX,
+  homeGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: space.home.gradientHeight,
   },
+  scrollView: { flex: 1, backgroundColor: "transparent" },
+  contentSurface: { backgroundColor: color.surface },
   loading: { marginTop: space.home.sectionTop * 2 },
   sectionLoading: { marginTop: space.home.sectionTop },
   stateBox: { alignItems: "center", marginTop: space.home.sectionTop * 2, gap: 12 },

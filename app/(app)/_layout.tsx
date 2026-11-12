@@ -9,6 +9,7 @@ import { TabBar, type TabBarProps } from "../../src/components/TabBar";
 import { TutorialOverlay } from "../../src/components/tutorial/TutorialOverlay";
 import { useSession } from "../../src/auth/session";
 import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
+import { usePushNotifications } from "../../src/notifications/push";
 
 /**
  * The (app) group: everything behind the session gate.
@@ -80,6 +81,9 @@ export default function AppLayout() {
   // The opening film's cached tier, for the NEXT launch. Background only: by
   // the time this layout mounts the film has already played. See the hook.
   useOpeningTierSync(!!session);
+  // Phone notifications: registers this phone once signed in, and opens the
+  // right screen when one is tapped. See src/notifications/push.ts.
+  usePushNotifications(session?.user.id);
 
   // tone="boot": this is the initial session read, on the cold-start path.
   if (isLoading) return <Splash tone="boot" waitingOn="Reading your saved session from secure storage" />;
@@ -116,13 +120,9 @@ export default function AppLayout() {
           TabBar.tsx, NOT by the `href: null` below — and stays navigable, with
           the new Home linking to it (See all, Filter).
 
-          THE HEADER STAYS ON FOR HOME. The search row is a SECOND row under the
-          wordmark, not a replacement for it: the wordmark, the Leaves pill and
-          the bell/messages icons are the app's chrome and Home is not the one
-          screen that goes without them. Home therefore takes no safe-area
-          padding of its own — AppHeader paints behind the status bar and
-          insets its own contents. */}
-      <Tabs.Screen name="home" options={{ title: "Home", header: questsHeader }} />
+            HOME DRAWS ITS OWN PINNED HEADER. Its safe-area inset and status-bar
+            style belong to the Home screen; other tabs keep AppHeader unchanged. */}
+          <Tabs.Screen name="home" options={{ title: "Home", headerShown: false }} />
       <Tabs.Screen name="index" options={{ title: "Community", header: questsHeader }} />
       <Tabs.Screen name="post" options={{ title: "Post" }} />
       {/* THE ONLY TAB THAT DRAWS ITS OWN BAR.
@@ -168,7 +168,6 @@ export default function AppLayout() {
 
       {/* The Safe-Zone map and one hub's listings. Same flat-file, query-param
           arrangement as `item` above, and for the same reason. */}
-      <Tabs.Screen name="hubs" options={{ href: null, title: "Safe hubs" }} />
       {/* No app header on one hub's page: its map strip runs to the top edge. */}
       <Tabs.Screen name="hub" options={{ href: null, title: "Safe hub", headerShown: false }} />
     </Tabs>

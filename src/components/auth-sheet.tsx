@@ -60,7 +60,6 @@ import {
   defaultDobParts,
   formatLongDate,
   selectableYears,
-  todayParts,
   type DateParts,
 } from "../lib/dob";
 import {
@@ -71,6 +70,7 @@ import {
   openAndroidDatePicker,
   partsToDate,
 } from "./native-date-dialog";
+import { sizedImage } from "../media/image-url";
 
 /**
  * The auth kit: a sheet over a video band.
@@ -113,6 +113,21 @@ interface AuthMetrics {
 }
 
 const Ctx = createContext<AuthMetrics | null>(null);
+
+/**
+ * The fields, buttons and pickers of this file on an ordinary app screen (the
+ * in-app shop registration), without the photo band and sheet. Static
+ * metrics: the screen's own ScrollView deals with the keyboard.
+ */
+export function AuthFieldsProvider({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const value = useMemo<AuthMetrics>(
+    () => ({ board: authBoard(width), width, keyboardUp: false, keyboardInset: 0, imeHeight: 0, safeTop: insets.top, safeBottom: insets.bottom }),
+    [width, insets.top, insets.bottom],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
 
 function useMetrics(): AuthMetrics {
   const ctx = useContext(Ctx);
@@ -649,7 +664,7 @@ function Avatar({ name, url }: { name: string; url?: string | null }) {
   } as const;
 
   if (url) {
-    return <Image source={{ uri: url }} style={box} contentFit="cover" transition={160} />;
+    return <Image source={{ uri: sizedImage(url, "thumb") }} style={box} contentFit="cover" transition={160} />;
   }
 
   return (
@@ -1849,11 +1864,11 @@ export function DateOfBirthField({
  */
 function useNativeDatePicker(current: DateParts | null, onPicked: (next: DateParts) => void) {
   const [iosOpen, setIosOpen] = useState(false);
-  const [draft, setDraft] = useState<DateParts>(() => current ?? todayParts());
+  const [draft, setDraft] = useState<DateParts>(() => current ?? defaultDobParts());
 
   const tryOpen = useCallback(
     (onUnavailable: () => void) => {
-      const seed = current ?? todayParts();
+      const seed = current ?? defaultDobParts();
 
       if (!nativeDatePickerAvailable) {
         onUnavailable();

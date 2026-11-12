@@ -48,9 +48,10 @@ export const QUESTS_KEY = ["quests"] as const;
 const doneCount = (day: QuestDay | undefined) =>
   day ? day.quests.filter((q) => q.completed).length : 0;
 
-export function useQuests() {
+export function useQuests({ enabled = true }: { enabled?: boolean } = {}) {
   const qc = useQueryClient();
   return useQuery({
+    enabled,
     queryKey: QUESTS_KEY,
     queryFn: async () => {
       const before = qc.getQueryData<QuestDay>(QUESTS_KEY);

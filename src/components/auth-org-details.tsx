@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError } from "../api/client";
 import {
@@ -10,10 +11,10 @@ import {
 } from "../api/organizations";
 import { ApiUrlGear } from "./ApiUrlGear";
 import { Tappable } from "./Tappable";
-import { StoreIcon } from "./icons";
+import { ChevronLeftIcon, StoreIcon } from "./icons";
 import {
+  AuthFieldsProvider,
   AuthScreen,
-  BandBackButton,
   BandRow,
   Banner,
   Body,
@@ -112,6 +113,7 @@ export function OrgDetailsStep({
   const { data } = useOrganizations(true, accessToken);
   const create = useCreateOrganization();
 
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [dti, setDti] = useState("");
   const [category, setCategory] = useState<BusinessCategoryOption | null>(null);
@@ -188,24 +190,9 @@ export function OrgDetailsStep({
     }
   }
 
-  return (
-    <AuthScreen
-      scrim="createAccount"
-      band={bandHeight.signIn}
-      padTop={keyboardRule.sheetPadTopSignIn}
-      bandContent={
-        inApp ? (
-          <BandRow leading={<BandBackButton onPress={onSkip} label="Back to settings" />}>
-            <Wordmark />
-          </BandRow>
-        ) : (
-          <BandRow trailing={<ApiUrlGear variant="band" />}>
-            <Wordmark />
-          </BandRow>
-        )
-      }
-    >
-      <Headline variant="logIn">Tell us about the business</Headline>
+  const form = (
+    <>
+      {inApp ? null : <Headline variant="logIn">Tell us about the business</Headline>}
 
       <View style={{ height: gap.headlineToBody }} />
       <Body>
@@ -291,6 +278,43 @@ export function OrgDetailsStep({
         }}
         onClose={() => setPickerOpen(false)}
       />
+    </>
+  );
+
+  // Inside the app (from Settings or the post screen), a plain app screen:
+  // back arrow and a title, like every other screen you reached it from. The
+  // signup photo band made it look as if you had been sent back to sign-up.
+  if (inApp) {
+    return (
+      <View style={{ flex: 1, backgroundColor: sheetColor.surface, paddingTop: insets.top }}>
+        <View style={{ height: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, gap: 4 }}>
+          <Tappable onPress={onSkip} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back" style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+            <ChevronLeftIcon size={24} color={sheetColor.ink} />
+          </Tappable>
+          <Text style={{ fontFamily: "BricolageGrotesque-SemiBold", fontSize: 19, color: sheetColor.ink }}>Register your shop</Text>
+        </View>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 8, paddingBottom: insets.bottom + 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <AuthFieldsProvider>{form}</AuthFieldsProvider>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <AuthScreen
+      scrim="createAccount"
+      band={bandHeight.signIn}
+      padTop={keyboardRule.sheetPadTopSignIn}
+      bandContent={
+        <BandRow trailing={<ApiUrlGear variant="band" />}>
+          <Wordmark />
+        </BandRow>
+      }
+    >
+      {form}
     </AuthScreen>
   );
 }

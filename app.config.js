@@ -45,12 +45,45 @@ function googleSignInPlugin() {
   return ["@react-native-google-signin/google-signin", { iosUrlScheme }];
 }
 
+/**
+ * FIREBASE (push notifications, 20 Oct 2026). Android needs google-services.json
+ * to get a push token. The repo is PUBLIC, so the file is not committed
+ * (.gitignore): an EAS build gets it from the secret file variable
+ * GOOGLE_SERVICES_JSON, whose value is the path EAS wrote it to; a local build
+ * uses ./google-services.json if it is there. With neither, the key is left out
+ * -- prebuild would fail on a missing file -- and the app builds and runs, just
+ * without pushes.
+ */
+function googleServicesFile() {
+  if (process.env.GOOGLE_SERVICES_JSON) return process.env.GOOGLE_SERVICES_JSON;
+  const local = require("path").join(__dirname, "google-services.json");
+  return require("fs").existsSync(local) ? "./google-services.json" : undefined;
+}
+
 module.exports = ({ config }) => {
   const plugins = [...(config.plugins ?? []), googleSignInPlugin()];
+  const servicesFile = googleServicesFile();
+  if (servicesFile) config = { ...config, android: { ...config.android, googleServicesFile: servicesFile } };
+  const isLocalDevelopment =
+    !process.env.EAS_BUILD_PROFILE && process.env.NODE_ENV !== "production";
+
+  // A store build sends passwords and tokens; it does so over TLS or not at all.
+  if (process.env.EAS_BUILD_PROFILE === "production") {
+    const url = process.env.EXPO_PUBLIC_API_URL ?? "";
+    if (!url.startsWith("https://")) throw new Error(`Production build needs an https:// EXPO_PUBLIC_API_URL, got "${url}"`);
+    if (process.env.BAYLO_ALLOW_CLEARTEXT === "1") throw new Error("Production build must not set BAYLO_ALLOW_CLEARTEXT");
+  }
 
   if (process.env.BAYLO_ALLOW_CLEARTEXT === "1") {
     plugins.push(["expo-build-properties", { android: { usesCleartextTraffic: true } }]);
   }
 
-  return { ...config, plugins };
+  return {
+    ...config,
+    extra: {
+      ...config.extra,
+      apiOverrideAllowed: isLocalDevelopment,
+    },
+    plugins,
+  };
 };

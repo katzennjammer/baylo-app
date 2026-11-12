@@ -27,6 +27,8 @@ export interface Story {
   createdAt: string;
   expiresAt: string;
   seen: boolean;
+  /** People who have seen it; your own stories only. */
+  seenBy?: number;
   /** The shared listing, in the same shape the feed sends. */
   item: Item;
 }

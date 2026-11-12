@@ -15,6 +15,7 @@ import {
   offerType,
   textStyle,
 } from "../../theme/offer-tokens";
+import { sizedImage } from "../../media/image-url";
 
 /**
  * Every row the offer flow draws.
@@ -293,7 +294,7 @@ export function ItemRow({
         }}
       >
         {image ? (
-          <Image source={{ uri: image }} contentFit="cover" style={{ width: "100%", height: "100%" }} transition={120} />
+          <Image source={{ uri: sizedImage(image, "thumb") }} contentFit="cover" style={{ width: "100%", height: "100%" }} transition={120} />
         ) : (
           <ImageIcon size={20} stroke={1.5} color={offerColor.inkDisabled} />
         )}

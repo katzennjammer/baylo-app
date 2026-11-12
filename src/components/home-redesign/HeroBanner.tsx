@@ -1,140 +1,354 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AccessibilityInfo,
+  Animated,
+  AppState,
+  Easing,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useIsFocused } from "expo-router";
+import type * as ExpoBattery from "expo-battery";
 
-import { ImageIcon } from "../icons";
+import { MASCOT } from "../../media/mascots";
+import { videoKit } from "../../media/video-kit";
+import { VideoFallback } from "../../media/VideoFallback";
 import { Tappable } from "../Tappable";
-import { color, dark, icon, radius, size, space, textStyle, type } from "../../theme/tokens";
-import type { Item } from "../../api/types";
+import { color, radius, space, textStyle, type } from "../../theme/tokens";
 
-/**
- * The Home hero: forest-based gradient card, copy on the left, a real listing
- * photo bleeding off the right edge.
- *
- * ── THE PHOTO IS A LAID-OUT COLUMN, NOT AN ABSOLUTE BOX ─────────────────
- *
- * It was `position: absolute` with `top/bottom: 0`, a PERCENTAGE width and a
- * negative `right`, which is three separate ways for the box to come out empty
- * and no way to tell that it had: a photo that measured zero looked exactly
- * like a card with no photo. It is a flex child now — the card is a row, the
- * copy takes `1 - heroPhotoFraction` of it and this takes the rest, both from
- * a flex-basis of 0 so the split is arithmetic rather than a percentage string.
- * The bleed is a negative margin on that child, clipped by the card's own
- * `overflow: hidden`, so the photo still runs past the right edge.
- *
- * AND IT FAILS VISIBLY. A missing or broken photo draws the same ImageIcon
- * panel GridTile and ExclusiveTile draw, in the dark palette this card is on,
- * instead of rendering nothing and leaving a bare gradient that reads as a
- * design choice.
- *
- * TODO(home-redesign): /api/v1/browse has no "featured" concept. Until the
- * server sends one, the screen passes the first browse item that has a photo
- * and this builds its copy from that item's category. Replace `item` with the
- * server's featured block when it exists; do NOT add a fake endpoint for it.
- */
+let batteryKit: typeof ExpoBattery | null = null;
+try {
+  // Keep the screen usable in an installed shell that predates this native module.
+  batteryKit = require("expo-battery") as typeof ExpoBattery;
+} catch (error) {
+  console.warn("[home mascot] expo-battery is unavailable:", error);
+}
+
 export function HeroBanner({
-  item,
-  onPress,
+  pendingTradeCount,
+  leavesBalance,
+  firstName,
+  onViewTrades,
+  onExploreFood,
 }: {
-  item: Item;
-  onPress: () => void;
+  pendingTradeCount: number | null;
+  leavesBalance: number | null;
+  firstName: string | null | undefined;
+  onViewTrades: () => void;
+  onExploreFood: () => void;
 }) {
-  const [failed, setFailed] = useState(false);
-  const cover = item.images[0];
+  const focused = useIsFocused();
+  const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
+  const [powerSaver, setPowerSaver] = useState<boolean | null>(null);
+  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  const [videoFailed, setVideoFailed] = useState(false);
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const hasRevealedMessage = useRef(false);
 
-  // TODO(home-redesign): mocked copy. Headline follows the featured item's
-  // category so it is at least true to the photo beside it.
-  const headline = `Explore ${item.categoryLabel}`;
-  const subhead = "Exchange for what you want";
-  const cta = "Barter now";
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(
+      (enabled) => {
+        if (alive) setReduceMotion(enabled);
+      },
+      (error: unknown) => {
+        console.warn("[home mascot] reduced-motion status could not be read:", error);
+        if (alive) setReduceMotion(false);
+      },
+    );
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      alive = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!batteryKit) {
+      setPowerSaver(false);
+      return;
+    }
+
+    let alive = true;
+    let subscription: ReturnType<typeof batteryKit.addLowPowerModeListener> | null = null;
+    try {
+      subscription = batteryKit.addLowPowerModeListener(({ lowPowerMode }) => {
+        setPowerSaver(lowPowerMode);
+      });
+      void batteryKit.isLowPowerModeEnabledAsync().then(
+        (enabled) => {
+          if (alive) setPowerSaver(enabled);
+        },
+        (error: unknown) => {
+          console.warn("[home mascot] power-saver status could not be read:", error);
+          if (alive) setPowerSaver(false);
+        },
+      );
+    } catch (error) {
+      console.warn("[home mascot] power-saver monitoring could not start:", error);
+      setPowerSaver(false);
+    }
+    return () => {
+      alive = false;
+      subscription?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      setForeground(state === "active");
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const message =
+    pendingTradeCount !== null && pendingTradeCount > 0
+      ? `You've got ${pendingTradeCount} ${pendingTradeCount === 1 ? "trade" : "trades"} waiting for a reply. Check them before they expire.`
+      : leavesBalance !== null
+        ? `You've got ${leavesBalance} Leaves ready to put toward your next trade.`
+        : "A good barter starts with something you no longer need.";
+
+  useEffect(() => {
+    if (hasRevealedMessage.current) return;
+    if (reduceMotion === true) {
+      textOpacity.setValue(1);
+      hasRevealedMessage.current = true;
+      return;
+    }
+    if (reduceMotion === false && message) {
+      const animation = Animated.timing(textOpacity, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      });
+      animation.start(({ finished }) => {
+        if (finished) hasRevealedMessage.current = true;
+      });
+      return () => animation.stop();
+    }
+  }, [message, reduceMotion, textOpacity]);
+
+  const resolvedName = firstName?.trim().split(/\s+/)[0] || "there";
+  const now = new Date();
+  const date = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const videoEnabled = reduceMotion === false && powerSaver === false;
+  const failVideo = useCallback(() => setVideoFailed(true), []);
 
   return (
-    <LinearGradient
-      colors={[color.forest, dark.surface]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={s.card}
-    >
-      <View style={s.copy}>
-        <Text style={[textStyle(type.heroTitle), { color: dark.ink }]} numberOfLines={2}>
-          {headline}
+    <View style={s.card}>
+      <View style={s.greeting}>
+        <Text style={[textStyle(type.metadata), s.date]} numberOfLines={1}>
+          {date}
         </Text>
-        <Text style={[textStyle(type.heroSubhead), { color: dark.secondary, marginTop: 4 }]} numberOfLines={2}>
-          {subhead}
+        <Text style={[textStyle(type.heroTitle), s.greetingText]} numberOfLines={1}>
+          {greeting}, {resolvedName}!
         </Text>
-        <Tappable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={`${cta}. ${headline}`}
-          style={s.cta}
-          pressedStyle={s.ctaPressed}
-        >
-          <Text style={[textStyle(type.heroCta), { color: color.onGreen }]}>{cta}</Text>
-        </Tappable>
       </View>
 
-      <View style={s.photoBox}>
-        {cover && !failed ? (
-          <Image
-            source={{ uri: cover }}
-            contentFit="cover"
-            style={StyleSheet.absoluteFill}
-            transition={120}
-            onError={() => setFailed(true)}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, s.photoFailed]}>
-            <ImageIcon
-              size={icon.failedPhoto.size}
-              stroke={icon.failedPhoto.stroke}
-              color={dark.muted}
-            />
+      <View style={s.contentRow}>
+        <View style={s.duckFrame}>
+          {videoEnabled && !videoFailed && videoKit ? (
+            <VideoFallback what="Home mascot video" fallback={<MascotFallback />}>
+              <WaveVideo
+                focused={focused && foreground}
+                onFailure={failVideo}
+              />
+            </VideoFallback>
+          ) : videoFailed || reduceMotion === true || powerSaver === true || !videoKit ? (
+            <MascotFallback />
+          ) : null}
+        </View>
+
+        <View style={s.bubbleRow}>
+          <View style={s.bubbleTail} />
+          <View style={s.bubble}>
+            <Animated.Text
+              style={[textStyle(type.metadata), s.message, { opacity: textOpacity }]}
+              numberOfLines={3}
+              ellipsizeMode="tail"
+            >
+              {message}
+            </Animated.Text>
           </View>
-        )}
+        </View>
       </View>
-    </LinearGradient>
+
+      <View style={s.actions}>
+        <Tappable
+          onPress={onViewTrades}
+          accessibilityRole="button"
+          style={s.primaryAction}
+          pressedStyle={s.primaryPressed}
+        >
+          <Text style={[textStyle(type.metadata), s.primaryText]}>View trades</Text>
+        </Tappable>
+        <Tappable
+          onPress={onExploreFood}
+          accessibilityRole="button"
+          style={s.secondaryAction}
+          pressedStyle={s.secondaryPressed}
+        >
+          <Text style={[textStyle(type.metadata), s.secondaryText]}>Explore food</Text>
+        </Tappable>
+      </View>
+    </View>
+  );
+}
+
+function MascotFallback() {
+  return (
+    <Image
+      source={MASCOT.celebrate}
+      contentFit="contain"
+      style={s.fallbackDuck}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+}
+
+function WaveVideo({ focused, onFailure }: { focused: boolean; onFailure: () => void }) {
+  if (!videoKit) return null;
+  return <WaveVideoInner focused={focused} onFailure={onFailure} />;
+}
+
+function WaveVideoInner({ focused, onFailure }: { focused: boolean; onFailure: () => void }) {
+  const { VideoView, useVideoPlayer } = videoKit!;
+  const player = useVideoPlayer(MASCOT.wave, (createdPlayer) => {
+    createdPlayer.loop = true;
+    createdPlayer.muted = true;
+    createdPlayer.keepScreenOnWhilePlaying = false;
+  });
+
+  useEffect(() => {
+    const subscription = player.addListener("statusChange", ({ status, error }) => {
+      if (status !== "error") return;
+      console.warn("[home mascot] video playback failed:", error?.message ?? "unknown video error");
+      onFailure();
+    });
+    if (player.status === "error") {
+      console.warn("[home mascot] video player entered error state");
+      onFailure();
+    }
+    return () => subscription.remove();
+  }, [onFailure, player]);
+
+  useEffect(() => {
+    try {
+      if (focused) player.play();
+      else player.pause();
+    } catch (error) {
+      console.warn("[home mascot] video playback command failed:", error);
+      onFailure();
+    }
+  }, [focused, onFailure, player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+      surfaceType="surfaceView"
+      useExoShutter={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+    />
   );
 }
 
 const s = StyleSheet.create({
   card: {
     marginHorizontal: space.screenX,
-    height: size.home.heroHeight,
-    borderRadius: radius.hero,
+    borderRadius: 20,
     overflow: "hidden",
+    padding: 14,
+    backgroundColor: color.mascotGreen,
+  },
+  greeting: {
+    marginBottom: 10,
+  },
+  date: { color: color.onScrim, opacity: 0.82 },
+  greetingText: { color: color.onScrim, marginTop: 2 },
+  contentRow: {
     flexDirection: "row",
-    alignItems: "stretch",
+    alignItems: "center",
+    gap: 2,
   },
-  // flexBasis 0 on both, so the two grow numbers ARE the split — 56/44 of the
-  // card, whatever the card turns out to be. No percentage strings, and no
-  // dependence on the parent having resolved its width first.
-  copy: {
-    flexGrow: 1 - size.home.heroPhotoFraction,
-    flexBasis: 0,
-    justifyContent: "center",
-    paddingHorizontal: space.home.heroX,
-    paddingVertical: space.home.heroY,
-  },
-  photoBox: {
-    flexGrow: size.home.heroPhotoFraction,
-    flexBasis: 0,
-    // The bleed. The card clips it, so the photo reaches the right edge with no
-    // rounded corner cutting into it.
-    marginRight: -size.home.heroPhotoBleed,
-    backgroundColor: dark.control,
+  duckFrame: {
+    position: "relative",
+    width: 110,
+    height: 110,
+    flexShrink: 0,
     overflow: "hidden",
-  },
-  photoFailed: { alignItems: "center", justifyContent: "center" },
-  cta: {
-    alignSelf: "flex-start",
-    marginTop: space.home.heroSubToCta,
-    height: size.home.heroCta,
-    paddingHorizontal: size.home.heroCtaX,
-    borderRadius: radius.heroCta,
-    backgroundColor: color.green,
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaPressed: { opacity: 0.85 },
+  fallbackDuck: {
+    width: 110,
+    height: 110,
+  },
+  bubbleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  bubbleTail: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 8,
+    borderBottomWidth: 8,
+    borderRightWidth: 9,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    borderRightColor: color.searchSurface,
+  },
+  bubble: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 76,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: color.searchSurface,
+  },
+  message: { color: color.ink, flexShrink: 1 },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  primaryAction: {
+    minHeight: 34,
+    paddingHorizontal: 14,
+    borderRadius: radius.heroCta,
+    backgroundColor: color.searchSurface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryText: { color: color.mascotGreen },
+  primaryPressed: { opacity: 0.82 },
+  secondaryAction: {
+    minHeight: 34,
+    paddingHorizontal: 14,
+    borderRadius: radius.heroCta,
+    borderWidth: 1,
+    borderColor: color.onScrim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryText: { color: color.onScrim },
+  secondaryPressed: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
 });
