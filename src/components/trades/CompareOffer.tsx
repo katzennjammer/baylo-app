@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import type { OfferDecided } from "../../api/trades";
 import type { LiveOffer } from "../../api/types";
@@ -69,6 +70,7 @@ export function CompareOffer({
   onOpenTrade: (tradeId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const partner = firstName(offer.counterparty.name);
   const theirs = offer.offeredItems[0];
   const mine = offer.post;
@@ -216,6 +218,14 @@ export function CompareOffer({
         {/* Who you would be meeting. */}
         <View style={s.box}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Photo and name open their profile (13 Nov 2026); the chat
+                button beside them stays its own target. */}
+            <Tappable
+              onPress={() => router.push({ pathname: "/user", params: { id: offer.counterparty.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${offer.counterparty.name}'s profile`}
+              style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
             <Face name={offer.counterparty.name} avatar={offer.counterparty.avatar} size={48} />
             <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
               <PremiumName premium={offer.counterparty.premium} style={{ fontFamily: font.sansBold, fontSize: 16, color: color.ink }}>
@@ -235,6 +245,7 @@ export function CompareOffer({
                 palette={{ ink: color.ink, control: color.control }}
               />
             </View>
+            </Tappable>
             <Tappable
               onPress={onChat}
               accessibilityRole="button"
