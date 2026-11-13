@@ -225,7 +225,16 @@ export default function TradeScreen() {
               : null
           }
           onChat={() =>
-            router.push(`/(app)/messages?partner=${encodeURIComponent(offer.counterparty.id)}`)
+            // Straight into THEIR chat (13 Nov 2026), the way the profile's
+            // Message button does; the old link only opened the Messages tab.
+            router.push({
+              pathname: "/messages/thread",
+              params: {
+                partner: offer.counterparty.id,
+                partnerName: offer.counterparty.name,
+                partnerAvatar: offer.counterparty.avatar ?? "",
+              },
+            })
           }
           onOpenTrade={(id) => router.replace(present.tradeHref(id) as never)}
         />

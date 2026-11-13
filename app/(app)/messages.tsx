@@ -77,6 +77,16 @@ export default function MessagesScreen() {
   const activeTrades = useActiveTrades();
   const [query, setQuery] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "trading">("all");
+  // A link here WITH a partner (the offer screen's chat button, the trade
+  // menu, a message notification) means "open the chat with them" (13 Nov
+  // 2026); it used to stop on this list. Open it once, then drop the param so
+  // Back lands on the list instead of bouncing into the chat again.
+  useEffect(() => {
+    const partner = params.partner;
+    if (!partner) return;
+    router.setParams({ partner: undefined });
+    router.push({ pathname: "/messages/thread", params: { partner } });
+  }, [params.partner, router]);
   useFocusEffect(
     useCallback(() => {
       void refetch();
