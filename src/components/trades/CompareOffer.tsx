@@ -15,6 +15,7 @@ import { RatingLine, TierChip } from "../profile/PersonHeader";
 import { BracketChip } from "../BracketChip";
 import { Thumb } from "./rows";
 import { FailurePopup } from "../FailurePopup";
+import { PremiumName } from "../PremiumName";
 
 /**
  * The received-offer view of /trade (Nov 2026): one offer, compared side by
@@ -217,9 +218,9 @@ export function CompareOffer({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Face name={offer.counterparty.name} avatar={offer.counterparty.avatar} size={48} />
             <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-              <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.ink }} numberOfLines={1}>
+              <PremiumName premium={offer.counterparty.premium} style={{ fontFamily: font.sansBold, fontSize: 16, color: color.ink }}>
                 {offer.counterparty.name}
-              </Text>
+              </PremiumName>
               {/* The same rating line and tier chip as their profile header. */}
               <RatingLine
                 rating={offer.counterparty.rating ?? 0}

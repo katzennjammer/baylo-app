@@ -28,6 +28,7 @@ import { CheckIcon, ChevronRightIcon } from "../../src/components/icons";
 import { NoticeDialog } from "../../src/components/NoticeDialog";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { sizedImage } from "../../src/media/image-url";
+import { PremiumName } from "../../src/components/PremiumName";
 
 /**
  * Profile — the account block and the owner's shelf.
@@ -798,7 +799,7 @@ export function ReviewRow({ dark, review, onReviewer, onItem }: { dark: boolean;
       <Pressable onPress={onReviewer} style={s.reviewIdentity} accessibilityRole="button" accessibilityLabel={`View ${review.reviewer.name}'s profile`}>
         <ReviewAvatar uri={review.reviewer.avatar} name={review.reviewer.name} dark={dark} />
         <View style={s.reviewIdentityText}>
-          <Text style={[s.reviewName, { color: palette.ink }]} numberOfLines={1}>{review.reviewer.name}</Text>
+          <PremiumName premium={review.reviewer.premium} style={[s.reviewName, { color: palette.ink }]}>{review.reviewer.name}</PremiumName>
           <View style={s.reviewMetaRow}>
             <RatingStars dark={dark} rating={review.rating} />
             {when ? <Text style={[s.reviewDate, { color: palette.muted }]}>{when}</Text> : null}

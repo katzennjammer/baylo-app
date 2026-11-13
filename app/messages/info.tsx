@@ -19,6 +19,7 @@ import { getActingOrgId } from "../../src/api/org-context";
 import { sizedImage } from "../../src/media/image-url";
 import { color, font } from "../../src/theme/tokens";
 import { StarText } from "../../src/components/StarText";
+import { PremiumName } from "../../src/components/PremiumName";
 
 /**
  * Chat info -- the i button in a chat (4 Nov 2026 design). Messenger's info
@@ -164,7 +165,7 @@ export default function ChatInfoScreen() {
               <Text style={s.initials}>{initials(name)}</Text>
             </View>
           )}
-          <Text style={s.name} numberOfLines={1}>{name}</Text>
+          <PremiumName premium={p?.user.premium === true} rowStyle={{ marginTop: 8 }} style={p?.user.premium ? [s.name, { marginTop: 0 }] : s.name}>{name}</PremiumName>
           {facts ? <StarText style={s.facts} numberOfLines={1}>{facts}</StarText> : null}
         </View>
 

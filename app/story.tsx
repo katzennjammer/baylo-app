@@ -32,6 +32,7 @@ import { listingArea } from "../src/lib/listing-area";
 import { relativeShort } from "../src/lib/format";
 import { border, color, icon, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { sizedImage } from "../src/media/image-url";
+import { PremiumTag } from "../src/components/PremiumTag";
 
 /**
  * The full-screen story viewer (2 Oct 2026). Opened from the stories row with
@@ -388,6 +389,7 @@ export default function StoryViewer() {
             <Text style={[textStyle(type.username), s.onDark]} numberOfLines={1}>
               {author.isOwn ? "Your story" : author.user.name}
             </Text>
+            {!author.isOwn && author.user.premium ? <PremiumTag /> : null}
             {when ? <Text style={[textStyle(type.metadata), s.onDarkMuted]}>{when}</Text> : null}
             <View style={{ flex: 1 }} />
             <Tappable

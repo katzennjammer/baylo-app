@@ -5,6 +5,7 @@ import { Divider } from "../Divider";
 import { color, lines, radius, size, space, textStyle, type } from "../../theme/tokens";
 import type { MatchCandidate } from "../../api/types";
 import { sizedImage } from "../../media/image-url";
+import { PremiumTag } from "../PremiumTag";
 
 /**
  * "Matches for you" — the inset interstitial, the one tinted surface in the feed.
@@ -62,6 +63,8 @@ export function MatchesStrip({ matches }: { matches: MatchCandidate[] }) {
             <Text style={[textStyle(type.matchesTitle), s.title]} numberOfLines={lines.matchesTitle}>
               {m.name}
             </Text>
+            {/* The card is a photo wide: the tag gets its own line. */}
+            {m.premium ? <View style={{ alignSelf: "flex-start", marginTop: 4 }}><PremiumTag /></View> : null}
 
             <Text style={[textStyle(type.matchesMeta), s.reason]} numberOfLines={1}>
               {m.reason}

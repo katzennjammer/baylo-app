@@ -97,6 +97,8 @@ export interface UserSearchResult {
   id: string;
   name: string;
   avatar: string | null;
+  /** Premium or VIP now: the gold tag beside the name. */
+  premium?: boolean;
   location: string | null;
   rating: number;
   reviewCount: number;
@@ -156,7 +158,7 @@ export interface ItemComment {
   id: string;
   content: string;
   createdAt: string;
-  user: { id: string; name: string; avatar: string | null };
+  user: { id: string; name: string; avatar: string | null; premium?: boolean };
   replyCount: number;
   replies?: ItemComment[];
   parentId?: string | null;
@@ -354,6 +356,7 @@ export interface MatchCandidate {
   userId: string;
   name: string;
   avatar: string | null;
+  premium?: boolean;
   totalTrades: number;
   sharedCategories: string[];
   reason: string;
@@ -596,6 +599,7 @@ export interface ProfileConnectionUser {
   id: string;
   name: string;
   avatar: string | null;
+  premium?: boolean;
   trustTier: string | null;
   follow: { status: FollowStatus };
   followsYou: boolean;
@@ -645,6 +649,8 @@ export interface LiveOffer {
     trustTier?: TrustTier | null;
     /** Government ID approved. Optional, and absent reads as not verified. */
     idVerified?: boolean;
+    /** Premium or VIP now: the gold tag beside the name. */
+    premium?: boolean;
   };
   /**
    * THE BRIDGE, as this screen needs it. Both brackets as they stood when the
@@ -713,7 +719,7 @@ export interface ActiveTrade {
    */
   bridgeFeeLeaves?: number | null;
   bridgeFeePaidBySender?: boolean | null;
-  counterparty: { id: string; name: string; avatar: string | null };
+  counterparty: { id: string; name: string; avatar: string | null; premium?: boolean };
   myReview: { rating: number } | null;
   receivedReview: { rating: number } | null;
   rewardLeaves: number | null;

@@ -32,6 +32,8 @@ export interface ConversationListItem {
   partnerId: string;
   partnerName: string;
   partnerAvatar: string | null;
+  /** Premium or VIP now: the gold tag beside the name. Absent on an older server. */
+  partnerPremium?: boolean;
   lastMessageId: string;
   content: string;
   lastMessageAt: string;

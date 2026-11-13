@@ -17,6 +17,7 @@ import { previewFromContent } from "../../src/components/messages/MessagePayload
 import { useRealtimeLiveness } from "../../src/lib/trade-liveness";
 import { color, font, radius, textStyle, type } from "../../src/theme/tokens";
 import { sizedImage } from "../../src/media/image-url";
+import { PremiumName } from "../../src/components/PremiumName";
 
 function relativeTime(dateIso: string): string {
   const date = new Date(dateIso);
@@ -286,7 +287,7 @@ export default function MessagesScreen() {
                 accessibilityLabel={`Open conversation with ${item.partnerName}`}
               >
                 <View style={styles.metaRow}>
-                  <Text style={[styles.name, item.unreadCount > 0 && styles.unreadText]}>{item.partnerName}</Text>
+                  <PremiumName premium={item.partnerPremium} rowStyle={{ flexShrink: 1 }} style={[styles.name, item.unreadCount > 0 && styles.unreadText]}>{item.partnerName}</PremiumName>
                   <Text style={[styles.time, item.unreadCount > 0 && { color: color.forest, fontFamily: font.sansBold }]}>{relativeTime(item.lastMessageAt)}</Text>
                 </View>
                 <View style={styles.previewRow}>

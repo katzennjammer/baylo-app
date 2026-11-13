@@ -12,6 +12,7 @@ import { MascotEmptyState } from "../MascotEmptyState";
 import { ChevronRightIcon, PinIcon, StoreIcon, SwapIcon, VerifiedOrgIcon } from "../icons";
 import { Tappable } from "../Tappable";
 import { StarText } from "../StarText";
+import { PremiumTag } from "../PremiumTag";
 
 export function PeopleResults({
   header,
@@ -171,6 +172,7 @@ function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPr
           <Text style={[textStyle(type.username), s.name]} numberOfLines={1}>
             {highlight(displayName, query)}
           </Text>
+          {user.premium ? <PremiumTag /> : null}
           {badge ? (
             <View style={s.badge}>
               <Text style={[textStyle(type.metadata), s.badgeText]} numberOfLines={1}>

@@ -49,6 +49,7 @@ import { showDialog } from "../../src/components/dialog";
 import { sizedImage } from "../../src/media/image-url";
 import { cacheMeasuredChatImageSize } from "../../src/components/messages/chat-image-sizing";
 import { StarText } from "../../src/components/StarText";
+import { PremiumName } from "../../src/components/PremiumName";
 
 /** Consecutive messages from one sender closer than this are one run. */
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -624,7 +625,7 @@ export default function MessagesThreadScreen() {
         >
           {avatarNode(36)}
           <View style={styles.identityText}>
-            <Text style={[styles.title, { color: palette.ink }]} numberOfLines={1}>{otherName}</Text>
+            <PremiumName premium={partnerProfile.data?.user.premium === true} style={[styles.title, { color: palette.ink }]}>{otherName}</PremiumName>
             {typingName ? (
               <Text style={[styles.subtitle, { color: palette.forest }]} numberOfLines={1}>typing…</Text>
             ) : standing ? (
