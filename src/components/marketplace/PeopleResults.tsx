@@ -5,8 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { UserSearchResult } from "../../api/types";
 import { sizedImage } from "../../media/image-url";
-import { businessCategoryLabel } from "../../lib/business-category";
-import { TIER_LABEL } from "../../lib/trust";
 import { border, color, icon, radius, space, textStyle, type } from "../../theme/tokens";
 import { MascotEmptyState } from "../MascotEmptyState";
 import { ChevronRightIcon, PinIcon, StoreIcon, SwapIcon, VerifiedOrgIcon } from "../icons";
@@ -123,11 +121,6 @@ function highlight(name: string, query: string): React.ReactNode {
 function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPress: () => void; query?: string }) {
   const image = user.org?.logoUrl ?? user.avatar;
   const displayName = user.org?.name ?? user.name;
-  const badge = user.org
-    ? businessCategoryLabel(user.org.businessCategory)
-    : user.trustTier
-      ? TIER_LABEL[user.trustTier]
-      : null;
   const accessibilityLabel = [
     displayName,
     user.org?.verified ? "Verified organization" : null,
@@ -172,14 +165,10 @@ function PersonRow({ user, onPress, query = "" }: { user: UserSearchResult; onPr
           <Text style={[textStyle(type.username), s.name]} numberOfLines={1}>
             {highlight(displayName, query)}
           </Text>
+          {/* Search shows ONE tag (13 Nov 2026): PREMIUM for a premium
+              account, nothing otherwise. The green tier and shop-category
+              chips stay on the profile. */}
           {user.premium ? <PremiumTag /> : null}
-          {badge ? (
-            <View style={s.badge}>
-              <Text style={[textStyle(type.metadata), s.badgeText]} numberOfLines={1}>
-                {badge}
-              </Text>
-            </View>
-          ) : null}
           {user.org?.verified ? (
             <VerifiedOrgIcon
               size={icon.orgBadge.size}
@@ -255,15 +244,6 @@ const s = StyleSheet.create({
   identity: { flex: 1, minWidth: 0, gap: 4 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   name: { flexShrink: 1, color: color.ink },
-  badge: {
-    flexShrink: 1,
-    maxWidth: 112,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: "#D8F3DE",
-  },
-  badgeText: { color: color.forest, fontSize: 10, lineHeight: 13, fontWeight: "700" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   stars: { flexDirection: "row", alignItems: "center", gap: 1 },
   rating: { color: color.ink },
