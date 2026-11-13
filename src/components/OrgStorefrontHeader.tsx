@@ -13,6 +13,7 @@ import { CheckIcon, ChevronLeftIcon, MessageIcon, PlusIcon, ShareIcon, VerifiedO
 import { bracketOf } from "../lib/brackets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tappable } from "./Tappable";
+import { PremiumTag } from "./PremiumTag";
 import { sizedImage } from "../media/image-url";
 import { MascotEmptyState } from "./MascotEmptyState";
 import type { MascotPose } from "../media/mascots";
@@ -103,9 +104,12 @@ export function OrgStorefrontHeader({
   onBack,
   location,
   listingValues = [],
+  premium = false,
 }: {
   dark: boolean;
   org: Org;
+  /** The shop's own live Premium or VIP term: the PREMIUM tag beside its name. */
+  premium?: boolean;
   counts: PublicProfilePayload["counts"];
   /** Unused since the staff roster was removed; accepted so hosts need no change. */
   viewerId?: string | null;
@@ -183,7 +187,10 @@ export function OrgStorefrontHeader({
           </View>
         </View>
 
-        <Text style={[textStyle(type.storefrontName), s.name, { color: palette.ink }]} numberOfLines={2}>{org.name}</Text>
+        <View style={s.nameWithTag}>
+          <Text style={[textStyle(type.storefrontName), s.name, { color: palette.ink }]} numberOfLines={2}>{org.name}</Text>
+          {premium ? <PremiumTag size="large" /> : null}
+        </View>
 
         {/*
           "Verified MSME" ONLY when org.verified -- true only after an admin
@@ -463,7 +470,8 @@ const s = StyleSheet.create({
   logo: { width: LOGO_INNER, height: LOGO_INNER, borderRadius: radius.storefrontLogo - size.storefront.logoRing },
   logoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.green },
   nameRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.storefront.nameGap, marginTop: space.storefront.logoToName },
-  name: { flexShrink: 1, marginTop: 10 },
+  nameWithTag: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10, marginTop: 10 },
+  name: { flexShrink: 1 },
   identityLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 4 },
   verified: { fontWeight: "700", marginLeft: 5 },
   place: { marginTop: 8 },

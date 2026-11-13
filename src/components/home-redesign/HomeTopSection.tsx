@@ -22,6 +22,7 @@ import { subscribeToUserChannel } from "../../api/pusher";
 import { useSession } from "../../auth/session";
 import { BellIcon, FilterIcon, MessageIcon, QuestIcon } from "../icons";
 import { LeavesPill } from "../AppHeader";
+import { tourTarget } from "../../tutorial/store";
 import { Tappable } from "../Tappable";
 import { OfflineBar } from "../home/OfflineBar";
 import { SearchField } from "../marketplace/BrowseControls";
@@ -103,15 +104,22 @@ export function HomePinnedHeader({ scrollY }: { scrollY: Animated.Value }) {
           Baylo<Text style={s.wordmarkDot}>.</Text>
         </Text>
         <View style={s.headerActions}>
-          <LeavesPill
-            value={leavesValue}
-            owner={home.acting && !pillStale ? home.acting.name : undefined}
-            stale={offline}
-            tight={tight}
-          />
-          <HomeHeaderButton label="Quests" count={questCount} onPress={() => router.push("/quests")}>
-            <QuestIcon size={icon.headerAction.size} stroke={icon.headerAction.stroke} color={color.homeOnGreen} />
-          </HomeHeaderButton>
+          {/* The two wrappers are what the first-time tour measures (see
+              src/tutorial/store). They add no style: each holds one child and
+              takes its size, so the row lays out as it did. */}
+          <View ref={tourTarget("leaves")} collapsable={false}>
+            <LeavesPill
+              value={leavesValue}
+              owner={home.acting && !pillStale ? home.acting.name : undefined}
+              stale={offline}
+              tight={tight}
+            />
+          </View>
+          <View ref={tourTarget("quests")} collapsable={false}>
+            <HomeHeaderButton label="Quests" count={questCount} onPress={() => router.push("/quests")}>
+              <QuestIcon size={icon.headerAction.size} stroke={icon.headerAction.stroke} color={color.homeOnGreen} />
+            </HomeHeaderButton>
+          </View>
           <HomeHeaderButton
             label="Notifications"
             count={home.unread?.notifications ?? 0}
@@ -235,7 +243,7 @@ export function HomeTopSection({
 
       <View style={{ paddingTop: space.home.top }}>
         <View style={s.searchContainer}>
-          <View style={s.searchRow}>
+          <View ref={tourTarget("search")} collapsable={false} style={s.searchRow}>
             <SearchField
               value={searchValue}
               onChange={onSearchChange}

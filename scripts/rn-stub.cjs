@@ -15,7 +15,15 @@ const inert = () =>
     construct: () => inert(),
   });
 
+// Bundled assets. In the app Metro turns `require("./duck.png")` into a number
+// (an asset id); under Node the same require would try to run the image as
+// JavaScript. Pure code reaches these through ordinary imports -- a copy file
+// imports a component file that names a mascot -- so they answer the way Metro
+// would: with a number, and without reading the file.
+const ASSET = /\.(png|jpe?g|gif|webp|svg|mp4|webm|mov|ttf|otf)$/i;
+
 const load = Module._load;
 Module._load = function (request, ...rest) {
+  if (ASSET.test(request)) return 1;
   return STUB.test(request) ? inert() : load.call(this, request, ...rest);
 };

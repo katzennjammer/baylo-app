@@ -12,6 +12,7 @@ import {
 } from "./icons";
 import { useNeedsTodayCount } from "../api/trades";
 import { formatBadge } from "../lib/format";
+import { tourTarget } from "../tutorial/store";
 import {
   border,
   color,
@@ -212,6 +213,9 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
         return (
           <Pressable
             key={route.key}
+            // The first-time tour points at Trades. The Post circle registers
+            // itself, in <Fab>: its hole is the circle, not this whole slot.
+            ref={route.name === BADGED_ROUTE ? tourTarget("trades") : undefined}
             onPress={onPress}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
@@ -352,7 +356,9 @@ function Fab() {
           item measures the same as its four neighbours and their labels agree
           on a baseline. It draws nothing; the circle is its sibling. */}
       <View style={s.fabSlot} />
-      <View style={s.fabRing}>
+      {/* collapsable={false}: the tour measures this view, and Android would
+          otherwise be free to flatten it away. */}
+      <View ref={tourTarget("post")} collapsable={false} style={s.fabRing}>
         <View style={s.fab}>
           <PlusIcon size={icon.fabPlus.size} stroke={icon.fabPlus.stroke} color={color.onGreen} />
         </View>

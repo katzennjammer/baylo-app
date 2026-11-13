@@ -11,7 +11,7 @@ import { useRefetchOnFocus } from "../../src/lib/refetch-on-focus";
 import { useSession } from "../../src/auth/session";
 import type { Item, ProfileMePayload } from "../../src/api/types";
 import { bracketLabel, bracketOf as bracketOfValue } from "../../src/lib/brackets";
-import { color, font, motion } from "../../src/theme/tokens";
+import { categoryTone, color, font, motion } from "../../src/theme/tokens";
 import { orgLogoUrl, switchToOrganization, useOrganizations, type ActingOrg } from "../../src/api/organizations";
 import { getActingOrgId } from "../../src/api/org-context";
 import { LeafIcon, StoreIcon } from "../../src/components/icons";
@@ -19,6 +19,7 @@ import { OrgStorefrontHeader, ShopAbout, StorefrontEmpty, useStorefrontKeyboard 
 import { GridIcon } from "../../src/components/icons";
 import { useColorScheme } from "react-native";
 import { TIER_LABEL } from "../../src/lib/trust";
+import { hasPremiumAccess } from "../../src/lib/premium";
 import { getApiBase } from "../../src/api/config";
 import { DEFAULT_MAX_PROFILE_BADGES, fetchAchievements } from "../../src/api/achievements";
 import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
@@ -143,6 +144,16 @@ export default function ProfileScreen() {
       setSwitchingToSelf(false);
     }
   }, [selectShop]);
+  // The other direction: into a shop, from the personal profile below.
+  const [switchingToShopId, setSwitchingToShopId] = useState<string | null>(null);
+  const switchToShop = useCallback(async (organizationId: string) => {
+    setSwitchingToShopId(organizationId);
+    try {
+      await selectShop(organizationId);
+    } finally {
+      setSwitchingToShopId(null);
+    }
+  }, [selectShop]);
 
   // One shop and no context yet (a fresh sign-in clears it): adopt the shop.
   // ONCE per mount, which is once per sign-in because this tab stays mounted.
@@ -217,7 +228,7 @@ export default function ProfileScreen() {
         dark={dark}
         orgUserId={actingShop.orgUserId!}
         viewerId={user?.id ?? null}
-        topSlot={<SwitchToMyselfCard dark={dark} shopName={actingShop.name} personName={profile?.user.name ?? user?.name ?? null} busy={switchingToSelf} onPress={() => void switchToMyself()} />}
+        topSlot={<SwitchToMyselfCard dark={dark} shop={actingShop} personName={profile?.user.name ?? user?.name ?? null} busy={switchingToSelf} onPress={() => void switchToMyself()} />}
       />
     );
   }
@@ -241,8 +252,31 @@ export default function ProfileScreen() {
       data={rows}
       keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
       ListHeaderComponent={<>
+        {/* THE WAY INTO A SHOP FROM THE PERSONAL PROFILE (12 Nov 2026).
+
+            Reaching here means this person has their own history and is not
+            acting as a shop -- both branches that draw a storefront returned
+            above. Until this card, that was a dead end for an owner: the only
+            things that ever set the shop context were registering the shop and
+            the post flow, and anything that cleared it (signing out, "Switch
+            to Myself", "Post as myself instead" while the shop was in review)
+            left a profile with no sign a shop existed. Settings said "My
+            shop"; this tab said nothing. One card per shop, because nothing
+            caps how many a person may own. */}
+        {shops.map((shop) => (
+          <SwitchToShopCard
+            key={shop.id}
+            dark={dark}
+            shop={shop}
+            busy={switchingToShopId === shop.id}
+            disabled={switchingToShopId !== null}
+            onPress={() => void switchToShop(shop.id)}
+          />
+        ))}
         <PersonHeader
           userId={profile?.user.id}
+          name={profile?.user.name ?? user?.name ?? undefined}
+          premium={hasPremiumAccess(profile?.reputation)}
           avatar={<Avatar uri={profile?.user.avatar ?? user?.image ?? null} name={profile?.user.name ?? user?.name ?? "Signed in"} />}
           user={{
             bio: profile?.user.bio ?? null,
@@ -437,26 +471,129 @@ function ShopCard({ dark, name, logoUrl, onPress, actionLabel = "View shop" }: {
 }
 
 /**
- * The way back to the personal profile, above the storefront of a shop the
- * person is acting as. PROMINENT ON PURPOSE -- a full-width card with a filled
- * button, not a strip -- because it is also the answer to "why is my profile
- * gone?", and a person who does not see it will think their account changed.
- * It says what switching does, not just that it can be done.
+ * The identity switch, one card for both directions (redrawn 12 Nov 2026).
+ *
+ * Above a storefront it says whose page this is and offers the way back to
+ * the person; on the personal profile it says the person owns a shop and
+ * offers the way in. Same card, same place, same button, so the two read as
+ * one switch seen from either side.
+ *
+ * PROMINENT ON PURPOSE. It is also the answer to "why is my profile gone?",
+ * and a person who does not see it will think their account changed -- hence
+ * a full-width button that names where it goes, not a link in a corner.
+ *
+ * The shop's logo leads the card because that is how the shop is recognised
+ * everywhere else, and the chip carries the one fact people ask after
+ * registering: has it been approved?
  */
-function SwitchToMyselfCard({ dark, shopName, personName, busy, onPress }: { dark: boolean; shopName: string; personName: string | null; busy: boolean; onPress: () => void }) {
+function IdentitySwitchCard({
+  dark,
+  eyebrow,
+  shop,
+  note,
+  buttonLabel,
+  buttonIcon,
+  busy,
+  disabled,
+  onPress,
+  accessibilityLabel,
+}: {
+  dark: boolean;
+  eyebrow: string;
+  shop: Pick<ActingOrg, "name" | "logoUrl" | "verified" | "verificationStatus">;
+  note: string;
+  buttonLabel: string;
+  buttonIcon: React.ComponentProps<typeof Ionicons>["name"];
+  busy: boolean;
+  disabled: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
   const palette = dark ? darkColors : lightColors;
+  const logo = orgLogoUrl(shop.logoUrl);
+  const status = shop.verificationStatus ?? (shop.verified ? "VERIFIED" : "PENDING");
+  // Text on its own wash in every case; the pairs are the app's existing ones
+  // (green, sand and urgent), so none of them is a new colour to keep in step.
+  const chip =
+    status === "VERIFIED"
+      ? { label: "Verified", bg: dark ? "#244A31" : color.surface, ink: dark ? "#BFE8C7" : color.forest }
+      : status === "REJECTED"
+        ? { label: "Not approved", bg: color.urgentWash, ink: color.urgent }
+        : { label: "Under review", bg: categoryTone.sand.bg, ink: categoryTone.sand.ink };
+  const onFill = dark ? "#10210F" : color.surface;
   return (
-    <View style={[s.selfCard, { backgroundColor: dark ? "#1F3326" : color.greenWash, borderColor: dark ? "#2F5A3B" : color.greenLine }]}>
-      <View style={s.selfCardText}>
-        <Text style={[s.shopEyebrow, { color: palette.muted }]}>You are acting as</Text>
-        <Text style={[s.shopName, { color: palette.ink }]} numberOfLines={1}>{shopName}</Text>
-        <Text style={[s.selfCardBody, { color: palette.secondary }]}>New listings you post go on this shop.</Text>
+    <View style={[s.switchCard, { backgroundColor: dark ? "#1F3326" : color.greenWash }]}>
+      <View style={s.switchHead}>
+        {logo
+          ? <Image source={{ uri: sizedImage(logo, "thumb") }} contentFit="cover" style={s.switchLogo} />
+          : <View style={[s.switchLogo, s.switchLogoFallback, { backgroundColor: dark ? "#244A31" : color.surface }]}><StoreIcon size={22} stroke={1.6} color={dark ? "#BFE8C7" : color.forest} /></View>}
+        <View style={s.switchText}>
+          <Text style={[s.switchEyebrow, { color: palette.secondary }]} numberOfLines={1}>{eyebrow}</Text>
+          <Text style={[s.switchName, { color: palette.ink }]} numberOfLines={1}>{shop.name}</Text>
+        </View>
+        <View style={[s.switchChip, { backgroundColor: chip.bg }]}>
+          <Text style={[s.switchChipText, { color: chip.ink }]}>{chip.label}</Text>
+        </View>
       </View>
-      <Pressable onPress={busy ? undefined : onPress} style={[s.selfButton, { backgroundColor: palette.green, opacity: busy ? 0.6 : 1 }]} accessibilityRole="button" accessibilityState={{ busy }} accessibilityLabel={`Switch to myself${personName ? `, ${personName}` : ""}. Shows your personal profile`}>
-        <Ionicons name="person-outline" size={16} color={dark ? "#10210F" : color.onGreen} />
-        <Text style={[s.selfButtonText, { color: dark ? "#10210F" : color.onGreen }]}>{busy ? "Switching…" : "Switch to Myself"}</Text>
+      <Text style={[s.switchNote, { color: palette.secondary }]}>{note}</Text>
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        style={[s.switchButton, { backgroundColor: dark ? palette.green : color.forest, opacity: disabled ? 0.6 : 1 }]}
+        accessibilityRole="button"
+        accessibilityState={{ busy, disabled }}
+        accessibilityLabel={accessibilityLabel}
+      >
+        <Ionicons name={buttonIcon} size={17} color={onFill} />
+        <Text style={[s.switchButtonText, { color: onFill }]}>{busy ? "Switching…" : buttonLabel}</Text>
       </Pressable>
     </View>
+  );
+}
+
+/** Above the storefront of a shop the person is acting as: the way back. */
+function SwitchToMyselfCard({ dark, shop, personName, busy, onPress }: { dark: boolean; shop: ActingOrg; personName: string | null; busy: boolean; onPress: () => void }) {
+  return (
+    <IdentitySwitchCard
+      dark={dark}
+      eyebrow="You are acting as"
+      shop={shop}
+      note="New listings you post go on this shop."
+      buttonLabel="Switch to Myself"
+      buttonIcon="person-outline"
+      busy={busy}
+      disabled={busy}
+      onPress={onPress}
+      accessibilityLabel={`Switch to myself${personName ? `, ${personName}` : ""}. Shows your personal profile`}
+    />
+  );
+}
+
+/**
+ * On the personal profile: the way into a shop this person owns. The note is
+ * about the review because a shop still in review opens onto an empty
+ * storefront that cannot post yet, which is better learnt here than there.
+ */
+function SwitchToShopCard({ dark, shop, busy, disabled, onPress }: { dark: boolean; shop: ActingOrg; busy: boolean; disabled: boolean; onPress: () => void }) {
+  const status = shop.verificationStatus ?? (shop.verified ? "VERIFIED" : "PENDING");
+  const note =
+    status === "VERIFIED"
+      ? "Switch to see its storefront and post as the shop."
+      : status === "REJECTED"
+        ? "You can still open its storefront, but it cannot post."
+        : "You can open its storefront now. It can post once approved.";
+  return (
+    <IdentitySwitchCard
+      dark={dark}
+      eyebrow="Your shop"
+      shop={shop}
+      note={note}
+      buttonLabel="Switch to shop"
+      buttonIcon="storefront-outline"
+      busy={busy}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityLabel={`Switch to ${shop.name}. Shows the shop's storefront`}
+    />
   );
 }
 
@@ -535,6 +672,7 @@ function ShopView({ dark, orgUserId, viewerId, topSlot }: { dark: boolean; orgUs
         <OrgStorefrontHeader
           dark={dark}
           org={org}
+          premium={data.user.premium === true}
           counts={data.counts}
           viewerId={viewerId}
           follow={{ label: "", busy: false, disabled: true, primary: false, onPress: inert }}
@@ -967,11 +1105,18 @@ const s = StyleSheet.create({
   shopLogoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash },
   shopText: { flex: 1, minWidth: 0 },
   shopEyebrow: { fontFamily: font.sans, fontSize: 11 },
-  selfCard: { marginHorizontal: 16, marginTop: 10, marginBottom: 4, padding: 14, borderRadius: 12, borderWidth: 1, gap: 12 },
-  selfCardText: { gap: 1 },
-  selfCardBody: { fontFamily: font.sans, fontSize: 12, marginTop: 4 },
-  selfButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10 },
-  selfButtonText: { fontFamily: font.sansSemi, fontSize: 14 },
+  switchCard: { marginHorizontal: 16, marginTop: 10, marginBottom: 4, padding: 14, borderRadius: 18, gap: 12 },
+  switchHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  switchLogo: { width: 46, height: 46, borderRadius: 13 },
+  switchLogoFallback: { alignItems: "center", justifyContent: "center" },
+  switchText: { flex: 1, minWidth: 0, gap: 2 },
+  switchEyebrow: { fontFamily: font.sans, fontSize: 12 },
+  switchName: { fontFamily: font.displaySemi, fontSize: 17 },
+  switchChip: { height: 24, paddingHorizontal: 10, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  switchChipText: { fontFamily: font.sansSemi, fontSize: 11 },
+  switchNote: { fontFamily: font.sans, fontSize: 13, lineHeight: 18 },
+  switchButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 46, borderRadius: 23 },
+  switchButtonText: { fontFamily: font.sansSemi, fontSize: 15 },
   shopName: { fontFamily: font.sansSemi, fontSize: 14, marginTop: 1 },
   shopLink: { fontFamily: font.sansSemi, fontSize: 13 },
   identityRow: { flexDirection: "row", alignItems: "center" },

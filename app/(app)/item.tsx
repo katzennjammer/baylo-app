@@ -60,6 +60,7 @@ import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { PhotoCarousel } from "../../src/components/marketplace/PhotoCarousel";
 import { CommentsSheet } from "../../src/components/home/CommentsSheet";
 import { Tappable } from "../../src/components/Tappable";
+import { PremiumTag } from "../../src/components/PremiumTag";
 import { openPremium, type PremiumReason } from "../../src/lib/premium";
 import { ORG_BADGE_LABEL } from "../../src/lib/org";
 import { businessCategoryLabel } from "../../src/lib/business-category";
@@ -1010,7 +1011,7 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
     <Tappable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${name}. ${meta}. ${org ? "Open storefront." : "View profile."}`}
+      accessibilityLabel={`${name}${owner.premium ? ", Premium member" : ""}. ${meta}. ${org ? "Open storefront." : "View profile."}`}
       style={s.seller}
       pressedStyle={s.pressed}
     >
@@ -1032,6 +1033,7 @@ function SellerRow({ owner, onPress }: { owner: Item["owner"]; onPress: () => vo
           {org?.verified ? (
             <CheckIcon size={icon.check.size} stroke={icon.check.stroke} color={color.forest} />
           ) : null}
+          {owner.premium ? <PremiumTag /> : null}
         </View>
         {/* A person: the profile header's tier chip and gold-star rating,
             not the old "RISING" caps tag and a grey star. */}

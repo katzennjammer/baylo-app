@@ -23,6 +23,7 @@ import { useActiveTrades } from "../../src/api/trades";
 import { useUserSearchSuggestions, userSearchErrorPresentation } from "../../src/api/users";
 import type { Item } from "../../src/api/types";
 import { useSession } from "../../src/auth/session";
+import { tourTarget, useTourState, useTutorialAutoStart } from "../../src/tutorial/store";
 import { Tappable } from "../../src/components/Tappable";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { marketplaceWithFilters } from "../../src/lib/marketplace-link";
@@ -217,6 +218,17 @@ export default function HomeScreen() {
     [onScroll, scrollY],
   );
 
+  // The first-time tour starts here, once per account, after the first load
+  // has settled either way — content, empty or error — so the hole is cut
+  // over a screen that has stopped moving. See src/tutorial/store.
+  useTutorialAutoStart(viewerId, !isInitialBrowseLoad);
+  // A replay from Settings can find this screen scrolled down, with the search
+  // bar the tour points at out of view. Back to the top as it starts.
+  const tourActive = useTourState().active;
+  useEffect(() => {
+    if (tourActive) scroller.current?.scrollTo({ y: 0, animated: false });
+  }, [tourActive]);
+
   // NO REFETCH WHEN A WINDOW RUNS OUT (1 Oct 2026). Each card's live pill turns
   // to "Ended" at zero and the card stays put; refetching here would pull it
   // out of the row under the person's thumb. Pull-to-refresh and the next
@@ -402,7 +414,11 @@ export default function HomeScreen() {
             {/* 3. Categories: shortcuts into Marketplace. A navigation row, not
                 a content section, so its header is plain: no accent, no
                 squiggle, no subtitle. */}
-            <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
+            {/* The wrapper is what the first-time tour measures; see the
+                "categories" step in src/tutorial/steps.ts. */}
+            <View ref={tourTarget("categories")} collapsable={false}>
+              <SectionHeader accent="Categories" onSeeAll={() => browseInMarketplace(null)} />
+            </View>
             <CategoryCircles facets={facets} onSelect={browseInMarketplace} />
 
             {/* 4. Limited time (perishables): one row of large cards, soonest

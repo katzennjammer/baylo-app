@@ -18,6 +18,7 @@ import type { ViewerReputation } from "../src/api/types";
 import { useSession } from "../src/auth/session";
 import { BackHeader } from "../src/components/BackHeader";
 import { showDialog } from "../src/components/dialog";
+import { startTour } from "../src/tutorial/store";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { ChevronRightIcon, SearchIcon } from "../src/components/icons";
 import { Ionicons } from "@expo/vector-icons";
@@ -130,6 +131,14 @@ export default function SettingsScreen() {
     await signOut();
     if (router.canDismiss()) router.dismissAll();
     router.replace("/(auth)/login");
+  }
+
+  // The tour is drawn over the tabs and points at Home, and this screen is a
+  // root route on top of them: leave first, land on Home, then start it.
+  function replayTutorial() {
+    if (router.canDismiss()) router.dismissAll();
+    router.navigate("/(app)/home");
+    startTour();
   }
 
   function confirmSignOut() {
@@ -267,6 +276,7 @@ export default function SettingsScreen() {
 
         <Group title="Support and about" hidden={!!query}>
           <SettingsRow icon="help-circle-outline" label="Help" sub="Common questions and how to reach us" onPress={() => openPage(HELP_PATH)} />
+          <SettingsRow icon="play-circle-outline" label="Replay tutorial" sub="Take the quick tour of the app again" onPress={replayTutorial} />
           <SettingsRow icon="document-text-outline" label="Terms of service" external onPress={() => openPage(TERMS_PATH)} />
           <SettingsRow icon="lock-closed-outline" label="Privacy policy" external onPress={() => openPage(PRIVACY_PATH)} />
           <InfoRow icon="information-circle-outline" label="Version" value={version} />

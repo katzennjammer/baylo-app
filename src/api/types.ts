@@ -57,7 +57,17 @@ export interface ItemOwner {
    * than a guess if it ever comes back null again.
    */
   trustTier: TrustTier | null;
+  /**
+   * The badge the person chose to show beside their name on the Community feed.
+   * NO LONGER DRAWN (13 Nov 2026): achievements live on the profile's badge
+   * shelf only. The server still sends it for shipped clients.
+   */
   featuredAchievement: { id: string; name: string; icon: string; imageUrl: string | null } | null;
+  /**
+   * A live Premium or VIP term: the PREMIUM tag beside the name. A shop's own
+   * term for a shop. Optional -- an older server omits it, which reads as none.
+   */
+  premium?: boolean;
   /**
    * The organisation this owner IS, or null for a person.
    *
@@ -540,6 +550,8 @@ export interface PublicProfilePayload {
     trustTier: string | null;
     /** Government ID approved. Optional: a server older than 6 Nov 2026 omits it. */
     idVerified?: boolean;
+    /** A live Premium or VIP term: the PREMIUM tag. Optional; an older server omits it. */
+    premium?: boolean;
     /**
      * Set when this profile is an organisation. Null for a person, which is
      * almost every profile.

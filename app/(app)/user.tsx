@@ -23,6 +23,7 @@ import { SheetRow, SheetRows, SheetShell } from "../../src/components/sheet-ui";
 import { showDialog } from "../../src/components/dialog";
 import { bracketLabel } from "../../src/lib/brackets";
 import { HeaderButtons, PersonHeader } from "../../src/components/profile/PersonHeader";
+import { PremiumTag } from "../../src/components/PremiumTag";
 import type { Item } from "../../src/api/types";
 import { color, dark as darkTokens, font, icon, space } from "../../src/theme/tokens";
 
@@ -170,6 +171,7 @@ export default function UserProfileScreen() {
     <OrgStorefrontHeader
       dark={dark}
       org={org}
+      premium={data.user.premium === true}
       counts={data.counts}
       viewerId={session?.user.id ?? null}
       follow={{ label: followButtonLabel(status, data.follow.followsYou), busy, disabled: busy || status === "PENDING", primary: status === "NONE", onPress: toggleFollow }}
@@ -212,7 +214,7 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
     keyExtractor={(row) => row.kind === "posts" ? row.items.map((item) => item.id).join(":") : row.review.id}
     ListHeaderComponent={<>
       {/* A shop draws its back button over its cover instead. */}
-      {org ? null : <BackRow title={data.user.name} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={() => setActionsOpen(true)} />}
+      {org ? null : <BackRow title={data.user.name} premium={data.user.premium === true} insetsTop={insets.top} dark={dark} onPress={() => router.back()} onMenu={() => setActionsOpen(true)} />}
       {header ?? (
       <PersonHeader
           userId={data.user.id}
@@ -326,14 +328,17 @@ ${getApiBase().replace(/\/+$/, "")}/profile/${encodeURIComponent(data.user.id)}`
 }
 
 function chunkItems(items: Item[]): Item[][] { const rows: Item[][] = []; for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2)); return rows; }
-function BackRow({ title, insetsTop, dark, onPress, onMenu }: { title: string; insetsTop: number; dark: boolean; onPress: () => void; onMenu?: () => void }) {
+function BackRow({ title, premium, insetsTop, dark, onPress, onMenu }: { title: string; premium?: boolean; insetsTop: number; dark: boolean; onPress: () => void; onMenu?: () => void }) {
   const palette = dark ? darkColors : lightColors;
   return (
     <View style={[s.top, { borderBottomColor: palette.divider, paddingTop: insetsTop, height: insetsTop + 64 }]}>
       <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel="Go back" style={s.back} pressedStyle={s.backPressed}>
         <ChevronLeftIcon size={icon.back.size} stroke={icon.back.stroke} color={palette.ink} />
       </Tappable>
-      <Text style={[s.headerTitle, { color: palette.ink }]} numberOfLines={1}>{title}</Text>
+      <View style={s.headerTitleRow}>
+        <Text style={[s.headerTitle, { color: palette.ink }]} numberOfLines={1}>{title}</Text>
+        {premium ? <PremiumTag /> : null}
+      </View>
       {/* One labelled menu (Report, Block) in the header, not beside the buttons. */}
       {onMenu ? (
         <Tappable onPress={onMenu} accessibilityRole="button" accessibilityLabel="More options" style={s.back} pressedStyle={s.backPressed}>
@@ -351,7 +356,7 @@ const s = StyleSheet.create({
   badgeLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   badgeLineThumb: { width: 40, height: 40, borderRadius: 10, overflow: "hidden", backgroundColor: "#DDE7EE" },
   badgeLineText: { flex: 1, fontSize: 13 },
-  screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitle: { flex: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1 }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, chips: { gap: 18, paddingHorizontal: 20, paddingTop: 12 }, chip: { minHeight: 36, justifyContent: "center", borderBottomWidth: 2 }, chipText: { fontSize: 14 }, gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 }, footer: { paddingVertical: 18 },
+  screen: { flex: 1 }, top: { flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.screenXTight }, back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, backPressed: { opacity: 0.6 }, headerTitleRow: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, headerTitle: { flexShrink: 1, textAlign: "center", fontFamily: font.displaySemi, fontSize: 18 }, headerSpacer: { width: 44 }, spinner: { marginTop: 40 }, empty: { textAlign: "center", paddingVertical: 48 }, header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, identityRow: { flexDirection: "row", alignItems: "center" }, stats: { flex: 1, flexDirection: "row", justifyContent: "space-evenly", marginLeft: 20 }, stat: { alignItems: "center", minWidth: 58, minHeight: 44, justifyContent: "center" }, statValue: { fontFamily: font.sansSemi, fontSize: 18 }, statLabel: { fontFamily: font.sans, fontSize: 12, marginTop: 4 }, tier: { alignSelf: "flex-start", borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginTop: 6 }, tierText: { fontFamily: font.sansSemi, fontSize: 11 }, bio: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 8 }, actionButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "transparent" }, menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1 }, followButton: { backgroundColor: color.green }, actionText: { fontFamily: font.sansSemi, fontSize: 14 }, followText: { color: color.onGreen }, disabled: { opacity: 0.55 }, chips: { gap: 18, paddingHorizontal: 20, paddingTop: 12 }, chip: { minHeight: 36, justifyContent: "center", borderBottomWidth: 2 }, chipText: { fontSize: 14 }, gridRow: { width: "100%", flexDirection: "row", gap: 12, paddingHorizontal: 20, marginTop: 12 }, footer: { paddingVertical: 18 },
 });
 const lightColors = { surface: color.surface, control: color.control, ink: color.ink, secondary: color.inkSecondary, muted: color.inkMuted, divider: color.divider, border: color.controlLine, green: color.green };
 const darkColors = { surface: darkTokens.surface, control: darkTokens.control, ink: darkTokens.ink, secondary: darkTokens.secondary, muted: darkTokens.muted, divider: darkTokens.divider, border: darkTokens.border, green: darkTokens.green };

@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { FALLBACK_CATEGORY_ICON, HOME_CATEGORY_ICONS } from "./category-icon-map";
 import { Tappable } from "../Tappable";
 import { dColor, homeCategoryTile, space, textStyle, type } from "../../theme/tokens";
+import { tourTarget } from "../../tutorial/store";
 
 /**
  * The Home category row: compact, horizontally scrollable category tiles.
@@ -41,7 +42,7 @@ export function CategoryCircles({
       ? HOME_CATEGORY_ICONS[facet.category]
       : FALLBACK_CATEGORY_ICON;
     const label = facet.category === "OTHER" ? "Other" : facet.label;
-    return (
+    const tile = (
       <Tappable
         key={facet.category}
         onPress={() => onSelect(facet.category)}
@@ -65,6 +66,16 @@ export function CategoryCircles({
           {label}
         </Text>
       </Tappable>
+    );
+    // The first tile is one corner of what the first-time tour spotlights
+    // (src/tutorial/steps.ts, "categories"). Tappable takes no ref, so that one
+    // tile sits in a wrapper the tour can measure; the wrapper adds no style
+    // and takes the tile's size, so the row lays out as before.
+    if (facet !== columns[0]?.[0]) return tile;
+    return (
+      <View key={facet.category} ref={tourTarget("categoryTile")} collapsable={false}>
+        {tile}
+      </View>
     );
   };
 

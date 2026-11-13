@@ -1,10 +1,12 @@
 import { Redirect, Tabs } from "expo-router";
+import { View } from "react-native";
 
 import { useTradeRealtime } from "../../src/api/trade-realtime";
 import { useActingShopUserId } from "../../src/api/home";
 import { AppHeader } from "../../src/components/AppHeader";
 import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
+import { TutorialOverlay } from "../../src/components/tutorial/TutorialOverlay";
 import { useSession } from "../../src/auth/session";
 import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
 import { usePushNotifications } from "../../src/notifications/push";
@@ -88,6 +90,10 @@ export default function AppLayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (
+    // The wrapper exists for the tour: it has to draw over the header and the
+    // tab bar, both of which live inside <Tabs>, so it is a sibling AFTER the
+    // navigator rather than a child of any screen. See TutorialOverlay.
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{ header: () => <AppHeader /> }}
       // "history", not the navigator's default "firstRoute". The hidden routes
@@ -165,5 +171,7 @@ export default function AppLayout() {
       {/* No app header on one hub's page: its map strip runs to the top edge. */}
       <Tabs.Screen name="hub" options={{ href: null, title: "Safe hub", headerShown: false }} />
     </Tabs>
+    <TutorialOverlay />
+    </View>
   );
 }

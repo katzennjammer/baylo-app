@@ -44,9 +44,19 @@ const secureStoreStub = {
   },
 };
 
+// ── expo-constants stub ──────────────────────────────────────────────────────
+//
+// src/api/config.ts reads one thing from it: `expoConfig.extra.apiOverrideAllowed`,
+// the EAS-profile switch for the server-address gear. The real package loads
+// React Native and cannot run under Node, same as expo-secure-store above.
+// `extra` is left empty on purpose: this run is a dev one (`__DEV__` above), and
+// that alone is what permits the base-URL change in section 7.
+const constantsStub = { __esModule: true, default: { expoConfig: { extra: {} } } };
+
 const load = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "expo-secure-store") return secureStoreStub;
+  if (request === "expo-constants") return constantsStub;
   return load.call(this, request, ...rest);
 };
 

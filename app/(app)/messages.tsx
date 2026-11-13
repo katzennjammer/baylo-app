@@ -9,13 +9,13 @@ import { useHome } from "../../src/api/home";
 import { getActingOrgId } from "../../src/api/org-context";
 import { subscribeToUserChannel } from "../../src/api/pusher";
 import { useSession } from "../../src/auth/session";
-import { MessageIcon, SearchIcon, StoreIcon } from "../../src/components/icons";
+import { SearchIcon, StoreIcon } from "../../src/components/icons";
 import { useActiveTrades } from "../../src/api/trades";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
 import { Tappable } from "../../src/components/Tappable";
 import { previewFromContent } from "../../src/components/messages/MessagePayloads";
 import { useRealtimeLiveness } from "../../src/lib/trade-liveness";
-import { color, font, icon, radius, textStyle, type } from "../../src/theme/tokens";
+import { color, font, radius, textStyle, type } from "../../src/theme/tokens";
 import { sizedImage } from "../../src/media/image-url";
 
 function relativeTime(dateIso: string): string {
@@ -128,13 +128,17 @@ export default function MessagesScreen() {
     const failure = conversationsErrorCopy(error);
     return (
       <View style={styles.centered}>
-        <MessageIcon size={icon.emptyLeaf.size} stroke={icon.emptyLeaf.stroke} color={color.forest} />
-        <Text style={styles.headline}>{failure.headline}</Text>
-        <Text style={styles.body}>{failure.body}</Text>
-        {failure.code ? <Text style={styles.errorCode}>{failure.code}</Text> : null}
-        <Tappable onPress={() => void refetch()} style={styles.retryButton} pressedStyle={styles.retryButtonPressed}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Tappable>
+        {/* The worried duck, as on every other "could not load" screen (the
+            Profile tab's, for one). The status and code stay underneath, small:
+            they are what makes a screenshot of this enough to diagnose it. */}
+        <MascotEmptyState
+          pose="worry"
+          title={failure.headline}
+          message={failure.body}
+          action={{ label: "Retry", onPress: () => void refetch() }}
+        >
+          {failure.code ? <Text style={styles.errorCode}>{failure.code}</Text> : null}
+        </MascotEmptyState>
       </View>
     );
   }
@@ -347,14 +351,6 @@ const styles = StyleSheet.create({
     color: color.ink,
     textAlign: "center",
   },
-  body: {
-    marginTop: 8,
-    fontFamily: font.sans,
-    fontSize: 14,
-    lineHeight: 20,
-    color: color.inkSecondary,
-    textAlign: "center",
-  },
   errorCode: {
     marginTop: 8,
     ...type.gridMeta,
@@ -376,21 +372,6 @@ const styles = StyleSheet.create({
     fontFamily: font.sansSemi,
     fontSize: 12,
     color: color.forest,
-  },
-  retryButton: {
-    marginTop: 18,
-    backgroundColor: color.forest,
-    borderRadius: radius.primaryButton,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  retryButtonPressed: {
-    opacity: 0.9,
-  },
-  retryText: {
-    fontFamily: font.sansSemi,
-    fontSize: 14,
-    color: color.surface,
   },
   content: {
     paddingHorizontal: 12,

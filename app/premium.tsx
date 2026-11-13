@@ -4,10 +4,12 @@ import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "
 import { Image } from "expo-image";
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
-import { useProfileMe } from "../src/api/profile";
+import { getActingOrgId } from "../src/api/org-context";
+import { useOrganizations } from "../src/api/organizations";
+import { useProfileMe, usePublicProfile } from "../src/api/profile";
 import { LockIcon } from "../src/components/offer/icons";
 import { OfferSheet } from "../src/components/offer/OfferSheet";
-import { Glyph, LeafIcon, StarIcon, type IconProps } from "../src/components/icons";
+import { Glyph, LeafIcon, StarIcon, StoreIcon, type IconProps } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
 import { BRACKET_COUNT, bracketLabel, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../src/lib/brackets";
 import { MASCOT } from "../src/media/mascots";
@@ -134,8 +136,24 @@ export default function PremiumScreen() {
   const { data, isLoading } = useProfileMe();
   const { height: windowHeight } = useWindowDimensions();
 
+  // ACTING AS A SHOP: this page reads the PERSON's status (profile/me), and a
+  // shop holds Premium on its own account. See ShopPremiumNote.
+  const actingOrgId = getActingOrgId();
+  const orgs = useOrganizations(actingOrgId !== null);
+  const shop = actingOrgId ? orgs.data?.data.organizations.find((o) => o.id === actingOrgId) : undefined;
+  const shopPremium = usePublicProfile(shop?.orgUserId).data?.user.premium;
+
   const rep = data?.reputation;
-  const active = hasPremiumAccess(rep);
+  const personActive = hasPremiumAccess(rep);
+  // WHILE ACTING AS A SHOP THIS PAGE IS ABOUT THE SHOP, once the server has said
+  // what the shop's status is. Premium is bought separately per account, and
+  // the shop's is what the server reads when the shop accepts a Bracket 7+
+  // offer or pays a bridging fee -- so a page that kept saying "You're a
+  // Premium member" about the PERSON, under a shop's name and from a shop's
+  // refusal, was wrong for the question being asked. An older server does not
+  // send the shop's status; then the page stays the person's, with the note.
+  const viewingShop = shop !== undefined && shopPremium !== undefined;
+  const active = viewingShop ? shopPremium === true : personActive;
 
   // The opening film's cached tier follows the paywall's own read of the
   // server's verdict. There is no purchase callback to hang this on — the buy
@@ -178,15 +196,18 @@ export default function PremiumScreen() {
             ]}
             accessibilityRole="header"
           >
-            {active ? "You're a\n" : "Trade bigger.\nBridge "}
+            {active ? (viewingShop ? "Your shop is a\n" : "You're a\n") : "Trade bigger.\nBridge "}
             <Text style={{ color: offerColor.deep }}>{active ? "Premium member" : `${DISCOUNT_PERCENT}% cheaper`}</Text>
             {active ? "" : "."}
           </Text>
           {rep ? (
             <View style={{ alignItems: "center" }}>
-              <StatusPill active={active} rep={rep} />
+              <StatusPill active={active} rep={viewingShop ? {} : rep} />
             </View>
           ) : null}
+
+          {/* ── Whose Premium this is, while acting as a shop ────────── */}
+          {shop ? <ShopPremiumNote name={shop.name} shopPremium={shopPremium} personActive={personActive} /> : null}
 
           {/* ── Why you're here, when a gate sent you ────────────────── */}
           {reason && !active ? <BlockedNote reason={reason} bracket={bracket} /> : null}
@@ -478,6 +499,52 @@ function BlockedNote({ reason, bracket }: { reason: PremiumReason; bracket: numb
       }}
     >
       <LockIcon size={offerIcon.lock.size} stroke={offerIcon.lock.stroke} color={offerColor.inkSecondary} />
+      <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>{text}</Text>
+    </View>
+  );
+}
+
+/**
+ * Shown while acting as a shop: whose Premium the page is showing, and the
+ * other account's, so neither is mistaken for the other. Premium belongs to ONE
+ * account and a shop's account is not the person's. The server reads the
+ * SHOP's for what the shop does -- accepting an offer of Bracket 7 or above on
+ * its listing, and the bridging fee when it is the one paying -- and the
+ * PERSON's for the offers they send, which always go out as the person.
+ *
+ * `shopPremium` is undefined from a server that does not send it (older than
+ * 13 Nov 2026): the page is then the person's, and the note says so and says
+ * nothing about the shop's status. Same quiet hairline treatment as
+ * BlockedNote: this is information, not an error.
+ */
+function ShopPremiumNote({
+  name,
+  shopPremium,
+  personActive,
+}: {
+  name: string;
+  shopPremium: boolean | undefined;
+  personActive: boolean;
+}) {
+  const text =
+    shopPremium === undefined
+      ? `You're acting as ${name}. Premium belongs to one account: this page shows yours, and ${name} has its own.`
+      : `You're acting as ${name}, so this page shows ${name}'s Premium. Premium is separate for each account, and yours is ${personActive ? "active" : "not active"}.` +
+        (shopPremium ? "" : ` ${name} can't accept items in ${bracketLabel(PREMIUM_MIN_BRACKET)} and above until it has Premium.`);
+  return (
+    <View
+      style={{
+        marginTop: 22,
+        flexDirection: "row",
+        gap: 12,
+        padding: 14,
+        borderRadius: offerRadius.row,
+        borderWidth: offerBorder.hairline,
+        borderColor: offerColor.rule,
+        backgroundColor: offerColor.sunk,
+      }}
+    >
+      <StoreIcon size={20} stroke={1.6} color={offerColor.inkSecondary} />
       <Text style={[textStyle(offerType.bodyDense), { color: offerColor.inkSecondary, flex: 1 }]}>{text}</Text>
     </View>
   );

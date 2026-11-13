@@ -14,15 +14,19 @@ import { BackHeader } from "../src/components/BackHeader";
 import { SectionHeader } from "../src/components/home-redesign/SectionHeader";
 import { CheckIcon, StarIcon } from "../src/components/icons";
 import { Tappable } from "../src/components/Tappable";
-import { SheetRow, SheetRows, SheetShell } from "../src/components/sheet-ui";
 import { border, color, font, icon as iconToken, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { sizedImage } from "../src/media/image-url";
 import { MASCOT } from "../src/media/mascots";
 
 /**
- * Achievements: every badge, which of the earned ones show on the profile, and
- * the one that rides beside the name on the home feed. Reached from Settings
- * and from the profile's badge shelf.
+ * Achievements: every badge, and which of the earned ones show on the profile.
+ * Reached from Settings and from the profile's badge shelf.
+ *
+ * BADGES LIVE ON THE PROFILE ONLY (13 Nov 2026). There used to be a second
+ * choice here, "Beside your name on Home", which put one badge next to the
+ * person's name on every Community post. That is gone: a post carries the
+ * PREMIUM tag for members and nothing else. Every save still sends
+ * `featuredAchievementId: null`, which also clears a choice made before.
  *
  * ── DRAWN LIKE SETTINGS (3 Oct 2026) ────────────────────────────────────────
  *
@@ -31,7 +35,7 @@ import { MASCOT } from "../src/media/mascots";
  * no tinted card: badges are rows on the canvas with a hairline under each,
  * sections open with the shared SectionHeader, and every colour is a token.
  * What each control DOES is unchanged — tap an earned badge to put it on the
- * profile, tap a chip to feature it on Home, Save to send both.
+ * profile.
  *
  * Save moved to a bar at the foot, the app's primary button. It was at the
  * top, off screen by the time anyone had scrolled to a badge and tapped it.
@@ -90,7 +94,6 @@ export default function AchievementsScreen() {
     },
   });
   const [selected, setSelected] = useState<string[]>([]);
-  const [featured, setFeatured] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string } | null>(null);
   // The server decides the shelf size; the app just honours it.
   const maxSlots = query.data?.maxProfileBadges ?? DEFAULT_MAX_PROFILE_BADGES;
@@ -99,12 +102,9 @@ export default function AchievementsScreen() {
     .filter((item) => item.displayOrder !== null)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
     .map((item) => item.id);
-  const savedFeatured =
-    query.data?.achievements.find((item) => item.homeDisplayOrder !== null)?.id ?? null;
   const hasChanges =
     selected.length !== savedSelected.length ||
-    selected.some((id, index) => id !== savedSelected[index]) ||
-    featured !== savedFeatured;
+    selected.some((id, index) => id !== savedSelected[index]);
 
   useEffect(() => {
     if (query.data) {
@@ -115,8 +115,6 @@ export default function AchievementsScreen() {
           .map((item) => item.id),
       );
 
-      const featuredBadge = query.data.achievements.find((item) => item.homeDisplayOrder !== null);
-      setFeatured(featuredBadge?.id ?? null);
     }
   }, [query.data]);
 
@@ -128,14 +126,12 @@ export default function AchievementsScreen() {
 
   // CHANGES SAVE AS YOU TAP (4 Nov 2026): no Save button. Each tap sends the
   // new choice; the toast says what changed and offers Undo.
-  const [pickingHome, setPickingHome] = useState(false);
-  const [undo, setUndo] = useState<{ ids: string[]; featured: string | null } | null>(null);
-  const commit = (ids: string[], nextFeatured: string | null, text: string) => {
-    setUndo({ ids: selected, featured });
+  const [undo, setUndo] = useState<{ ids: string[] } | null>(null);
+  const commit = (ids: string[], text: string) => {
+    setUndo({ ids: selected });
     setSelected(ids);
-    setFeatured(nextFeatured);
     save.mutate(
-      { achievementIds: ids, featuredAchievementId: nextFeatured },
+      { achievementIds: ids, featuredAchievementId: null },
       { onSuccess: () => setSaveMessage({ ok: true, text }) },
     );
   };
@@ -143,9 +139,9 @@ export default function AchievementsScreen() {
 
   function toggleSelected(id: string) {
     if (selected.includes(id)) {
-      commit(selected.filter((value) => value !== id), featured === id ? null : featured, `${nameOf(id)} is off your profile.`);
+      commit(selected.filter((value) => value !== id), `${nameOf(id)} is off your profile.`);
     } else if (selected.length < maxSlots) {
-      commit([...selected, id], featured, `${nameOf(id)} now shows on your profile.`);
+      commit([...selected, id], `${nameOf(id)} now shows on your profile.`);
     } else {
       setSaveMessage({ ok: false, text: `Your profile shows up to ${maxSlots}. Take one off first.` });
     }
@@ -198,17 +194,6 @@ export default function AchievementsScreen() {
                     </View>
                   );
                 })}
-              </View>
-              <View style={styles.homeRow}>
-                <Text style={styles.homeText}>
-                  Beside your name on Home:{" "}
-                  <Text style={{ fontWeight: "700" }}>{achievements.find((x) => x.id === featured)?.name ?? "none"}</Text>
-                </Text>
-                {earned.length > 0 ? (
-                  <Tappable onPress={() => setPickingHome(true)} accessibilityRole="button" style={styles.changeButton}>
-                    <Text style={styles.changeText}>Change</Text>
-                  </Tappable>
-                ) : null}
               </View>
             </View>
 
@@ -271,34 +256,6 @@ export default function AchievementsScreen() {
             ) : null}
           </ScrollView>
 
-          {/* Change the Home badge. */}
-          {pickingHome ? (
-            <SheetShell title="Beside your name on Home" onClose={() => setPickingHome(false)}>
-              <SheetRows>
-                {earned.map((a) => (
-                  <SheetRow
-                    key={a.id}
-                    glyph={<BadgeIcon icon={a.icon} imageUrl={a.imageUrl} size={24} />}
-                    label={featured === a.id ? `${a.name} (showing)` : a.name}
-                    onPress={() => {
-                      setPickingHome(false);
-                      if (featured !== a.id) commit(selected, a.id, `${a.name} now shows on Home.`);
-                    }}
-                  />
-                ))}
-                {featured ? (
-                  <SheetRow
-                    label="Show no badge"
-                    onPress={() => {
-                      setPickingHome(false);
-                      commit(selected, null, "Home shows no badge now.");
-                    }}
-                  />
-                ) : null}
-              </SheetRows>
-            </SheetShell>
-          ) : null}
-
           {/* Saved: a small toast with the duck, and Undo. */}
           {saveMessage ? (
             <View style={[styles.toast, { bottom: Math.max(insets.bottom, 12) + 8 }]} accessibilityLiveRegion="polite">
@@ -313,9 +270,8 @@ export default function AchievementsScreen() {
                     const back = undo;
                     setUndo(null);
                     setSelected(back.ids);
-                    setFeatured(back.featured);
                     save.mutate(
-                      { achievementIds: back.ids, featuredAchievementId: back.featured },
+                      { achievementIds: back.ids, featuredAchievementId: null },
                       { onSuccess: () => setSaveMessage({ ok: true, text: "Change undone." }) },
                     );
                   }}
@@ -363,10 +319,6 @@ const styles = StyleSheet.create({
   slots: { flexDirection: "row", gap: 8 },
   slot: { flex: 1, aspectRatio: 1, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: color.greenWash, borderWidth: 2, borderColor: color.green, overflow: "hidden" },
   slotEmpty: { backgroundColor: "transparent", borderColor: color.dashed, borderStyle: "dashed" },
-  homeRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: color.divider },
-  homeText: { flex: 1, fontFamily: font.sans, fontSize: 13, color: "#3F3E37" },
-  changeButton: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: color.controlLineStrong, justifyContent: "center" },
-  changeText: { fontFamily: font.sansSemi, fontSize: 13, color: color.ink },
   groupTitle: { marginHorizontal: 4, fontFamily: font.sansBold, fontSize: 13, color: color.inkSecondary },
   earnedGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   earnedTile: { width: "31.5%", alignItems: "center", gap: 6, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 16, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.searchSurface },
