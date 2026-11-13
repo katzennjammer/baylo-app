@@ -7,7 +7,7 @@ export interface ProfileReview {
   rating: number;
   comment: string | null;
   createdAt: string;
-  reviewer: { id: string; name: string; avatar: string | null };
+  reviewer: { id: string; name: string; avatar: string | null; premium?: boolean };
   item: {
     id: string;
     title: string;

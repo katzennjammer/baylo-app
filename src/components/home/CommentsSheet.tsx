@@ -14,6 +14,7 @@ import { Notifications } from "../../notifications/notifications-safe";
 import type { Item, ItemComment } from "../../api/types";
 import { showDialog } from "../dialog";
 import { sizedImage } from "../../media/image-url";
+import { PremiumTag } from "../PremiumTag";
 
 const MAX_COMMENT = 2000;
 
@@ -165,6 +166,7 @@ function Bubble({ c, ownerId, onAuthor, onReply, small = false }: { c: { id: str
             <Tappable onPress={() => onAuthor(c.user.id)} style={{ flexShrink: 1 }}>
               <Text style={s.name} numberOfLines={1}>{c.user.name}</Text>
             </Tappable>
+            {c.user.premium ? <PremiumTag /> : null}
             {isOwner ? <View style={s.ownerTag}><Text style={s.ownerTagText}>Owner</Text></View> : null}
           </View>
           <Text style={s.body}>{c.content}</Text>

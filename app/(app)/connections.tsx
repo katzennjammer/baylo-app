@@ -13,6 +13,7 @@ import { Tappable } from "../../src/components/Tappable";
 import { useSession } from "../../src/auth/session";
 import { color, font, icon, space } from "../../src/theme/tokens";
 import { sizedImage } from "../../src/media/image-url";
+import { PremiumName } from "../../src/components/PremiumName";
 
 type ConnectionKind = "followers" | "following";
 
@@ -93,7 +94,7 @@ function ConnectionRow({ user, viewerId, ownFollowers, showFollowsYou, dark, onP
     <Pressable onPress={onPress} style={s.identity} accessibilityRole="button" accessibilityLabel={`View ${user.name}'s profile`}>
       <Avatar user={user} dark={dark} />
       <View style={s.identityText}>
-        <Text style={[s.name, { color: palette.ink }]} numberOfLines={1}>{user.name}</Text>
+        <PremiumName premium={user.premium} style={[s.name, { color: palette.ink }]}>{user.name}</PremiumName>
         {sub ? <Text style={[s.tier, { color: palette.muted }]} numberOfLines={1}>{sub}</Text> : null}
         {/* On your own followers list the button is Remove, so following
             back is a small link under the name instead. */}

@@ -34,7 +34,7 @@ export interface Story {
 }
 
 export interface StoryAuthor {
-  user: { id: string; name: string; avatar: string | null };
+  user: { id: string; name: string; avatar: string | null; premium?: boolean };
   isOwn: boolean;
   /** Every story seen (always true for your own). The grey ring. */
   allSeen: boolean;

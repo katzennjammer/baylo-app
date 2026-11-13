@@ -21,6 +21,7 @@ import { TIER_ORDER } from "../src/lib/trust";
 import { sizedImage } from "../src/media/image-url";
 import { color, font, space } from "../src/theme/tokens";
 import { offerColor } from "../src/theme/offer-tokens";
+import { PremiumName } from "../src/components/PremiumName";
 
 /**
  * One listing's offer inbox (Nov 2026). Opened from a listing card on the
@@ -250,9 +251,9 @@ function OfferCard({ offer, onPress }: { offer: LiveOffer; onPress: () => void }
             rating line and tier chip as their profile. One row could not
             hold all four without squeezing the name. */}
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <Text style={{ fontFamily: font.sansSemi, fontSize: 14, color: color.ink }} numberOfLines={1}>
+          <PremiumName premium={who.premium} style={{ fontFamily: font.sansSemi, fontSize: 14, color: color.ink }}>
             {who.name}
-          </Text>
+          </PremiumName>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <TierChip tier={who.trustTier} idVerified={who.idVerified} palette={{ ink: color.ink, control: color.control }} />
             <RatingLine rating={who.rating ?? 0} reviews={who.reviewCount ?? null} palette={{ ink: color.ink, secondary: color.inkSecondary }} size={13} />
