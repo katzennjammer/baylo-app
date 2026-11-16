@@ -60,8 +60,38 @@ function googleServicesFile() {
   return require("fs").existsSync(local) ? "./google-services.json" : undefined;
 }
 
+/**
+ * "Open email" opens the mail app's inbox (src/lib/open-mail.ts, 16 Nov 2026).
+ * Android 11+ only lets an app launch another by package name if it declares
+ * it under <queries>, so Gmail and the generic "email app" intent are listed.
+ * Without this the Gmail step fails quietly in the APK.
+ */
+function mailAppQueriesPlugin(config) {
+  const { withAndroidManifest } = require("expo/config-plugins");
+  return withAndroidManifest(config, (cfg) => {
+    const manifest = cfg.modResults.manifest;
+    manifest.queries = manifest.queries ?? [];
+    const queries = manifest.queries[0] ?? (manifest.queries[0] = {});
+    queries.package = queries.package ?? [];
+    if (!queries.package.some((p) => p.$?.["android:name"] === "com.google.android.gm")) {
+      queries.package.push({ $: { "android:name": "com.google.android.gm" } });
+    }
+    queries.intent = queries.intent ?? [];
+    const hasEmailIntent = queries.intent.some((i) =>
+      (i.category ?? []).some((c) => c.$?.["android:name"] === "android.intent.category.APP_EMAIL"),
+    );
+    if (!hasEmailIntent) {
+      queries.intent.push({
+        action: [{ $: { "android:name": "android.intent.action.MAIN" } }],
+        category: [{ $: { "android:name": "android.intent.category.APP_EMAIL" } }],
+      });
+    }
+    return cfg;
+  });
+}
+
 module.exports = ({ config }) => {
-  const plugins = [...(config.plugins ?? []), googleSignInPlugin()];
+  const plugins = [...(config.plugins ?? []), googleSignInPlugin(), mailAppQueriesPlugin];
   const servicesFile = googleServicesFile();
   if (servicesFile) config = { ...config, android: { ...config.android, googleServicesFile: servicesFile } };
   const isLocalDevelopment =
