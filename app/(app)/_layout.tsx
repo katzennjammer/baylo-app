@@ -8,6 +8,7 @@ import { Splash } from "../../src/components/Splash";
 import { TabBar, type TabBarProps } from "../../src/components/TabBar";
 import { TutorialOverlay } from "../../src/components/tutorial/TutorialOverlay";
 import { useSession } from "../../src/auth/session";
+import { useAdoptShopOnSignIn } from "../../src/auth/adopt-shop";
 import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
 import { usePushNotifications } from "../../src/notifications/push";
 
@@ -84,6 +85,9 @@ export default function AppLayout() {
   // Phone notifications: registers this phone once signed in, and opens the
   // right screen when one is tapped. See src/notifications/push.ts.
   usePushNotifications(session?.user.id);
+  // A shop-only owner starts in shop mode right after sign-in, not only once
+  // the Profile tab is opened. See src/auth/adopt-shop.ts.
+  useAdoptShopOnSignIn(session?.user.id);
 
   // tone="boot": this is the initial session read, on the cold-start path.
   if (isLoading) return <Splash tone="boot" waitingOn="Reading your saved session from secure storage" />;
