@@ -86,6 +86,7 @@ import { SendToChatSheet } from "../../src/components/messages/SendToChatSheet";
 import { sizedImage } from "../../src/media/image-url";
 import { useQueryClient } from "@tanstack/react-query";
 import { confirmRelist } from "../../src/api/relist";
+import { offerHref } from "../../src/components/trades/present";
 
 function normalizeListingText(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -315,9 +316,13 @@ export default function ItemDetailScreen() {
    */
   // "vip" locks the control too (bracket 9+, which Premium does not open).
   const locked = viewer.offerLock !== null;
-  const showReach = !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
+  // SHOP MODE (16 Nov 2026): an offer from here is the SHOP's, so the shelf
+  // is the shop's items (the server's `tradeableItems`, with values), not
+  // the person's. The person's reach and "where you stand" do not apply.
+  const asShop = !!viewer.sendingAs?.shop;
+  const showReach = !asShop && !locked && shouldShowWhereYouStand(item.valueLeaves, reach);
   const outOfReach =
-    !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
+    !asShop && !locked && item.valueLeaves !== null && reach !== null && bracketOf(item.valueLeaves) > reach;
   /**
    * THE RULE, NOT THE REACH. The reach is the upper edge — one bracket above
    * the best item — and the grid greys against it. But an offer may also be
@@ -327,9 +332,11 @@ export default function ItemDetailScreen() {
    * which way it missed, so the notice can name the actual reason.
    */
   const listingBracket = item.valueLeaves !== null ? bracketOf(item.valueLeaves) : null;
-  const shelfValues = (me?.items ?? [])
-    .filter((row) => row.status === "AVAILABLE" && !row.hiddenByModerator)
-    .map((row) => row.valueLeaves);
+  const shelfValues = asShop
+    ? viewer.tradeableItems.map((row) => row.valueLeaves ?? null)
+    : (me?.items ?? [])
+        .filter((row) => row.status === "AVAILABLE" && !row.hiddenByModerator)
+        .map((row) => row.valueLeaves);
   const misses = listingBracket !== null && me ? shelfMisses(shelfValues, listingBracket) : null;
   const cannotOffer = !locked && listingBracket !== null && (outOfReach || misses !== null);
   const reachInsert =
@@ -700,6 +707,8 @@ export default function ItemDetailScreen() {
             canOffer={viewer.canOffer}
             checkingAvailability={isFetching}
             existingOfferId={viewer.existingOfferId}
+            incomingOfferId={viewer.incomingOfferId ?? null}
+            onSeeIncoming={(id) => router.push(offerHref(id) as never)}
             sendAs={{
               shopName: viewer.sendingAs?.shop ? viewer.sendingAs.name : null,
               shopVerified: viewer.sendingAs?.shop?.verified ?? true,
@@ -1206,6 +1215,8 @@ function BottomBar({
   canOffer,
   checkingAvailability,
   existingOfferId,
+  incomingOfferId,
+  onSeeIncoming,
   sendAs,
   ended,
   lock,
@@ -1226,6 +1237,12 @@ function BottomBar({
   canOffer: boolean;
   checkingAvailability: boolean;
   existingOfferId: string | null;
+  /**
+   * A live offer that puts THIS item up for one of the viewer's listings
+   * (16 Nov 2026). The button then leads to it: "See their offer".
+   */
+  incomingOfferId: string | null;
+  onSeeIncoming: (offerId: string) => void;
   /**
    * Who an offer from here goes out as (16 Nov 2026). `shopName` is set in
    * shop mode; `otherAccount` names the viewer's OWN account that already has
@@ -1384,6 +1401,27 @@ function BottomBar({
       <View style={s.barRow}>
         {heart}
         {inert("This listing has ended")}
+      </View>
+    );
+  }
+
+  // THIS ITEM IS ALREADY OFFERED TO YOU: lead to that offer (accept or
+  // decline it there) rather than to a new one. Your own pending offer on
+  // this listing still comes first.
+  if (incomingOfferId && !existingOfferId) {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        <Tappable
+          onPress={() => onSeeIncoming(incomingOfferId)}
+          accessibilityRole="button"
+          style={s.action}
+          pressedStyle={s.pressed}
+        >
+          <Text style={[textStyle(type.primaryButton), s.barLabel, { color: color.onGreen }]} numberOfLines={2}>
+            See their offer
+          </Text>
+        </Tappable>
       </View>
     );
   }
