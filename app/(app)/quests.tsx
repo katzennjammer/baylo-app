@@ -139,7 +139,11 @@ export default function QuestsScreen() {
             </View>
           ) : null}
           {data.quests.length === 0 ? (
-            <MascotEmptyState pose="celebrate" size={100} title="No quests today" message="Check back tomorrow for new ones." />
+            data.notice ? (
+              <MascotEmptyState pose="box" size={100} title="Not yet" message={data.notice} />
+            ) : (
+              <MascotEmptyState pose="celebrate" size={100} title="No quests today" message="Check back tomorrow for new ones." />
+            )
           ) : (
             <View style={s.list}>
               {data.quests.map((q, i) => (
