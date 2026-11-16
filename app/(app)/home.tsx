@@ -391,8 +391,17 @@ export default function HomeScreen() {
           searchSuggestions={searchSuggestions}
           onFilterPress={openFilters}
           pendingTradeCount={pendingTradeCount}
-          leavesBalance={typeof homeData.viewer?.leaves === "number" ? homeData.viewer.leaves : null}
+          // Shop mode: the SHOP's name and balance, the same account the
+          // header pill shows (`acting`), never the person's.
+          leavesBalance={
+            homeData.acting
+              ? homeData.acting.leaves
+              : typeof homeData.viewer?.leaves === "number"
+                ? homeData.viewer.leaves
+                : null
+          }
           firstName={homeData.viewer?.name ?? session?.user.name}
+          shopName={homeData.acting?.name ?? null}
           onViewTrades={openTrades}
           onExploreFood={() => browseInMarketplace("FOOD")}
         />
