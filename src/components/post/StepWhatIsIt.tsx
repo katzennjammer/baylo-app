@@ -11,7 +11,7 @@ import {
   type Category,
 } from "../../api/post";
 import { leadPhoto } from "../../post/photos";
-import { titleError, unitLabel, usePost } from "../../post/state";
+import { isPostable, titleError, unitLabel, usePost } from "../../post/state";
 import {
   postColor,
   postIcon,
@@ -25,6 +25,7 @@ import {
 } from "../../theme/post-tokens";
 import { CheckIcon } from "../icons";
 import { Tappable } from "../Tappable";
+import { PhotoStrip } from "./PhotoStrip";
 import {
   ConfirmButton,
   Divider,
@@ -90,6 +91,7 @@ export function StepWhatIsIt({
   const [brandAdded, setBrandAdded] = useState(false);
 
   const lead = leadPhoto(state.photos);
+  const postable = state.photos.filter(isPostable);
   const phase = state.detection.phase;
   const brand = state.detection.original?.brand;
   const brandEvidence = state.detection.original?.brandEvidence;
@@ -219,6 +221,18 @@ export function StepWhatIsIt({
                   )}
                 </View>
               </View>
+
+              {/* All the photos, not just the one we read (16 Nov 2026), so a
+                  wrong photo mixed in is seen now; each can be removed. */}
+              {postable.length > 1 ? (
+                <View style={{ marginTop: 12 }}>
+                  <PhotoStrip
+                    photos={postable}
+                    tile={56}
+                    onRemove={(id) => dispatch({ type: "photo/remove", id })}
+                  />
+                </View>
+              ) : null}
 
               {showBrand && brand && brandEvidence ? (
                 <BrandEvidenceRow
