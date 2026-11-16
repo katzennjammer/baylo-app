@@ -255,6 +255,28 @@ export function useMarkAllNotificationsRead() {
 }
 
 /**
+ * DELETE /api/notifications -- "Clear all" (16 Nov 2026). Removes everything
+ * the current bell shows (the shop's in shop mode). The server keeps the one
+ * "suspension ended" notice, which doubles as its "already told" record.
+ */
+export function useClearAllNotifications() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await request("/api/notifications", { method: "DELETE" });
+      if (!res.ok) return legacyFailure(res, "We could not clear your notifications.");
+      return (await res.json()) as { ok: boolean; cleared: number };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+      void qc.invalidateQueries({ queryKey: ["home"] });
+      void import("../notifications/badge").then((m) => m.syncAppBadge()).catch(() => undefined);
+    },
+  });
+}
+
+/**
  * Marks the visible activity rows without touching hidden message notifications.
  * The legacy API has only an all-unread PATCH or a per-notification PATCH.
  */
