@@ -331,6 +331,12 @@ export interface ItemDetailPayload {
     /** Non-null when this viewer already has a PENDING offer on this listing. */
     existingOfferId: string | null;
     /**
+     * A live offer that puts THIS item up for one of the viewer's own
+     * listings (16 Nov 2026): the button reads "See their offer". Absent on
+     * an older server.
+     */
+    incomingOfferId?: string | null;
+    /**
      * The account an offer from here goes out AS (16 Nov 2026). `shop` is null
      * for the person; in shop mode it is the acting shop, and `verified: false`
      * means only an inactive button with the reason. Absent on an older server.
