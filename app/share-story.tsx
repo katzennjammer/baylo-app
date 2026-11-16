@@ -22,7 +22,8 @@ import { sizedImage } from "../src/media/image-url";
 import { showDialog } from "../src/components/dialog";
 import { ApiError } from "../src/api/client";
 import { getActingOrgId } from "../src/api/org-context";
-import { useProfileMe } from "../src/api/profile";
+import { useActingShop } from "../src/api/organizations";
+import { useProfileMe, usePublicProfile } from "../src/api/profile";
 import { STORY_CAPTION_MAX, useCreateStory, useStories } from "../src/api/stories";
 import { clockTime } from "../src/lib/format";
 import { bracketLabel, bracketOf } from "../src/lib/brackets";
@@ -41,8 +42,9 @@ import { border, color, radius, size, space, textStyle, type } from "../src/them
  * A listing already in your story is shown but can't be picked: the server
  * allows one live story per listing.
  *
- * PERSONAL ONLY. While acting as a shop the screen says so instead of offering
- * the shop's shelf, which the server would refuse.
+ * SHOPS SHARE THEIR OWN (16 Nov 2026). Acting as a VERIFIED shop the picker
+ * is the shop's shelf and the story goes out as the shop; an unverified shop
+ * is told why it can't.
  */
 export default function ShareStoryScreen() {
   const router = useRouter();
@@ -50,7 +52,11 @@ export default function ShareStoryScreen() {
   const { width } = useWindowDimensions();
   const actingAsShop = getActingOrgId() !== null;
 
-  const me = useProfileMe(!actingAsShop);
+  const shop = useActingShop();
+  const personal = useProfileMe(!actingAsShop);
+  const shopShelf = usePublicProfile(actingAsShop ? shop?.orgUserId : undefined);
+  // One shelf, whoever is sharing: the shop's storefront in shop mode.
+  const me = actingAsShop ? shopShelf : personal;
   const { data: authors = [] } = useStories();
   const create = useCreateStory();
 
@@ -92,7 +98,7 @@ export default function ShareStoryScreen() {
           } else if (code === "ALREADY_SHARED") {
             showDialog("Already in your story", "This listing is already in your story.");
           } else if (code === "PERSONAL_ONLY") {
-            showDialog("Stories are personal", "Switch to your own account to share a story.");
+            showDialog("Not verified yet", "Only verified shops can share stories. Switch to your personal profile to share one.");
           } else if (e instanceof ApiError && e.status === 404) {
             showDialog(
               "Can't share this listing",
@@ -137,11 +143,11 @@ export default function ShareStoryScreen() {
     </View>
   );
 
-  if (actingAsShop) {
+  if (actingAsShop && shop && !shop.verified) {
     return (
       <View style={s.root}>
         {header}
-        <Message title="Stories are personal" body="Switch to your own account to share a listing to your story." />
+        <Message title="Not verified yet" body="Only verified shops can share stories. Switch to your personal profile to share one." />
       </View>
     );
   }
