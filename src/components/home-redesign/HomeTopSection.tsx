@@ -39,6 +39,11 @@ type HomeTopSectionProps = {
   pendingTradeCount: number | null;
   leavesBalance: number | null;
   firstName: string | null | undefined;
+  /**
+   * Acting as a shop (16 Nov 2026): the shop's name, greeted in full instead
+   * of the person's first name. Null for the person.
+   */
+  shopName?: string | null;
   onViewTrades: () => void;
   onExploreFood: () => void;
 };
@@ -181,12 +186,13 @@ export function HomeTopSection({
   pendingTradeCount,
   leavesBalance,
   firstName,
+  shopName = null,
   onViewTrades,
   onExploreFood,
 }: HomeTopSectionProps) {
   const { width } = useWindowDimensions();
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
-  const resolvedName = firstName?.trim().split(/\s+/)[0] || "there";
+  const resolvedName = shopName?.trim() || firstName?.trim().split(/\s+/)[0] || "there";
   const now = new Date();
   const weekday = now.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
   const monthDay = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
