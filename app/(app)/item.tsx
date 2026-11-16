@@ -700,6 +700,11 @@ export default function ItemDetailScreen() {
             canOffer={viewer.canOffer}
             checkingAvailability={isFetching}
             existingOfferId={viewer.existingOfferId}
+            sendAs={{
+              shopName: viewer.sendingAs?.shop ? viewer.sendingAs.name : null,
+              shopVerified: viewer.sendingAs?.shop?.verified ?? true,
+              otherAccount: viewer.otherAccountOffer?.name ?? null,
+            }}
             ended={ended}
             lock={
               locked && item.valueLeaves !== null
@@ -1201,6 +1206,7 @@ function BottomBar({
   canOffer,
   checkingAvailability,
   existingOfferId,
+  sendAs,
   ended,
   lock,
   liked,
@@ -1220,6 +1226,12 @@ function BottomBar({
   canOffer: boolean;
   checkingAvailability: boolean;
   existingOfferId: string | null;
+  /**
+   * Who an offer from here goes out as (16 Nov 2026). `shopName` is set in
+   * shop mode; `otherAccount` names the viewer's OWN account that already has
+   * an offer pending here (one per person across their profile and shops).
+   */
+  sendAs: { shopName: string | null; shopVerified: boolean; otherAccount: string | null };
   ended: boolean;
   lock: { kind: PremiumReason; bracket: number; owner: string; onPress: () => void } | null;
   liked: boolean;
@@ -1376,6 +1388,37 @@ function BottomBar({
     );
   }
 
+  // Shop mode, shop not verified: only verified shops send offers. The button
+  // stays visible but inactive, with the reason under it.
+  if (sendAs.shopName && !sendAs.shopVerified && !existingOfferId) {
+    return (
+      <View>
+        <View style={s.barRow}>
+          {heart}
+          {inert(`Send offer as ${sendAs.shopName}`)}
+        </View>
+        <Text style={[textStyle(type.gridMeta), s.lockedBody]}>
+          Only verified shops can send offers. Switch to your personal profile to send one.
+        </Text>
+      </View>
+    );
+  }
+
+  // One pending offer per person: another of the viewer's own accounts has one.
+  if (sendAs.otherAccount && !existingOfferId) {
+    return (
+      <View>
+        <View style={s.barRow}>
+          {heart}
+          {inert("Offer already sent")}
+        </View>
+        <Text style={[textStyle(type.gridMeta), s.lockedBody]}>
+          You already have an offer on this listing as {sendAs.otherAccount}. Switch to {sendAs.otherAccount} to see it.
+        </Text>
+      </View>
+    );
+  }
+
   if (lock) {
     // It replaces the offer button rather than sitting beside it: a locked
     // line above a live "Send offer" would be the contradiction the server
@@ -1423,7 +1466,7 @@ function BottomBar({
             change or withdraw a sent offer, so the button leads to §5.2's
             pending-offer state rather than promising an edit.
           */}
-          {existingOfferId ? "See your offer" : "Send offer"}
+          {existingOfferId ? "See your offer" : sendAs.shopName ? `Send offer as ${sendAs.shopName}` : "Send offer"}
         </Text>
       </Tappable>
     </View>

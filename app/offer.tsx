@@ -45,7 +45,7 @@ import { CONDITIONS } from "../src/api/browse";
 import { TradeTickets } from "../src/components/offer/TradeTickets";
 import { Tappable } from "../src/components/Tappable";
 import { color } from "../src/theme/tokens";
-import { displayedBridgeFee, hasPremiumAccess, openPremium, premiumGateReason } from "../src/lib/premium";
+import { displayedBridgeFee, openPremium, premiumGateReason } from "../src/lib/premium";
 import { grouped, shelfMisses } from "../src/lib/gap";
 import { offerAllowed, type OfferTerms } from "../src/lib/trade-rules";
 import {
@@ -166,7 +166,7 @@ export default function OfferScreen() {
   // subscription prices it — 8/bracket for Premium, as the server holds.
   // Display only; see displayedBridgeFee().
   const proposerFee =
-    terms?.payer === "proposer" ? displayedBridgeFee(terms, hasPremiumAccess(context?.reputation)) : 0;
+    terms?.payer === "proposer" ? displayedBridgeFee(terms, context?.senderPremium ?? false) : 0;
   // A receiver-pays bridge is priced by the listing owner's subscription,
   // which the phone is never told — so this is only ever tested for > 0 and
   // never shown as a figure. See copy.footnote.theyPay.
@@ -516,6 +516,19 @@ export default function OfferScreen() {
       />
 
       <ScrollView scrollEnabled={!sending} keyboardShouldPersistTaps="handled">
+        {/* Shop mode (16 Nov 2026): say WHICH account this goes out as, and
+            whose balance pays. The person's own offers show nothing new. */}
+        {context.sendingAsShop ? (
+          <Section pad={offerSpace.section.offering}>
+            <SectionLabel>Sending as</SectionLabel>
+            <Text style={sendAsStyles.name} numberOfLines={1}>
+              {context.sendingAsShop}
+            </Text>
+            <Text style={sendAsStyles.meta}>
+              {`Shop balance: ${grouped(context.balance)} Leaves · items from ${context.sendingAsShop}`}
+            </Text>
+          </Section>
+        ) : null}
         {/* The trade as two equal tickets, the same picture the sent offer keeps. */}
         <Section pad={offerSpace.section.offering}>
           <TradeTickets
@@ -651,6 +664,7 @@ export default function OfferScreen() {
           theirBracket={theirBracket}
           fee={proposerFee}
           balance={context.balance}
+          payerName={context.sendingAsShop}
           busy={sending}
           onConfirm={onSend}
           onDismiss={() => setConsentOpen(false)}
@@ -844,3 +858,8 @@ function MessageField({
     </View>
   );
 }
+
+const sendAsStyles = StyleSheet.create({
+  name: { fontSize: 16, fontWeight: "600", color: color.ink, marginTop: 4 },
+  meta: { fontSize: 13, color: color.inkSecondary, marginTop: 2 },
+});

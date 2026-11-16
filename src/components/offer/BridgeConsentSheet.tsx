@@ -64,6 +64,7 @@ export function BridgeConsentSheet({
   theirBracket,
   fee,
   balance,
+  payerName = null,
   busy,
   onConfirm,
   onDismiss,
@@ -79,6 +80,11 @@ export function BridgeConsentSheet({
   fee: number;
   /** This user's balance right now. */
   balance: number;
+  /**
+   * Set when the fee is paid by a SHOP (16 Nov 2026): the shop's name, so the
+   * sheet says whose Leaves are held. Null for the person, as before.
+   */
+  payerName?: string | null;
   /** The request is in flight. The primary reads as such and cannot fire twice. */
   busy: boolean;
   onConfirm: () => void;
@@ -128,6 +134,17 @@ export function BridgeConsentSheet({
               : copy.consent.bodyAccept(otherName)
             : copy.consent.shortBody(fee, balance)}
         </Text>
+
+        {payerName ? (
+          <Text
+            style={[
+              textStyle(offerType.body),
+              { color: offerColor.ink, marginTop: offerSpace.labelToContent },
+            ]}
+          >
+            {`Held from ${payerName}'s Leaves, not your personal balance.`}
+          </Text>
+        ) : null}
 
         <View style={{ marginTop: offerSpace.paragraphToControl }}>
           {enough ? (

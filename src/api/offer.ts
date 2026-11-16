@@ -1,3 +1,5 @@
+import { hasPremiumAccess } from "../lib/premium";
+import { ORGANIZATIONS_KEY } from "./organizations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiV1, legacyFailure, request } from "./client";
@@ -111,6 +113,13 @@ export interface OfferContext {
   /** True when this listing is above the viewer's tier cap and the offer would 403. */
   tierItemCapExceeded: boolean;
   pendingOfferedItemIds: Set<string>;
+  /**
+   * The account the offer goes out AS (16 Nov 2026): null for the person, the
+   * shop's name in shop mode. Drawn as the "Sending as" row and on the fee sheet.
+   */
+  sendingAsShop: string | null;
+  /** The SENDER's Premium: the shop's own in shop mode, else the person's. */
+  senderPremium: boolean;
 }
 
 /**
@@ -142,7 +151,9 @@ export function useOfferContext(itemId: string | undefined) {
     // is gone" rather than as "its value did not load".
     const valueById = new Map(me.items.map((row) => [row.id, row.valueLeaves]));
     const myItems: OfferableItem[] = detail.viewer.tradeableItems.map((row) => {
-      const valueLeaves = valueById.get(row.id) ?? null;
+      // The server's own value first (a shop's items are not in the person's
+      // profile), the profile's as the fallback for an older server.
+      const valueLeaves = row.valueLeaves ?? valueById.get(row.id) ?? null;
       return {
         id: row.id,
         title: row.title,
@@ -162,8 +173,12 @@ export function useOfferContext(itemId: string | undefined) {
     // server sent `maxItemValueLeaves`; a client this new never talks to one,
     // but the fallback is one line and it keeps the field optional-safe.
     const limits = me.reputation.limits as { maxItemBracket?: number | null; maxItemValueLeaves?: number | null };
-    const cap: Bracket | null =
-      limits.maxItemBracket !== undefined
+    // The person's tier cap is the PERSON's: acting as a shop, the server
+    // judges the shop's own standing, so the composer does not pre-refuse.
+    const sendingAsShop = !!detail.viewer.sendingAs?.shop;
+    const cap: Bracket | null = sendingAsShop
+      ? null
+      : limits.maxItemBracket !== undefined
         ? limits.maxItemBracket
         : limits.maxItemValueLeaves == null
           ? null
@@ -200,6 +215,10 @@ export function useOfferContext(itemId: string | undefined) {
       maxItemBracket: cap,
       tierItemCapExceeded: cap !== null && targetBracket !== null && targetBracket > cap,
       pendingOfferedItemIds,
+      sendingAsShop: detail.viewer.sendingAs?.shop ? detail.viewer.sendingAs.name : null,
+      senderPremium: detail.viewer.sendingAs?.shop
+        ? detail.viewer.sendingAs.premium === true
+        : hasPremiumAccess(me.reputation),
     };
   }
 
@@ -411,6 +430,8 @@ export function useSendOffer() {
       // The balance may have dropped by the fee, and the new offer belongs in
       // `offers`. Both live behind this key.
       void qc.invalidateQueries({ queryKey: LIVE_OFFERS_KEY });
+      // A shop's fee comes from the shop's balance, shown in the shop list.
+      void qc.invalidateQueries({ queryKey: ORGANIZATIONS_KEY });
     },
   });
 }
