@@ -213,3 +213,12 @@ export function grouped(n: number): string {
   }
   return n < 0 ? `-${out}` : out;
 }
+
+/**
+ * A count of POINTS, the spendable balance (16 Nov 2026): "1 point",
+ * "1,200 points". "Leaves" is reserved for what an ITEM is worth; fees, the
+ * balance, task and trade rewards and refunds are points.
+ */
+export function points(n: number): string {
+  return `${grouped(n)} ${Math.abs(n) === 1 ? "point" : "points"}`;
+}

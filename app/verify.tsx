@@ -125,7 +125,7 @@ export default function VerifyScreen() {
             {state.leaves > 0 ? (
               <View className="mt-4">
                 <NoticeBanner
-                  message={`${state.leaves} Leaves credited to your balance.`}
+                  message={`${state.leaves} points credited to your balance.`}
                 />
               </View>
             ) : null}

@@ -163,7 +163,7 @@ export function ChatOfferCard({
               disabled={flow.busy}
               accessibilityLabel={
                 flow.receiverPays
-                  ? `Accept, with a ${grouped(flow.fee)}-Leaf bridging fee`
+                  ? `Accept, with a ${grouped(flow.fee)}-point bridging fee`
                   : `Accept ${partner}'s offer`
               }
               style={{ flex: 1 }}

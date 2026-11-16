@@ -83,7 +83,7 @@ export function SuspendedSheet({ notice, onBack }: { notice: SuspensionNotice; o
         {repeat
           ? `This is suspension number ${level} on this account. Further breaches of the community rules can lead to a longer or permanent one.`
           : "Further breaches of the community rules can lead to a longer suspension."}{" "}
-        Nothing has been deleted — your listings and Leaves are kept.{"\n\n"}
+        Nothing has been deleted — your listings and points are kept.{"\n\n"}
         If you think we got this wrong, write to {SUPPORT_EMAIL} from the email on this account and
         a person will review it.
       </Body>

@@ -1,5 +1,5 @@
 import { CODE_LENGTH } from "../../api/trades";
-import { grouped, shortDate } from "../../lib/gap";
+import { grouped, points, shortDate } from "../../lib/gap";
 import { spellCount } from "../offer/copy";
 
 /**
@@ -181,7 +181,7 @@ export const waiting = {
   nothingHeld: (partner: string) =>
     `If ${partner} does not reply it expires on its own. Nothing is held.`,
   leavesHeld: (partner: string, held: number) =>
-    `If ${partner} does not reply it expires on its own. ${grouped(held)} Leaves come back.`,
+    `If ${partner} does not reply it expires on its own. ${points(held)} come back.`,
   withdraw: "Withdraw",
   /** Ends a trade row and releases both items. Not the same act as a withdrawal. */
   cancel: "Call it off",
@@ -192,12 +192,12 @@ export const waiting = {
    * offered item is one bracket above theirs, and the fee is theirs.
    */
   youWouldPay: (fee: number) =>
-    `Accepting costs a ${grouped(fee)}-Leaf bridging fee — their item is one bracket above yours`,
+    `Accepting costs a ${grouped(fee)}-point bridging fee — their item is one bracket above yours`,
   /** The one control on such a row. It opens the review screen, where the consent sheet is. */
-  reviewFee: (fee: number) => `Review the ${grouped(fee)}-Leaf fee and accept`,
+  reviewFee: (fee: number) => `Review the ${grouped(fee)}-point fee and accept`,
   /** The strip on an incoming offer the PROPOSER already paid for. */
   theyPaid: (partner: string, fee: number) =>
-    `${partner} has put up a ${grouped(fee)}-Leaf bridging fee — it comes to you when the swap completes`,
+    `${partner} has put up a ${grouped(fee)}-point bridging fee — it comes to you when the swap completes`,
 } as const;
 
 /**
@@ -282,8 +282,8 @@ export const tradeCard = {
   withPartner: (partner: string) => `With ${partner}`,
   youGive: "You give",
   youGet: "You get",
-  leaves: (n: number) => `${grouped(n)} Leaves`,
-  itemPlusLeaves: (title: string, n: number) => `${title} + ${grouped(n)} Leaves`,
+  leaves: (n: number) => `${points(n)}`,
+  itemPlusLeaves: (title: string, n: number) => `${title} + ${points(n)}`,
   itemPlusMore: (title: string, more: number) => `${title} + ${more} more`,
   /** A side with nothing named on the wire (a bracket-only offer, a deleted item). */
   unnamed: "Not named",
@@ -328,7 +328,7 @@ export const tradeCard = {
   requestFrom: (partner: string) => `Swap request from ${partner}`,
   /* The withdraw confirmations. */
   withdrawOfferTitle: (partner: string) => `Withdraw your offer to ${partner}?`,
-  withdrawOfferHeld: (held: number) => `${grouped(held)} Leaves come back to you.`,
+  withdrawOfferHeld: (held: number) => `${points(held)} come back to you.`,
   withdrawOfferNothingHeld: "Nothing was held, so nothing comes back.",
   withdrawRequestTitle: (partner: string) => `Withdraw your swap request to ${partner}?`,
   withdrawRequestBody: "The trade is called off and both items go back to available.",
@@ -428,13 +428,13 @@ export const code = {
    * congratulation. The zero case gets the server's own reason.
    */
   rewardLabel: "Earned for this trade",
-  rewardLine: (leaves: number) => `+${grouped(leaves)} Leaves`,
-  rewardNone: "No Leaves for this one",
+  rewardLine: (leaves: number) => `+${points(leaves)}`,
+  rewardNone: "No points for this one",
   /** The bridging fee, settled with the trade. From the viewer's side. */
   feePaidOut: (fee: number, partner: string) =>
-    `Your ${grouped(fee)}-Leaf bridging fee went to ${partner}`,
+    `Your ${grouped(fee)}-point bridging fee went to ${partner}`,
   feeReceived: (fee: number, partner: string) =>
-    `${partner}'s ${grouped(fee)}-Leaf bridging fee came to you`,
+    `${partner}'s ${grouped(fee)}-point bridging fee came to you`,
 } as const;
 
 /* ───────────────────── the one trade screen (Round 2) ───────────────── */
@@ -451,7 +451,7 @@ export const tradeScreen = {
   requestFrom: (partner: string) => `${partner} sent you a swap request`,
   replyBy: (by: string) => `Reply by ${by}. It expires on its own after that.`,
   accepted: "Accepted",
-  acceptedHeld: (n: number) => `Accepted · ${grouped(n)} Leaves held`,
+  acceptedHeld: (n: number) => `Accepted · ${points(n)} held`,
   declined: "Declined",
   /* The hub step. */
   hubStepTitle: (partner: string) => `Where will you meet ${partner}?`,
@@ -606,8 +606,8 @@ export const picker = {
   /** `n` comes from /api/v1/profile/me's task list; null words it without one. */
   rewardBody: (n: number | null) =>
     n === null
-      ? "You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn Leaves once the trade is completed."
-      : `You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn ${grouped(n)} Leaves once the trade is completed.`,
+      ? "You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn points once the trade is completed."
+      : `You both listed this hub as a meetup spot. Agree on it, meet here, and you each earn ${points(n)} once the trade is completed.`,
   // The two conditions the server checks that this screen cannot: the hub must
   // be AGREED (not just suggested) and still on both listings at the handover.
   rewardSmallPrint:
@@ -639,7 +639,7 @@ export const review = {
   /** Frame 9i's nav-right mono. */
   expiresIn: (days: number) => (days === 1 ? "1 day left" : `${days} days left`),
   /** The second line under the swap when an offer predates brackets. */
-  noLeaves: "No Leaves either way",
+  noLeaves: "No points either way",
 } as const;
 
 /* ───────────────────────────── small helpers ────────────────────────── */

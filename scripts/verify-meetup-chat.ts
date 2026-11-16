@@ -137,7 +137,7 @@ function eq<T>(label: string, got: T, want: T) {
 
 /* 6. reward copy */
 {
-  eq("reward with amount", copy.picker.rewardBody(25).includes("each earn 25 Leaves"), true);
+  eq("reward with amount", copy.picker.rewardBody(25).includes("each earn 25 points"), true);
   eq("reward without amount", /\d/.test(copy.picker.rewardBody(null)), false);
 }
 

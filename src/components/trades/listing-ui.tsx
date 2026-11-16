@@ -43,7 +43,7 @@ export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 export function relationLabel(offer: LiveOffer): string {
   const r = offerRelation(offer);
   if (r.kind === "same") return "Same bracket";
-  const fee = r.fee ? ` ${r.fee} Leaves` : " the fee";
+  const fee = r.fee ? ` ${r.fee} points` : " the fee";
   return r.kind === "below"
     ? `One below · ${firstName(offer.counterparty.name)} pays${fee}`
     : `One above · you pay${fee}`;

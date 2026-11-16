@@ -69,7 +69,7 @@ function OLD_swapLine(trade: ActiveTrade): string {
   const theirsItem = sent ? trade.requestedItem : trade.offeredItem;
   if (trade.kind === "leaves") {
     const leaves = trade.offeredLeaves ?? 0;
-    const side = leaves > 0 ? `${grouped(leaves)} Leaves` : "Leaves";
+    const side = leaves > 0 ? `${grouped(leaves)} points` : "points";
     return sent
       ? `Your ${side} for ${OLD_bracketed(trade.requestedItem)}`
       : `Their ${side} for your ${OLD_bracketed(trade.requestedItem)}`;

@@ -809,9 +809,9 @@ function CheckYourEmail({ state }: { state: PendingSignup }) {
 
       <View style={{ height: gap.headlineToBody }} />
       <Body>
-        We sent a verification link to {state.email}. Open it and {VERIFY_CREDIT_LEAVES} Leaves land
+        We sent a verification link to {state.email}. Open it and {VERIFY_CREDIT_LEAVES} points land
         in your balance. You can look around without it — browse, message and accept trades — but
-        the Leaves wait until you do.
+        the points wait until you do.
       </Body>
 
       {message ? (

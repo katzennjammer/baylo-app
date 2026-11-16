@@ -55,7 +55,7 @@ export function EmptyFeed({ location }: { location: string | null }) {
       </Pressable>
 
       <Text style={[textStyle(type.sectionSubcopy), s.note]}>
-        You start with {VERIFY_CREDIT_LEAVES} Leaves once your email is verified. You earn more by
+        You start with {VERIFY_CREDIT_LEAVES} points once your email is verified. You earn more by
         completing trades, never by paying.
       </Text>
     </MascotEmptyState>

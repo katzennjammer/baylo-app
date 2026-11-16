@@ -484,7 +484,7 @@ export default function OfferScreen() {
             numberOfLines={1}
           >
             {`${chosen.title} · ${bracketLabel(yourBracket)} → ${context.item.title} · ${bracketLabel(theirBracket)}` +
-              (proposerFee > 0 ? ` · ${grouped(proposerFee)}-Leaf fee` : "") +
+              (proposerFee > 0 ? ` · ${grouped(proposerFee)}-point fee` : "") +
               (receiverFee > 0 ? ` · ${owner} pays the fee` : "")}
           </Text>
         </View>
@@ -525,7 +525,7 @@ export default function OfferScreen() {
               {context.sendingAsShop}
             </Text>
             <Text style={sendAsStyles.meta}>
-              {`Shop balance: ${grouped(context.balance)} Leaves · items from ${context.sendingAsShop}`}
+              {`Shop balance: ${grouped(context.balance)} points · items from ${context.sendingAsShop}`}
             </Text>
           </Section>
         ) : null}
