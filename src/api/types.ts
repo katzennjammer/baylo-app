@@ -326,9 +326,25 @@ export interface ItemDetailPayload {
      */
     offerLock: "premium" | "vip" | null;
     leaves: number;
-    tradeableItems: { id: string; title: string; image: string | null }[];
+    /** `valueLeaves`: sent since 16 Nov 2026 so a SHOP's items carry their value. */
+    tradeableItems: { id: string; title: string; image: string | null; valueLeaves?: number | null }[];
     /** Non-null when this viewer already has a PENDING offer on this listing. */
     existingOfferId: string | null;
+    /**
+     * The account an offer from here goes out AS (16 Nov 2026). `shop` is null
+     * for the person; in shop mode it is the acting shop, and `verified: false`
+     * means only an inactive button with the reason. Absent on an older server.
+     */
+    sendingAs?: {
+      id: string;
+      name: string;
+      avatar: string | null;
+      shop: { id: string; verified: boolean } | null;
+      /** The sending account's own Premium (the shop's in shop mode), for the fee quote. */
+      premium?: boolean;
+    };
+    /** Another of this person's own accounts already has an offer pending here. */
+    otherAccountOffer?: { name: string } | null;
   };
 }
 
