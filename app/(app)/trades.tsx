@@ -4,7 +4,9 @@ import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
-import { useProfileMe } from "../../src/api/profile";
+import { useProfileMe, usePublicProfile } from "../../src/api/profile";
+import { getActingOrgId } from "../../src/api/org-context";
+import { useActingShop } from "../../src/api/organizations";
 import { buildTradesModel, useActiveTrades, useTradeHistory } from "../../src/api/trades";
 import type { Item, LiveOffer } from "../../src/api/types";
 import { MascotEmptyState } from "../../src/components/MascotEmptyState";
@@ -79,6 +81,15 @@ export default function TradesScreen() {
   const active = useActiveTrades();
   const history = useTradeHistory();
   const profile = useProfileMe();
+  // SHOP MODE (16 Nov 2026): "My listings" is the SHOP's shelf, matching the
+  // offers above it (the Trades list is already the shop's). It used to read
+  // the person's profile/me, so a shop owner saw their personal listings
+  // here. The shop's items come from its storefront, as on the Profile tab.
+  const actingOrgId = getActingOrgId();
+  const shopUserId = useActingShop()?.orgUserId;
+  const shopProfile = usePublicProfile(shopUserId);
+  const shelf = actingOrgId ? shopProfile.data?.items : profile.data?.items;
+  const shelfLoaded = actingOrgId ? !!shopProfile.data : !!profile.data;
   const withdraw = useWithdraw();
 
   const model = useMemo(
@@ -94,7 +105,7 @@ export default function TradesScreen() {
   );
 
   const rows = useMemo<ListingRow[]>(() => {
-    const listed = (profile.data?.items ?? []).filter((i) => i.status === "AVAILABLE");
+    const listed = (shelf ?? []).filter((i) => i.status === "AVAILABLE");
     const byItem = new Map<string, LiveOffer[]>();
     for (const o of received) byItem.set(o.post.id, [...(byItem.get(o.post.id) ?? []), o]);
     const out = listed.map((item) => {
@@ -112,7 +123,7 @@ export default function TradesScreen() {
       value: (a, b) => (b.item.valueLeaves ?? 0) - (a.item.valueLeaves ?? 0),
     };
     return out.sort(by[sort]);
-  }, [profile.data, received, sort]);
+  }, [shelf, received, sort]);
 
   // Codes live 15 minutes, so a "Show code" card can go stale while this screen
   // sits open. The shared clock re-renders only when some card's phase changes,
@@ -133,8 +144,13 @@ export default function TradesScreen() {
   // The spinner follows the GESTURE, not `isRefetching`: liveness and the push
   // channel refetch silently, and must not flick a pull indicator nobody pulled.
   const refetchAll = useCallback(
-    () => Promise.all([active.refetch(), history.refetch(), profile.refetch()]),
-    [active.refetch, history.refetch, profile.refetch],
+    () =>
+      Promise.all([
+        active.refetch(),
+        history.refetch(),
+        actingOrgId ? shopProfile.refetch() : profile.refetch(),
+      ]),
+    [active.refetch, history.refetch, profile.refetch, shopProfile.refetch, actingOrgId],
   );
   const { refreshing, onRefresh } = usePullToRefresh(refetchAll);
   useTradeLiveness(active.refetch);
@@ -220,7 +236,7 @@ export default function TradesScreen() {
               </>
             ) : null}
 
-            {rows.length === 0 && profile.data ? (
+            {rows.length === 0 && shelfLoaded ? (
               yourMove.length === 0 ? (
                 <View style={s.empty}>
                   <MascotEmptyState

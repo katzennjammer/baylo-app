@@ -16,6 +16,7 @@ import {
   type,
 } from "../../theme/tokens";
 import { useStories, type StoryAuthor } from "../../api/stories";
+import { orgLogoUrl, useActingShop } from "../../api/organizations";
 import { sizedImage } from "../../media/image-url";
 
 /**
@@ -29,7 +30,8 @@ import { sizedImage } from "../../media/image-url";
  *   "Your story"   always first while acting as yourself. No stories yet: the
  *                  circle opens "Share a listing". With stories: it opens the
  *                  viewer, and the small + badge opens "Share a listing".
- *                  Hidden while acting as a shop -- stories are personal (v1).
+ *                  Acting as a VERIFIED shop it is the shop's circle (16 Nov
+ *                  2026): shops post their own stories.
  *   an author      green ring = something unseen, grey = all seen. Opens the
  *                  viewer at that author.
  *
@@ -47,14 +49,22 @@ export function StoriesRow({
 }) {
   const router = useRouter();
   const { data: authors = [] } = useStories();
+  // Whose circle leads the row: the shop's in shop mode, the person's otherwise.
+  // An unverified shop cannot post (the server refuses), so it gets no circle.
+  const shop = useActingShop();
+  const me = actingAsShop
+    ? shop?.orgUserId && shop.verified
+      ? { id: shop.orgUserId, name: shop.name, avatar: orgLogoUrl(shop.logoUrl) }
+      : undefined
+    : viewer;
 
   const own = authors.find((a) => a.isOwn) ?? null;
   const others = authors.filter((a) => !a.isOwn);
   const openViewer = (authorId: string) => router.push({ pathname: "/story", params: { authorId } });
   const openShare = () => router.push("/share-story");
 
-  // Nothing to show a shop, and no stories from anyone: no empty band.
-  if (actingAsShop && others.length === 0) return null;
+  // Nothing to post as (an unverified shop) and nobody else's stories: no empty band.
+  if (!me && others.length === 0) return null;
 
   return (
     <View style={{ backgroundColor: color.surface }}>
@@ -62,10 +72,10 @@ export function StoriesRow({
         {/* ONE circle for you: "Create story" until you have one, then
             "Your story", whose small + adds another. Both at once showed two
             plus signs side by side. */}
-        {!actingAsShop && viewer && !(own && own.stories.length > 0) ? <CreateStory onPress={openShare} /> : null}
-        {!actingAsShop && viewer && own && own.stories.length > 0 ? (
+        {me && !(own && own.stories.length > 0) ? <CreateStory onPress={openShare} /> : null}
+        {me && own && own.stories.length > 0 ? (
           <YourStory
-            viewer={viewer}
+            viewer={me}
             own={own}
             onOpen={() => openViewer(own.user.id)}
             onAdd={openShare}
@@ -151,7 +161,7 @@ function AuthorBubble({ author, onPress }: { author: StoryAuthor; onPress: () =>
     >
       <View style={[s.ring, { borderColor: seen ? color.controlLine : color.green }]}>
         <View style={s.ringGap}>
-          <Avatar uri={author.user.avatar} name={author.user.name} />
+          <Avatar uri={storyAvatar(author)} name={author.user.name} />
         </View>
       </View>
       <Text
@@ -162,6 +172,11 @@ function AuthorBubble({ author, onPress }: { author: StoryAuthor; onPress: () =>
       </Text>
     </Pressable>
   );
+}
+
+/** A shop author shows its logo; a person their photo. */
+export function storyAvatar(author: StoryAuthor): string | null {
+  return author.user.org ? orgLogoUrl(author.user.org.logoUrl) ?? author.user.avatar : author.user.avatar;
 }
 
 function Avatar({ uri, name }: { uri: string | null; name: string }) {

@@ -34,7 +34,14 @@ export interface Story {
 }
 
 export interface StoryAuthor {
-  user: { id: string; name: string; avatar: string | null; premium?: boolean };
+  /** `org`: the author is a shop (16 Nov 2026); its logo and name. */
+  user: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    premium?: boolean;
+    org?: { id: string; name: string; logoUrl: string | null; verified: boolean } | null;
+  };
   isOwn: boolean;
   /** Every story seen (always true for your own). The grey ring. */
   allSeen: boolean;

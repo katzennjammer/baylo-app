@@ -33,6 +33,7 @@ import { relativeShort } from "../src/lib/format";
 import { border, color, icon, radius, size, space, textStyle, type } from "../src/theme/tokens";
 import { sizedImage } from "../src/media/image-url";
 import { PremiumTag } from "../src/components/PremiumTag";
+import { storyAvatar } from "../src/components/home/StoriesRow";
 
 /**
  * The full-screen story viewer (2 Oct 2026). Opened from the stories row with
@@ -385,7 +386,7 @@ export default function StoryViewer() {
           </View>
 
           <View style={s.authorRow}>
-            <Avatar uri={author.user.avatar} name={author.user.name} />
+            <Avatar uri={storyAvatar(author)} name={author.user.name} />
             <Text style={[textStyle(type.username), s.onDark]} numberOfLines={1}>
               {author.isOwn ? "Your story" : author.user.name}
             </Text>

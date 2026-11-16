@@ -336,6 +336,8 @@ export interface ItemDetailPayload {
      * an older server.
      */
     incomingOfferId?: string | null;
+    /** This listing is another of the viewer's own accounts (16 Nov 2026). */
+    ownAccount?: boolean;
     /**
      * The account an offer from here goes out AS (16 Nov 2026). `shop` is null
      * for the person; in shop mode it is the acting shop, and `verified: false`

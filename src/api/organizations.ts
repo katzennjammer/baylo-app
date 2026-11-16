@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiV1, currentSession, request } from "./client";
 import { getApiBase } from "./config";
-import { setActingOrgId } from "./org-context";
+import { getActingOrgId, setActingOrgId } from "./org-context";
 import { prepareImage } from "../media/prepare-image";
 
 /**
@@ -291,4 +291,17 @@ export function orgLogoUrl(logoUrl: string | null): string | null {
   if (!logoUrl) return null;
   if (/^https?:\/\//i.test(logoUrl)) return logoUrl;
   return `${getApiBase().replace(/\/+$/, "")}${logoUrl}`;
+}
+
+/**
+ * The shop this device is ACTING AS, or undefined in personal mode (16 Nov
+ * 2026). For the screens that must show the shop's own things in shop mode:
+ * Trades' "My listings", the stories row's own circle, sharing a story.
+ * getActingOrgId() is read per render; every switch invalidates the queries,
+ * which re-renders the callers.
+ */
+export function useActingShop(): ActingOrg | undefined {
+  const { data } = useOrganizations();
+  const id = getActingOrgId();
+  return id ? data?.data.organizations.find((o) => o.id === id) : undefined;
 }

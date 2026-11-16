@@ -705,6 +705,7 @@ export default function ItemDetailScreen() {
             status={item.status}
             action={viewer.action}
             canOffer={viewer.canOffer}
+            ownAccount={viewer.ownAccount === true}
             checkingAvailability={isFetching}
             existingOfferId={viewer.existingOfferId}
             incomingOfferId={viewer.incomingOfferId ?? null}
@@ -1213,6 +1214,7 @@ function BottomBar({
   status,
   action,
   canOffer,
+  ownAccount,
   checkingAvailability,
   existingOfferId,
   incomingOfferId,
@@ -1235,6 +1237,8 @@ function BottomBar({
   status: string;
   action: "EDIT" | "SEND_OFFER" | "IN_TRADE" | "TRADED" | "UNAVAILABLE" | "RELIST";
   canOffer: boolean;
+  /** The listing is another of the viewer's own accounts: say so. */
+  ownAccount: boolean;
   checkingAvailability: boolean;
   existingOfferId: string | null;
   /**
@@ -1383,6 +1387,17 @@ function BottomBar({
       <View style={s.barRow}>
         {heart}
         {inert("Checking availability…")}
+      </View>
+    );
+  }
+
+  // Your shop's listing, or your own while acting as a shop: one person on
+  // both sides, which the server refuses. Say why instead of "Not available".
+  if (ownAccount) {
+    return (
+      <View style={s.barRow}>
+        {heart}
+        {inert("You can't offer to your own account")}
       </View>
     );
   }
