@@ -7,6 +7,7 @@ import { ApiError, apiV1 } from "../src/api/client";
 import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
+  useClearAllNotifications,
   useMarkNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
@@ -78,6 +79,26 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const list = useNotifications();
   const markVisible = useMarkNotificationsRead();
+  const clearAll = useClearAllNotifications();
+  // "Clear all" (16 Nov 2026): asked first, so a stray tap can't wipe the list.
+  const confirmClearAll = () =>
+    showDialog("Clear all notifications?", "This removes them from this list.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () =>
+          clearAll.mutate(undefined, {
+            onError: (e) =>
+              showDialog(
+                "Couldn't clear",
+                e instanceof ApiError ? e.message : "Check your connection and try again.",
+                [{ text: "Got it" }],
+                { pose: "worry" },
+              ),
+          }),
+      },
+    ]);
 
   /*
    * The snapshot behind the dots. Captured the first time rows arrive and never
@@ -126,7 +147,24 @@ export default function NotificationsScreen() {
 
   return (
     <OfferScreenHost imeInset={0}>
-      <TradesBackTitle title="Notifications" onBack={() => router.back()} />
+      <TradesBackTitle
+        title="Notifications"
+        onBack={() => router.back()}
+        trailing={
+          all.length > 0 ? (
+            <Tappable
+              onPress={clearAll.isPending ? undefined : confirmClearAll}
+              accessibilityRole="button"
+              accessibilityLabel="Clear all notifications"
+              hitSlop={8}
+            >
+              <Text style={[textStyle(offerType.body), { color: clearAll.isPending ? color.inkMuted : color.forest, fontWeight: "600" }]}>
+                {clearAll.isPending ? "Clearing…" : "Clear all"}
+              </Text>
+            </Tappable>
+          ) : null
+        }
+      />
 
       {list.isError ? (
         <TradesErrorPanel onRetry={() => void list.refetch()} />
