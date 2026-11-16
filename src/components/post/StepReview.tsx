@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { Text, View } from "react-native";
 
 import { useHubs } from "../../api/hubs";
@@ -15,8 +14,8 @@ import {
   textStyle,
   type Board,
 } from "../../theme/post-tokens";
-import { MarkerBadge } from "./CameraMarker";
 import { PhotoIssues } from "./PhotoIssues";
+import { PhotoStrip } from "./PhotoStrip";
 import { Divider, LeavesChip, SectionLabel, SmallTextButton, Tag } from "./ui";
 
 /**
@@ -61,7 +60,14 @@ export function StepReview({ board }: { board: Board }) {
       </View>
       <View style={{ height: postSpace.review.headingBelow }} />
 
-      <PhotoRail photos={photos} board={board} />
+      {/* Every photo, each removable (16 Nov 2026): a wrong photo mixed into
+          the set can be dropped here instead of going live. */}
+      <PhotoStrip
+        photos={photos}
+        tile={board.reviewTile}
+        paddingX={board.reviewX}
+        onRemove={(id) => dispatch({ type: "photo/remove", id })}
+      />
       {/* The photos that are not on the rail yet, and why. Post is disabled
           until this is empty, so the reason sits right under the photos. */}
       <PhotoIssues
@@ -266,73 +272,6 @@ function Section({
       </View>
       <Divider />
     </>
-  );
-}
-
-/* ──────────────────────────── the photo rail ────────────────────────── */
-
-/**
- * Two 104 tiles and a remainder.
- *
- * The remainder tile is a `+N` count in an empty bordered box rather than a
- * third thumbnail, because the rail is a reminder of what is attached, not a
- * gallery — the gallery is one Edit away and it is step 1, where the photos can
- * actually be changed.
- */
-function PhotoRail({
-  photos,
-  board,
-}: {
-  photos: { id: string; localUri: string; source: "camera" | "gallery" }[];
-  board: Board;
-}) {
-  const tile = board.reviewTile;
-  const shown = photos.slice(0, 2);
-  const remainder = photos.length - shown.length;
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        gap: postSpace.review.railGap,
-        paddingHorizontal: board.reviewX,
-      }}
-    >
-      {shown.map((photo) => (
-        <View
-          key={photo.id}
-          style={{
-            width: tile,
-            height: tile,
-            borderRadius: postRadius.reviewTile,
-            overflow: "hidden",
-            backgroundColor: postColor.inset,
-          }}
-        >
-          <Image
-            source={{ uri: photo.localUri }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-          />
-          {photo.source === "camera" ? <MarkerBadge tile={104} /> : null}
-        </View>
-      ))}
-      <View
-        style={{
-          flex: 1,
-          height: tile,
-          borderRadius: postRadius.reviewTile,
-          borderWidth: 1,
-          borderColor: postColor.divider,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={[textStyle(postType.helper), { color: postColor.inkDisabled }]}>
-          {`+${Math.max(0, remainder)}`}
-        </Text>
-      </View>
-    </View>
   );
 }
 
