@@ -41,6 +41,11 @@ export interface QuestDay {
   quests: Quest[];
   periodStart: string;
   resetsAt: string;
+  /**
+   * Why there are no quests, when the server says (16 Nov 2026): an
+   * unverified shop. A verified shop gets its own quests in shop mode.
+   */
+  notice?: string;
 }
 
 export const QUESTS_KEY = ["quests"] as const;
