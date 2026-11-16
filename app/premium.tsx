@@ -116,7 +116,7 @@ const PERKS: readonly { key: string; Icon: (p: IconProps) => React.JSX.Element; 
     Icon: LeafIcon,
     title: "Cheaper bridging fees",
     body:
-      `${PREMIUM_BRIDGE_FEE_PER_BRACKET} Leaves per bracket instead of ${BRIDGE_FEE_PER_BRACKET} — ` +
+      `${PREMIUM_BRIDGE_FEE_PER_BRACKET} points per bracket instead of ${BRIDGE_FEE_PER_BRACKET} — ` +
       `${DISCOUNT_PERCENT}% off whenever you're the one paying the bridge.`,
   },
   {

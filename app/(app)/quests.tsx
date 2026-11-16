@@ -114,7 +114,7 @@ export default function QuestsScreen() {
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={s.stripTitle}>All {done} done!</Text>
                 <Text style={s.stripBody}>
-                  You earned all {total} Leaves today.{resetsIn && resetsIn !== "now" ? ` New quests in ${resetsIn}.` : ""}
+                  You earned all {total} points today.{resetsIn && resetsIn !== "now" ? ` New quests in ${resetsIn}.` : ""}
                 </Text>
               </View>
             </View>
@@ -127,7 +127,7 @@ export default function QuestsScreen() {
                 <View style={s.stripEarned}>
                   <LeafIcon size={13} stroke={2.4} color="#DDF1E2" />
                   <Text style={s.stripEarnedText}>
-                    {earned} of {total} Leaves earned
+                    {earned} of {total} points earned
                   </Text>
                 </View>
               </View>
@@ -175,7 +175,7 @@ function QuestRow({ quest, first, onNavigate }: { quest: Quest; first: boolean; 
       accessible
       accessibilityLabel={`${TIER_LABEL[quest.tier]} quest: ${quest.label}. ${quest.description} ${
         quest.completed ? "Done" : "Not done"
-      }, ${quest.rewardLeaves} Leaves.`}
+      }, ${quest.rewardLeaves} points.`}
     >
       {quest.completed ? (
         <View style={s.doneMark}>
@@ -188,7 +188,7 @@ function QuestRow({ quest, first, onNavigate }: { quest: Quest; first: boolean; 
         <Text style={[s.rowTitle, quest.completed && { color: color.inkSecondary }]}>{quest.label}</Text>
         <Text style={quest.completed ? s.rowDone : s.rowSub}>
           {quest.completed
-            ? `Done · +${quest.rewardLeaves} Leaves earned`
+            ? `Done · +${quest.rewardLeaves} points earned`
             : `${quest.description} · ${TIER_LABEL[quest.tier]}`}
         </Text>
       </View>

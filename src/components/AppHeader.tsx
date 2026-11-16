@@ -437,7 +437,7 @@ export function LeavesPill({
       ]}
       accessibilityRole="text"
       accessibilityLabel={
-        value === null ? "Leaves balance loading" : `${owner ? `${owner} balance, ` : ""}${value} Leaves`
+        value === null ? "Points balance loading" : `${owner ? `${owner} balance, ` : ""}${value} points`
       }
     >
       <LeafIcon size={leaf.size} stroke={leaf.stroke} color={ink} />

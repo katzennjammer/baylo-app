@@ -74,7 +74,7 @@ export function VerifyEmailBar({ viewerId }: { viewerId: string }) {
       <LeafIcon size={icon.offlineWarning.size} stroke={icon.offlineWarning.stroke} color={color.forest} />
       <View style={s.body}>
         <Text style={[textStyle(type.offlineText), s.text]}>
-          {note ?? "Verify your email to collect your welcome Leaves."}
+          {note ?? "Verify your email to collect your welcome points."}
         </Text>
         {note ? null : (
           <Tappable

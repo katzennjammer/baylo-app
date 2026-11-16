@@ -107,7 +107,7 @@ export function HeroBanner({
     pendingTradeCount !== null && pendingTradeCount > 0
       ? `You've got ${pendingTradeCount} ${pendingTradeCount === 1 ? "trade" : "trades"} waiting for a reply. Check them before they expire.`
       : leavesBalance !== null
-        ? `You've got ${leavesBalance} Leaves ready to put toward your next trade.`
+        ? `You've got ${leavesBalance} points ready to put toward your next trade.`
         : "A good barter starts with something you no longer need.";
 
   useEffect(() => {

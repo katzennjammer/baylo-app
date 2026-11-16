@@ -436,10 +436,10 @@ export function DonePanel({ trade }: { trade: ActiveTrade }) {
             trade.rewards.map((r, i) => (
               <Detail
                 key={`${r.kind}-${i}`}
-                label={REWARD_LABEL[r.kind] ?? "Leaves reward"}
+                label={REWARD_LABEL[r.kind] ?? "Points reward"}
                 value={
                   r.leaves > 0
-                    ? `+${r.leaves} Leaves`
+                    ? `+${r.leaves} points`
                     : r.reason === "repeat_partner"
                       ? `Not paid: you traded with ${partner} in the last 30 days`
                       : r.reason === "weekly_cap"
@@ -450,8 +450,8 @@ export function DonePanel({ trade }: { trade: ActiveTrade }) {
             ))
           ) : (
             <Detail
-              label="Leaves reward earned"
-              value={trade.rewardLeaves === null ? "None" : `+${trade.rewardLeaves} Leaves`}
+              label="Points reward earned"
+              value={trade.rewardLeaves === null ? "None" : `+${trade.rewardLeaves} points`}
             />
           )}
           <Detail label="Rating I gave" value={trade.myReview ? `${trade.myReview.rating}/5` : "Not rated yet"} />

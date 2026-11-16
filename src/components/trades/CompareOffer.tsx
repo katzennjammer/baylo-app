@@ -94,7 +94,7 @@ export function CompareOffer({
     const lines = [
       "Both items are held for this trade until you meet.",
       rel.kind === "below" && rel.fee
-        ? `${partner}'s ${rel.fee}-Leaf bridging fee comes to you when the trade is done.`
+        ? `${partner}'s ${rel.fee}-point bridging fee comes to you when the trade is done.`
         : "No bridging fee: both items are in the same bracket.",
       others > 0
         ? `The other ${others} offer${others === 1 ? " is" : "s are"} declined, and those traders are told.`
@@ -135,8 +135,8 @@ export function CompareOffer({
     rel.kind === "same"
       ? `Both items are in Bracket ${myBracket ?? "?"}, so neither of you pays anything.`
       : rel.kind === "below"
-        ? `${partner} moves up a bracket, so ${partner} pays the ${rel.fee ?? ""}-Leaf bridging fee. It's already held, and it comes to you when the trade is done.`
-        : `You move up a bracket, so you pay a ${rel.fee ?? ""}-Leaf bridging fee when you accept. It goes to ${partner} when the trade is done.`;
+        ? `${partner} moves up a bracket, so ${partner} pays the ${rel.fee ?? ""}-point bridging fee. It's already held, and it comes to you when the trade is done.`
+        : `You move up a bracket, so you pay a ${rel.fee ?? ""}-point bridging fee when you accept. It goes to ${partner} when the trade is done.`;
   const headline =
     rel.kind === "same" ? "Same bracket" : rel.kind === "below" ? "One bracket below yours" : "One bracket above yours";
 
@@ -293,7 +293,7 @@ export function CompareOffer({
             <ActivityIndicator color={color.onGreen} />
           ) : (
             <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.onGreen }}>
-              {flow.receiverPays ? `Accept · pay ${flow.fee} Leaves` : "Accept trade"}
+              {flow.receiverPays ? `Accept · pay ${flow.fee} points` : "Accept trade"}
             </Text>
           )}
         </Tappable>

@@ -78,7 +78,7 @@ export default function DeleteAccountScreen() {
             {"• Your profile, name and photo are erased.\n" +
               "• Your listings are removed and pending offers are declined.\n" +
               "• Your messages are redacted.\n" +
-              "• Your Leaves balance is lost and cannot be recovered.\n" +
+              "• Your points balance is lost and cannot be recovered.\n" +
               "• You will be signed out on every device."}
           </Text>
         </View>

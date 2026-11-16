@@ -142,7 +142,7 @@ export function BridgeConsentSheet({
               { color: offerColor.ink, marginTop: offerSpace.labelToContent },
             ]}
           >
-            {`Held from ${payerName}'s Leaves, not your personal balance.`}
+            {`Held from ${payerName}'s points, not your personal balance.`}
           </Text>
         ) : null}
 

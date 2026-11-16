@@ -1065,7 +1065,7 @@ export function swapLine(trade: ActiveTrade): string {
     // A legacy Leaves-only trade: the listing sits in BOTH item columns as a
     // placeholder, so there is one item to name, and it is the receiver's.
     const leaves = trade.offeredLeaves ?? 0;
-    const side = leaves > 0 ? `${grouped(leaves)} Leaves` : "Leaves";
+    const side = leaves > 0 ? `${grouped(leaves)} points` : "points";
     return sent
       ? `Your ${side} for ${bracketed(trade.requestedItem)}`
       : `Their ${side} for your ${bracketed(trade.requestedItem)}`;
@@ -1101,9 +1101,9 @@ export function offerFeeLine(offer: LiveOffer): string | null {
   if (fee <= 0 || !offer.bridgeFeePayer) return null;
   const proposerPays = offer.bridgeFeePayer === "proposer";
   if (offer.direction === "sent") {
-    return proposerPays ? `${grouped(fee)}-Leaf fee held` : `They pay ${grouped(fee)} on accepting`;
+    return proposerPays ? `${grouped(fee)}-point fee held` : `They pay ${grouped(fee)} on accepting`;
   }
-  return proposerPays ? `They paid a ${grouped(fee)}-Leaf fee` : `You pay ${grouped(fee)} on accepting`;
+  return proposerPays ? `They paid a ${grouped(fee)}-point fee` : `You pay ${grouped(fee)} on accepting`;
 }
 
 /**
@@ -1116,8 +1116,8 @@ export function tradeFeeLine(trade: ActiveTrade): string | null {
   if (fee <= 0 || trade.bridgeFeePaidBySender == null) return null;
   const viewerPaid = trade.bridgeFeePaidBySender === (trade.direction === "sent");
   return viewerPaid
-    ? `Your ${grouped(fee)}-Leaf bridging fee goes to them when this completes, or comes back if it is cancelled`
-    : `Their ${grouped(fee)}-Leaf bridging fee comes to you when this completes`;
+    ? `Your ${grouped(fee)}-point bridging fee goes to them when this completes, or comes back if it is cancelled`
+    : `Their ${grouped(fee)}-point bridging fee comes to you when this completes`;
 }
 
 /** `Air Max · Bracket 4`, or `Air Max` when never valued. Either side. */

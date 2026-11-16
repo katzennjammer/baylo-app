@@ -291,7 +291,7 @@ export function HomeTopSection({
                 </>
               ) : (
                 <>
-                  You&apos;ve got <Text style={s.subtitleEmphasis}>{leavesBalance === null ? "—" : formatLeaves(leavesBalance)}</Text> Leaves ready for your next trade.
+                  You&apos;ve got <Text style={s.subtitleEmphasis}>{leavesBalance === null ? "—" : formatLeaves(leavesBalance)}</Text> points ready for your next trade.
                 </>
               )}
             </Text>

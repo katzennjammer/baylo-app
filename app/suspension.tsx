@@ -126,7 +126,7 @@ function SuspensionBody({ s }: { s: SuspensionDetail }) {
       <Gutter style={{ paddingTop: 16, gap: 14 }}>
         <Text style={[textStyle(offerType.helper), { color: offerColor.inkSecondary }]}>
           Further breaches of the community rules can lead to a longer or permanent suspension.
-          Nothing was deleted — your listings and Leaves were kept.{"\n\n"}
+          Nothing was deleted — your listings and points were kept.{"\n\n"}
           If you think this was a mistake, write to {SUPPORT_EMAIL} from the email on this account
           and a person will review it.
         </Text>

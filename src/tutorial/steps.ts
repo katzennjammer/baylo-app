@@ -92,8 +92,8 @@ export const TOUR_STEPS: readonly TourStep[] = [
     targets: ["leaves", "quests"],
     shape: "pill",
     pose: "up",
-    title: "Earn Leaves with daily quests",
-    body: "This is your Leaves balance. Tap the target beside it to see today’s quests and earn more.",
+    title: "Earn points with daily quests",
+    body: "This is your points balance. Tap the target beside it to see today’s quests and earn more.",
   },
   {
     id: "done",

@@ -29,7 +29,7 @@
  */
 
 import { bracketLabel, bracketsWord, PREMIUM_MIN_BRACKET, VIP_MIN_BRACKET } from "../../lib/brackets";
-import { grouped } from "../../lib/gap";
+import { grouped, points } from "../../lib/gap";
 import type { OfferLegality } from "../../lib/trade-rules";
 
 /** `Marco A.` → `Marco`. The spec addresses people by first name throughout. */
@@ -78,7 +78,7 @@ export function messageCounter(used: number, max: number): string {
 export const button = {
   send: "Send offer",
   /** The proposer-pays bridge: the fee is named on the button, once. */
-  sendWithFee: (fee: number) => `Send offer · ${grouped(fee)}-Leaf fee`,
+  sendWithFee: (fee: number) => `Send offer · ${grouped(fee)}-point fee`,
   /** Inside the consent sheet. Disabled until the box is ticked. */
   propose: "Propose",
   accept: "Accept",
@@ -89,7 +89,7 @@ export const footnote = {
   threeDays: (owner: string) => `${owner} has three days to reply.`,
   /** `20 Leaves held from 310 until Marco replies.` The proposer-pays bridge. */
   heldFrom: (held: number, balance: number, owner: string) =>
-    `${grouped(held)} Leaves held from ${grouped(balance)} until ${owner} replies.`,
+    `${points(held)} held from ${grouped(balance)} until ${owner} replies.`,
   /** The up-bridge note the spec names: `Marco will pay a 30-Leaf bridging fee to accept.` */
   /**
    * NO FIGURE. The receiver's fee is priced by THEIR subscription (8/bracket
@@ -132,7 +132,7 @@ export const bracket = {
     `nothing changes hands but the items. ${owner} decides.`,
   /** The proposer pays. `fee` is 10 × the proposer's own bracket. */
   bridgeUp: (fee: number, balance: number, owner: string) =>
-    `Your item is one bracket below ${owner}'s, so a ${grouped(fee)}-Leaf bridging fee makes ` +
+    `Your item is one bracket below ${owner}'s, so a ${grouped(fee)}-point bridging fee makes ` +
     `up the difference. It is held from your ${grouped(balance)} when you send and goes to ` +
     `${owner} when the swap completes. If ${owner} declines or the offer expires, it comes back.`,
   /** The receiver pays. `fee` is 10 × the receiver's own bracket. */
@@ -143,7 +143,7 @@ export const bracket = {
     `Premium status. Nothing is held from you.`,
   /** The proposer cannot cover the fee. `need` vs `have`, and no send. */
   short: (fee: number, balance: number) =>
-    `This bridge needs ${grouped(fee)} Leaves and you hold ${grouped(balance)}. Complete a ` +
+    `This bridge needs ${points(fee)} and you hold ${grouped(balance)}. Complete a ` +
     `trade or a task to earn more, or offer an item in the same bracket instead.`,
 } as const;
 
@@ -178,7 +178,7 @@ export const consent = {
   headingAccept: "Before you accept",
   /** `Bracket 2 for Bracket 3 · 20-Leaf bridging fee` */
   terms: (yours: number, theirs: number, fee: number) =>
-    `${bracketLabel(yours)} for ${bracketLabel(theirs)} · ${grouped(fee)}-Leaf bridging fee`,
+    `${bracketLabel(yours)} for ${bracketLabel(theirs)} · ${grouped(fee)}-point bridging fee`,
   bodySend: (owner: string) =>
     `The fee is held now and goes to ${owner} when the swap completes. If ${owner} declines, ` +
     `or the offer expires after three days, it comes back to you in full.`,
@@ -190,7 +190,7 @@ export const consent = {
   checkbox: "I agree to the bridging fee and the trading policy",
   policyLink: "Read the trading policy",
   /** The insufficient-balance variant. No button; these two lines instead. */
-  shortHeading: "Not enough Leaves for this bridge",
+  shortHeading: "Not enough points for this bridge",
   shortBody: (need: number, have: number) =>
     `You need ${grouped(need)} and you hold ${grouped(have)}. Complete a trade or a task to ` +
     `earn more, or choose an item in the same bracket.`,
@@ -250,7 +250,7 @@ export const pending = {
   body: (sentAgo: string, owner: string, weekday: string) =>
     `Sent ${sentAgo}. ${owner} has until ${weekday} to reply, then it expires on its own.`,
   /** `Bracket 2 for Bracket 3 · 20 Leaves held` / `· no fee` / `· Marco pays 30 on accepting` */
-  termsHeld: (fee: number) => `${grouped(fee)} Leaves held`,
+  termsHeld: (fee: number) => `${points(fee)} held`,
   termsFree: "no fee",
   termsTheyPay: (owner: string, fee: number) => `${owner} pays ${grouped(fee)} on accepting`,
   leaveIt: "Leave it as it is",
@@ -259,7 +259,7 @@ export const pending = {
 /** §10.5 "Sending" and "Send failed". */
 export const sending = {
   label: "Sending",
-  footnote: (held: number) => (held > 0 ? `Holding ${grouped(held)} Leaves` : "Sending your offer"),
+  footnote: (held: number) => (held > 0 ? `Holding ${points(held)}` : "Sending your offer"),
 } as const;
 
 export const sendFailed = {
@@ -267,7 +267,7 @@ export const sendFailed = {
   /** `…your 20 Leaves were released back to your balance…` */
   body: (owner: string, held: number) =>
     `The connection dropped partway. Nothing reached ${owner}, ` +
-    (held > 0 ? `your ${grouped(held)} Leaves were released back to your balance, ` : "") +
+    (held > 0 ? `your ${points(held)} were released back to your balance, ` : "") +
     `and the offer is still here exactly as you built it.`,
   retry: "Try sending again",
   keep: "Keep it and send later",
@@ -387,7 +387,7 @@ export const prompt = {
     {
       title: "Trading up costs a bridging fee",
       body:
-        "When the two items are one bracket apart, the trade includes a bridging fee in Leaves. " +
+        "When the two items are one bracket apart, the trade includes a bridging fee in points. " +
         "Whoever ends up with the higher-bracket item pays it.",
     },
   ],
