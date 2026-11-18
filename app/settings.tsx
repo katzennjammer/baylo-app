@@ -11,9 +11,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError, resendVerificationSignedIn } from "../src/api/client";
 import { getApiBase } from "../src/api/config";
 import { fetchIdVerification, type IdVerificationStatus } from "../src/api/id-verification";
-import { useOrganizations, type ActingOrg } from "../src/api/organizations";
+import { orgLogoUrl, useActingShop, useOrganizations, type ActingOrg } from "../src/api/organizations";
 import { getActingOrgId } from "../src/api/org-context";
-import { useProfileMe } from "../src/api/profile";
+import { useProfileMe, usePublicProfile } from "../src/api/profile";
 import type { ViewerReputation } from "../src/api/types";
 import { useSession } from "../src/auth/session";
 import { BackHeader } from "../src/components/BackHeader";
@@ -94,6 +94,25 @@ export default function SettingsScreen() {
     organizations[0] ??
     null;
 
+  // Shop mode (18 Nov 2026). A shop has no login of its own: email, password
+  // and sessions stay the owner's and are labelled so. The person-only rows
+  // (ID check, achievements, the person's Premium) are hidden, and the top
+  // card and the Premium row are the SHOP's.
+  const actingShop = useActingShop();
+  const shopProfile = usePublicProfile(actingShop?.orgUserId);
+  const ownerName = profile?.user.name ?? session?.user.name ?? "you";
+  const shopPremium = shopProfile.data
+    ? shopProfile.data.user.premium
+      ? "Active"
+      : "Not subscribed"
+    : undefined;
+  function openShop(shop: ActingOrg) {
+    router.push({
+      pathname: "/edit-org",
+      params: { id: shop.id, userId: shop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "" },
+    });
+  }
+
   const email = profile?.user.email ?? session?.user.email ?? "";
   const version = Constants.expoConfig?.version ?? "unknown";
 
@@ -169,7 +188,10 @@ export default function SettingsScreen() {
           />
         </View>
         {/* You, at the top: the way in to Edit profile. */}
-        {!query ? (
+        {!query && actingShop ? (
+          <ShopCard shop={actingShop} onPress={() => openShop(actingShop)} />
+        ) : null}
+        {!query && !actingShop ? (
           <Tappable onPress={() => router.push("/edit-profile")} accessibilityRole="button" style={styles.me} pressedStyle={styles.pressed}>
             {profile?.user.avatar ? (
               <Image source={{ uri: sizedImage(profile.user.avatar, "thumb") }} contentFit="cover" style={styles.meAvatar} />
@@ -188,7 +210,7 @@ export default function SettingsScreen() {
         <SettingsQuery.Provider value={query.trim().toLowerCase()}>
         {/* The design's six groups (4 Nov 2026), each one card of rows with an
             icon square, a value on the right, and ↗ for browser pages. */}
-        <Group title="Your account" hidden={!!query}>
+        <Group title={actingShop ? `Owner login (${ownerName})` : "Your account"} hidden={!!query}>
           {profile ? (
             profile.user.isVerified ? (
               <InfoRow icon="mail-outline" label="Email verification" value="Verified" good sub={email} />
@@ -207,14 +229,14 @@ export default function SettingsScreen() {
             sub={signInLine(profile?.user.hasPassword) ?? "Or set one if you signed up with Google"}
             onPress={() => router.push("/change-password")}
           />
-          <SettingsRow
+          {actingShop ? null : <SettingsRow
             icon="id-card-outline"
             label="ID verification"
             value={idVerification.data?.verified || idVerification.data?.status === "approved" ? "Verified" : undefined}
             good
             sub={idVerification.data?.verified || idVerification.data?.status === "approved" ? undefined : idStatusLine(idVerification.data?.status, idVerification.data?.verified)}
             onPress={() => router.push("/verify-id")}
-          />
+          />}
           <SettingsRow
             icon="phone-portrait-outline"
             label="Active sessions"
@@ -223,7 +245,7 @@ export default function SettingsScreen() {
           />
         </Group>
 
-        <Group title="Your profile" hidden={!!query}>
+        {actingShop ? null : <Group title="Your profile" hidden={!!query}>
           <SettingsRow
             icon="ribbon-outline"
             label="Achievements"
@@ -235,15 +257,7 @@ export default function SettingsScreen() {
               icon="storefront-outline"
               label="My shop"
               sub={`${myShop.name} · ${organizationStatusLine(myShop)}`}
-              onPress={() =>
-                router.push({
-                  pathname: "/edit-org",
-                  params: {
-                    id: myShop.id,
-                    userId: myShop.orgUserId ?? profile?.user.id ?? session?.user.id ?? "",
-                  },
-                })
-              }
+              onPress={() => openShop(myShop)}
             />
           ) : organizationsQuery.isSuccess && organizations.length === 0 ? (
             <SettingsRow
@@ -253,7 +267,7 @@ export default function SettingsScreen() {
               onPress={() => router.push("/register-shop")}
             />
           ) : null}
-        </Group>
+        </Group>}
 
         <Group title="Trading" hidden={!!query}>
           <SettingsRow
@@ -262,7 +276,7 @@ export default function SettingsScreen() {
             sub="Brackets, bridging fees, your tier"
             onPress={() => setExplainerOpen(true)}
           />
-          <SettingsRow icon="star-outline" label="Premium" value={premiumValue(profile?.reputation)} onPress={() => openPremium(router)} />
+          <SettingsRow icon="star-outline" label="Premium" value={actingShop ? shopPremium : premiumValue(profile?.reputation)} onPress={() => openPremium(router)} />
           <SettingsRow icon="document-text-outline" label="Trading policy" external onPress={() => openPage(TRADING_POLICY_PATH)} />
         </Group>
 
@@ -420,6 +434,41 @@ function InfoRow({ icon: iconName, label, value, sub, good = false }: { icon: Ic
       </View>
       <Text style={[styles.rowValue, good && { color: color.forest }]}>{value}</Text>
     </View>
+  );
+}
+
+/**
+ * The top card in shop mode: the shop, not the owner. Its status sentence
+ * says what an unverified shop cannot do yet, because "Under review" alone
+ * does not.
+ */
+function ShopCard({ shop, onPress }: { shop: ActingOrg; onPress: () => void }) {
+  const logo = orgLogoUrl(shop.logoUrl);
+  const status = shop.verificationStatus ?? (shop.verified ? "VERIFIED" : "PENDING");
+  const note =
+    status === "VERIFIED"
+      ? null
+      : status === "REJECTED"
+        ? "Not approved. Open the shop to see why."
+        : "An admin has to verify this shop before it can post, send offers, share stories or do quests.";
+  return (
+    <Tappable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${shop.name}, ${organizationStatusLine(shop)}`} style={styles.me} pressedStyle={styles.pressed}>
+      {logo ? (
+        <Image source={{ uri: logo }} contentFit="cover" style={styles.meAvatar} />
+      ) : (
+        <View style={[styles.meAvatar, styles.meFallback]}>
+          <Ionicons name="storefront-outline" size={22} color={color.forest} />
+        </View>
+      )}
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={styles.meName} numberOfLines={1}>{shop.name}</Text>
+        <Text style={[styles.meSub, status === "VERIFIED" && { color: color.forest }]} numberOfLines={1}>
+          {`Shop · ${organizationStatusLine(shop)} · Edit shop`}
+        </Text>
+        {note ? <Text style={styles.rowSub}>{note}</Text> : null}
+      </View>
+      <ChevronRightIcon size={icon.chevron.size} stroke={icon.chevron.stroke} color={color.inkMuted} />
+    </Tappable>
   );
 }
 
