@@ -14,6 +14,7 @@ import {
   type OfferableItem,
 } from "../src/api/offer";
 import { useKeyboardState } from "../src/components/auth-sheet";
+import { useMeasuredKeyboardOverlap } from "../src/lib/keyboard-overlap";
 import { Splash } from "../src/components/Splash";
 import { BridgeConsentSheet } from "../src/components/offer/BridgeConsentSheet";
 import {
@@ -123,7 +124,11 @@ export default function OfferScreen() {
   const context = frozen ?? liveContext;
 
   /* ── the IME. See the note on `OfferScreenHost`. ────────────────────── */
-  const { keyboardUp, imeHeight } = useKeyboardState();
+  const { keyboardUp } = useKeyboardState();
+  // The keyboard's real overlap, MEASURED (18 Nov 2026): the raw keyboard
+  // height on top of a window Android had already shrunk squeezed the
+  // message box. Same fix as the swap-code screen; see keyboard-overlap.ts.
+  const kb = useMeasuredKeyboardOverlap();
   const [messageFocused, setMessageFocused] = useState(false);
 
   const board = useOfferBoard();
@@ -461,7 +466,8 @@ export default function OfferScreen() {
 
   if (keyboardUp && messageFocused) {
     return (
-      <OfferScreenHost imeInset={imeHeight}>
+      <View ref={kb.rootRef} onLayout={kb.onRootLayout} style={{ flex: 1 }}>
+      <OfferScreenHost imeInset={kb.overlap}>
         <OfferNav
           title={copy.chrome.navTitle}
           onBack={null}
@@ -499,6 +505,7 @@ export default function OfferScreen() {
           expand
         />
       </OfferScreenHost>
+      </View>
     );
   }
 
