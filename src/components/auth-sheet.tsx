@@ -53,6 +53,7 @@ import {
   type AuthBoard,
   type ScrimName,
 } from "../theme/auth-sheet-tokens";
+import { color } from "../theme/tokens";
 import {
   MONTH_NAMES,
   clampDay,
@@ -1565,11 +1566,19 @@ export function RejectionPanel({ rows }: { rows: PanelRow[] }) {
 export function Banner({
   message,
   action,
+  tone = "error",
 }: {
   message: string;
   action?: { label: string; onPress: () => void };
+  /**
+   * "success" (18 Nov 2026): a green panel with a check, for good news such as
+   * "the reset link was sent". It used to share the red error look, which made
+   * a successful request read like a failure.
+   */
+  tone?: "error" | "success";
 }) {
   const { board } = useMetrics();
+  const ok = tone === "success";
 
   return (
     <View
@@ -1580,15 +1589,15 @@ export function Banner({
         padding: board.panelX,
         borderRadius: authRadius.panel,
         borderWidth: authSize.panelBorder,
-        borderColor: sheetColor.panelLine,
-        backgroundColor: sheetColor.panelFill,
+        borderColor: ok ? color.greenLine : sheetColor.panelLine,
+        backgroundColor: ok ? color.greenWash : sheetColor.panelFill,
       }}
     >
       <View style={{ paddingTop: 1 }}>
-        <AlertIcon color={sheetColor.errorInk} />
+        {ok ? <CheckIcon color={sheetColor.forest} /> : <AlertIcon color={sheetColor.errorInk} />}
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[authText(authType.errorMessage), { color: sheetColor.errorInk }]}>
+        <Text style={[authText(authType.errorMessage), { color: ok ? sheetColor.forest : sheetColor.errorInk }]}>
           {message}
         </Text>
         {action ? (

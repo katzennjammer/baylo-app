@@ -378,7 +378,9 @@ function EmailLogIn({
     try {
       await requestPasswordReset(address);
       setNotice(
-        `If ${address} has an account, a reset link is on its way. Open it on this phone — the reset page is on the Baylo website.`,
+        // Friendlier wording (18 Nov 2026), still never confirming whether the
+        // address is registered.
+        `Check your email. If ${address} has a Baylo account, we've sent a link to reset your password. It can take a minute, so check Spam too.`,
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not send the reset email.");
@@ -463,7 +465,7 @@ function EmailLogIn({
 
       {banner ? (
         <View style={{ marginBottom: gap.inputsToDeclaration }}>
-          <Banner message={banner} />
+          <Banner message={banner} tone={banner === notice && !error ? "success" : "error"} />
         </View>
       ) : null}
 
