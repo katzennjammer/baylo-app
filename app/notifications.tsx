@@ -7,7 +7,7 @@ import { ApiError, apiV1 } from "../src/api/client";
 import { itemKey } from "../src/api/item";
 import {
   notificationTarget,
-  useClearAllNotifications,
+  useMarkAllNotificationsRead,
   useMarkNotificationsRead,
   useNotifications,
 } from "../src/api/notifications";
@@ -79,26 +79,22 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const list = useNotifications();
   const markVisible = useMarkNotificationsRead();
-  const clearAll = useClearAllNotifications();
-  // "Clear all" (16 Nov 2026): asked first, so a stray tap can't wipe the list.
-  const confirmClearAll = () =>
-    showDialog("Clear all notifications?", "This removes them from this list.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Clear",
-        style: "destructive",
-        onPress: () =>
-          clearAll.mutate(undefined, {
-            onError: (e) =>
-              showDialog(
-                "Couldn't clear",
-                e instanceof ApiError ? e.message : "Check your connection and try again.",
-                [{ text: "Got it" }],
-                { pose: "worry" },
-              ),
-          }),
-      },
-    ]);
+  // "Mark all as read" (18 Nov 2026): one tap clears every dot and the bell
+  // count, for the whole inbox (the shop's in shop mode), not just the rows
+  // loaded here. Nothing is removed. Uses PATCH /api/notifications.
+  const markAll = useMarkAllNotificationsRead();
+  const [allMarked, setAllMarked] = useState(false);
+  const markAllRead = () =>
+    markAll.mutate(undefined, {
+      onSuccess: () => setAllMarked(true),
+      onError: (e) =>
+        showDialog(
+          "Couldn't mark them as read",
+          e instanceof ApiError ? e.message : "Check your connection and try again.",
+          [{ text: "Got it" }],
+          { pose: "worry" },
+        ),
+    });
 
   /*
    * The snapshot behind the dots. Captured the first time rows arrive and never
@@ -151,15 +147,15 @@ export default function NotificationsScreen() {
         title="Notifications"
         onBack={() => router.back()}
         trailing={
-          all.length > 0 ? (
+          !allMarked && ((unreadOnEntry.current?.size ?? 0) > 0 || (list.data?.unreadCount ?? 0) > 0) ? (
             <Tappable
-              onPress={clearAll.isPending ? undefined : confirmClearAll}
+              onPress={markAll.isPending ? undefined : markAllRead}
               accessibilityRole="button"
-              accessibilityLabel="Clear all notifications"
+              accessibilityLabel="Mark all notifications as read"
               hitSlop={8}
             >
-              <Text style={[textStyle(offerType.body), { color: clearAll.isPending ? color.inkMuted : color.forest, fontWeight: "600" }]}>
-                {clearAll.isPending ? "Clearing…" : "Clear all"}
+              <Text style={[textStyle(offerType.body), { color: markAll.isPending ? color.inkMuted : color.forest, fontWeight: "600" }]}>
+                {markAll.isPending ? "Marking…" : "Mark all as read"}
               </Text>
             </Tappable>
           ) : null
@@ -214,7 +210,7 @@ export default function NotificationsScreen() {
                 <View key={n.id}>
                   <NotificationRow
                     item={n}
-                    wasUnread={unreadOnEntry.current?.has(n.id) ?? false}
+                    wasUnread={!allMarked && (unreadOnEntry.current?.has(n.id) ?? false)}
                     onOpen={(path) => router.push(path as never)}
                   />
                   <Hairline />
