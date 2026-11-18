@@ -719,13 +719,23 @@ export default function MessagesThreadScreen() {
                 : "This conversation failed to load."}
             </Text>
             {!isUnavailableConversationError(thread.error) ? (
+              // Shows it is working, and ignores taps until the retry
+              // answers (18 Nov 2026): it used to look dead while loading.
               <Tappable
-                onPress={() => void thread.refetch()}
-                style={styles.newMessageButton}
+                onPress={thread.isFetching ? undefined : () => void thread.refetch()}
+                style={[styles.newMessageButton, thread.isFetching ? { opacity: 0.7 } : null]}
                 pressedStyle={styles.newMessageButtonPressed}
                 accessibilityRole="button"
+                accessibilityState={{ busy: thread.isFetching, disabled: thread.isFetching }}
               >
-                <Text style={styles.newMessageButtonText}>Try again</Text>
+                {thread.isFetching ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.newMessageButtonText}>Trying…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.newMessageButtonText}>Try again</Text>
+                )}
               </Tappable>
             ) : null}
         </View>

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRef, type ReactNode } from "react";
-import { Animated, PanResponder, StyleSheet, Text, View } from "react-native";
+import { Animated, Keyboard, PanResponder, StyleSheet, Text, View } from "react-native";
 
 import { color } from "../../theme/tokens";
 import { Tappable } from "../Tappable";
@@ -32,11 +32,27 @@ export function SwipeToReply({
 }) {
   const dx = useRef(new Animated.Value(0)).current;
   const passed = useRef(false);
+  // Read through a ref: the responder is created once, so a captured
+  // `enabled` would stay whatever it was on the first render.
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const responder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => enabled && g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
-      onMoveShouldSetPanResponderCapture: (_e, g) => enabled && g.dx > 18 && Math.abs(g.dx) > Math.abs(g.dy) * 2.5,
+      // KEYBOARD UP (18 Nov 2026): the chat's ScrollView, with
+      // keyboardShouldPersistTaps="handled", claims every touch at its START
+      // so a tap can close the keyboard, and React Native never lets a child
+      // take a touch back from an ancestor that holds it. So swipe-to-reply
+      // died while typing. While the keyboard shows, the bubble claims the
+      // start itself (deeper views such as the bubble's own buttons still go
+      // first); a vertical drag is still handed to the scroller, and a plain
+      // tap still closes the keyboard (see release).
+      onStartShouldSetPanResponder: () => enabledRef.current && Keyboard.isVisible(),
+      onMoveShouldSetPanResponder: (_e, g) => enabledRef.current && g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onMoveShouldSetPanResponderCapture: (_e, g) => enabledRef.current && g.dx > 18 && Math.abs(g.dx) > Math.abs(g.dy) * 2.5,
       onPanResponderMove: (_e, g) => {
+        // Sideways only: a mostly-vertical drag claimed at the start must not
+        // nudge the bubble while the list takes over the scroll.
+        if (Math.abs(g.dx) <= Math.abs(g.dy)) return;
         const x = Math.max(0, Math.min(MAX, g.dx));
         dx.setValue(x);
         if (x >= TRIGGER && !passed.current) {
@@ -46,8 +62,11 @@ export function SwipeToReply({
           passed.current = false;
         }
       },
-      onPanResponderRelease: () => {
+      onPanResponderRelease: (_e, g) => {
         if (passed.current) onReplyRef.current();
+        // A plain tap while typing still closes the keyboard, as it did when
+        // the list held the touch.
+        else if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6 && Keyboard.isVisible()) Keyboard.dismiss();
         passed.current = false;
         Animated.spring(dx, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
       },
