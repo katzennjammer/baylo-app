@@ -13,6 +13,7 @@ import {
 } from "../src/api/trades";
 import type { ActiveTrade, LiveOffer, SafeZoneHub } from "../src/api/types";
 import { useKeyboardState } from "../src/components/auth-sheet";
+import { useMeasuredKeyboardOverlap } from "../src/lib/keyboard-overlap";
 import { Splash } from "../src/components/Splash";
 import { Tappable } from "../src/components/Tappable";
 import {
@@ -112,8 +113,18 @@ export default function TradeScreen() {
   // A listing's own offers: an offer past the main feed's 50-row cap is still
   // found when it was opened from that listing's inbox.
   const listingOffers = useListingOffers(params.listing || undefined);
-  const { keyboardUp, imeHeight } = useKeyboardState();
+  const { keyboardUp } = useKeyboardState();
   const entry = useCodeEntry();
+  // The keyboard's real overlap with this screen, MEASURED (18 Nov 2026).
+  // The raw keyboard height was added on top of a window Android had already
+  // shrunk, so the swap-code field was squeezed and cut off at the top.
+  const kb = useMeasuredKeyboardOverlap();
+  const scrollRef = useRef<ScrollView>(null);
+  // With the keyboard up the swap header drops out above the code field, so
+  // start the scroller at the top where the field now is.
+  useEffect(() => {
+    if (keyboardUp) scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [keyboardUp]);
 
   useTradeLiveness(active.refetch);
 
@@ -513,7 +524,8 @@ export default function TradeScreen() {
   const busy = offerFlow.busy || decideTrade.isPending || withdraw.busy;
 
   return (
-    <OfferScreenHost imeInset={keyboardUp ? imeHeight : 0} dimmed={busy}>
+    <View ref={kb.rootRef} onLayout={kb.onRootLayout} style={{ flex: 1 }}>
+    <OfferScreenHost imeInset={keyboardUp ? kb.overlap : 0} dimmed={busy}>
       <TradesBackTitle
         title={copy.tradeScreen.title(partner)}
         onBack={goBack}
@@ -534,7 +546,7 @@ export default function TradeScreen() {
         }
       />
 
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* The swap and the track. Under the keyboard both drop out as null in
             slots that stay, so the code field never changes index. */}
         {keyboardUp ? null : (
@@ -598,6 +610,7 @@ export default function TradeScreen() {
 
       {offerFlow.sheet}
     </OfferScreenHost>
+    </View>
   );
 }
 
