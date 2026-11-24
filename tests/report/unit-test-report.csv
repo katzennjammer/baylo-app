@@ -87,7 +87,7 @@
 "—","Marketplace and Search","Shop Categories","11/24/2026","Case-086","Known business category is shown","A friendly label is returned (SARI_SARI -> Sari-sari store)","Performed as expected","PASSED"
 "—","Marketplace and Search","Shop Categories","11/24/2026","Case-087","Business category from a newer server is shown","It is title-cased instead of leaking raw SNAKE_CASE","Performed as expected","PASSED"
 "—","Marketplace and Search","Shop Categories","11/24/2026","Case-088","Unknown category is checked","isKnownBusinessCategory is false","Performed as expected","PASSED"
-"—","Marketplace and Search","Listing Area","11/24/2026","Case-089","Listing has an active safe-zone hub in 'Davao City'","Area shown is 'Davao' (city suffix removed)","Performed as expected","PASSED"
+"—","Marketplace and Search","Listing Area","11/24/2026","Case-089","Listing has an active safe-zone hub in 'Cebu City'","Area shown is 'Cebu' (city suffix removed)","Performed as expected","PASSED"
 "—","Marketplace and Search","Listing Area","11/24/2026","Case-090","Listing has no hubs","Area falls back to the owner's location","Performed as expected","PASSED"
 "—","Marketplace and Search","Listing Area","11/24/2026","Case-091","Listing has no hubs and no owner location","Area is null","Performed as expected","PASSED"
 "—","Trading and Offers","Value Brackets","11/24/2026","Case-092","Item is worth exactly 100 Leaves","It is in Bracket 1 (ceiling is inclusive)","Performed as expected","PASSED"

@@ -55,9 +55,9 @@ meet("Meetup Form", "Time picker opens at 3:30 PM the same day", "It starts at t
 });
 
 const hubs = [
-  { id: "a", name: "Alpha Mall", city: "Davao", typeLabel: "Mall" },
+  { id: "a", name: "Alpha Mall", city: "Mandaue", typeLabel: "Mall" },
   { id: "b", name: "Bravo Plaza", city: "Cebu", typeLabel: "Plaza" },
-  { id: "c", name: "Charlie Hall", city: "Davao", typeLabel: "Hall" },
+  { id: "c", name: "Charlie Hall", city: "Mandaue", typeLabel: "Hall" },
 ];
 meet("Hub List", "User opens the hub list with a suggested and a shared hub", "Groups are ordered suggested, shared, then cities", () => {
   const g = groupHubs({ hubs, shared: new Set(["c"]), suggestedId: "a", km: null });
@@ -72,10 +72,10 @@ meet("Hub List", "User searches text that matches no hub", "The list is empty", 
 });
 meet("Hub List", "Cities are listed without distance data", "Cities are alphabetical", () => {
   const g = groupHubs({ hubs, shared: new Set(), suggestedId: null, km: null });
-  assert.deepEqual(g.map((x) => (x.kind === "city" ? x.city : "")), ["Cebu", "Davao"]);
+  assert.deepEqual(g.map((x) => (x.kind === "city" ? x.city : "")), ["Cebu", "Mandaue"]);
 });
 meet("Distance", "User is at the hub's exact location", "Distance is 0 km", () => {
-  assert.equal(distanceKm(7.07, 125.6, { latitude: 7.07, longitude: 125.6 } as never), 0);
+  assert.equal(distanceKm(10.3157, 123.8854, { latitude: 10.3157, longitude: 123.8854 } as never), 0);
 });
 meet("Distance", "Hub is one degree of longitude away on the equator", "Distance is about 111 km", () => {
   const km = distanceKm(0, 0, { latitude: 0, longitude: 1 } as never);

@@ -119,12 +119,12 @@ c("Shop Categories", "Unknown category is checked", "isKnownBusinessCategory is 
   assert.equal(isKnownBusinessCategory("PET_SUPPLIES"), false);
   assert.equal(isKnownBusinessCategory("RETAIL"), true);
 });
-c("Listing Area", "Listing has an active safe-zone hub in 'Davao City'", "Area shown is 'Davao' (city suffix removed)", () => {
-  const item = { safeZones: [{ city: "Davao City", isActive: true }], owner: { location: "Manila" } } as never;
-  assert.equal(listingArea(item), "Davao");
+c("Listing Area", "Listing has an active safe-zone hub in 'Cebu City'", "Area shown is 'Cebu' (city suffix removed)", () => {
+  const item = { safeZones: [{ city: "Cebu City", isActive: true }], owner: { location: "Mandaue City" } } as never;
+  assert.equal(listingArea(item), "Cebu");
 });
 c("Listing Area", "Listing has no hubs", "Area falls back to the owner's location", () => {
-  assert.equal(listingArea({ safeZones: [], owner: { location: "Cebu City" } } as never), "Cebu");
+  assert.equal(listingArea({ safeZones: [], owner: { location: "Mandaue City" } } as never), "Mandaue");
 });
 c("Listing Area", "Listing has no hubs and no owner location", "Area is null", () => {
   assert.equal(listingArea({ safeZones: [], owner: { location: "  " } } as never), null);
