@@ -75,7 +75,8 @@
     "phone:tunnel": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode tunnel",
     "phone:lan": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -Mode lan",
     "phone:reset": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -ClearBundleHost",
-    "phone:show": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -ShowOnly"
+    "phone:show": "powershell -ExecutionPolicy Bypass -File scripts/connect-phone.ps1 -ShowOnly",
+    "test:integration": "node --require ./scripts/rn-stub.cjs --require ./scripts/securestore-fake.cjs --import tsx --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/support/reporter.mjs --test-reporter-destination=stdout tests/integration/*.test.ts"
   },
   "private": true,
   "overrides": {
