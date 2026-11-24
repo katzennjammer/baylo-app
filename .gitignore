@@ -49,3 +49,6 @@ yarn-error.*
 crash*.txt
 adb
 findstr
+
+# Large generated evidence documents (Word)
+tests/report/evidence/
