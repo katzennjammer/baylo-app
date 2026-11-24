@@ -41,6 +41,13 @@ import { openMailApp } from "../../src/lib/open-mail";
 import { AccountTypeStep, type AccountType } from "../../src/components/auth-account-type";
 import { OrgDetailsStep } from "../../src/components/auth-org-details";
 import { rememberSignedUpAsOrganization } from "../../src/auth/signup-kind";
+import {
+  INDIVIDUAL_COPY,
+  OWNER_COPY,
+  validate,
+  type FieldErrors,
+  type FormState,
+} from "../../src/auth/form-validation";
 
 /**
  * Create an account, and the two screens that hang off it.
@@ -95,14 +102,6 @@ interface PendingSignup {
   session: StoredSession | null;
   /** False when the server could not send the mail. Offer a resend at once. */
   emailSent: boolean;
-}
-
-interface FormState {
-  name: string;
-  email: string;
-  password: string;
-  confirm: string;
-  dob: DateParts | null;
 }
 
 const EMPTY_FORM: FormState = { name: "", email: "", password: "", confirm: "", dob: null };
@@ -224,93 +223,6 @@ export default function RegisterScreen() {
 }
 
 // ── The form ─────────────────────────────────────────────────────────────────
-
-interface FieldErrors {
-  name?: string;
-  email?: string;
-  password?: string;
-  confirm?: string;
-  dateOfBirth?: string;
-}
-
-/**
- * Client-side validation, matching the server's schema rather than guessing at
- * it.
- *
- * The server is the authority — `registerSchema` in `../baylo/src/lib/
- * validation.ts` — and these rules are a copy of it, kept deliberately narrow:
- * a non-empty name up to 100 characters, something with an @ in it, eight
- * characters of password, and a real past date of birth. Validating MORE than
- * the server does is the trap. A client that insists on a symbol and a digit
- * rejects passwords the backend would have accepted, and the user has no way to
- * discover that the rule is imaginary.
- *
- * The confirm field has no server counterpart at all — the server never sees it
- * — which is exactly why it must be checked here.
- *
- * THE AGE RULE IS NOT IN HERE. It is checked at submission and answered with a
- * whole screen rather than a red line under a field, because "you are sixteen"
- * is not the same kind of problem as "that is not an email address" and putting
- * them in the same list would say that it is.
- */
-function validate(input: FormState, copy: FormCopy): FieldErrors {
-  const errors: FieldErrors = {};
-
-  if (!input.name.trim()) errors.name = copy.nameMissing;
-  else if (input.name.trim().length > 100) errors.name = "That name is too long (100 max).";
-
-  // Loose on purpose. The server's zod `.email()` is the real check, and a
-  // stricter regex here would reject valid addresses nobody can then explain.
-  if (!input.email.trim()) errors.email = "Enter your email.";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim()))
-    errors.email = "That does not look like an email address.";
-
-  if (input.password.length < 8) errors.password = "At least 8 characters.";
-
-  if (!input.confirm) errors.confirm = "Type your password again.";
-  else if (input.confirm !== input.password) errors.confirm = "These don't match yet.";
-
-  if (!input.dob) errors.dateOfBirth = copy.dobMissing;
-
-  return errors;
-}
-
-/**
- * The form's words, for a person and for an MSME owner.
- *
- * The account being created is the OWNER's own login either way — the
- * organisation is a separate row made on the next step — so the fields do not
- * change, only whose they say they are. Email, password and confirm are not in
- * here: they are the login either way, and "Owner's email" read as a separate
- * business contact address, just as "the owner's password" would suggest the
- * business has one of its own.
- */
-interface FormCopy {
-  headline: string;
-  subhead: string;
-  name: string;
-  nameMissing: string;
-  dob: string;
-  dobMissing: string;
-}
-
-const INDIVIDUAL_COPY: FormCopy = {
-  headline: "Create your account",
-  subhead: "Set up once, then trade for good.",
-  name: "Full name",
-  nameMissing: "Enter your name.",
-  dob: "Date of birth",
-  dobMissing: "Pick your date of birth.",
-};
-
-const OWNER_COPY: FormCopy = {
-  headline: "Owner's details",
-  subhead: "Your business details come next.",
-  name: "Owner's full name",
-  nameMissing: "Enter the owner's name.",
-  dob: "Owner's date of birth",
-  dobMissing: "Pick the owner's date of birth.",
-};
 
 function RegisterForm({
   form,

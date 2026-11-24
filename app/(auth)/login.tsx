@@ -9,6 +9,7 @@ import {
   type GoogleExchange,
 } from "../../src/api/client";
 import { getApiBase } from "../../src/api/config";
+import { canSubmitLogin } from "../../src/auth/form-validation";
 import { ApiUrlGear } from "../../src/components/ApiUrlGear";
 import { useGoogleSignIn } from "../../src/auth/google";
 import { useSession } from "../../src/auth/session";
@@ -327,7 +328,7 @@ function EmailLogIn({
 
   const passwordRef = useRef<TextInput>(null);
 
-  const canSubmit = email.trim().length > 0 && password.length > 0 && !busy && !google.busy;
+  const canSubmit = canSubmitLogin(email, password) && !busy && !google.busy;
 
   async function onSubmit() {
     if (!canSubmit) return;

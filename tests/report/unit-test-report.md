@@ -1,0 +1,231 @@
+# Unit Testing Report
+
+Generated 11/24/2026. 183 cases, 183 passed, 0 failed.
+
+## Table 1: Unit Testing — Authentication
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Authentication | Register | 11/24/2026 | Case-001 | User inputs an invalid email format | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-002 | User inputs an email with no domain dot (juan@example) | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-003 | User inputs missing email | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-004 | User inputs an email made only of spaces | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-005 | User inputs missing name | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-006 | User inputs a name made only of spaces | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-007 | User inputs a name longer than 100 characters | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-008 | User inputs a name of exactly 100 characters | Name is accepted | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-009 | User inputs a password shorter than 8 characters | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-010 | User inputs a password of exactly 8 characters | Password is accepted | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-011 | User leaves confirm password empty | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-012 | User inputs a confirm password that does not match | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-013 | User does not pick a date of birth | Account will not be successfully registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-014 | MSME owner leaves the name empty | Owner-specific message is shown and registration is blocked | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-015 | User leaves every field empty | Every field reports an error | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-016 | User enters all valid credentials | No errors, account details are sent for registration | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-017 | User enters a valid email surrounded by spaces | Email is accepted after trimming | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-018 | Server rejects the email with a field-level validation error (400) | ApiError carries the field issue; account is not registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-019 | Email is already registered (409) | ApiError 409 is raised; no duplicate account | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-020 | User under 18 submits a date of birth | Server refusal UNDER_18 is surfaced; account is not registered | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-021 | Too many sign-ups from one address (429 with Retry-After) | ApiError reports RATE_LIMITED and the wait in seconds | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-022 | Server cannot be reached | A network ApiError is raised instead of an unhandled crash | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-023 | Server answers 200 but leaves out required fields | MALFORMED_RESPONSE is raised, not a half-built account | Performed as expected | PASSED |
+| — | Authentication | Register | 11/24/2026 | Case-024 | User enters all valid credentials and the server accepts them | Account details are posted to /api/auth/register and the new account is returned | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-025 | User input empty fields | Account will not be successfully logged in | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-026 | User inputs email only | Account will not be successfully logged in | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-027 | User inputs password only | Account will not be successfully logged in | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-028 | User inputs an email made only of spaces | Account will not be successfully logged in | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-029 | User inputs both email and password | Log in button is enabled | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-030 | User inputs a wrong password (401) | The server's vague 'Invalid email or password' is shown unchanged | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-031 | User inputs valid credentials | Session is returned and saved to secure storage | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-032 | Server answers 200 without tokens | MALFORMED_RESPONSE is raised and nothing is saved | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-033 | Suspended account signs in (403 ACCOUNT_SUSPENDED) | Sign-in is refused and the suspension notice is readable | Performed as expected | PASSED |
+| — | Authentication | Login | 11/24/2026 | Case-034 | User requests a password reset | Request is posted to /api/auth/forgot-password | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-035 | User turns 18 today | Counted as 18 and allowed | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-036 | User turns 18 tomorrow | Counted as 17 and refused | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-037 | User is 17 years old | isAdult is false | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-038 | User is exactly 18 years old | isAdult is true | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-039 | User picks a date in the future | Date is not a real past date | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-040 | User picks 31 February | Date is not a real past date | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-041 | User picks month 13 | Date is not a real past date | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-042 | User picks a year more than 110 years ago | Date is not a real past date | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-043 | User picks 15 May 1995 | Date is a real past date | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-044 | User changes the month from March 31 to February | Day is clamped to the last day of February | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-045 | Leap-year check for February | 2024 has 29 days, 2023 and 1900 have 28 | Performed as expected | PASSED |
+| — | Authentication | Date of Birth | 11/24/2026 | Case-046 | Date of birth is sent to the server | Formatted as zero-padded YYYY-MM-DD | Performed as expected | PASSED |
+
+## Table 2: Unit Testing — Session and Storage
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Session and Storage | Session | 11/24/2026 | Case-001 | No session has been saved | loadSession returns null | Performed as expected | PASSED |
+| — | Session and Storage | Session | 11/24/2026 | Case-002 | User logs in and the session is saved | loadSession returns the same tokens and user | Performed as expected | PASSED |
+| — | Session and Storage | Session | 11/24/2026 | Case-003 | Token refresh saves a new token pair | Tokens change, stored user is kept | Performed as expected | PASSED |
+| — | Session and Storage | Session | 11/24/2026 | Case-004 | User logs out | Stored session is cleared and loadSession returns null | Performed as expected | PASSED |
+| — | Session and Storage | Session | 11/24/2026 | Case-005 | Stored refresh token is missing | Session is treated as signed out | Performed as expected | PASSED |
+| — | Session and Storage | Session | 11/24/2026 | Case-006 | Stored user record is corrupted JSON | Session is treated as signed out, no crash | Performed as expected | PASSED |
+| — | Session and Storage | Account Type | 11/24/2026 | Case-007 | MSME owner signs up with an email | Email is remembered as an organization signup | Performed as expected | PASSED |
+| — | Session and Storage | Account Type | 11/24/2026 | Case-008 | Email is checked with different case and spaces | Lookup still matches | Performed as expected | PASSED |
+| — | Session and Storage | Account Type | 11/24/2026 | Case-009 | Individual user email is checked | Not reported as an organization | Performed as expected | PASSED |
+| — | Session and Storage | Account Type | 11/24/2026 | Case-010 | Email is null or empty | Not reported as an organization | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-011 | Developer enters a valid http URL | No validation problem is reported | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-012 | Developer enters an empty URL | A message asks for a URL | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-013 | Developer enters text that is not a URL | A 'not a URL' message is shown | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-014 | Developer enters an ftp:// URL | Only http and https are accepted | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-015 | Developer saves a URL with trailing slashes | Slashes are removed so requests never contain //api | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-016 | Developer saves an invalid URL | setApiBase rejects and keeps the current address | Performed as expected | PASSED |
+| — | Session and Storage | API Address | 11/24/2026 | Case-017 | Developer resets the address | The saved override is deleted from storage | Performed as expected | PASSED |
+
+## Table 3: Unit Testing — Marketplace and Search
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-001 | User types "cheap secondhand iphone" | Category ELECTRONICS and a low price bracket are suggested | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-002 | User types "under 50 Leaves" | Search is capped at Bracket 1 and sent as 100 Leaves | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-003 | User types "between 1000 and 2000 leaves in good condition" | Brackets 5 to 6, GOOD condition, sent as 901 to 2500 | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-004 | User types "like new sneakers" | Condition is LIKE_NEW, not NEW | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-005 | User types "fresh vegetables from a sari-sari store" | FOOD, perishable and shops-only SARI_SARI are suggested | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-006 | User types Taglish "mountain bike na mura" | BIKES category and cheap price are understood | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-007 | User types "over 12000 leaves" | Minimum is Bracket 10 (strictly above the top of Bracket 9) | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-008 | User types "bracket 40" | Bracket is clamped to 10, no crash | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-009 | User types "looking for a drone" | Free-text query 'drone' is used when no category matches | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-010 | User types words that match nothing ("show me stuff") | Search is reported as not understood | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-011 | User types only spaces | Search is reported as not understood | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-012 | User types a 150-character word | It is not sent as a query (the server caps queries at 100) | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-013 | User types seven categories at once | Categories are capped at 5 | Performed as expected | PASSED |
+| — | Marketplace and Search | Search Helper | 11/24/2026 | Case-014 | User removes a filter chip | That filter is cleared and the other chips remain | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-015 | Search helper hands filters to the Marketplace screen and back | Parsed filters equal the filters that were sent | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-016 | Filter parameter is empty or missing | No filters are applied | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-017 | Filter parameter is invalid JSON | No filters are applied, no crash | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-018 | Filter parameter is an array instead of an object | No filters are applied | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-019 | Filter contains an unknown category | Unknown category is dropped | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-020 | Filter has minimum price above maximum price | Both bounds are dropped instead of sending a 400 | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-021 | Filter has a negative or fractional price | The bad bound is ignored | Performed as expected | PASSED |
+| — | Marketplace and Search | Marketplace Filters | 11/24/2026 | Case-022 | Filter query is 300 characters long | Query is cut to 100 characters | Performed as expected | PASSED |
+| — | Marketplace and Search | Shop Categories | 11/24/2026 | Case-023 | Known business category is shown | A friendly label is returned (SARI_SARI -> Sari-sari store) | Performed as expected | PASSED |
+| — | Marketplace and Search | Shop Categories | 11/24/2026 | Case-024 | Business category from a newer server is shown | It is title-cased instead of leaking raw SNAKE_CASE | Performed as expected | PASSED |
+| — | Marketplace and Search | Shop Categories | 11/24/2026 | Case-025 | Unknown category is checked | isKnownBusinessCategory is false | Performed as expected | PASSED |
+| — | Marketplace and Search | Listing Area | 11/24/2026 | Case-026 | Listing has an active safe-zone hub in 'Davao City' | Area shown is 'Davao' (city suffix removed) | Performed as expected | PASSED |
+| — | Marketplace and Search | Listing Area | 11/24/2026 | Case-027 | Listing has no hubs | Area falls back to the owner's location | Performed as expected | PASSED |
+| — | Marketplace and Search | Listing Area | 11/24/2026 | Case-028 | Listing has no hubs and no owner location | Area is null | Performed as expected | PASSED |
+
+## Table 4: Unit Testing — Trading and Offers
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-001 | Item is worth exactly 100 Leaves | It is in Bracket 1 (ceiling is inclusive) | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-002 | Item is worth 101 Leaves | It is in Bracket 2 | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-003 | Item is worth 12,000 Leaves | It is in Bracket 9 | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-004 | Item is worth 12,001 Leaves | It is in the top bracket (10) | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-005 | Range of Bracket 1 is requested | Range is 1 to 100 | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-006 | Range of the top bracket is requested | Range is 12,001 and up, with no maximum | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-007 | Bracket number outside 1 to 10 is requested | It is clamped, never out of range | Performed as expected | PASSED |
+| — | Trading and Offers | Value Brackets | 11/24/2026 | Case-008 | Bracket count is displayed | Singular for 1, plural otherwise | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-009 | Offer is in the same bracket as the item | Offer is legal with no fee | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-010 | Offer is one bracket below the item | Allowed as a bridge-up; the proposer pays | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-011 | Offer is one bracket above the item | Allowed as a bridge-down; the receiver pays | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-012 | Offer is two brackets below the item | Offer is refused as too low | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-013 | Offer is two brackets above the item | Offer is refused as too high | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-014 | Bridge between Bracket 3 and 4 | Fee is 10 Leaves per lower bracket (30) | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-015 | Fee for a bracket that does not exist | No fee is returned (null) | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-016 | Trade completes for a Bracket 5 item | Reward is 2 Leaves per bracket (10) | Performed as expected | PASSED |
+| — | Trading and Offers | Offer Rules | 11/24/2026 | Case-017 | Trade reward for an out-of-range bracket | Reward is clamped to the valid range | Performed as expected | PASSED |
+| — | Trading and Offers | Item Value Check | 11/24/2026 | Case-018 | Owner keeps the suggested value | Decision is 'suggested' | Performed as expected | PASSED |
+| — | Trading and Offers | Item Value Check | 11/24/2026 | Case-019 | Owner lowers the value | Decision is 'lowered' | Performed as expected | PASSED |
+| — | Trading and Offers | Item Value Check | 11/24/2026 | Case-020 | Owner raises the value by one bracket | Decision is 'raisedWithinCap' | Performed as expected | PASSED |
+| — | Trading and Offers | Item Value Check | 11/24/2026 | Case-021 | Owner raises the value by two brackets | Decision is 'needsReview' | Performed as expected | PASSED |
+| — | Trading and Offers | Item Value Check | 11/24/2026 | Case-022 | Cap is computed for a 400-Leaf suggestion | One bracket of headroom: maximum 900 Leaves without review | Performed as expected | PASSED |
+| — | Trading and Offers | Trade Sides | 11/24/2026 | Case-023 | Viewer sent the offer | They give what they offered and get what they asked for | Performed as expected | PASSED |
+| — | Trading and Offers | Trade Sides | 11/24/2026 | Case-024 | Viewer received the offer | Sides are swapped | Performed as expected | PASSED |
+| — | Trading and Offers | Trade Sides | 11/24/2026 | Case-025 | Direction is 'sent' or 'received' | viewerIsSender is true only for 'sent' | Performed as expected | PASSED |
+
+## Table 5: Unit Testing — Reputation and Premium
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Reputation and Premium | Premium Gates | 11/24/2026 | Case-001 | Item is in Bracket 6 | No Premium needed | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Gates | 11/24/2026 | Case-002 | Item is in Bracket 7 | Premium is needed | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Gates | 11/24/2026 | Case-003 | Item value is not known yet (null) | Premium is not demanded | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Access | 11/24/2026 | Case-004 | Profile is not loaded yet | Treated as no Premium access | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Access | 11/24/2026 | Case-005 | User has Premium only | Access is granted | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Access | 11/24/2026 | Case-006 | User has VIP only | Access is granted (VIP includes Premium) | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Access | 11/24/2026 | Case-007 | User has neither | Access is not granted | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Fee | 11/24/2026 | Case-008 | Premium user bridges up from Bracket 3 | Shown fee is 8 per bracket (24), not 30 | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Fee | 11/24/2026 | Case-009 | Free user bridges up from Bracket 3 | Shown fee is the full 30 | Performed as expected | PASSED |
+| — | Reputation and Premium | Premium Fee | 11/24/2026 | Case-010 | Offer has no bridge fee | Fee stays 0 even for Premium | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-011 | Trader has 2 completed trades | Tier is New Trader | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-012 | Trader has 3 trades | Tier is Rising Trader | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-013 | Trader has 10 trades and a 4.2 rating | Tier is Trusted Trader | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-014 | Trader has 10 trades but a 3.5 rating | Tier stays Rising Trader | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-015 | Trader has 25 trades and a 4.8 rating | Tier is Top Trader | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-016 | Trader has 25 trades but a 4.4 rating | Tier is Trusted Trader, not Top | Performed as expected | PASSED |
+| — | Reputation and Premium | Trust Tier | 11/24/2026 | Case-017 | Server sends a tier | The server's tier is used over the local calculation | Performed as expected | PASSED |
+
+## Table 6: Unit Testing — Moderation and Suspension
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-001 | Sign-in fails with an ordinary error (not a suspension) | No suspension notice is produced | Performed as expected | PASSED |
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-002 | Server sends ACCOUNT_SUSPENDED with reason, level and dates | Notice carries the reason, level, since and until | Performed as expected | PASSED |
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-003 | Older server sends only the code | Notice still opens, with empty reason and no dates | Performed as expected | PASSED |
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-004 | Suspension has no end date | 'until' is null (indefinite) | Performed as expected | PASSED |
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-005 | Suspension date is garbage | Date is treated as unknown (null) | Performed as expected | PASSED |
+| — | Moderation and Suspension | Suspension | 11/24/2026 | Case-006 | Reason is blank spaces | Reason is null | Performed as expected | PASSED |
+| — | Moderation and Suspension | Value Rejection | 11/24/2026 | Case-007 | Listing is rejected as ABOVE_MARKET | The matching explanation is shown | Performed as expected | PASSED |
+| — | Moderation and Suspension | Value Rejection | 11/24/2026 | Case-008 | Rejection code is unknown or missing | The generic OTHER explanation is shown | Performed as expected | PASSED |
+
+## Table 7: Unit Testing — Meetup Scheduling
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-001 | User has not chosen a safe-zone hub | First missing item is 'hub' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-002 | User chose a hub but no day | First missing item is 'day' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-003 | User chose a hub and day but no time | First missing item is 'time' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-004 | User picks a time that already passed | Meetup is refused as 'past' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-005 | User picks the current minute | Meetup is allowed (not in the past) | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-006 | User picks a date more than 90 days ahead | Meetup is refused as 'tooFar' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-007 | User picks hub, day and a future time | No gap; meetup can be proposed | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-008 | Day and time are combined | One date at that local time | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-009 | A meetup time is displayed | Shown as 'Fri 12 Jun, 14:00' style text | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-010 | Time picker opens before 2 PM | It starts at 14:00 | Performed as expected | PASSED |
+| — | Meetup Scheduling | Meetup Form | 11/24/2026 | Case-011 | Time picker opens at 3:30 PM the same day | It starts at the next whole hour (16:00) | Performed as expected | PASSED |
+| — | Meetup Scheduling | Hub List | 11/24/2026 | Case-012 | User opens the hub list with a suggested and a shared hub | Groups are ordered suggested, shared, then cities | Performed as expected | PASSED |
+| — | Meetup Scheduling | Hub List | 11/24/2026 | Case-013 | User searches 'plaza' | Only matching hubs are listed | Performed as expected | PASSED |
+| — | Meetup Scheduling | Hub List | 11/24/2026 | Case-014 | User searches text that matches no hub | The list is empty | Performed as expected | PASSED |
+| — | Meetup Scheduling | Hub List | 11/24/2026 | Case-015 | Cities are listed without distance data | Cities are alphabetical | Performed as expected | PASSED |
+| — | Meetup Scheduling | Distance | 11/24/2026 | Case-016 | User is at the hub's exact location | Distance is 0 km | Performed as expected | PASSED |
+| — | Meetup Scheduling | Distance | 11/24/2026 | Case-017 | Hub is one degree of longitude away on the equator | Distance is about 111 km | Performed as expected | PASSED |
+| — | Meetup Scheduling | Distance | 11/24/2026 | Case-018 | Distance under 100 metres is displayed | Shown as 'Nearby' | Performed as expected | PASSED |
+| — | Meetup Scheduling | Distance | 11/24/2026 | Case-019 | Distances of 2.34 km and 42.6 km are displayed | '2.3 km' and '43 km' | Performed as expected | PASSED |
+
+## Table 8: Unit Testing — Messaging
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Messaging | System Messages | 11/24/2026 | Case-001 | Both traders' phones post the same offer update | Only the partner's copy is shown | Performed as expected | PASSED |
+| — | Messaging | System Messages | 11/24/2026 | Case-002 | Offer goes ACCEPTED then COMPLETED | Both different updates are kept | Performed as expected | PASSED |
+| — | Messaging | System Messages | 11/24/2026 | Case-003 | Normal chat messages and invalid JSON | They are never collapsed or lost | Performed as expected | PASSED |
+| — | Messaging | System Messages | 11/24/2026 | Case-004 | Trade-completed notice is posted twice | One copy remains | Performed as expected | PASSED |
+
+## Table 9: Unit Testing — Display Formatting
+
+| Proponent | Module Name | Unit Name | Date Tested | Test Case ID | Test Case Description | Expected Result | Actual Result | Result |
+|---|---|---|---|---|---|---|---|---|
+| — | Display Formatting | Leaves Balance | 11/24/2026 | Case-001 | Balance is 1240 | Shown with a comma: 1,240 | Performed as expected | PASSED |
+| — | Display Formatting | Leaves Balance | 11/24/2026 | Case-002 | Balance is 99,999 | Still grouped: 99,999 | Performed as expected | PASSED |
+| — | Display Formatting | Leaves Balance | 11/24/2026 | Case-003 | Balance is 99,960 or 128,500 | Compact and truncated, never rounded up (99,960 stays; 128.5k) | Performed as expected | PASSED |
+| — | Display Formatting | Leaves Balance | 11/24/2026 | Case-004 | Balance is negative or 2,400,000 | Never below 0; millions use M | Performed as expected | PASSED |
+| — | Display Formatting | Counts | 11/24/2026 | Case-005 | Follower counts 1, 950, 1,999 and 12,000 | '1 follower', '950 followers', '1.9K followers', '12K followers' | Performed as expected | PASSED |
+| — | Display Formatting | Counts | 11/24/2026 | Case-006 | Compact count of 3,400,000 | '3.4M' | Performed as expected | PASSED |
+| — | Display Formatting | Counts | 11/24/2026 | Case-007 | Unread badge of 5 and 150 | '5' and '99+' | Performed as expected | PASSED |
+| — | Display Formatting | Time Ago | 11/24/2026 | Case-008 | Message sent 30 seconds ago | 'now' | Performed as expected | PASSED |
+| — | Display Formatting | Time Ago | 11/24/2026 | Case-009 | Message sent 5 minutes, 3 hours and 2 days ago | '5m ago', '3h ago', '2d ago' | Performed as expected | PASSED |
+| — | Display Formatting | Time Ago | 11/24/2026 | Case-010 | Timestamp is not a valid date | Empty text instead of 'NaN' | Performed as expected | PASSED |
+| — | Display Formatting | Time Ago | 11/24/2026 | Case-011 | Long form for 1 hour, 2 hours and 1 day | '1 hour ago', '2 hours ago', '1 day ago' | Performed as expected | PASSED |
+| — | Display Formatting | Time Ago | 11/24/2026 | Case-012 | Clock time at 9:05 local | '09:05' in 24-hour format | Performed as expected | PASSED |
+| — | Display Formatting | Perishable Countdown | 11/24/2026 | Case-013 | Window ends 3 seconds from now | secondsLeft is 3 | Performed as expected | PASSED |
+| — | Display Formatting | Perishable Countdown | 11/24/2026 | Case-014 | Window already ended or date is invalid | secondsLeft is 0, never negative | Performed as expected | PASSED |
+| — | Display Formatting | Perishable Countdown | 11/24/2026 | Case-015 | 5h 12m 44s and 1d 14h 22m 5s remain | '05:12:44' and '1d 14:22:05' | Performed as expected | PASSED |
+| — | Display Formatting | Perishable Countdown | 11/24/2026 | Case-016 | Screen reader reads 0, 30 s, 1 h 1 m, 1 d | 'Ended', 'less than a minute', '1 hour 1 minute', '1 day' | Performed as expected | PASSED |
+| — | Display Formatting | Timeout Helper | 11/24/2026 | Case-017 | Operation finishes before the limit | Its value is returned | Performed as expected | PASSED |
+| — | Display Formatting | Timeout Helper | 11/24/2026 | Case-018 | Operation is slower than the limit | null is returned instead of waiting forever | Performed as expected | PASSED |
+| — | Display Formatting | Timeout Helper | 11/24/2026 | Case-019 | Operation fails before the limit | The original error is passed on | Performed as expected | PASSED |
