@@ -376,7 +376,7 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
           // hour ago" reads as done, where "being reviewed" alone reads as a
           // status the app might have forgotten. The CTA opens /verify-id,
           // whose pending branch has no form on it.
-          body: `${sentAt ? `Sent ${sentAt}. ` : ""}A person looks at every one, usually within a day. As soon as it is approved you can post.`,
+          body: `${sentAt ? `Sent ${sentAt}. ` : ""}Our automatic check could not settle this one, so a person is looking at it, usually within a day. As soon as it is approved you can post.`,
           cta: "Got it",
         }
       : state.status === "exhausted"
@@ -395,7 +395,7 @@ function IdGatePrompt({ state }: { state: IdVerificationPayload }) {
             }
           : {
               title: "Verify your ID to post",
-              body: "Posting an item needs a photo of a government ID, so that everyone trading here is a real, once-verified person. It is usually reviewed within a day.",
+              body: "Posting an item needs a photo of a government ID, so that everyone trading here is a real, once-verified person. Baylo checks it automatically, usually in seconds.",
               cta: "Verify my ID",
             };
 
