@@ -113,7 +113,7 @@ function usePhotoPipeline() {
       const patch = (p: Partial<Photo>) => dispatch({ type: "photo/patch", id, patch: p });
 
       patch({ dup: "running", checkPaused: false });
-      let verdict: { status: PhashStatus; hash: string | null; matchedItemId?: string };
+      let verdict: Awaited<ReturnType<typeof checkDuplicate>>;
       try {
         verdict = await checkDuplicate(url, controller.signal);
       } catch (e) {
@@ -133,7 +133,12 @@ function usePhotoPipeline() {
       }
       if (controller.signal.aborted) return;
 
-      patch({ dup: verdict.status, hash: verdict.hash });
+      patch({
+        dup: verdict.status,
+        hash: verdict.hash,
+        confidencePct: verdict.confidencePct ?? null,
+        sameItem: !!verdict.sameItem,
+      });
 
       // The matched listing is fetched only when a panel will show it. `passed`
       // shows nothing, ever, so it costs nothing.

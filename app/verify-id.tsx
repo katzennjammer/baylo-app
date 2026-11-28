@@ -22,6 +22,7 @@ import {
   formatSubmittedAt,
   submitIdVerification,
   type IdVerificationPayload,
+  type IdVerificationState,
 } from "../src/api/id-verification";
 import { PROFILE_ME_KEY } from "../src/api/profile";
 import { ChevronLeftIcon } from "../src/components/icons";
@@ -125,17 +126,38 @@ export default function VerifyIdScreen() {
       ) : (
         <SubmitForm
           payload={data}
-          onSubmitted={() => {
+          onSubmitted={(result) => {
             qc.invalidateQueries({ queryKey: ["id-verification"] });
             // The offer screen reads the ID state off /profile/me, not off
             // this query, and caches it for a minute. Without this a person
             // who submits and goes straight to an offer sees "Verify your
             // ID" on the DPA row for up to sixty seconds after doing so.
             qc.invalidateQueries({ queryKey: PROFILE_ME_KEY });
-            // Back to where you came from (the post screen shows the "being
-            // reviewed" duck), rather than a second copy of it here that the
-            // back button would show again.
-            router.back();
+            // Since 29 Nov 2026 the server checks the ID automatically and
+            // usually answers at once. Say so here rather than leaving it to
+            // the screen behind.
+            if (result.verified) {
+              showDialog(
+                "Your ID is approved",
+                "Baylo checked it automatically. You can post items now.",
+                [{ text: "Great", onPress: () => router.back() }],
+                { pose: "celebrate" },
+              );
+            } else if (result.status === "rejected" || result.status === "exhausted") {
+              // Stay on this screen: the form redraws in its "try again"
+              // state with the fix written under it.
+              showDialog(
+                "We couldn't approve this ID",
+                result.latest?.rejectionFix ?? "Check the photo and the number, then try again.",
+                [{ text: "Got it" }],
+                { pose: "worry" },
+              );
+            } else {
+              // Pending: the system sent it to a person (last attempt, or it
+              // could not read it). Back to where you came from, which shows
+              // the "being reviewed" duck.
+              router.back();
+            }
           }}
         />
       )}
@@ -286,7 +308,7 @@ function Pending({ payload, onDone }: { payload: IdVerificationPayload; onDone: 
     <DuckState
       pose="idCard"
       title="Your ID is being reviewed"
-      body={`Sent ${sentAt ?? "recently"}. A person looks at every one, usually within a day. As soon as it is approved you can post.`}
+      body={`Sent ${sentAt ?? "recently"}. Our automatic check could not settle this one, so a person is looking at it, usually within a day. As soon as it is approved you can post.`}
       cta={{ label: "Got it", onPress: onDone }}
     />
   );
@@ -309,7 +331,7 @@ function SubmitForm({
   onSubmitted,
 }: {
   payload: IdVerificationPayload;
-  onSubmitted: () => void;
+  onSubmitted: (result: IdVerificationState) => void;
 }) {
   const [idType, setIdType] = useState<string | null>(null);
   const [idNumber, setIdNumber] = useState("");
@@ -325,9 +347,9 @@ function SubmitForm({
         idNumber: idNumber.trim(),
         imageUri: image!.uri,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setError(null);
-      onSubmitted();
+      onSubmitted(result);
     },
     onError: (e) => {
       // The server's message is shown verbatim. It is the one that knows

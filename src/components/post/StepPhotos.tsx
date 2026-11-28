@@ -635,6 +635,7 @@ function PhotoState({
       return (
         <DuplicateSelf
           listing={photo.match}
+          sameItem={!!photo.sameItem}
           // "Keep this photo" changes nothing — the photo is already attached.
           // Dismissing the panel IS the action, so the verdict is recorded as
           // passed and the note goes away.
@@ -647,6 +648,7 @@ function PhotoState({
       return (
         <DuplicateWarned
           listing={photo.match}
+          confidencePct={photo.confidencePct ?? null}
           onKeep={() => dispatch({ type: "photo/patch", id: photo.id, patch: { dup: "passed" } })}
           onTakeOwn={onTakePhoto}
         />
@@ -659,6 +661,7 @@ function PhotoState({
           // printing an identifier support cannot look up.
           reference={null}
           appealSent={false}
+          confidencePct={photo.confidencePct ?? null}
           onTakePhoto={onTakePhoto}
           onChooseAnother={onChooseAnother}
           onAppeal={() => {}}

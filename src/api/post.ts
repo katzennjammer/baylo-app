@@ -378,6 +378,14 @@ export interface PhashResult {
   /** Present on self / warned / failed. The listing this photo matched. */
   matchedItemId?: string;
   distance?: number;
+  /**
+   * How sure the server is (0..100) that this is ANOTHER trader's photo, from
+   * Baylo's own image model (29 Nov 2026). On warned/failed. Older servers
+   * send none.
+   */
+  confidencePct?: number;
+  /** On `self`: the photo looks like the same item as one of your active listings (another angle). */
+  sameItem?: { itemId: string; title: string; similarityPct: number };
 }
 
 /**
@@ -436,6 +444,11 @@ export async function checkDuplicate(
       status,
       matchedItemId: typeof body.matchedItemId === "string" ? body.matchedItemId : undefined,
       distance: typeof body.distance === "number" ? body.distance : undefined,
+      confidencePct: typeof body.confidencePct === "number" ? body.confidencePct : undefined,
+      sameItem:
+        body.sameItem && typeof body.sameItem.itemId === "string" && typeof body.sameItem.title === "string"
+          ? body.sameItem
+          : undefined,
     };
   } catch {
     return { hash: null, status: "failed" };

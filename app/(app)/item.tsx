@@ -536,6 +536,18 @@ export default function ItemDetailScreen() {
 
           <Text style={[textStyle(type.detailTitle), s.title]}>{item.title}</Text>
 
+          {/* The tiered similar-photo policy (29 Nov 2026): a photo 80–94%
+              likely to be another trader's is allowed but labelled, so
+              traders can judge for themselves. */}
+          {item.similarPhotoPct ? (
+            <Text
+              style={[textStyle(type.metadata), { color: color.inkSecondary, marginTop: 4 }]}
+              accessibilityLabel={`Photo check: ${item.similarPhotoPct} percent similar to another listing`}
+            >
+              {`Photo check: ${item.similarPhotoPct}% similar to another listing`}
+            </Text>
+          ) : null}
+
           {item.description.trim() &&
           normalizeListingText(item.description) !== normalizeListingText(item.title) ? (
             <Text style={[textStyle(type.detailBody), s.description]}>{item.description}</Text>

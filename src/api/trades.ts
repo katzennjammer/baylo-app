@@ -649,6 +649,13 @@ export interface MeetupOptions {
   you: "sender" | "receiver";
   /** The viewer's own listing in this trade, for the add-a-hub route out. */
   yourItemId: string;
+  /**
+   * The counter limit (29 Nov 2026). Absent on an older server. `yoursLeft` 0:
+   * the viewer may only propose `fairHub`, or cancel at no cost.
+   */
+  counters?: { max: number; yoursLeft: number; theirsLeft: number };
+  /** The hub fairest to both listings' areas; null when neither named a hub. */
+  fairHub?: { hub: SafeZoneHub; kmFromYours: number | null; kmFromTheirs: number | null; shared: boolean } | null;
 }
 
 export function useMeetupOptions(tradeId: string | undefined) {

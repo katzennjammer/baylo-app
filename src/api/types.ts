@@ -177,6 +177,12 @@ export interface Item {
   /** The model's number before the owner adjusted it. Null predates the model. */
   suggestedLeaves: number | null;
   valuationSource: string | null;
+  /**
+   * 80..94 when a photo of this listing is that similar to ANOTHER trader's
+   * photo (29 Nov 2026): shown as "X% similar to another listing". Absent on
+   * older servers.
+   */
+  similarPhotoPct?: number | null;
   status: string;
   /**
    * TRUE when a moderator has taken the listing down. Only ever true on your
