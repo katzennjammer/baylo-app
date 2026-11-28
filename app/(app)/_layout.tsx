@@ -10,6 +10,7 @@ import { TutorialOverlay } from "../../src/components/tutorial/TutorialOverlay";
 import { useSession } from "../../src/auth/session";
 import { useAdoptShopOnSignIn } from "../../src/auth/adopt-shop";
 import { useOpeningTierSync } from "../../src/media/useOpeningTierSync";
+import { useBracketSync } from "../../src/api/brackets";
 import { usePushNotifications } from "../../src/notifications/push";
 
 /**
@@ -82,6 +83,7 @@ export default function AppLayout() {
   // The opening film's cached tier, for the NEXT launch. Background only: by
   // the time this layout mounts the film has already played. See the hook.
   useOpeningTierSync(!!session);
+  useBracketSync(!!session);
   // Phone notifications: registers this phone once signed in, and opens the
   // right screen when one is tapped. See src/notifications/push.ts.
   usePushNotifications(session?.user.id);

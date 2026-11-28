@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { readCachedBrackets } from "../src/api/brackets";
 import { createQueryClient } from "../src/api/queryClient";
 import { DialogHost } from "../src/components/dialog";
 import { PostedDialog } from "../src/components/PostedDialog";
@@ -35,6 +36,11 @@ const queryClient = createQueryClient();
 // overlaps the font load instead of starting when the intro mounts. Memoised
 // and never rejects; app/intro.tsx awaits the same promise.
 void readOpeningTier();
+
+// The bracket table the last launch saved (the server works the limits out
+// from listing data since 28 Nov 2026), read now for the same reason: it lands
+// during the font load, before any listing renders. Never rejects.
+void readCachedBrackets();
 
 /**
  * Every face the type scale names, keyed by the string `tokens.font` asks for.

@@ -13,13 +13,20 @@
  * (the offer composer, a DPA, the header balance). Brackets are discovery
  * framing, not agreement framing: "one bracket" is not a debt.
  *
- * ── A HAND-KEPT MIRROR OF THE SERVER'S TABLE ────────────────────────────────
+ * ── THE LIMITS COME FROM THE SERVER (since 28 Nov 2026) ────────────────────
  *
- * `baylo/src/lib/brackets.ts` is the source; this is the copy that lets a tile
- * bracket itself without a round trip, the same arrangement as `TIER_LADDER`
- * in gap.ts. The server enforces the premium gate from ITS table, so a drift
- * here would show as a padlock on the wrong tile, never as an offer sent that
- * the server should have refused.
+ * The server works the limits out from Baylo's own listing values and can
+ * change them (a monthly recalculation). This module keeps the ACTIVE table in
+ * memory so every caller stays synchronous:
+ *   - it starts as DEFAULT_BRACKET_CEILINGS, the hand-set table, and is
+ *     replaced at boot by the copy the last launch saved
+ *     (../api/brackets: readCachedBrackets), before any listing renders;
+ *   - while signed in, ../api/brackets fetches GET /api/v1/brackets and, when
+ *     the table changed, installs it, saves it and refreshes the screens.
+ * The server enforces the premium gate and the fees from ITS table, so a stale
+ * copy here can only show a padlock or a bracket on the wrong tile for a
+ * moment, never let through an offer the server should refuse. The NUMBER of
+ * brackets (10) never changes.
  *
  * ── NOT A PEG ───────────────────────────────────────────────────────────────
  *
@@ -27,8 +34,8 @@
  * is what keeps the non-monetary claim true. No pesos anywhere in this file.
  */
 
-/** Upper bound of each bracket, inclusive. The last bracket is open-ended. */
-export const BRACKET_CEILINGS: readonly number[] = [
+/** The hand-set table used until 28 Nov 2026: the starting point and the fallback. */
+export const DEFAULT_BRACKET_CEILINGS: readonly number[] = Object.freeze([
   100, // 1
   250, // 2
   500, // 3
@@ -39,24 +46,52 @@ export const BRACKET_CEILINGS: readonly number[] = [
   9000, // 8
   12000, // 9
   // 10: everything above
-];
+]);
 
-export const BRACKET_COUNT = BRACKET_CEILINGS.length + 1;
+/** Always 10: nine ceilings, and the last bracket is open-ended. */
+export const BRACKET_COUNT = DEFAULT_BRACKET_CEILINGS.length + 1;
+
+let active: readonly number[] = DEFAULT_BRACKET_CEILINGS;
+
+/** True when `c` is a usable table: BRACKET_COUNT - 1 strictly increasing positive integers. */
+export function validCeilings(c: unknown): c is number[] {
+  return (
+    Array.isArray(c) &&
+    c.length === BRACKET_COUNT - 1 &&
+    c.every((x, i) => Number.isInteger(x) && x > 0 && (i === 0 || x > (c[i - 1] as number)))
+  );
+}
+
+/** Upper bound of each bracket, inclusive, in Leaves: the server's ACTIVE table. */
+export function bracketCeilings(): readonly number[] {
+  return active;
+}
+
+/**
+ * Installs a new table. Returns true only when it was valid AND different, so
+ * the caller knows whether screens need refreshing.
+ */
+export function setBracketCeilings(c: readonly number[]): boolean {
+  if (!validCeilings([...c])) return false;
+  if (c.length === active.length && c.every((x, i) => x === active[i])) return false;
+  active = Object.freeze([...c]);
+  return true;
+}
 
 /** 1..BRACKET_COUNT. */
 export type Bracket = number;
 
 /** `bracketOf(425)` → 3. Non-positive values land in bracket 1. */
 export function bracketOf(valueLeaves: number): Bracket {
-  const i = BRACKET_CEILINGS.findIndex((ceiling) => valueLeaves <= ceiling);
+  const i = active.findIndex((ceiling) => valueLeaves <= ceiling);
   return i === -1 ? BRACKET_COUNT : i + 1;
 }
 
 /** Inclusive Leaves range of a bracket; `max` is null for the open top. */
 export function bracketRange(bracket: Bracket): { min: number; max: number | null } {
   const b = Math.min(Math.max(1, Math.trunc(bracket)), BRACKET_COUNT);
-  const min = b === 1 ? 1 : BRACKET_CEILINGS[b - 2] + 1;
-  const max = b === BRACKET_COUNT ? null : BRACKET_CEILINGS[b - 1];
+  const min = b === 1 ? 1 : active[b - 2] + 1;
+  const max = b === BRACKET_COUNT ? null : active[b - 1];
   return { min, max };
 }
 
