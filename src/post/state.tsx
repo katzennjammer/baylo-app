@@ -70,6 +70,10 @@ export interface Photo {
   hash: string | null;
   /** Fetched only when the verdict is self or warned. */
   match: MatchedListing | null;
+  /** 0..100 confidence it is another trader's photo, when the server said (29 Nov 2026). */
+  confidencePct?: number | null;
+  /** True when `self` means "looks like the same item as your active listing", not "the same photo". */
+  sameItem?: boolean;
   /** Set when a photo was rejected for size or type before any request went out. */
   rejected: "too-large" | "unsupported" | null;
   /**

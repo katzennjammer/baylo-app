@@ -183,11 +183,14 @@ function ListingRow({ listing, meta }: { listing: MatchedListing; meta: string }
  */
 export function DuplicateSelf({
   listing,
+  sameItem = false,
   onKeep,
   onDifferent,
   onSeeListing,
 }: {
   listing: MatchedListing | null;
+  /** The server matched the ITEM (another angle or a new photo), not the photo itself (29 Nov 2026). */
+  sameItem?: boolean;
   onKeep: () => void;
   onDifferent: () => void;
   onSeeListing: () => void;
@@ -202,8 +205,12 @@ export function DuplicateSelf({
             color={postColor.inkSecondary}
           />
         }
-        heading="You used this photo before"
-        body="It is from your own listing below. If you are posting the same item again, carry on. If this is a different item, use a new photo so traders can tell them apart."
+        heading={sameItem ? "This looks like your listing below" : "You used this photo before"}
+        body={
+          sameItem
+            ? "It looks like the same item as one you already have up, maybe from another angle. Posting one item twice is not allowed: if it is the same, edit your listing instead. If this is a different item, carry on."
+            : "It is from your own listing below. If you are posting the same item again, carry on. If this is a different item, use a new photo so traders can tell them apart."
+        }
       >
         {listing ? (
           <View style={{ marginTop: 14 }}>
@@ -213,9 +220,9 @@ export function DuplicateSelf({
       </NoticePanel>
 
       <View style={{ gap: 9 }}>
-        <PrimaryButton label="Keep this photo" onPress={onKeep} />
+        <PrimaryButton label={sameItem ? "It's a different item" : "Keep this photo"} onPress={onKeep} />
         <OutlineButton label="Use a different photo" onPress={onDifferent} />
-        {listing ? <TextButton label="See my old listing" onPress={onSeeListing} /> : null}
+        {listing ? <TextButton label={sameItem ? "See my listing" : "See my old listing"} onPress={onSeeListing} /> : null}
       </View>
     </View>
   );
@@ -238,10 +245,13 @@ export function DuplicateSelf({
  */
 export function DuplicateWarned({
   listing,
+  confidencePct = null,
   onKeep,
   onTakeOwn,
 }: {
   listing: MatchedListing | null;
+  /** 0..100, when the server sent it (29 Nov 2026): shown, to be transparent. */
+  confidencePct?: number | null;
   onKeep: () => void;
   onTakeOwn: () => void;
 }) {
@@ -261,8 +271,16 @@ export function DuplicateWarned({
             color={postColor.warmInk}
           />
         }
-        heading="This photo looks close to one already on Baylo"
-        body="As far as we can tell it is not the same photo, and similar items do look alike. You can post it as it is. If someone reports the listing, we may check it against the other one."
+        heading={
+          confidencePct !== null
+            ? `This photo is ${confidencePct}% similar to another listing`
+            : "This photo looks close to one already on Baylo"
+        }
+        body={
+          confidencePct !== null
+            ? `Baylo's photo check is ${confidencePct}% sure it matches the listing below, which is not enough to block it: similar items do look alike. You can post it as it is, and your listing will show "${confidencePct}% similar to another listing" so traders know.`
+            : "As far as we can tell it is not the same photo, and similar items do look alike. You can post it as it is. If someone reports the listing, we may check it against the other one."
+        }
       />
 
       {listing ? (
@@ -323,11 +341,14 @@ export function DuplicateWarned({
 export function DuplicateFailed({
   reference,
   appealSent,
+  confidencePct = null,
   onTakePhoto,
   onChooseAnother,
   onAppeal,
 }: {
   reference: string | null;
+  /** 0..100, when the server sent it (29 Nov 2026). */
+  confidencePct?: number | null;
   appealSent: boolean;
   onTakePhoto: () => void;
   onChooseAnother: () => void;
@@ -356,7 +377,10 @@ export function DuplicateFailed({
             { color: postColor.inkSecondary, marginTop: 6 },
           ]}
         >
-          Our check matched it to a photo already on Baylo, so it was not added. This usually
+          {confidencePct !== null
+            ? `Our check is ${confidencePct}% sure this is a photo already on Baylo from another trader, so it was not added. `
+            : "Our check matched it to a photo already on Baylo, so it was not added. "}
+          This usually
           happens with photos saved from the internet or taken from another listing. Sometimes
           our check is simply wrong.
         </Text>
