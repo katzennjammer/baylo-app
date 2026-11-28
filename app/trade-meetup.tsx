@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../src/api/client";
+import { showDialog } from "../src/components/dialog";
 import {
   planConflictOf,
   replacesOf,
   useActiveTrades,
+  useCancelTrade,
   useMeetupOptions,
   useProposeMeetup,
 } from "../src/api/trades";
@@ -100,6 +102,7 @@ export default function TradeMeetupScreen() {
   const active = useActiveTrades();
   const options = useMeetupOptions(id);
   const propose = useProposeMeetup(id);
+  const cancel = useCancelTrade();
   const location = useLastKnownLocation();
 
   const trade = (active.data?.trades ?? []).find((t) => t.id === id) ?? null;
@@ -158,7 +161,16 @@ export default function TradeMeetupScreen() {
     if (!kmTo) return candidates[0]!.id;
     return [...candidates].sort((a, b) => kmTo(a) - kmTo(b))[0]!.id;
   }, [hubs, shared, kmTo]);
-  const effectiveHubId = chosenHubId ?? defaultHubId;
+  // ── The counter limit (29 Nov 2026) ──
+  // Sending from here COUNTERS the standing plan when it is the partner's or
+  // already agreed. After MAX counters the server only takes the fair hub, so
+  // the hub is fixed to it and the screen says why, with a free cancel.
+  const standingNow = basis !== undefined ? basis : plan;
+  const isCounter = !!standingNow && (standingNow.proposedBy !== you || !!standingNow.agreedAt);
+  const counterInfo = options.data?.counters;
+  const fair = options.data?.fairHub ?? null;
+  const limitReached = isCounter && counterInfo?.yoursLeft === 0;
+  const effectiveHubId = limitReached && fair ? fair.hub.id : (chosenHubId ?? defaultHubId);
   const chosenHub = hubs.find((h) => h.id === effectiveHubId) ?? null;
 
   const apiError = active.error instanceof ApiError ? active.error : null;
@@ -226,10 +238,27 @@ export default function TradeMeetupScreen() {
       const rule = (e.meta as { rule?: string } | undefined)?.rule;
       setFailure(rule === "SAFEZONE_HUB_CLOSED" ? copy.meetup.hubClosed : e.message);
       if (rule) setHubId(null);
-      if (rule === "SAFEZONE_HUB_INVALID") void options.refetch();
+      if (rule === "SAFEZONE_HUB_INVALID" || rule === "MEETUP_COUNTER_LIMIT") void options.refetch();
       return;
     }
     setFailure("That did not go through. Nothing has changed.");
+  };
+
+  const confirmCancel = () => {
+    if (!id) return;
+    showDialog(
+      "Cancel this trade?",
+      "It costs nothing: any bridging fee comes back to you in full, and both items go back on the market.",
+      [
+        { text: "Keep trading", style: "cancel" },
+        {
+          text: "Cancel trade",
+          style: "destructive",
+          onPress: () => cancel.mutate(id, { onSuccess: () => router.back(), onError: () => setFailure("We could not cancel that just now. Try again.") }),
+        },
+      ],
+      { pose: "worry" },
+    );
   };
 
   const gapNow = () => meetupGap({ hubId: chosenHub?.id ?? null, day: chosenDay, time: chosenTime, now: new Date() });
@@ -322,14 +351,30 @@ export default function TradeMeetupScreen() {
           <StepHeading n={1} done={!!chosenHub}>
             {copy.picker.stepWhere}
           </StepHeading>
+          {limitReached ? (
+            <CounterLimitCard
+              partner={partner}
+              max={counterInfo?.max ?? 3}
+              fair={fair}
+              cancelling={cancel.isPending}
+              onCancel={confirmCancel}
+            />
+          ) : null}
           <WhereCard
             hub={chosenHub}
             km={chosenHub && kmTo ? kmTo(chosenHub) : null}
             reward={!!chosenHub && shared.has(chosenHub.id)}
             suggestedBy={chosenHub && chosenHub.id === theirSuggestion ? partner : null}
-            onPress={() => setSheet("hubs")}
+            onPress={() => (limitReached ? undefined : setSheet("hubs"))}
             onReward={() => setRewardOpen(true)}
           />
+          {isCounter && counterInfo && !limitReached ? (
+            <Text style={[textStyle(type.metadata), { color: color.inkSecondary }]}>
+              {counterInfo.yoursLeft === 1
+                ? "This is your last chance to suggest another place; after it, Baylo picks the fairest hub for you both."
+                : `You can suggest another place ${counterInfo.yoursLeft} more times.`}
+            </Text>
+          ) : null}
         </Gutter>
 
         {/* ── 2 When ── */}
@@ -439,6 +484,46 @@ export default function TradeMeetupScreen() {
 /* ─────────────────────────────── pieces ─────────────────────────────── */
 
 /** The button's words for what is still missing. */
+/**
+ * Shown once the viewer has countered MAX times (29 Nov 2026): the hub is
+ * fixed to the fairest one for both, and cancelling is offered as free.
+ */
+function CounterLimitCard({
+  partner,
+  max,
+  fair,
+  cancelling,
+  onCancel,
+}: {
+  partner: string;
+  max: number;
+  fair: { hub: SafeZoneHub; kmFromYours: number | null; kmFromTheirs: number | null } | null;
+  cancelling: boolean;
+  onCancel: () => void;
+}) {
+  const distances =
+    fair && fair.kmFromYours !== null && fair.kmFromTheirs !== null
+      ? ` It is about ${fair.kmFromYours} km from your hubs and ${fair.kmFromTheirs} km from ${partner}'s.`
+      : "";
+  return (
+    <View style={{ borderRadius: 14, borderWidth: 1, borderColor: color.controlLine, backgroundColor: color.inset, padding: 14, gap: 8 }}>
+      <Text style={[textStyle(type.detailBody), { color: color.ink, fontFamily: "PublicSans-SemiBold" }]}>
+        {fair ? `Meet in the middle at ${fair.hub.name}` : "Time to settle the meeting"}
+      </Text>
+      <Text style={[textStyle(type.detailBody), { color: color.inkSecondary }]}>
+        {fair
+          ? `You have suggested another place ${max} times. To settle it, Baylo picked the fairest hub for you both.${distances} Pick a time there, or cancel the trade at no cost.`
+          : `You have suggested another place ${max} times. Agree to the current plan, or cancel the trade at no cost.`}
+      </Text>
+      <Tappable onPress={onCancel} disabled={cancelling} accessibilityRole="button" accessibilityLabel="Cancel trade at no cost">
+        <Text style={[textStyle(type.detailBody), { color: color.urgent, fontFamily: "PublicSans-SemiBold" }]}>
+          {cancelling ? "Cancelling…" : "Cancel trade at no cost"}
+        </Text>
+      </Tappable>
+    </View>
+  );
+}
+
 function gapLabel(gap: MeetupGap): string {
   switch (gap) {
     case "hub":
